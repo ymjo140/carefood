@@ -29,6 +29,19 @@ function formatPrice(price: number): string {
   return price.toLocaleString("ko-KR") + "원";
 }
 
+const PLATFORM_LABELS: Record<string, string> = {
+  danawa: "다나와",
+  coupang: "쿠팡",
+  naver: "네이버",
+  kurly: "컬리",
+  gmarket: "G마켓",
+  ssg: "SSG",
+};
+
+function platformLabel(platform: string): string {
+  return PLATFORM_LABELS[platform] || platform;
+}
+
 function NutritionBar({
   label,
   value,
@@ -288,7 +301,7 @@ export default function ProductExplorer() {
                               rel="noopener noreferrer"
                               className="text-[10px] px-1.5 py-0.5 bg-card border border-border rounded hover:border-primary/50 transition-colors"
                             >
-                              {pp.platform}
+                              {platformLabel(pp.platform)}
                             </a>
                           ) : null
                         )}
