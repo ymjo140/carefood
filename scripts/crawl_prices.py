@@ -29,6 +29,7 @@
   SUPABASE_KEY         - Supabase service_role 키
 """
 
+import gc
 import os
 import re
 import sys
@@ -49,13 +50,14 @@ from dotenv import load_dotenv
 from supabase import create_client, Client
 
 # ─── 로깅 ──────────────────────────────────────────────
+_log_handlers = [logging.StreamHandler()]
+# Render 환경에서는 파일 로깅 비활성화 (stdout이 로그 수집기로 전달됨)
+if not os.environ.get("RENDER"):
+    _log_handlers.append(logging.FileHandler("crawl_prices.log", encoding="utf-8"))
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
-    handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler("crawl_prices.log", encoding="utf-8"),
-    ],
+    handlers=_log_handlers,
 )
 log = logging.getLogger(__name__)
 
@@ -90,6 +92,42 @@ _danawa_available: Optional[bool] = None
 _danawa_fail_streak: int = 0
 _DANAWA_MAX_FAILS: int = 5
 
+# 재사용 세션 (TCP 연결 풀링 → 메모리 절약 + 속도 향상)
+_http_session: Optional[requests.Session] = None
+
+
+def _get_http_session() -> requests.Session:
+    """HTTP 세션 싱글턴. 커넥션 풀 재사용으로 메모리·속도 개선."""
+    global _http_session
+    if _http_session is None:
+        _http_session = requests.Session()
+        _http_session.headers.update({
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/120.0.0.0 Safari/537.36"
+            ),
+            "Accept": "text/html,application/xhtml+xml",
+            "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8",
+        })
+    return _http_session
+
+
+def _get_memory_mb() -> float:
+    """현재 프로세스 RSS 메모리 (MB). Linux /proc/self/status 기반."""
+    try:
+        with open("/proc/self/status") as f:
+            for line in f:
+                if line.startswith("VmRSS:"):
+                    return int(line.split()[1]) / 1024  # kB → MB
+    except Exception:
+        pass
+    return 0.0
+
+
+# 메모리 안전 한도 (MB) — Render 512MB 제한의 85%
+MEMORY_LIMIT_MB = int(os.environ.get("MEMORY_LIMIT_MB", "420"))
+
 
 def strip_html(text: str) -> str:
     """HTML <b> 태그 제거."""
@@ -115,19 +153,12 @@ def danawa_search(query: str, display: int = 10) -> list[dict]:
         "tab": "goods",
         "limit": str(min(display, 40)),
     }
-    headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/120.0.0.0 Safari/537.36"
-        ),
-        "Accept": "text/html,application/xhtml+xml",
-        "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8",
-    }
+
+    session = _get_http_session()
 
     try:
-        resp = requests.get(
-            DANAWA_SEARCH_URL, params=params, headers=headers, timeout=15
+        resp = session.get(
+            DANAWA_SEARCH_URL, params=params, timeout=15
         )
 
         # 418/403 → 봇 감지 차단
@@ -157,7 +188,12 @@ def danawa_search(query: str, display: int = 10) -> list[dict]:
 
         _danawa_fail_streak = 0  # 성공 시 리셋
 
-        soup = BeautifulSoup(resp.text, "html.parser")
+        html = resp.text
+        resp.close()
+        del resp
+
+        soup = BeautifulSoup(html, "html.parser")
+        del html
         results = []
 
         for item in soup.select("li.prod_item"):
@@ -211,6 +247,8 @@ def danawa_search(query: str, display: int = 10) -> list[dict]:
                 "mallName": "danawa",
             })
 
+        soup.decompose()
+        del soup
         return results
 
     except requests.RequestException as e:
@@ -652,11 +690,15 @@ def crawl_streaming(
             )
             batch = result.data or []
             crawled_ids.update(r["product_id"] for r in batch)
-            if len(batch) < 5000:
+            count = len(batch)
+            del batch, result  # 즉시 해제
+            if count < 5000:
                 break
             offset += 5000
+        gc.collect()
         if crawled_ids:
             log.info(f"  이미 가격 수집된 제품: {len(crawled_ids):,}건 (스킵)")
+        log.info(f"  시작 메모리: {_get_memory_mb():.0f}MB")
 
     # ─── 카운터 ───
     processed = 0
@@ -725,6 +767,7 @@ def crawl_streaming(
                     platform_counts["danawa"] = (
                         platform_counts.get("danawa", 0) + 1
                     )
+            del danawa_items
 
             # ─── 쿠팡 (선택적) ───
             if use_coupang and coupang_calls < MAX_COUPANG_PER_HOUR:
@@ -754,17 +797,37 @@ def crawl_streaming(
 
             # 진행률 (100건마다)
             if searched > 0 and searched % 100 == 0:
+                # 메모리 사용량 체크
+                mem_mb = _get_memory_mb()
                 log.info(
                     f"  진행: {processed:,}/{max_products:,}  "
                     f"검색: {searched:,}  가격: {prices_found:,}  "
-                    f"DB: {upserted:,}  스킵: {skipped_crawled:,}"
+                    f"DB: {upserted:,}  스킵: {skipped_crawled:,}  "
+                    f"메모리: {mem_mb:.0f}MB"
                 )
+
+            # 200건마다 강제 GC (메모리 단편화 방지)
+            if searched > 0 and searched % 200 == 0:
+                gc.collect()
+
+            # 메모리 안전 한도 초과 시 조기 종료
+            if searched > 0 and searched % 50 == 0:
+                mem_mb = _get_memory_mb()
+                if mem_mb > MEMORY_LIMIT_MB:
+                    log.warning(
+                        f"  메모리 한도 초과 ({mem_mb:.0f}MB > {MEMORY_LIMIT_MB}MB) "
+                        f"— 안전 종료. 다음 실행 시 이어서 처리됨."
+                    )
+                    done = True
+                    break
 
             # 다나와 스크래핑 속도 제한 (랜덤 딜레이로 봇 탐지 회피)
             time.sleep(random.uniform(0.4, 1.2))
 
         if len(products) < page_size:
+            del products, result
             break
+        del products, result
         page_offset += page_size
 
     # 남은 버퍼 플러시
