@@ -116,6 +116,10 @@ def detect_endpoint(api_key: str) -> str:
 
             # 정상 응답 확인 (body.items 존재)
             body = data.get("body", {})
+            if not body or not isinstance(body, dict) or not body.keys():
+                resp_wrapper = data.get("response", {})
+                if isinstance(resp_wrapper, dict) and resp_wrapper:
+                    body = resp_wrapper.get("body", {})
             if body.get("totalCount") is not None or body.get("items") is not None:
                 ACTIVE_ENDPOINT = f"{BASE_URL}/{svc_name}/{op_name}"
                 log.info(f"서비스 탐지 성공: {svc_name}/{op_name}")
@@ -149,6 +153,10 @@ def discover_fields(api_key: str):
     data = resp.json()
 
     body = data.get("body", {})
+    if not body or not isinstance(body, dict) or not body.keys():
+        resp_wrapper = data.get("response", {})
+        if isinstance(resp_wrapper, dict) and resp_wrapper:
+            body = resp_wrapper.get("body", {})
     total = body.get("totalCount", "?")
     items = body.get("items", [])
     # data.go.kr: body.items는 dict이고 실제 리스트는 body.items.item
@@ -159,6 +167,7 @@ def discover_fields(api_key: str):
 
     log.info(f"=== 필드 디스커버리 (총 {total}건) ===")
     log.info(f"엔드포인트: {endpoint}")
+    log.info(f"data top keys: {list(data.keys())}")
     log.info(f"body 키: {list(body.keys())}")
 
     if items:
@@ -204,7 +213,13 @@ def fetch_total_count(api_key: str) -> int:
             f"{err_header.get('returnAuthMsg')}"
         )
 
+    # body 탐색: data.body 또는 data.response.body
     body = data.get("body", {})
+    if not body or not isinstance(body, dict) or not body.keys():
+        resp_wrapper = data.get("response", {})
+        if isinstance(resp_wrapper, dict) and resp_wrapper:
+            body = resp_wrapper.get("body", {})
+
     total = int(body.get("totalCount", 0))
     log.info(f"전체 데이터 건수: {total:,}")
     return total
@@ -235,11 +250,20 @@ def fetch_page(api_key: str, page_no: int, num_rows: int) -> list[dict]:
                 log.warning(f"API 경고: {err_msg}")
                 return []
 
+            # body 탐색: data.body 또는 data.response.body
             body = data.get("body", {})
+            if not body or not isinstance(body, dict) or not body.keys():
+                # response 래퍼가 있는 경우
+                resp_wrapper = data.get("response", {})
+                if isinstance(resp_wrapper, dict) and resp_wrapper:
+                    body = resp_wrapper.get("body", {})
+
             raw_items = body.get("items", [])
 
             # 첫 페이지에서 응답 구조 디버그 로깅
             if page_no == 1 and attempt == 0:
+                log.info(f"[DEBUG] data top keys: {list(data.keys()) if isinstance(data, dict) else type(data)}")
+                log.info(f"[DEBUG] data snippet: {json.dumps(data, ensure_ascii=False)[:500]}")
                 log.info(f"[DEBUG] body keys: {list(body.keys()) if isinstance(body, dict) else type(body)}")
                 log.info(f"[DEBUG] items type: {type(raw_items).__name__}")
                 if isinstance(raw_items, dict):
