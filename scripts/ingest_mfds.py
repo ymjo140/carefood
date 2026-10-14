@@ -305,25 +305,157 @@ def fetch_page(api_key: str, page_no: int, num_rows: int) -> list[dict]:
     return []
 
 
-def fetch_all(api_key: str) -> list[dict]:
-    """전체 데이터를 페이지별로 가져온다."""
+class StatsAccumulator:
+    """메모리 절약: 전체 데이터를 저장하지 않고 카운터만 누적."""
+
+    def __init__(self):
+        self.total = 0
+        self.skipped = 0
+        self.has_sodium = 0
+        self.has_sugar = 0
+        self.has_fat = 0
+        self.has_calories = 0
+        self.has_fiber = 0
+        self.spicy_gt0 = 0
+        self.sodium_buckets = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0}
+        self.first_row_keys: Optional[list] = None
+        self.upserted = 0
+        self.upsert_errors = 0
+
+    def add(self, product: dict):
+        self.total += 1
+        if product["calories"] is not None:
+            self.has_calories += 1
+        if product["fat_g"] is not None:
+            self.has_fat += 1
+        if product["sugar_g"] is not None:
+            self.has_sugar += 1
+        if product["fiber_g"] is not None:
+            self.has_fiber += 1
+        if product["spicy_score"] > 0:
+            self.spicy_gt0 += 1
+        na = product["sodium_mg"]
+        if na is not None:
+            self.has_sodium += 1
+            if na < 300:
+                self.sodium_buckets[1] += 1
+            elif na < 500:
+                self.sodium_buckets[2] += 1
+            elif na < 800:
+                self.sodium_buckets[3] += 1
+            elif na < 1200:
+                self.sodium_buckets[4] += 1
+            else:
+                self.sodium_buckets[5] += 1
+
+    def print_report(self):
+        """적재 후 데이터 품질 리포트 출력."""
+        total = self.total
+        if total == 0:
+            log.warning("통계 리포트 생략: 데이터 없음")
+            return
+
+        log.info("=" * 50)
+        log.info("데이터 품질 리포트")
+        log.info("=" * 50)
+        log.info(f"  전체 제품수:           {total:>8,}")
+        log.info(f"  열량 데이터 있음:      {self.has_calories:>8,} ({self.has_calories/total*100:.1f}%)")
+        log.info(f"  나트륨 데이터 있음:    {self.has_sodium:>8,} ({self.has_sodium/total*100:.1f}%)")
+        log.info(f"  당류 데이터 있음:      {self.has_sugar:>8,} ({self.has_sugar/total*100:.1f}%)")
+        log.info(f"  지방 데이터 있음:      {self.has_fat:>8,} ({self.has_fat/total*100:.1f}%)")
+        log.info(f"  식이섬유 있음:         {self.has_fiber:>8,} ({self.has_fiber/total*100:.1f}%)")
+        log.info(f"  매운맛 점수 > 0:       {self.spicy_gt0:>8,} ({self.spicy_gt0/total*100:.1f}%)")
+        log.info(f"  스킵 (이름 없음):      {self.skipped:>8,}")
+        log.info("=" * 50)
+
+        # 나트륨 분포 (맛 매핑 기초 데이터)
+        if self.has_sodium > 0:
+            log.info("나트륨 분포 (짠맛 레벨별):")
+            labels = {
+                1: "싱거운 (0~300mg)",
+                2: "약한   (300~500mg)",
+                3: "보통   (500~800mg)",
+                4: "짠     (800~1200mg)",
+                5: "매우짠 (1200mg+)",
+            }
+            for level, count in self.sodium_buckets.items():
+                pct = count / max(self.has_sodium, 1) * 100
+                bar = "█" * int(pct / 2)
+                log.info(f"  레벨 {level} {labels[level]}: {count:>6,} ({pct:>5.1f}%) {bar}")
+        else:
+            log.warning("나트륨 데이터가 0건입니다 — 필드 매핑을 확인하세요 (--discover)")
+
+
+def ingest_streaming(api_key: str, supabase: Optional[Client]) -> StatsAccumulator:
+    """스트리밍 적재: 페이지별로 fetch → transform → upsert → 메모리 해제.
+
+    341K+ 행을 512MB 메모리 내에서 처리하기 위해
+    전체 데이터를 누적하지 않고 페이지 단위로 처리 후 즉시 폐기한다.
+    """
     total = fetch_total_count(api_key)
-    all_rows = []
     total_pages = (total + PAGE_SIZE - 1) // PAGE_SIZE
+    stats = StatsAccumulator()
+    total_fetched = 0
+
+    log.info(f"총 {total:,}건, {total_pages}페이지 스트리밍 처리 시작")
 
     for page_no in range(1, total_pages + 1):
+        # ── fetch ──
         items = fetch_page(api_key, page_no, PAGE_SIZE)
-        all_rows.extend(items)
-        fetched_so_far = min(page_no * PAGE_SIZE, total)
-        log.info(
-            f"  수집: 페이지 {page_no:>4}/{total_pages}"
-            f"  ({len(items):>4}건)"
-            f"  누적 {len(all_rows):,}"
-        )
+        total_fetched += len(items)
+
+        if not items:
+            log.warning(f"  페이지 {page_no}: 빈 응답, 건너뜀")
+            time.sleep(0.3)
+            continue
+
+        # 첫 페이지 필드 목록 기록
+        if stats.first_row_keys is None:
+            stats.first_row_keys = sorted(items[0].keys())
+            log.info(f"응답 필드 목록: {stats.first_row_keys}")
+
+        # ── transform ──
+        page_products = []
+        for row in items:
+            name = _get_field(row, "FOOD_NM_KR", "DESC_KOR", "FOOD_NM") or ""
+            if not name:
+                stats.skipped += 1
+                continue
+            product = transform_row(row)
+            stats.add(product)
+            page_products.append(product)
+
+        # ── upsert (페이지 단위) ──
+        if supabase and page_products:
+            try:
+                supabase.table("products").upsert(
+                    page_products, on_conflict="food_code"
+                ).execute()
+                stats.upserted += len(page_products)
+            except Exception as e:
+                stats.upsert_errors += len(page_products)
+                log.error(f"  upsert 실패 (페이지 {page_no}): {e}")
+
+        # ── 로깅 (10페이지마다 또는 마지막 페이지) ──
+        if page_no % 10 == 0 or page_no == total_pages:
+            log.info(
+                f"  처리: {page_no:>4}/{total_pages}페이지"
+                f"  누적 fetch={total_fetched:,}"
+                f"  변환={stats.total:,}"
+                f"  적재={stats.upserted:,}"
+            )
+
+        # ── 메모리 해제 ──
+        del items, page_products
+
         time.sleep(0.3)  # 서버 부하 방지
 
-    log.info(f"수집 완료: 총 {len(all_rows):,}건")
-    return all_rows
+    log.info(
+        f"스트리밍 완료: fetch={total_fetched:,}"
+        f"  변환={stats.total:,}  스킵={stats.skipped}"
+        f"  적재={stats.upserted:,}  실패={stats.upsert_errors}"
+    )
+    return stats
 
 
 # ═══════════════════════════════════════════════════════
@@ -511,110 +643,8 @@ def transform_row(row: dict) -> dict:
     }
 
 
-def transform_all(raw_rows: list[dict]) -> list[dict]:
-    """전체 데이터 변환 + 이름 없는 행 제거."""
-    products = []
-    skipped = 0
-    for row in raw_rows:
-        name = _get_field(row, "FOOD_NM_KR", "DESC_KOR", "FOOD_NM") or ""
-        if not name:
-            skipped += 1
-            continue
-        products.append(transform_row(row))
-
-    log.info(f"변환 완료: {len(products):,}건 (스킵 {skipped}건)")
-    return products
-
-
-# ═══════════════════════════════════════════════════════
-#  3. Supabase 적재 (Upsert)
-# ═══════════════════════════════════════════════════════
-
-def upsert_to_supabase(supabase: Client, products: list[dict]):
-    """food_code 기준 upsert — 기존 데이터 보존, 신규만 추가."""
-    total = len(products)
-    inserted = 0
-    errors = 0
-
-    for i in range(0, total, UPSERT_CHUNK):
-        chunk = products[i : i + UPSERT_CHUNK]
-        try:
-            result = (
-                supabase.table("products")
-                .upsert(chunk, on_conflict="food_code")
-                .execute()
-            )
-            inserted += len(chunk)
-            log.info(f"  upsert {i+1}~{i+len(chunk)} / {total}")
-        except Exception as e:
-            errors += len(chunk)
-            log.error(f"  upsert 실패 ({i+1}~{i+len(chunk)}): {e}")
-
-    log.info(f"적재 완료: 성공 {inserted:,} / 실패 {errors}")
-
-
-# ═══════════════════════════════════════════════════════
-#  4. 통계 리포트
-# ═══════════════════════════════════════════════════════
-
-def print_stats(products: list[dict]):
-    """적재 전 데이터 품질 리포트."""
-    total = len(products)
-    if total == 0:
-        log.warning("통계 리포트 생략: 데이터 없음")
-        return
-
-    has_sodium    = sum(1 for p in products if p["sodium_mg"] is not None)
-    has_sugar     = sum(1 for p in products if p["sugar_g"] is not None)
-    has_fat       = sum(1 for p in products if p["fat_g"] is not None)
-    has_calories  = sum(1 for p in products if p["calories"] is not None)
-    has_fiber     = sum(1 for p in products if p["fiber_g"] is not None)
-    spicy_gt0     = sum(1 for p in products if p["spicy_score"] > 0)
-
-    log.info("=" * 50)
-    log.info("데이터 품질 리포트")
-    log.info("=" * 50)
-    log.info(f"  전체 제품수:           {total:>8,}")
-    log.info(f"  열량 데이터 있음:      {has_calories:>8,} ({has_calories/total*100:.1f}%)")
-    log.info(f"  나트륨 데이터 있음:    {has_sodium:>8,} ({has_sodium/total*100:.1f}%)")
-    log.info(f"  당류 데이터 있음:      {has_sugar:>8,} ({has_sugar/total*100:.1f}%)")
-    log.info(f"  지방 데이터 있음:      {has_fat:>8,} ({has_fat/total*100:.1f}%)")
-    log.info(f"  식이섬유 있음:         {has_fiber:>8,} ({has_fiber/total*100:.1f}%)")
-    log.info(f"  매운맛 점수 > 0:       {spicy_gt0:>8,} ({spicy_gt0/total*100:.1f}%)")
-    log.info("=" * 50)
-
-    # 나트륨 분포 (맛 매핑 기초 데이터)
-    if has_sodium > 0:
-        sodium_buckets = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0}
-        for p in products:
-            na = p["sodium_mg"]
-            if na is None:
-                continue
-            if na < 300:
-                sodium_buckets[1] += 1
-            elif na < 500:
-                sodium_buckets[2] += 1
-            elif na < 800:
-                sodium_buckets[3] += 1
-            elif na < 1200:
-                sodium_buckets[4] += 1
-            else:
-                sodium_buckets[5] += 1
-
-        log.info("나트륨 분포 (짠맛 레벨별):")
-        labels = {
-            1: "싱거운 (0~300mg)",
-            2: "약한   (300~500mg)",
-            3: "보통   (500~800mg)",
-            4: "짠     (800~1200mg)",
-            5: "매우짠 (1200mg+)",
-        }
-        for level, count in sodium_buckets.items():
-            pct = count / max(has_sodium, 1) * 100
-            bar = "█" * int(pct / 2)
-            log.info(f"  레벨 {level} {labels[level]}: {count:>6,} ({pct:>5.1f}%) {bar}")
-    else:
-        log.warning("나트륨 데이터가 0건입니다 — 필드 매핑을 확인하세요 (--discover)")
+# (transform_all / upsert_to_supabase / print_stats 는 StatsAccumulator +
+#  ingest_streaming 으로 통합됨 — 메모리 512MB 제한 대응)
 
 
 # ═══════════════════════════════════════════════════════
@@ -638,48 +668,41 @@ def main():
         return
 
     log.info("=" * 50)
-    log.info("식약처 식품영양성분DB → Supabase 적재 시작")
+    log.info("식약처 식품영양성분DB → Supabase 적재 시작 (스트리밍 모드)")
     log.info(f"API: data.go.kr (공공데이터포털)")
+    log.info(f"페이지 크기: {PAGE_SIZE}건, upsert 단위: 페이지별")
     log.info(f"시작 시간: {datetime.now().isoformat()}")
     log.info("=" * 50)
 
-    # Step 1: 서비스 탐지 + API에서 전체 데이터 수집
-    log.info("[1/4] data.go.kr API 서비스 탐지 및 호출 중...")
-    raw_rows = fetch_all(MFDS_API_KEY)
+    # Supabase 클라이언트 준비
+    supabase = None
+    if SUPABASE_URL and SUPABASE_KEY:
+        supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+        log.info("Supabase 연결 완료")
+    else:
+        log.warning("SUPABASE_URL/KEY 미설정 — 변환·통계만 수행 (적재 스킵)")
 
-    if not raw_rows:
+    # 서비스 탐지
+    log.info("[1/2] data.go.kr API 서비스 탐지 중...")
+    detect_endpoint(MFDS_API_KEY)
+
+    # 스트리밍 적재: fetch → transform → upsert 를 페이지 단위로 반복
+    log.info("[2/2] 스트리밍 수집·변환·적재 시작...")
+    stats = ingest_streaming(MFDS_API_KEY, supabase)
+
+    if stats.total == 0:
         log.error("수집된 데이터가 없습니다. API 키와 네트워크를 확인하세요.")
         sys.exit(1)
 
-    # 첫 번째 행의 필드 목록 로깅 (매핑 확인용)
-    log.info(f"응답 필드 목록: {sorted(raw_rows[0].keys())}")
-
-    # Step 2: 변환
-    log.info("[2/4] 데이터 변환 중...")
-    products = transform_all(raw_rows)
-
-    # Step 3: 통계 리포트
-    log.info("[3/4] 데이터 품질 검증 중...")
-    print_stats(products)
-
-    # JSON 백업 저장
-    backup_path = f"mfds_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-    with open(backup_path, "w", encoding="utf-8") as f:
-        json.dump(products, f, ensure_ascii=False, indent=2)
-    log.info(f"백업 저장: {backup_path}")
-
-    # Step 4: Supabase 적재
-    if not SUPABASE_URL or not SUPABASE_KEY:
-        log.warning("SUPABASE_URL/KEY 미설정 — 적재 스킵 (JSON 백업만 저장됨)")
-        log.info("Supabase 설정 후 다시 실행하세요.")
-        return
-
-    log.info("[4/4] Supabase 적재 중...")
-    supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-    upsert_to_supabase(supabase, products)
+    # 통계 리포트
+    stats.print_report()
 
     log.info("=" * 50)
-    log.info(f"완료! 총 {len(products):,}건 처리")
+    log.info(
+        f"완료! 변환 {stats.total:,}건"
+        f" / 적재 {stats.upserted:,}건"
+        f" / 실패 {stats.upsert_errors}"
+    )
     log.info(f"종료 시간: {datetime.now().isoformat()}")
     log.info("=" * 50)
 
