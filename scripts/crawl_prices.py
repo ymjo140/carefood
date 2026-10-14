@@ -2,14 +2,23 @@
 쿠팡/마켓컬리/네이버 가격 크롤러 → product_prices 테이블 적재
 ================================================================
 3개 채널 전략:
-  1) 네이버 쇼핑 API (1차): 모든 쇼핑몰 최저가를 한번에 수집
+  1) 네이버 쇼핑 검색 API (1차): 모든 쇼핑몰 최저가를 한번에 수집
+     - /v1/search/shop.json — 상품명/가격/링크 반환
+     - 실패 시 graceful skip (크롤러는 계속 작동)
   2) 쿠팡 파트너스 API (2차): 쿠팡 어필리에이트 링크 생성 (수수료 수익)
   3) 마켓컬리 (3차): 검색 URL 기반 아웃링크 생성
+
+추가 기능:
+  --trends 모드: 네이버 쇼핑인사이트 API로 키워드 트렌드 수집
+     - /v1/datalab/shopping/category/keywords — 검색 클릭 추이 (상대 비율)
+     - 케어푸드 관련 키워드 인기도 분석용
 
 사용법:
   pip install requests supabase python-dotenv
   cp .env.example .env   # 키 채우기
-  python crawl_prices.py
+  python crawl_prices.py              # 가격 크롤링
+  python crawl_prices.py --trends     # 트렌드 분석
+  python crawl_prices.py --test '저염 도시락'  # 단일 테스트
 
 환경변수:
   NAVER_CLIENT_ID      - 네이버 개발자 Client ID
@@ -69,6 +78,11 @@ UPSERT_CHUNK = 200
 #  - 응답: title, link, image, lprice, mallName 등
 
 NAVER_SHOP_URL = "https://openapi.naver.com/v1/search/shop.json"
+NAVER_INSIGHT_URL = "https://openapi.naver.com/v1/datalab/shopping/category/keywords"
+NAVER_INSIGHT_CATEGORY_URL = "https://openapi.naver.com/v1/datalab/shopping/categories"
+
+# 네이버 쇼핑 검색 API 가용 여부 (첫 호출 시 자동 판단)
+_naver_search_available: Optional[bool] = None
 
 def strip_html(text: str) -> str:
     """네이버 API 응답의 <b> 태그 제거."""
@@ -78,12 +92,18 @@ def strip_html(text: str) -> str:
 def naver_search(query: str, display: int = 20) -> list[dict]:
     """
     네이버 쇼핑 검색 API 호출.
+    API가 비활성/미지원인 경우 자동으로 스킵 (크롤러는 계속 작동).
 
     Returns:
         [{title, link, image, lprice, mallName, productId, ...}, ...]
     """
+    global _naver_search_available
+
     if not NAVER_CLIENT_ID:
-        log.warning("NAVER_CLIENT_ID 미설정 — 네이버 검색 스킵")
+        return []
+
+    # 이전 호출에서 API 사용 불가 확인됨 → 즉시 스킵
+    if _naver_search_available is False:
         return []
 
     headers = {
@@ -99,9 +119,26 @@ def naver_search(query: str, display: int = 20) -> list[dict]:
 
     try:
         resp = requests.get(NAVER_SHOP_URL, headers=headers, params=params, timeout=10)
+
+        # 401/403 → API 미지원 또는 권한 없음 → 이후 호출 전부 스킵
+        if resp.status_code in (401, 403, 404):
+            if _naver_search_available is None:
+                _naver_search_available = False
+                log.warning(
+                    f"네이버 쇼핑 검색 API 사용 불가 (HTTP {resp.status_code}). "
+                    f"이 API는 더 이상 신규 등록을 지원하지 않을 수 있습니다. "
+                    f"쿠팡/컬리 채널로 계속 진행합니다."
+                )
+            return []
+
         resp.raise_for_status()
         data = resp.json()
         items = data.get("items", [])
+
+        # 첫 성공 → API 사용 가능 확인
+        if _naver_search_available is None:
+            _naver_search_available = True
+            log.info("네이버 쇼핑 검색 API 사용 가능 확인!")
 
         # HTML 태그 정리
         for item in items:
@@ -112,6 +149,237 @@ def naver_search(query: str, display: int = 20) -> list[dict]:
     except requests.RequestException as e:
         log.error(f"네이버 검색 실패 [{query}]: {e}")
         return []
+
+
+# ═══════════════════════════════════════════════════════
+#  1-B. 네이버 쇼핑인사이트 API (트렌드 분석)
+# ═══════════════════════════════════════════════════════
+#  - 검색 클릭 추이 (상대 비율 0~100)
+#  - 카테고리별, 키워드별, 성별/연령별 분석 가능
+#  - 일 1,000회 호출 제한
+#  - 가격 정보는 없음 → 제품 인기도/트렌드 분석에 활용
+
+# 케어푸드 관련 네이버쇼핑 카테고리 코드
+CAREFOOD_CATEGORIES = {
+    "식품": "50000000",
+    "건강식품": "50000008",
+}
+
+# 케어푸드 주요 트렌드 키워드
+CAREFOOD_TREND_KEYWORDS = [
+    "저염식",
+    "저당 간식",
+    "당뇨 식단",
+    "케어푸드",
+    "다이어트 도시락",
+    "저칼로리 간식",
+    "고단백 식품",
+    "저나트륨",
+    "무설탕",
+    "글루텐프리",
+]
+
+
+def naver_insight_keywords(
+    category: str,
+    keywords: list[str],
+    start_date: str,
+    end_date: str,
+    time_unit: str = "month",
+) -> list[dict]:
+    """
+    네이버 쇼핑인사이트 키워드별 트렌드 조회.
+
+    Args:
+        category: 네이버쇼핑 카테고리 코드 (예: "50000000")
+        keywords: 비교할 키워드 리스트 (최대 5개)
+        start_date: 조회 시작일 (yyyy-mm-dd)
+        end_date: 조회 종료일 (yyyy-mm-dd)
+        time_unit: 구간 단위 (date/week/month)
+
+    Returns:
+        [{title, category, data: [{period, ratio}, ...]}, ...]
+    """
+    if not NAVER_CLIENT_ID:
+        log.warning("NAVER_CLIENT_ID 미설정 — 쇼핑인사이트 스킵")
+        return []
+
+    headers = {
+        "X-Naver-Client-Id": NAVER_CLIENT_ID,
+        "X-Naver-Client-Secret": NAVER_CLIENT_SECRET,
+        "Content-Type": "application/json",
+    }
+
+    # 키워드를 5개씩 묶어서 요청 (API 제한)
+    keyword_groups = [
+        {"name": kw, "param": [kw]}
+        for kw in keywords[:5]
+    ]
+
+    body = {
+        "startDate": start_date,
+        "endDate": end_date,
+        "timeUnit": time_unit,
+        "category": category,
+        "keyword": keyword_groups,
+    }
+
+    try:
+        resp = requests.post(
+            NAVER_INSIGHT_URL,
+            headers=headers,
+            json=body,
+            timeout=15,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        return data.get("results", [])
+
+    except requests.RequestException as e:
+        log.error(f"쇼핑인사이트 키워드 트렌드 실패: {e}")
+        return []
+
+
+def naver_insight_categories(
+    categories: list[dict],
+    start_date: str,
+    end_date: str,
+    time_unit: str = "month",
+) -> list[dict]:
+    """
+    네이버 쇼핑인사이트 분야별 트렌드 조회.
+
+    Args:
+        categories: [{"name": "분야명", "param": ["코드"]}, ...] (최대 3개)
+        start_date: 조회 시작일 (yyyy-mm-dd)
+        end_date: 조회 종료일 (yyyy-mm-dd)
+
+    Returns:
+        [{title, category, data: [{period, ratio}, ...]}, ...]
+    """
+    if not NAVER_CLIENT_ID:
+        log.warning("NAVER_CLIENT_ID 미설정 — 쇼핑인사이트 스킵")
+        return []
+
+    headers = {
+        "X-Naver-Client-Id": NAVER_CLIENT_ID,
+        "X-Naver-Client-Secret": NAVER_CLIENT_SECRET,
+        "Content-Type": "application/json",
+    }
+
+    body = {
+        "startDate": start_date,
+        "endDate": end_date,
+        "timeUnit": time_unit,
+        "category": categories[:3],
+    }
+
+    try:
+        resp = requests.post(
+            NAVER_INSIGHT_CATEGORY_URL,
+            headers=headers,
+            json=body,
+            timeout=15,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        return data.get("results", [])
+
+    except requests.RequestException as e:
+        log.error(f"쇼핑인사이트 카테고리 트렌드 실패: {e}")
+        return []
+
+
+def run_trend_analysis():
+    """
+    케어푸드 관련 키워드의 네이버 쇼핑 검색 트렌드를 분석.
+    --trends 플래그로 실행.
+    """
+    from datetime import timedelta
+
+    if not NAVER_CLIENT_ID:
+        log.error("NAVER_CLIENT_ID가 설정되지 않았습니다.")
+        log.info("발급: https://developers.naver.com/apps/#/register")
+        sys.exit(1)
+
+    today = datetime.now()
+    end_date = today.strftime("%Y-%m-%d")
+    start_date_3m = (today - timedelta(days=90)).strftime("%Y-%m-%d")
+    start_date_1y = (today - timedelta(days=365)).strftime("%Y-%m-%d")
+
+    log.info("=" * 60)
+    log.info("케어푸드 트렌드 분석 (네이버 쇼핑인사이트)")
+    log.info("=" * 60)
+
+    # 1) 카테고리 트렌드: 식품 vs 건강식품
+    log.info("\n[1] 카테고리별 트렌드 (최근 1년)")
+    cat_groups = [
+        {"name": name, "param": [code]}
+        for name, code in CAREFOOD_CATEGORIES.items()
+    ]
+    cat_results = naver_insight_categories(cat_groups, start_date_1y, end_date, "month")
+    for result in cat_results:
+        title = result.get("title", "?")
+        data = result.get("data", [])
+        if data:
+            latest = data[-1]
+            log.info(f"  {title}: 최근 ratio={latest.get('ratio', 0):.1f}")
+            # 3개월 전 대비 변화
+            if len(data) >= 4:
+                prev = data[-4]
+                change = latest.get("ratio", 0) - prev.get("ratio", 0)
+                direction = "↑" if change > 0 else "↓" if change < 0 else "→"
+                log.info(f"    3개월 전 대비: {direction} {abs(change):.1f}")
+
+    # 2) 키워드 트렌드 (5개씩 나눠서)
+    log.info(f"\n[2] 키워드별 트렌드 (최근 3개월)")
+    all_keyword_results = []
+    food_cat = CAREFOOD_CATEGORIES.get("식품", "50000000")
+
+    for i in range(0, len(CAREFOOD_TREND_KEYWORDS), 5):
+        batch = CAREFOOD_TREND_KEYWORDS[i:i+5]
+        results = naver_insight_keywords(food_cat, batch, start_date_3m, end_date, "week")
+        all_keyword_results.extend(results)
+        time.sleep(0.2)  # rate limit
+
+    # 결과 정리 — 최근 주의 ratio 기준 정렬
+    keyword_scores = []
+    for result in all_keyword_results:
+        title = result.get("title", "?")
+        data = result.get("data", [])
+        if data:
+            latest_ratio = data[-1].get("ratio", 0)
+            keyword_scores.append((title, latest_ratio))
+
+    keyword_scores.sort(key=lambda x: x[1], reverse=True)
+
+    log.info(f"  {'키워드':<20s}  {'인기도 (0~100)':>14s}")
+    log.info(f"  {'─' * 20}  {'─' * 14}")
+    for kw, score in keyword_scores:
+        bar = "█" * int(score / 5) + "░" * (20 - int(score / 5))
+        log.info(f"  {kw:<20s}  {score:>10.1f}  {bar}")
+
+    # JSON 저장
+    trend_data = {
+        "analyzed_at": today.isoformat(),
+        "period": f"{start_date_3m} ~ {end_date}",
+        "category_trends": [
+            {
+                "title": r.get("title"),
+                "data": r.get("data", []),
+            }
+            for r in cat_results
+        ],
+        "keyword_trends": [
+            {"keyword": kw, "latest_ratio": score}
+            for kw, score in keyword_scores
+        ],
+    }
+    trend_path = f"trends_{today.strftime('%Y%m%d')}.json"
+    with open(trend_path, "w", encoding="utf-8") as f:
+        json.dump(trend_data, f, ensure_ascii=False, indent=2)
+    log.info(f"\n트렌드 데이터 저장: {trend_path}")
+    log.info("=" * 60)
 
 
 def classify_platform(mall_name: str, link: str) -> str:
@@ -499,11 +767,20 @@ def main():
         "--no-coupang", action="store_true",
         help="쿠팡 파트너스 API 미사용"
     )
+    parser.add_argument(
+        "--trends", action="store_true",
+        help="가격 크롤링 대신 쇼핑인사이트 트렌드 분석 실행"
+    )
     args = parser.parse_args()
 
     # 테스트 모드
     if args.test:
         test_search(args.test)
+        return
+
+    # 트렌드 분석 모드
+    if args.trends:
+        run_trend_analysis()
         return
 
     # 풀 모드 — Supabase 필수
@@ -512,13 +789,29 @@ def main():
         log.info("테스트: python crawl_prices.py --test '저염 도시락'")
         sys.exit(1)
 
-    if not NAVER_CLIENT_ID:
-        log.error("NAVER_CLIENT_ID가 설정되지 않았습니다.")
-        log.info("발급: https://developers.naver.com/apps/#/register → 검색 API 선택")
+    # 채널별 API 키 상태 확인 (경고만, 종료하지 않음)
+    channels = []
+    if NAVER_CLIENT_ID:
+        channels.append("네이버")
+    else:
+        log.warning("NAVER_CLIENT_ID 미설정 — 네이버 채널 스킵")
+    if COUPANG_ACCESS_KEY:
+        channels.append("쿠팡")
+    else:
+        log.warning("COUPANG_ACCESS_KEY 미설정 — 쿠팡 채널 스킵")
+    channels.append("마켓컬리(아웃링크)")
+
+    if not NAVER_CLIENT_ID and not COUPANG_ACCESS_KEY:
+        log.error(
+            "네이버/쿠팡 API 키가 모두 없습니다. "
+            "최소 1개 채널의 API 키를 설정하세요."
+        )
+        log.info("발급: https://developers.naver.com/apps/#/register")
         sys.exit(1)
 
     log.info("=" * 50)
     log.info("가격 크롤러 시작")
+    log.info(f"활성 채널: {', '.join(channels)}")
     log.info(f"시작 시간: {datetime.now().isoformat()}")
     log.info("=" * 50)
 
