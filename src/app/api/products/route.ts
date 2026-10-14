@@ -33,7 +33,6 @@ export async function GET(request: NextRequest) {
   const sweet = Number(searchParams.get("sweet") || 0);
   const spicy = Number(searchParams.get("spicy") || 0);
   const fatty = Number(searchParams.get("fatty") || 0);
-  const category = searchParams.get("category") || null;
   const search = searchParams.get("q") || null;
   const page = Number(searchParams.get("page") || 1);
   const limit = Math.min(Number(searchParams.get("limit") || 20), 50);
@@ -63,14 +62,12 @@ export async function GET(request: NextRequest) {
     query = query.eq("spicy_score", spicy);
   }
 
-  // 카테고리 필터
-  if (category) {
-    query = query.eq("category_large", category);
-  }
+  // 상용제품만 (구매 가능 제품)
+  query = query.eq("category_large", "상용제품");
 
-  // 검색
+  // 검색 (패턴 매칭)
   if (search) {
-    query = query.textSearch("name", search, { type: "plain" });
+    query = query.ilike("name", `%${search}%`);
   }
 
   // 페이지네이션

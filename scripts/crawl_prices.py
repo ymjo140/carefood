@@ -544,36 +544,11 @@ def kurly_search_link(keyword: str) -> str:
 
 
 # ═══════════════════════════════════════════════════════
-#  4. 메인 파이프라인
+#  4. 스트리밍 파이프라인
 # ═══════════════════════════════════════════════════════
-
-def load_products(supabase: Client) -> list[dict]:
-    """
-    products 테이블에서 검색 대상 제품 로드.
-    이름과 ID만 가져온다.
-    """
-    all_products = []
-    page_size = 1000
-    offset = 0
-
-    while True:
-        result = (
-            supabase.table("products")
-            .select("id, name, serving_size_g, category_large")
-            .eq("is_active", True)
-            .range(offset, offset + page_size - 1)
-            .execute()
-        )
-        batch = result.data or []
-        all_products.extend(batch)
-
-        if len(batch) < page_size:
-            break
-        offset += page_size
-
-    log.info(f"검색 대상 제품: {len(all_products):,}건")
-    return all_products
-
+#  - 제품을 페이지 단위로 로드 → 검색 → upsert → 해제
+#  - 메모리 누적 없음 (512MB Render 환경 안전)
+#  - 기존 가격 수집된 제품 자동 스킵
 
 def build_search_query(product: dict) -> str:
     """
@@ -600,116 +575,181 @@ def build_search_query(product: dict) -> str:
     return name
 
 
-def crawl_product_prices(
-    supabase: Client,
-    products: list[dict],
-    use_coupang: bool = True,
-    max_products: int = 0,
-) -> list[dict]:
-    """
-    제품 목록을 순회하며 가격 정보 수집.
-
-    Args:
-        supabase: Supabase 클라이언트
-        products: products 테이블 레코드 리스트
-        use_coupang: 쿠팡 파트너스 API 사용 여부
-        max_products: 최대 처리 건수 (0=전체)
-    """
-    all_price_records = []
-    coupang_calls = 0
-    MAX_COUPANG_PER_HOUR = 9  # 안전 마진
-
-    targets = products[:max_products] if max_products > 0 else products
-    total = len(targets)
-
-    for i, product in enumerate(targets):
-        product_id = product["id"]
-        query = build_search_query(product)
-
-        if not query or len(query) < 2:
-            continue
-
-        # ─── 네이버 쇼핑 검색 (1차) ───
-        naver_items = naver_search(query, display=10)
-        if naver_items:
-            records = naver_to_price_records(
-                product_id,
-                naver_items,
-                product.get("serving_size_g"),
-            )
-            all_price_records.extend(records)
-
-        # ─── 쿠팡 파트너스 (2차 — 어필리에이트 링크) ───
-        # 쿠팡 결과가 네이버에서 이미 있으면 스킵
-        has_coupang = any(r["platform"] == "coupang" for r in all_price_records[-10:])
-
-        if use_coupang and not has_coupang and coupang_calls < MAX_COUPANG_PER_HOUR:
-            coupang_items = coupang_search(query, limit=3)
-            for item in coupang_items[:1]:  # 최저가 1건만
-                record = coupang_to_price_record(product_id, item)
-                if record:
-                    all_price_records.append(record)
-            coupang_calls += 1
-
-        # ─── 진행률 로깅 ───
-        if (i + 1) % 50 == 0 or i == total - 1:
-            log.info(
-                f"  진행: {i+1:>5}/{total}  "
-                f"수집 가격: {len(all_price_records):,}건  "
-                f"쿠팡API: {coupang_calls}회"
-            )
-
-        # 네이버 API 속도 제한 (초당 10회 이내)
-        time.sleep(0.15)
-
-    log.info(f"가격 수집 완료: 총 {len(all_price_records):,}건")
-    return all_price_records
-
-
-def upsert_prices(supabase: Client, records: list[dict]):
-    """product_prices 테이블에 upsert."""
-    total = len(records)
-    inserted = 0
+def _flush_buffer(supabase: Client, buffer: list[dict]) -> tuple[int, int]:
+    """Upsert a buffer of price records. Returns (ok_count, error_count)."""
+    if not buffer:
+        return 0, 0
+    ok = 0
     errors = 0
-
-    for i in range(0, total, UPSERT_CHUNK):
-        chunk = records[i : i + UPSERT_CHUNK]
+    for i in range(0, len(buffer), UPSERT_CHUNK):
+        chunk = buffer[i : i + UPSERT_CHUNK]
         try:
             supabase.table("product_prices").upsert(
                 chunk,
                 on_conflict="product_id,platform",
             ).execute()
-            inserted += len(chunk)
-            log.info(f"  upsert {i+1}~{i+len(chunk)} / {total}")
+            ok += len(chunk)
         except Exception as e:
-            # on_conflict 컬럼 조합에 unique 제약이 없으면 insert로 대체
-            try:
-                supabase.table("product_prices").insert(chunk).execute()
-                inserted += len(chunk)
-            except Exception as e2:
-                errors += len(chunk)
-                log.error(f"  적재 실패 ({i+1}~{i+len(chunk)}): {e2}")
-
-    log.info(f"적재 완료: 성공 {inserted:,} / 실패 {errors}")
+            errors += len(chunk)
+            log.error(f"  upsert 실패 ({len(chunk)}건): {e}")
+    return ok, errors
 
 
-def print_crawl_stats(records: list[dict]):
-    """크롤링 결과 통계."""
-    from collections import Counter
-    platforms = Counter(r["platform"] for r in records)
+def crawl_streaming(
+    supabase: Client,
+    max_products: int = 2000,
+    use_coupang: bool = False,
+    skip_crawled: bool = True,
+) -> dict:
+    """
+    스트리밍 가격 크롤러.
+    제품을 페이지 단위로 로드 -> 검색 -> upsert -> 해제.
+    메모리 누적 없이 동작하여 512MB 환경에서 안전.
+    """
+    # ─── 기존 가격 수집 제품 ID 로드 (스킵용) ───
+    crawled_ids: set[str] = set()
+    if skip_crawled:
+        offset = 0
+        while True:
+            result = (
+                supabase.table("product_prices")
+                .select("product_id")
+                .range(offset, offset + 4999)
+                .execute()
+            )
+            batch = result.data or []
+            crawled_ids.update(r["product_id"] for r in batch)
+            if len(batch) < 5000:
+                break
+            offset += 5000
+        if crawled_ids:
+            log.info(f"  이미 가격 수집된 제품: {len(crawled_ids):,}건 (스킵)")
 
-    log.info("=" * 50)
-    log.info("크롤링 결과 통계")
-    log.info("=" * 50)
-    log.info(f"  총 가격 레코드: {len(records):,}")
-    for platform, count in platforms.most_common():
-        log.info(f"  {platform:>12}: {count:>6,}건")
+    # ─── 카운터 ───
+    processed = 0
+    searched = 0
+    prices_found = 0
+    upserted = 0
+    upsert_errors = 0
+    skipped_crawled = 0
+    skipped_no_query = 0
+    platform_counts: dict[str, int] = {}
+    coupang_calls = 0
+    MAX_COUPANG_PER_HOUR = 9
 
-    prices = [r["price"] for r in records if r["price"]]
-    if prices:
-        log.info(f"  가격 범위: {min(prices):,}원 ~ {max(prices):,}원")
-        log.info(f"  평균 가격: {sum(prices)//len(prices):,}원")
-    log.info("=" * 50)
+    # ─── 버퍼 (upsert 배치용) ───
+    buffer: list[dict] = []
+
+    page_size = 500
+    page_offset = 0
+    done = False
+
+    while not done:
+        # 상용제품만 페이지 단위 로드
+        result = (
+            supabase.table("products")
+            .select("id, name, serving_size_g, category_large")
+            .eq("is_active", True)
+            .eq("category_large", "상용제품")
+            .order("name")
+            .range(page_offset, page_offset + page_size - 1)
+            .execute()
+        )
+        products = result.data or []
+        if not products:
+            break
+
+        for product in products:
+            if max_products > 0 and processed >= max_products:
+                done = True
+                break
+
+            product_id = product["id"]
+
+            # 이미 수집된 제품 스킵
+            if product_id in crawled_ids:
+                skipped_crawled += 1
+                processed += 1
+                continue
+
+            query = build_search_query(product)
+            if not query or len(query) < 2:
+                skipped_no_query += 1
+                processed += 1
+                continue
+
+            # ─── 네이버 쇼핑 검색 ───
+            naver_items = naver_search(query, display=10)
+            searched += 1
+
+            if naver_items:
+                records = naver_to_price_records(
+                    product_id, naver_items, product.get("serving_size_g")
+                )
+                buffer.extend(records)
+                prices_found += len(records)
+                for r in records:
+                    p = r["platform"]
+                    platform_counts[p] = platform_counts.get(p, 0) + 1
+
+            # ─── 쿠팡 (선택적) ───
+            if use_coupang and coupang_calls < MAX_COUPANG_PER_HOUR:
+                has_coupang = any(
+                    r["platform"] == "coupang" for r in buffer[-10:]
+                )
+                if not has_coupang:
+                    coupang_items = coupang_search(query, limit=3)
+                    for item in coupang_items[:1]:
+                        record = coupang_to_price_record(product_id, item)
+                        if record:
+                            buffer.append(record)
+                            prices_found += 1
+                            platform_counts["coupang"] = (
+                                platform_counts.get("coupang", 0) + 1
+                            )
+                    coupang_calls += 1
+
+            processed += 1
+
+            # 버퍼 플러시
+            if len(buffer) >= UPSERT_CHUNK:
+                ok, err = _flush_buffer(supabase, buffer)
+                upserted += ok
+                upsert_errors += err
+                buffer.clear()
+
+            # 진행률 (100건마다)
+            if searched > 0 and searched % 100 == 0:
+                log.info(
+                    f"  진행: {processed:,}/{max_products:,}  "
+                    f"검색: {searched:,}  가격: {prices_found:,}  "
+                    f"DB: {upserted:,}  스킵: {skipped_crawled:,}"
+                )
+
+            # 네이버 API 속도 제한 (초당 ~8회)
+            time.sleep(0.12)
+
+        if len(products) < page_size:
+            break
+        page_offset += page_size
+
+    # 남은 버퍼 플러시
+    if buffer:
+        ok, err = _flush_buffer(supabase, buffer)
+        upserted += ok
+        upsert_errors += err
+        buffer.clear()
+
+    return {
+        "processed": processed,
+        "searched": searched,
+        "prices_found": prices_found,
+        "upserted": upserted,
+        "errors": upsert_errors,
+        "skipped_crawled": skipped_crawled,
+        "skipped_no_query": skipped_no_query,
+        "platforms": platform_counts,
+    }
 
 
 # ═══════════════════════════════════════════════════════
@@ -754,18 +794,22 @@ def test_search(keyword: str):
 def main():
     import argparse
 
-    parser = argparse.ArgumentParser(description="케어푸드 가격 크롤러")
+    parser = argparse.ArgumentParser(description="케어푸드 가격 크롤러 (스트리밍)")
     parser.add_argument(
         "--test", type=str, default=None,
         help="단일 키워드 테스트 (예: --test '저염 도시락')"
     )
     parser.add_argument(
-        "--max", type=int, default=0,
-        help="최대 처리 제품 수 (0=전체, 테스트 시 50 권장)"
+        "--max", type=int, default=2000,
+        help="최대 처리 제품 수 (기본: 2000, 0=전체)"
     )
     parser.add_argument(
         "--no-coupang", action="store_true",
         help="쿠팡 파트너스 API 미사용"
+    )
+    parser.add_argument(
+        "--no-skip", action="store_true",
+        help="이미 가격이 수집된 제품도 다시 크롤링"
     )
     parser.add_argument(
         "--trends", action="store_true",
@@ -789,70 +833,55 @@ def main():
         log.info("테스트: python crawl_prices.py --test '저염 도시락'")
         sys.exit(1)
 
-    # 채널별 API 키 상태 확인 (경고만, 종료하지 않음)
+    # 채널별 API 키 상태
     channels = []
     if NAVER_CLIENT_ID:
         channels.append("네이버")
     else:
         log.warning("NAVER_CLIENT_ID 미설정 — 네이버 채널 스킵")
-    if COUPANG_ACCESS_KEY:
+    if COUPANG_ACCESS_KEY and not args.no_coupang:
         channels.append("쿠팡")
-    else:
-        log.warning("COUPANG_ACCESS_KEY 미설정 — 쿠팡 채널 스킵")
-    channels.append("마켓컬리(아웃링크)")
 
     if not NAVER_CLIENT_ID and not COUPANG_ACCESS_KEY:
-        log.error(
-            "네이버/쿠팡 API 키가 모두 없습니다. "
-            "최소 1개 채널의 API 키를 설정하세요."
-        )
+        log.error("네이버/쿠팡 API 키가 모두 없습니다.")
         log.info("발급: https://developers.naver.com/apps/#/register")
         sys.exit(1)
 
     log.info("=" * 50)
-    log.info("가격 크롤러 시작")
-    log.info(f"활성 채널: {', '.join(channels)}")
-    log.info(f"시작 시간: {datetime.now().isoformat()}")
+    log.info("가격 크롤러 시작 (스트리밍 모드)")
+    log.info(f"  활성 채널: {', '.join(channels)}")
+    log.info(f"  최대 처리: {args.max if args.max > 0 else '전체'}")
+    log.info(f"  기존 스킵: {'아니오' if args.no_skip else '예'}")
+    log.info(f"  시작 시간: {datetime.now().isoformat()}")
     log.info("=" * 50)
 
     supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-    # Step 1: 검색 대상 제품 로드
-    log.info("[1/3] 제품 목록 로드 중...")
-    products = load_products(supabase)
-    if not products:
-        log.error("products 테이블이 비어있습니다. ingest_mfds.py를 먼저 실행하세요.")
-        sys.exit(1)
-
-    # Step 2: 가격 크롤링
-    log.info("[2/3] 가격 크롤링 중...")
-    price_records = crawl_product_prices(
+    stats = crawl_streaming(
         supabase,
-        products,
-        use_coupang=not args.no_coupang,
         max_products=args.max,
+        use_coupang=bool(COUPANG_ACCESS_KEY) and not args.no_coupang,
+        skip_crawled=not args.no_skip,
     )
 
-    if not price_records:
-        log.warning("수집된 가격 데이터가 없습니다.")
-        return
-
-    # 통계
-    print_crawl_stats(price_records)
-
-    # JSON 백업
-    backup_path = f"prices_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-    with open(backup_path, "w", encoding="utf-8") as f:
-        json.dump(price_records, f, ensure_ascii=False, indent=2, default=str)
-    log.info(f"백업 저장: {backup_path}")
-
-    # Step 3: Supabase 적재
-    log.info("[3/3] Supabase 적재 중...")
-    upsert_prices(supabase, price_records)
-
+    # ─── 리포트 ───
     log.info("=" * 50)
-    log.info(f"완료! {len(price_records):,}건 가격 정보 처리")
-    log.info(f"종료 시간: {datetime.now().isoformat()}")
+    log.info("크롤링 완료 리포트")
+    log.info("=" * 50)
+    log.info(f"  처리 제품:  {stats['processed']:,}")
+    log.info(f"  API 검색:  {stats['searched']:,}")
+    log.info(f"  수집 가격:  {stats['prices_found']:,}")
+    log.info(f"  DB 적재:   {stats['upserted']:,}")
+    log.info(f"  적재 실패:  {stats['errors']:,}")
+    log.info(f"  스킵(기존): {stats['skipped_crawled']:,}")
+    log.info(f"  스킵(쿼리): {stats['skipped_no_query']:,}")
+    if stats["platforms"]:
+        log.info("  플랫폼별:")
+        for platform, count in sorted(
+            stats["platforms"].items(), key=lambda x: -x[1]
+        ):
+            log.info(f"    {platform:>12}: {count:>6,}건")
+    log.info(f"  종료 시간: {datetime.now().isoformat()}")
     log.info("=" * 50)
 
 
