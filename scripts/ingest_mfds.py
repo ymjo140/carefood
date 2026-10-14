@@ -60,7 +60,7 @@ SERVICE_CANDIDATES = [
     ("FoodNtrCpntDbInfo03", "getFoodNtrCpntDbInq03"),
 ]
 ACTIVE_ENDPOINT = None   # 런타임에 자동 탐지
-PAGE_SIZE = 1000         # 한 페이지당 최대 건수
+PAGE_SIZE = 500          # 한 페이지당 최대 건수 (API 제한: 500)
 UPSERT_CHUNK = 500       # Supabase upsert 단위
 
 # ─── 매운맛 키워드 사전 ──────────────────────────────────
@@ -240,7 +240,7 @@ def fetch_page(api_key: str, page_no: int, num_rows: int) -> list[dict]:
             resp.raise_for_status()
             data = resp.json()
 
-            # 에러 응답 체크
+            # 에러 응답 체크 1: OpenAPI_ServiceResponse (키 미등록 등)
             err_header = (
                 data.get("OpenAPI_ServiceResponse", {})
                     .get("cmmMsgHeader", {})
@@ -248,6 +248,16 @@ def fetch_page(api_key: str, page_no: int, num_rows: int) -> list[dict]:
             if err_header:
                 err_msg = err_header.get("errMsg", "")
                 log.warning(f"API 경고: {err_msg}")
+                return []
+
+            # 에러 응답 체크 2: header.resultCode (파라미터 오류 등)
+            result_header = data.get("header", {})
+            result_code = result_header.get("resultCode", "00")
+            if result_code != "00":
+                log.warning(
+                    f"API 응답 오류 (code={result_code}): "
+                    f"{result_header.get('resultMsg', '')}"
+                )
                 return []
 
             # body 탐색: data.body 또는 data.response.body
