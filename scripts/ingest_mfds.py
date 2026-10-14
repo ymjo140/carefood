@@ -151,6 +151,9 @@ def discover_fields(api_key: str):
     body = data.get("body", {})
     total = body.get("totalCount", "?")
     items = body.get("items", [])
+    # data.go.kr: body.items는 dict이고 실제 리스트는 body.items.item
+    if isinstance(items, dict):
+        items = items.get("item", [])
     if isinstance(items, dict):
         items = [items]
 
@@ -233,9 +236,26 @@ def fetch_page(api_key: str, page_no: int, num_rows: int) -> list[dict]:
                 return []
 
             body = data.get("body", {})
-            items = body.get("items", [])
+            raw_items = body.get("items", [])
 
-            # items가 dict일 때 (1건만 있으면 리스트가 아닌 dict로 옴)
+            # 첫 페이지에서 응답 구조 디버그 로깅
+            if page_no == 1 and attempt == 0:
+                log.info(f"[DEBUG] body keys: {list(body.keys()) if isinstance(body, dict) else type(body)}")
+                log.info(f"[DEBUG] items type: {type(raw_items).__name__}")
+                if isinstance(raw_items, dict):
+                    log.info(f"[DEBUG] items keys: {list(raw_items.keys())}")
+                    inner = raw_items.get("item")
+                    if inner is not None:
+                        log.info(f"[DEBUG] items.item type: {type(inner).__name__}, len: {len(inner) if isinstance(inner, list) else 'N/A'}")
+                        if isinstance(inner, list) and inner:
+                            log.info(f"[DEBUG] 첫 항목 keys: {list(inner[0].keys()) if isinstance(inner[0], dict) else 'not dict'}")
+
+            # data.go.kr 응답 구조: body.items는 dict이고,
+            # 실제 데이터 리스트는 body.items.item에 있음
+            items = raw_items
+            if isinstance(items, dict):
+                items = items.get("item", [])
+            # 1건만 있으면 리스트가 아닌 dict로 올 수 있음
             if isinstance(items, dict):
                 items = [items]
             if items is None:
