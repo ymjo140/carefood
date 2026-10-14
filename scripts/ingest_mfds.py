@@ -1,5 +1,5 @@
 """
-식약처 식품영양성분DB(I2790) → Supabase 적재 파이프라인
+식약처 식품영양성분DB → Supabase 적재 파이프라인
 =====================================================
 사용법:
   1. .env 파일에 API 키 설정
@@ -10,6 +10,11 @@
   MFDS_API_KEY      - 식품안전나라 OpenAPI 인증키 (https://openapi.foodsafetykorea.go.kr)
   SUPABASE_URL      - Supabase 프로젝트 URL
   SUPABASE_KEY      - Supabase service_role 키 (anon 아님 — RLS 우회 필요)
+
+참고:
+  - I2790 서비스는 2023년 이후 폐지됨 (ERROR-310)
+  - I0750이 현재 '식품영양성분 DB' 서비스
+  - 코드가 자동으로 사용 가능한 서비스를 탐지함
 """
 
 import os
@@ -44,7 +49,9 @@ SUPABASE_URL   = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY   = os.getenv("SUPABASE_KEY", "")   # service_role key
 
 BASE_URL = "https://openapi.foodsafetykorea.go.kr/api"
-SERVICE_ID = "I2790"                               # 식품영양성분DB
+# I0750 = 현재 식품영양성분 DB, I2790 = 구버전(~2023, 폐지됨)
+SERVICE_ID_CANDIDATES = ["I0750", "I2790"]
+SERVICE_ID = None  # 런타임에 자동 탐지
 BATCH_SIZE = 1000                                  # API 최대 1,000건/요청
 UPSERT_CHUNK = 500                                 # Supabase upsert 단위
 
@@ -71,14 +78,48 @@ SPICY_KEYWORDS = [
 #  1. 식약처 API 호출
 # ═══════════════════════════════════════════════════════
 
+def detect_service_id(api_key: str) -> str:
+    """사용 가능한 SERVICE_ID를 자동 탐지한다."""
+    global SERVICE_ID
+    if SERVICE_ID is not None:
+        return SERVICE_ID
+
+    for sid in SERVICE_ID_CANDIDATES:
+        url = f"{BASE_URL}/{api_key}/{sid}/json/1/1"
+        try:
+            resp = requests.get(url, timeout=30)
+            resp.raise_for_status()
+            data = resp.json()
+            result = data.get(sid, {})
+            code = result.get("RESULT", {}).get("CODE", "")
+            if code == "INFO-000":
+                SERVICE_ID = sid
+                log.info(f"서비스 탐지 성공: {sid}")
+                return sid
+            else:
+                log.warning(f"서비스 {sid} 사용 불가: {code} - {result.get('RESULT', {}).get('MSG', '')}")
+        except Exception as e:
+            log.warning(f"서비스 {sid} 연결 실패: {e}")
+
+    raise RuntimeError(
+        "사용 가능한 식품영양성분 서비스를 찾을 수 없습니다.\n"
+        f"시도한 서비스: {SERVICE_ID_CANDIDATES}\n"
+        "해결 방법:\n"
+        "  1. https://openapi.foodsafetykorea.go.kr 로그인\n"
+        "  2. '식품영양성분 DB' (I0750) 서비스 신청\n"
+        "  3. 발급받은 인증키를 MFDS_API_KEY에 설정"
+    )
+
+
 def fetch_total_count(api_key: str) -> int:
     """전체 데이터 건수 조회 (1건만 가져와서 total_count 확인)."""
-    url = f"{BASE_URL}/{api_key}/{SERVICE_ID}/json/1/1"
+    sid = detect_service_id(api_key)
+    url = f"{BASE_URL}/{api_key}/{sid}/json/1/1"
     resp = requests.get(url, timeout=30)
     resp.raise_for_status()
     data = resp.json()
 
-    result = data.get(SERVICE_ID, {})
+    result = data.get(sid, {})
     if "RESULT" in result and result["RESULT"].get("CODE") != "INFO-000":
         raise RuntimeError(f"API 오류: {result['RESULT']}")
 
@@ -89,13 +130,14 @@ def fetch_total_count(api_key: str) -> int:
 
 def fetch_batch(api_key: str, start: int, end: int) -> list[dict]:
     """start~end 범위의 데이터를 JSON으로 가져온다."""
-    url = f"{BASE_URL}/{api_key}/{SERVICE_ID}/json/{start}/{end}"
+    sid = SERVICE_ID  # detect_service_id()에서 이미 설정됨
+    url = f"{BASE_URL}/{api_key}/{sid}/json/{start}/{end}"
     for attempt in range(3):
         try:
             resp = requests.get(url, timeout=60)
             resp.raise_for_status()
             data = resp.json()
-            result = data.get(SERVICE_ID, {})
+            result = data.get(sid, {})
 
             if "RESULT" in result:
                 code = result["RESULT"].get("CODE", "")
@@ -195,7 +237,7 @@ def transform_row(row: dict) -> dict:
         "manufacturer":     row.get("MAKER_NAME") or None,
         "category_large":   row.get("GROUP_NAME") or None,
 
-        # 영양성분 (I2790 제공 9개)
+        # 영양성분 (I0750/I2790 공통 필드 9개)
         "serving_size_g":   safe_numeric(row.get("SERVING_SIZE")),
         "calories":         safe_numeric(row.get("NUTR_CONT1")),
         "carbs_g":          safe_numeric(row.get("NUTR_CONT2")),
@@ -207,7 +249,7 @@ def transform_row(row: dict) -> dict:
         "saturated_fat_g":  safe_numeric(row.get("NUTR_CONT8")),
         "trans_fat_g":      safe_numeric(row.get("NUTR_CONT9")),
 
-        # I2790에서 미제공 → null (추후 보강 데이터로 채움)
+        # 미제공 → null (추후 보강 데이터로 채움)
         "potassium_mg":     None,
         "calcium_mg":       None,
         "phosphorus_mg":    None,
@@ -341,8 +383,8 @@ def main():
     log.info(f"시작 시간: {datetime.now().isoformat()}")
     log.info("=" * 50)
 
-    # Step 1: API에서 전체 데이터 수집
-    log.info("[1/4] 식약처 API 호출 중...")
+    # Step 1: 서비스 탐지 + API에서 전체 데이터 수집
+    log.info("[1/4] 식약처 API 서비스 탐지 및 호출 중...")
     raw_rows = fetch_all(MFDS_API_KEY)
 
     if not raw_rows:
