@@ -68,7 +68,7 @@ COUPANG_SECRET_KEY  = os.getenv("COUPANG_SECRET_KEY", "")
 SUPABASE_URL        = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY        = os.getenv("SUPABASE_KEY", "")
 
-UPSERT_CHUNK = 200
+UPSERT_CHUNK = 50
 
 
 # ═══════════════════════════════════════════════════════
