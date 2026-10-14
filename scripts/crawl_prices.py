@@ -890,10 +890,48 @@ def test_search(keyword: str):
 #  메인
 # ═══════════════════════════════════════════════════════
 
+# 배치당 처리량 (subprocess 재시작으로 메모리 완전 해제)
+BATCH_SIZE = int(os.environ.get("CRAWL_BATCH_SIZE", "500"))
+
+
+def _run_single_batch(args) -> dict:
+    """단일 배치 실행 (워커 프로세스 내). 결과 stats dict 반환."""
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        log.error("SUPABASE_URL/KEY가 설정되지 않았습니다.")
+        sys.exit(1)
+
+    channels = ["다나와"]
+    if COUPANG_ACCESS_KEY and not args.no_coupang:
+        channels.append("쿠팡")
+
+    log.info(f"  활성 채널: {', '.join(channels)}")
+    log.info(f"  배치 크기: {args.max}")
+    log.info(f"  시작 메모리: {_get_memory_mb():.0f}MB")
+
+    supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+    stats = crawl_streaming(
+        supabase,
+        max_products=args.max,
+        use_coupang=bool(COUPANG_ACCESS_KEY) and not args.no_coupang,
+        skip_crawled=not args.no_skip,
+    )
+
+    log.info(
+        f"  배치 결과: 검색 {stats['searched']:,} / "
+        f"가격 {stats['prices_found']:,} / "
+        f"DB {stats['upserted']:,} / "
+        f"스킵 {stats['skipped_crawled']:,} / "
+        f"메모리 {_get_memory_mb():.0f}MB"
+    )
+    return stats
+
+
 def main():
     import argparse
+    import subprocess
 
-    parser = argparse.ArgumentParser(description="케어푸드 가격 크롤러 (스트리밍)")
+    parser = argparse.ArgumentParser(description="케어푸드 가격 크롤러 (배치 모드)")
     parser.add_argument(
         "--test", type=str, default=None,
         help="단일 키워드 테스트 (예: --test '저염 도시락')"
@@ -914,9 +952,13 @@ def main():
         "--trends", action="store_true",
         help="가격 크롤링 대신 쇼핑인사이트 트렌드 분석 실행"
     )
+    parser.add_argument(
+        "--worker", action="store_true",
+        help="(내부용) 배치 워커 모드로 실행"
+    )
     args = parser.parse_args()
 
-    # 환경변수 CRAWL_MAX가 있으면 --max 오버라이드 (Render 시작 명령 하드코딩 우회)
+    # 환경변수 CRAWL_MAX가 있으면 --max 오버라이드
     crawl_max_env = os.environ.get("CRAWL_MAX")
     if crawl_max_env:
         args.max = int(crawl_max_env)
@@ -931,51 +973,57 @@ def main():
         run_trend_analysis()
         return
 
-    # 풀 모드 — Supabase 필수
-    if not SUPABASE_URL or not SUPABASE_KEY:
-        log.error("SUPABASE_URL/KEY가 설정되지 않았습니다.")
-        log.info("테스트: python crawl_prices.py --test '저염 도시락'")
-        sys.exit(1)
+    # ─── 워커 모드: 단일 배치 실행 후 종료 ───
+    if args.worker:
+        stats = _run_single_batch(args)
+        # 새로 검색한 건이 0이면 → 모든 미수집 제품 처리 완료
+        if stats["searched"] == 0:
+            sys.exit(2)  # 부모에게 "더 이상 없음" 시그널
+        return
 
-    # 채널별 상태
-    channels = ["다나와"]  # 다나와는 API 키 불필요, 항상 사용 가능
-    if COUPANG_ACCESS_KEY and not args.no_coupang:
-        channels.append("쿠팡")
-
+    # ─── 오케스트레이터 모드: 배치별 subprocess 반복 ───
     log.info("=" * 50)
-    log.info("가격 크롤러 시작 (스트리밍 모드)")
-    log.info(f"  활성 채널: {', '.join(channels)}")
-    log.info(f"  최대 처리: {args.max if args.max > 0 else '전체'}")
-    log.info(f"  기존 스킵: {'아니오' if args.no_skip else '예'}")
+    log.info("가격 크롤러 시작 (배치 모드)")
+    log.info(f"  총 목표: {args.max if args.max > 0 else '전체'}")
+    log.info(f"  배치 크기: {BATCH_SIZE}건 (프로세스 재시작)")
     log.info(f"  시작 시간: {datetime.now().isoformat()}")
     log.info("=" * 50)
 
-    supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+    batch_num = 0
+    remaining = args.max if args.max > 0 else 999_999
 
-    stats = crawl_streaming(
-        supabase,
-        max_products=args.max,
-        use_coupang=bool(COUPANG_ACCESS_KEY) and not args.no_coupang,
-        skip_crawled=not args.no_skip,
-    )
+    while remaining > 0:
+        batch_num += 1
+        batch_size = min(BATCH_SIZE, remaining)
 
-    # ─── 리포트 ───
-    log.info("=" * 50)
-    log.info("크롤링 완료 리포트")
-    log.info("=" * 50)
-    log.info(f"  처리 제품:  {stats['processed']:,}")
-    log.info(f"  API 검색:  {stats['searched']:,}")
-    log.info(f"  수집 가격:  {stats['prices_found']:,}")
-    log.info(f"  DB 적재:   {stats['upserted']:,}")
-    log.info(f"  적재 실패:  {stats['errors']:,}")
-    log.info(f"  스킵(기존): {stats['skipped_crawled']:,}")
-    log.info(f"  스킵(쿼리): {stats['skipped_no_query']:,}")
-    if stats["platforms"]:
-        log.info("  플랫폼별:")
-        for platform, count in sorted(
-            stats["platforms"].items(), key=lambda x: -x[1]
-        ):
-            log.info(f"    {platform:>12}: {count:>6,}건")
+        log.info(f"\n── 배치 #{batch_num} (목표 {batch_size}건) ──")
+
+        # 자기 자신을 --worker 모드로 subprocess 실행
+        cmd = [
+            sys.executable, os.path.abspath(__file__),
+            "--max", str(batch_size),
+            "--worker",
+        ]
+        if args.no_coupang:
+            cmd.append("--no-coupang")
+        if args.no_skip:
+            cmd.append("--no-skip")
+
+        result = subprocess.run(cmd, timeout=7200)
+
+        if result.returncode == 2:
+            log.info("  모든 미수집 제품 처리 완료!")
+            break
+        elif result.returncode != 0:
+            log.warning(f"  배치 #{batch_num} 비정상 종료 (code={result.returncode})")
+            log.info("  5초 후 다음 배치 시도 (skip_crawled로 이어서 처리)...")
+            time.sleep(5)
+
+        remaining -= batch_size
+
+    log.info("\n" + "=" * 50)
+    log.info("크롤링 전체 완료")
+    log.info(f"  총 배치: {batch_num}회")
     log.info(f"  종료 시간: {datetime.now().isoformat()}")
     log.info("=" * 50)
 
