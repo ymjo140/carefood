@@ -7,14 +7,18 @@
   3. python ingest_mfds.py
 
 환경변수:
-  MFDS_API_KEY      - 식품안전나라 OpenAPI 인증키 (https://openapi.foodsafetykorea.go.kr)
+  MFDS_API_KEY      - 공공데이터포털(data.go.kr) 서비스키
+                      (https://www.data.go.kr/data/15127578/openapi.do)
   SUPABASE_URL      - Supabase 프로젝트 URL
   SUPABASE_KEY      - Supabase service_role 키 (anon 아님 — RLS 우회 필요)
 
 참고:
-  - I2790 서비스는 2023년 이후 폐지됨 (ERROR-310)
-  - I0750이 현재 '식품영양성분 DB' 서비스
-  - 코드가 자동으로 사용 가능한 서비스를 탐지함
+  - 이 스크립트는 공공데이터포털(data.go.kr) API를 사용합니다
+  - 서비스: 식품의약품안전처_식품영양성분DB정보 (서비스번호 15127578)
+  - 엔드포인트: FoodNtrCpntDbInfo02 / FoodNtrCpntDbInfo03
+
+옵션:
+  --discover     1건 조회 후 응답 필드를 출력하고 종료 (디버깅용)
 """
 
 import os
@@ -48,22 +52,25 @@ MFDS_API_KEY   = os.getenv("MFDS_API_KEY", "")
 SUPABASE_URL   = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY   = os.getenv("SUPABASE_KEY", "")   # service_role key
 
-BASE_URL = "https://openapi.foodsafetykorea.go.kr/api"
-# I0750 = 현재 식품영양성분 DB, I2790 = 구버전(~2023, 폐지됨)
-SERVICE_ID_CANDIDATES = ["I0750", "I2790"]
-SERVICE_ID = None  # 런타임에 자동 탐지
-BATCH_SIZE = 1000                                  # API 최대 1,000건/요청
-UPSERT_CHUNK = 500                                 # Supabase upsert 단위
+# ─── data.go.kr API 설정 ────────────────────────────────
+BASE_URL = "https://apis.data.go.kr/1471000"
+# 서비스 버전 후보 (02가 현재 주력, 03은 최신)
+SERVICE_CANDIDATES = [
+    ("FoodNtrCpntDbInfo02", "getFoodNtrCpntDbInq02"),
+    ("FoodNtrCpntDbInfo03", "getFoodNtrCpntDbInq03"),
+]
+ACTIVE_ENDPOINT = None   # 런타임에 자동 탐지
+PAGE_SIZE = 1000         # 한 페이지당 최대 건수
+UPSERT_CHUNK = 500       # Supabase upsert 단위
 
 # ─── 매운맛 키워드 사전 ──────────────────────────────────
-# DB의 spicy_keywords 시드와 동일 — 인라인으로도 사용 가능
 SPICY_KEYWORDS = [
     ("청양고추", 5, 1.5),
     ("하바네로", 5, 1.5),
     ("캡사이신", 4, 1.3),
     ("고춧가루", 3, 1.0),
     ("고추장",   3, 0.8),
-    ("고추",     3, 1.0),   # '고추장' 이후에 매칭해야 중복 방지
+    ("고추",     3, 1.0),
     ("칠리",     3, 1.0),
     ("할라피뇨", 3, 1.2),
     ("라유",     2, 0.8),
@@ -75,99 +82,190 @@ SPICY_KEYWORDS = [
 
 
 # ═══════════════════════════════════════════════════════
-#  1. 식약처 API 호출
+#  1. data.go.kr API 호출
 # ═══════════════════════════════════════════════════════
 
-def detect_service_id(api_key: str) -> str:
-    """사용 가능한 SERVICE_ID를 자동 탐지한다."""
-    global SERVICE_ID
-    if SERVICE_ID is not None:
-        return SERVICE_ID
+def detect_endpoint(api_key: str) -> str:
+    """사용 가능한 API 엔드포인트를 자동 탐지한다."""
+    global ACTIVE_ENDPOINT
+    if ACTIVE_ENDPOINT is not None:
+        return ACTIVE_ENDPOINT
 
-    for sid in SERVICE_ID_CANDIDATES:
-        url = f"{BASE_URL}/{api_key}/{sid}/json/1/1"
+    for svc_name, op_name in SERVICE_CANDIDATES:
+        url = f"{BASE_URL}/{svc_name}/{op_name}"
+        params = {
+            "serviceKey": api_key,
+            "pageNo": "1",
+            "numOfRows": "1",
+            "type": "json",
+        }
         try:
-            resp = requests.get(url, timeout=30)
-            resp.raise_for_status()
+            resp = requests.get(url, params=params, timeout=30)
             data = resp.json()
-            result = data.get(sid, {})
-            code = result.get("RESULT", {}).get("CODE", "")
-            if code == "INFO-000":
-                SERVICE_ID = sid
-                log.info(f"서비스 탐지 성공: {sid}")
-                return sid
-            else:
-                log.warning(f"서비스 {sid} 사용 불가: {code} - {result.get('RESULT', {}).get('MSG', '')}")
+
+            # 에러 응답 체크
+            err_header = (
+                data.get("OpenAPI_ServiceResponse", {})
+                    .get("cmmMsgHeader", {})
+            )
+            if err_header:
+                err_msg = err_header.get("errMsg", "")
+                auth_msg = err_header.get("returnAuthMsg", "")
+                log.warning(f"서비스 {svc_name} 오류: {err_msg} - {auth_msg}")
+                continue
+
+            # 정상 응답 확인 (body.items 존재)
+            body = data.get("body", {})
+            if body.get("totalCount") is not None or body.get("items") is not None:
+                ACTIVE_ENDPOINT = f"{BASE_URL}/{svc_name}/{op_name}"
+                log.info(f"서비스 탐지 성공: {svc_name}/{op_name}")
+                return ACTIVE_ENDPOINT
+
+            log.warning(f"서비스 {svc_name} 응답 구조 불일치: {list(data.keys())}")
+
         except Exception as e:
-            log.warning(f"서비스 {sid} 연결 실패: {e}")
+            log.warning(f"서비스 {svc_name} 연결 실패: {e}")
 
     raise RuntimeError(
         "사용 가능한 식품영양성분 서비스를 찾을 수 없습니다.\n"
-        f"시도한 서비스: {SERVICE_ID_CANDIDATES}\n"
+        f"시도한 서비스: {[s[0] for s in SERVICE_CANDIDATES]}\n"
         "해결 방법:\n"
-        "  1. https://openapi.foodsafetykorea.go.kr 로그인\n"
-        "  2. '식품영양성분 DB' (I0750) 서비스 신청\n"
-        "  3. 발급받은 인증키를 MFDS_API_KEY에 설정"
+        "  1. https://www.data.go.kr/data/15127578/openapi.do 에서 활용신청\n"
+        "  2. 발급받은 일반 인증키를 MFDS_API_KEY에 설정\n"
+        "  3. 키 발급 후 1~2시간 후 활성화됨"
     )
 
 
+def discover_fields(api_key: str):
+    """API에서 1건을 조회해 응답 필드 목록을 출력한다 (디버깅용)."""
+    endpoint = detect_endpoint(api_key)
+    params = {
+        "serviceKey": api_key,
+        "pageNo": "1",
+        "numOfRows": "1",
+        "type": "json",
+    }
+    resp = requests.get(endpoint, params=params, timeout=30)
+    data = resp.json()
+
+    body = data.get("body", {})
+    total = body.get("totalCount", "?")
+    items = body.get("items", [])
+    if isinstance(items, dict):
+        items = [items]
+
+    log.info(f"=== 필드 디스커버리 (총 {total}건) ===")
+    log.info(f"엔드포인트: {endpoint}")
+    log.info(f"body 키: {list(body.keys())}")
+
+    if items:
+        row = items[0]
+        log.info(f"항목 필드 수: {len(row)}")
+        log.info("-" * 60)
+        for key, val in sorted(row.items()):
+            display_val = str(val)[:80] if val else "(empty)"
+            log.info(f"  {key:30s} = {display_val}")
+        log.info("-" * 60)
+
+        # JSON으로도 저장
+        with open("field_discovery.json", "w", encoding="utf-8") as f:
+            json.dump({"totalCount": total, "sample_row": row}, f,
+                      ensure_ascii=False, indent=2)
+        log.info("필드 목록 저장: field_discovery.json")
+    else:
+        log.warning("응답에 데이터가 없습니다")
+        log.info(f"전체 응답: {json.dumps(data, ensure_ascii=False)[:500]}")
+
+
 def fetch_total_count(api_key: str) -> int:
-    """전체 데이터 건수 조회 (1건만 가져와서 total_count 확인)."""
-    sid = detect_service_id(api_key)
-    url = f"{BASE_URL}/{api_key}/{sid}/json/1/1"
-    resp = requests.get(url, timeout=30)
+    """전체 데이터 건수 조회."""
+    endpoint = detect_endpoint(api_key)
+    params = {
+        "serviceKey": api_key,
+        "pageNo": "1",
+        "numOfRows": "1",
+        "type": "json",
+    }
+    resp = requests.get(endpoint, params=params, timeout=30)
     resp.raise_for_status()
     data = resp.json()
 
-    result = data.get(sid, {})
-    if "RESULT" in result and result["RESULT"].get("CODE") != "INFO-000":
-        raise RuntimeError(f"API 오류: {result['RESULT']}")
+    # 에러 체크
+    err_header = (
+        data.get("OpenAPI_ServiceResponse", {})
+            .get("cmmMsgHeader", {})
+    )
+    if err_header:
+        raise RuntimeError(
+            f"API 오류: {err_header.get('errMsg')} - "
+            f"{err_header.get('returnAuthMsg')}"
+        )
 
-    total = int(result.get("total_count", 0))
+    body = data.get("body", {})
+    total = int(body.get("totalCount", 0))
     log.info(f"전체 데이터 건수: {total:,}")
     return total
 
 
-def fetch_batch(api_key: str, start: int, end: int) -> list[dict]:
-    """start~end 범위의 데이터를 JSON으로 가져온다."""
-    sid = SERVICE_ID  # detect_service_id()에서 이미 설정됨
-    url = f"{BASE_URL}/{api_key}/{sid}/json/{start}/{end}"
+def fetch_page(api_key: str, page_no: int, num_rows: int) -> list[dict]:
+    """지정 페이지의 데이터를 가져온다."""
+    endpoint = ACTIVE_ENDPOINT
+    params = {
+        "serviceKey": api_key,
+        "pageNo": str(page_no),
+        "numOfRows": str(num_rows),
+        "type": "json",
+    }
     for attempt in range(3):
         try:
-            resp = requests.get(url, timeout=60)
+            resp = requests.get(endpoint, params=params, timeout=60)
             resp.raise_for_status()
             data = resp.json()
-            result = data.get(sid, {})
 
-            if "RESULT" in result:
-                code = result["RESULT"].get("CODE", "")
-                if code == "INFO-200":
-                    # 해당 범위에 데이터 없음
-                    return []
-                if code != "INFO-000":
-                    log.warning(f"API 경고 [{code}]: {result['RESULT'].get('MSG')}")
-                    return []
+            # 에러 응답 체크
+            err_header = (
+                data.get("OpenAPI_ServiceResponse", {})
+                    .get("cmmMsgHeader", {})
+            )
+            if err_header:
+                err_msg = err_header.get("errMsg", "")
+                log.warning(f"API 경고: {err_msg}")
+                return []
 
-            return result.get("row", [])
+            body = data.get("body", {})
+            items = body.get("items", [])
+
+            # items가 dict일 때 (1건만 있으면 리스트가 아닌 dict로 옴)
+            if isinstance(items, dict):
+                items = [items]
+            if items is None:
+                items = []
+
+            return items
 
         except (requests.RequestException, json.JSONDecodeError) as e:
-            log.warning(f"요청 실패 (시도 {attempt+1}/3): {e}")
+            log.warning(f"요청 실패 (시도 {attempt+1}/3, 페이지 {page_no}): {e}")
             time.sleep(2 ** attempt)
 
-    log.error(f"3회 재시도 실패: {start}~{end}")
+    log.error(f"3회 재시도 실패: 페이지 {page_no}")
     return []
 
 
 def fetch_all(api_key: str) -> list[dict]:
-    """전체 데이터를 배치로 가져온다."""
+    """전체 데이터를 페이지별로 가져온다."""
     total = fetch_total_count(api_key)
     all_rows = []
+    total_pages = (total + PAGE_SIZE - 1) // PAGE_SIZE
 
-    for start in range(1, total + 1, BATCH_SIZE):
-        end = min(start + BATCH_SIZE - 1, total)
-        rows = fetch_batch(api_key, start, end)
-        all_rows.extend(rows)
-        log.info(f"  수집: {start:>6}~{end:>6}  ({len(rows):>4}건)  누적 {len(all_rows):,}")
+    for page_no in range(1, total_pages + 1):
+        items = fetch_page(api_key, page_no, PAGE_SIZE)
+        all_rows.extend(items)
+        fetched_so_far = min(page_no * PAGE_SIZE, total)
+        log.info(
+            f"  수집: 페이지 {page_no:>4}/{total_pages}"
+            f"  ({len(items):>4}건)"
+            f"  누적 {len(all_rows):,}"
+        )
         time.sleep(0.3)  # 서버 부하 방지
 
     log.info(f"수집 완료: 총 {len(all_rows):,}건")
@@ -185,8 +283,10 @@ def safe_numeric(value) -> Optional[float]:
     s = str(value).strip()
     if s in ("", "-", "N/A", "n/a", "없음"):
         return None
-    # 쉼표 제거
-    s = s.replace(",", "")
+    # 단위 문자 제거 (예: "260.000g" → "260.000")
+    s = re.sub(r"[^\d.\-]", "", s.replace(",", ""))
+    if not s:
+        return None
     try:
         return float(s)
     except ValueError:
@@ -213,7 +313,6 @@ def calc_spicy_score(ingredients_raw: Optional[str]) -> int:
     for keyword, base_score, weight in SPICY_KEYWORDS:
         idx = text.find(keyword)
         if idx >= 0:
-            # 위치 가중치: 앞쪽(주재료)에 있을수록 높음
             position_weight = 1.3 if (idx / max(text_len, 1)) < 0.5 else 1.0
             total_weighted += base_score * weight * position_weight
             match_count += 1
@@ -221,40 +320,128 @@ def calc_spicy_score(ingredients_raw: Optional[str]) -> int:
     if match_count == 0:
         return 0
 
-    # 정규화: 최대 가능 점수(청양고추+하바네로 앞쪽) 대비 비율 → 1~5
-    raw = total_weighted / match_count  # 평균 점수
+    raw = total_weighted / match_count
     score = min(round(raw), 5)
     return max(score, 1) if match_count > 0 else 0
 
 
+def _get_field(row: dict, *candidates: str) -> Optional[str]:
+    """여러 후보 필드명 중 값이 있는 첫 번째를 반환."""
+    for key in candidates:
+        val = row.get(key)
+        if val is not None and str(val).strip():
+            return str(val).strip()
+    return None
+
+
 def transform_row(row: dict) -> dict:
-    """API 응답 1건 → products 테이블 레코드로 변환."""
-    ingredients_raw = row.get("SUB_REF_NAME") or None  # 참고문헌/원재료명
+    """API 응답 1건 → products 테이블 레코드로 변환.
+
+    data.go.kr FoodNtrCpntDbInfo02 필드 매핑:
+    ─────────────────────────────────────────
+    확인된 필드:
+      FOOD_NM_KR  = 식품명
+      AMT_NUM1    = 에너지 (kcal)
+      AMT_NUM3    = 단백질 (g)
+      AMT_NUM4    = 지방 (g)
+      AMT_NUM6    = 탄수화물 (g)
+      Z10500      = 1회 섭취참고량 (g)
+      DB_CLASS_CM = 분류코드 (01=원재료, 02=가공식품, 03=외식)
+      FOOD_REF_NM = 참고음식명
+
+    추정 필드 (실제 응답으로 확인 필요 → --discover 참고):
+      AMT_NUM7    = 당류 (g)
+      AMT_NUM8    = 나트륨 (mg)
+      AMT_NUM9    = 콜레스테롤 (mg)
+      AMT_NUM10   = 포화지방산 (g)
+      AMT_NUM11   = 트랜스지방산 (g)
+      AMT_NUM2    = 수분 또는 식이섬유 (g)
+      FOOD_CD     = 식품코드
+      MAKER_NM    = 제조사명
+      RAWMTRL_NM  = 원재료명
+    """
+    # 식품명
+    name = _get_field(row, "FOOD_NM_KR", "DESC_KOR", "FOOD_NM") or ""
+
+    # 식품코드 — 여러 후보 시도
+    food_code = _get_field(
+        row, "FOOD_CD", "FOOD_CODE", "NUM",
+        "FOOD_NM_CD", "FOOD_OR_CD",
+    )
+    # food_code가 없으면 식품명 기반 해시 생성
+    if not food_code and name:
+        import hashlib
+        food_code = "HASH_" + hashlib.md5(name.encode()).hexdigest()[:12]
+
+    # 제조사
+    manufacturer = _get_field(
+        row, "MAKER_NM", "MAKER_NAME", "MFR_NM",
+        "CMPNY_NM", "ENTRPS_NM",
+    )
+
+    # 카테고리
+    category = _get_field(
+        row, "DB_CLASS_NM", "GROUP_NM", "GROUP_NAME",
+        "FOOD_CAT", "FOOD_CTGRY_NM",
+    )
+    # 분류코드로 대체
+    if not category:
+        code = row.get("DB_CLASS_CM")
+        if code == "01":
+            category = "품목대표"
+        elif code == "02":
+            category = "가공식품"
+        elif code == "03":
+            category = "외식"
+
+    # 원재료명
+    ingredients_raw = _get_field(
+        row, "RAWMTRL_NM", "SUB_REF_NAME", "SUB_REF_NM",
+        "RAWMTRL_INFO",
+    )
 
     return {
-        "food_code":        row.get("FOOD_CD"),
-        "name":             row.get("DESC_KOR", "").strip(),
-        "manufacturer":     row.get("MAKER_NAME") or None,
-        "category_large":   row.get("GROUP_NAME") or None,
+        "food_code":        food_code,
+        "name":             name,
+        "manufacturer":     manufacturer,
+        "category_large":   category,
 
-        # 영양성분 (I0750/I2790 공통 필드 9개)
-        "serving_size_g":   safe_numeric(row.get("SERVING_SIZE")),
-        "calories":         safe_numeric(row.get("NUTR_CONT1")),
-        "carbs_g":          safe_numeric(row.get("NUTR_CONT2")),
-        "protein_g":        safe_numeric(row.get("NUTR_CONT3")),
-        "fat_g":            safe_numeric(row.get("NUTR_CONT4")),
-        "sugar_g":          safe_numeric(row.get("NUTR_CONT5")),
-        "sodium_mg":        safe_numeric(row.get("NUTR_CONT6")),
-        "cholesterol_mg":   safe_numeric(row.get("NUTR_CONT7")),
-        "saturated_fat_g":  safe_numeric(row.get("NUTR_CONT8")),
-        "trans_fat_g":      safe_numeric(row.get("NUTR_CONT9")),
+        # 영양성분 — 확인된 필드 (AMT_NUM 기반)
+        "serving_size_g":   safe_numeric(row.get("Z10500")
+                            or row.get("SERVING_SIZE")),
+        "calories":         safe_numeric(row.get("AMT_NUM1")
+                            or row.get("NUTR_CONT1")),
+        "carbs_g":          safe_numeric(row.get("AMT_NUM6")
+                            or row.get("NUTR_CONT2")),
+        "protein_g":        safe_numeric(row.get("AMT_NUM3")
+                            or row.get("NUTR_CONT3")),
+        "fat_g":            safe_numeric(row.get("AMT_NUM4")
+                            or row.get("NUTR_CONT4")),
 
-        # 미제공 → null (추후 보강 데이터로 채움)
+        # 추정 필드 — 다수 후보 시도
+        "sugar_g":          safe_numeric(row.get("AMT_NUM7")
+                            or row.get("AMT_NUM5")
+                            or row.get("NUTR_CONT5")),
+        "sodium_mg":        safe_numeric(row.get("AMT_NUM8")
+                            or row.get("AMT_NUM13")
+                            or row.get("NUTR_CONT6")),
+        "cholesterol_mg":   safe_numeric(row.get("AMT_NUM9")
+                            or row.get("AMT_NUM14")
+                            or row.get("NUTR_CONT7")),
+        "saturated_fat_g":  safe_numeric(row.get("AMT_NUM10")
+                            or row.get("AMT_NUM15")
+                            or row.get("NUTR_CONT8")),
+        "trans_fat_g":      safe_numeric(row.get("AMT_NUM11")
+                            or row.get("AMT_NUM16")
+                            or row.get("NUTR_CONT9")),
+
+        # 미제공 → null (추후 보강)
         "potassium_mg":     None,
         "calcium_mg":       None,
         "phosphorus_mg":    None,
         "iron_mg":          None,
-        "fiber_g":          None,
+        "fiber_g":          safe_numeric(row.get("AMT_NUM2")
+                            or row.get("AMT_NUM12")),
         "vitamin_a_ug":     None,
         "vitamin_c_mg":     None,
         "vitamin_d_ug":     None,
@@ -275,7 +462,7 @@ def transform_all(raw_rows: list[dict]) -> list[dict]:
     products = []
     skipped = 0
     for row in raw_rows:
-        name = (row.get("DESC_KOR") or "").strip()
+        name = _get_field(row, "FOOD_NM_KR", "DESC_KOR", "FOOD_NM") or ""
         if not name:
             skipped += 1
             continue
@@ -319,52 +506,61 @@ def upsert_to_supabase(supabase: Client, products: list[dict]):
 def print_stats(products: list[dict]):
     """적재 전 데이터 품질 리포트."""
     total = len(products)
+    if total == 0:
+        log.warning("통계 리포트 생략: 데이터 없음")
+        return
+
     has_sodium    = sum(1 for p in products if p["sodium_mg"] is not None)
     has_sugar     = sum(1 for p in products if p["sugar_g"] is not None)
     has_fat       = sum(1 for p in products if p["fat_g"] is not None)
     has_calories  = sum(1 for p in products if p["calories"] is not None)
+    has_fiber     = sum(1 for p in products if p["fiber_g"] is not None)
     spicy_gt0     = sum(1 for p in products if p["spicy_score"] > 0)
 
     log.info("=" * 50)
     log.info("데이터 품질 리포트")
     log.info("=" * 50)
     log.info(f"  전체 제품수:           {total:>8,}")
+    log.info(f"  열량 데이터 있음:      {has_calories:>8,} ({has_calories/total*100:.1f}%)")
     log.info(f"  나트륨 데이터 있음:    {has_sodium:>8,} ({has_sodium/total*100:.1f}%)")
     log.info(f"  당류 데이터 있음:      {has_sugar:>8,} ({has_sugar/total*100:.1f}%)")
     log.info(f"  지방 데이터 있음:      {has_fat:>8,} ({has_fat/total*100:.1f}%)")
-    log.info(f"  열량 데이터 있음:      {has_calories:>8,} ({has_calories/total*100:.1f}%)")
+    log.info(f"  식이섬유 있음:         {has_fiber:>8,} ({has_fiber/total*100:.1f}%)")
     log.info(f"  매운맛 점수 > 0:       {spicy_gt0:>8,} ({spicy_gt0/total*100:.1f}%)")
     log.info("=" * 50)
 
     # 나트륨 분포 (맛 매핑 기초 데이터)
-    sodium_buckets = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0}
-    for p in products:
-        na = p["sodium_mg"]
-        if na is None:
-            continue
-        if na < 300:
-            sodium_buckets[1] += 1
-        elif na < 500:
-            sodium_buckets[2] += 1
-        elif na < 800:
-            sodium_buckets[3] += 1
-        elif na < 1200:
-            sodium_buckets[4] += 1
-        else:
-            sodium_buckets[5] += 1
+    if has_sodium > 0:
+        sodium_buckets = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0}
+        for p in products:
+            na = p["sodium_mg"]
+            if na is None:
+                continue
+            if na < 300:
+                sodium_buckets[1] += 1
+            elif na < 500:
+                sodium_buckets[2] += 1
+            elif na < 800:
+                sodium_buckets[3] += 1
+            elif na < 1200:
+                sodium_buckets[4] += 1
+            else:
+                sodium_buckets[5] += 1
 
-    log.info("나트륨 분포 (짠맛 레벨별):")
-    labels = {
-        1: "싱거운 (0~300mg)",
-        2: "약한   (300~500mg)",
-        3: "보통   (500~800mg)",
-        4: "짠     (800~1200mg)",
-        5: "매우짠 (1200mg+)",
-    }
-    for level, count in sodium_buckets.items():
-        pct = count / max(has_sodium, 1) * 100
-        bar = "█" * int(pct / 2)
-        log.info(f"  레벨 {level} {labels[level]}: {count:>6,} ({pct:>5.1f}%) {bar}")
+        log.info("나트륨 분포 (짠맛 레벨별):")
+        labels = {
+            1: "싱거운 (0~300mg)",
+            2: "약한   (300~500mg)",
+            3: "보통   (500~800mg)",
+            4: "짠     (800~1200mg)",
+            5: "매우짠 (1200mg+)",
+        }
+        for level, count in sodium_buckets.items():
+            pct = count / max(has_sodium, 1) * 100
+            bar = "█" * int(pct / 2)
+            log.info(f"  레벨 {level} {labels[level]}: {count:>6,} ({pct:>5.1f}%) {bar}")
+    else:
+        log.warning("나트륨 데이터가 0건입니다 — 필드 매핑을 확인하세요 (--discover)")
 
 
 # ═══════════════════════════════════════════════════════
@@ -375,21 +571,34 @@ def main():
     # 환경변수 체크
     if not MFDS_API_KEY:
         log.error("MFDS_API_KEY가 설정되지 않았습니다. .env 파일을 확인하세요.")
-        log.info("API 키 발급: https://openapi.foodsafetykorea.go.kr → 회원가입 → 인증키 발급")
+        log.info(
+            "API 키 발급: https://www.data.go.kr/data/15127578/openapi.do"
+            " → 활용신청 → 일반 인증키 발급"
+        )
         sys.exit(1)
+
+    # --discover 모드: 필드 디스커버리
+    if "--discover" in sys.argv:
+        log.info("=== 필드 디스커버리 모드 ===")
+        discover_fields(MFDS_API_KEY)
+        return
 
     log.info("=" * 50)
     log.info("식약처 식품영양성분DB → Supabase 적재 시작")
+    log.info(f"API: data.go.kr (공공데이터포털)")
     log.info(f"시작 시간: {datetime.now().isoformat()}")
     log.info("=" * 50)
 
     # Step 1: 서비스 탐지 + API에서 전체 데이터 수집
-    log.info("[1/4] 식약처 API 서비스 탐지 및 호출 중...")
+    log.info("[1/4] data.go.kr API 서비스 탐지 및 호출 중...")
     raw_rows = fetch_all(MFDS_API_KEY)
 
     if not raw_rows:
         log.error("수집된 데이터가 없습니다. API 키와 네트워크를 확인하세요.")
         sys.exit(1)
+
+    # 첫 번째 행의 필드 목록 로깅 (매핑 확인용)
+    log.info(f"응답 필드 목록: {sorted(raw_rows[0].keys())}")
 
     # Step 2: 변환
     log.info("[2/4] 데이터 변환 중...")
@@ -399,7 +608,7 @@ def main():
     log.info("[3/4] 데이터 품질 검증 중...")
     print_stats(products)
 
-    # (선택) JSON 백업 저장
+    # JSON 백업 저장
     backup_path = f"mfds_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
     with open(backup_path, "w", encoding="utf-8") as f:
         json.dump(products, f, ensure_ascii=False, indent=2)
