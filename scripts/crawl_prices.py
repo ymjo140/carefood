@@ -817,6 +817,11 @@ def main():
     )
     args = parser.parse_args()
 
+    # 환경변수 CRAWL_MAX가 있으면 --max 오버라이드 (Render 시작 명령 하드코딩 우회)
+    crawl_max_env = os.environ.get("CRAWL_MAX")
+    if crawl_max_env:
+        args.max = int(crawl_max_env)
+
     # 테스트 모드
     if args.test:
         test_search(args.test)
