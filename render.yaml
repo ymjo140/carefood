@@ -1,0 +1,39 @@
+# Render Blueprint — 케어푸드 데이터 파이프라인
+# https://docs.render.com/blueprint-spec
+
+services:
+  # ── 식약처 데이터 수집 (매일 새벽 3시 KST = 18:00 UTC) ──
+  - type: cron
+    name: carefood-ingest
+    runtime: python
+    schedule: "0 18 * * *"
+    buildCommand: pip install -r scripts/requirements.txt
+    startCommand: cd scripts && python ingest_mfds.py
+    envVars:
+      - key: MFDS_API_KEY
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_KEY
+        sync: false
+
+  # ── 가격 크롤러 (매일 오전 9시 KST = 0:00 UTC) ──
+  - type: cron
+    name: carefood-crawl-prices
+    runtime: python
+    schedule: "0 0 * * *"
+    buildCommand: pip install -r scripts/requirements.txt
+    startCommand: cd scripts && python crawl_prices.py --max 500
+    envVars:
+      - key: NAVER_CLIENT_ID
+        sync: false
+      - key: NAVER_CLIENT_SECRET
+        sync: false
+      - key: COUPANG_ACCESS_KEY
+        sync: false
+      - key: COUPANG_SECRET_KEY
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_KEY
+        sync: false
