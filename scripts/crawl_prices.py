@@ -39,7 +39,7 @@ import time
 import logging
 import urllib.parse
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from time import gmtime, strftime
 
 import requests
@@ -470,7 +470,7 @@ def danawa_to_price_record(
         "url": item.get("link", ""),
         "image_url": item.get("image", None) or None,
         "is_available": True,
-        "last_crawled_at": datetime.utcnow().isoformat(),
+        "last_crawled_at": datetime.now(timezone.utc).isoformat(),
     }
 
 
@@ -556,7 +556,7 @@ def coupang_to_price_record(product_id: str, item: dict) -> Optional[dict]:
         "url": url,  # 이미 어필리에이트 링크
         "image_url": item.get("productImage"),
         "is_available": True,
-        "last_crawled_at": datetime.utcnow().isoformat(),
+        "last_crawled_at": datetime.now(timezone.utc).isoformat(),
     }
 
 
