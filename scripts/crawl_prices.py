@@ -36,6 +36,7 @@ import json
 import hmac
 import hashlib
 import time
+import random
 import logging
 import urllib.parse
 from typing import Optional
@@ -759,8 +760,8 @@ def crawl_streaming(
                     f"DB: {upserted:,}  스킵: {skipped_crawled:,}"
                 )
 
-            # 다나와 스크래핑 속도 제한 (초당 ~2회, 서버 부담 최소화)
-            time.sleep(0.5)
+            # 다나와 스크래핑 속도 제한 (랜덤 딜레이로 봇 탐지 회피)
+            time.sleep(random.uniform(0.4, 1.2))
 
         if len(products) < page_size:
             break
