@@ -330,6 +330,15 @@ def naver_shop_search(query: str, display: int = 5) -> list[dict]:
             timeout=10,
         )
 
+        if resp.status_code in (401, 403):
+            log.error(
+                f"네이버 쇼핑 API 인증 실패 (HTTP {resp.status_code}). "
+                "네이버 개발자센터에서 '검색' API가 활성화되어 있는지 확인하세요. "
+                "https://developers.naver.com/apps/ → 내 애플리케이션 → API 설정 → '검색' 추가"
+            )
+            _naver_shop_available = False
+            return []
+
         if resp.status_code == 429:
             log.warning("네이버 쇼핑 API 일일 한도 초과 (429)")
             _naver_shop_available = False
