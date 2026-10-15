@@ -196,7 +196,9 @@ def danawa_search(query: str, display: int = 10) -> list[dict]:
         del html
         results = []
 
-        for item in soup.select("li.prod_item"):
+        prod_items = soup.select("li.prod_item")
+
+        for item in prod_items:
             # 상품 ID
             item_id = ""
             id_attr = item.get("id", "")
@@ -209,8 +211,10 @@ def danawa_search(query: str, display: int = 10) -> list[dict]:
                 continue
             title = strip_html(name_el.get_text(strip=True))
 
-            # 가격 — hidden input (가장 정확)
+            # 가격 추출 (3단계 fallback)
             price = 0
+
+            # 1) hidden input — 가격비교 상품 (전자제품 등)
             min_price_el = item.select_one("input[id^='min_price_']")
             if min_price_el:
                 try:
@@ -218,13 +222,24 @@ def danawa_search(query: str, display: int = 10) -> list[dict]:
                 except ValueError:
                     pass
 
-            # 가격 없으면 텍스트에서 추출
+            # 2) .price_sect 텍스트 — 쇼핑몰 상품 (식품 등)
+            #    <p class="price_sect"><strong>16,630</strong>원</p>
             if price <= 0:
-                price_el = item.select_one(".price_sect a")
+                price_el = item.select_one(".price_sect")
                 if price_el:
                     price_text = re.sub(r"[^\d]", "", price_el.get_text())
                     if price_text:
                         price = int(price_text)
+
+            # 3) .price_wrap 등 기타 가격 영역
+            if price <= 0:
+                for sel in (".price_wrap", ".price_info"):
+                    price_el = item.select_one(sel)
+                    if price_el:
+                        price_text = re.sub(r"[^\d]", "", price_el.get_text())
+                        if price_text:
+                            price = int(price_text)
+                            break
 
             if price <= 0:
                 continue
