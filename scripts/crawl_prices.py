@@ -1,12 +1,15 @@
 """
-다나와/쿠팡 가격 크롤러 → product_prices 테이블 적재
+가격 크롤러 → product_prices 테이블 적재
 ================================================================
 채널 전략:
-  1) 다나와 가격비교 (1차): 웹 스크래핑으로 최저가 수집
-     - search.danawa.com — 상품명/최저가/링크/이미지 파싱
-     - API 키 불필요, HTML 파싱 방식
-  2) 쿠팡 파트너스 API (2차): 어필리에이트 링크 생성 (수수료 수익)
-  3) 마켓컬리 (3차): 검색 URL 기반 아웃링크 생성
+  1) 네이버 쇼핑 검색 API (1차): 공식 REST API로 최저가 수집
+     - /v1/search/shop.json — JSON 응답, 봇 차단 없음
+     - 일 25,000회 호출, 안정적
+  2) 다나와 가격비교 (2차 fallback): 네이버 실패 시 웹 스크래핑
+     - search.danawa.com — HTML 파싱
+     - Render IP 봇 차단 이슈 있음
+  3) 쿠팡 파트너스 API (3차): 어필리에이트 링크 생성 (수수료 수익)
+  4) 마켓컬리 (4차): 검색 URL 기반 아웃링크 생성
 
 추가 기능:
   --trends 모드: 네이버 쇼핑인사이트 API로 키워드 트렌드 수집
@@ -21,10 +24,10 @@
   python crawl_prices.py --test '저염 도시락'  # 단일 테스트
 
 환경변수:
+  NAVER_CLIENT_ID      - 네이버 개발자 Client ID (가격 수집 + 트렌드)
+  NAVER_CLIENT_SECRET  - 네이버 개발자 Client Secret (가격 수집 + 트렌드)
   COUPANG_ACCESS_KEY   - 쿠팡 파트너스 ACCESS KEY (선택)
   COUPANG_SECRET_KEY   - 쿠팡 파트너스 SECRET KEY (선택)
-  NAVER_CLIENT_ID      - 네이버 개발자 Client ID (트렌드 분석용)
-  NAVER_CLIENT_SECRET  - 네이버 개발자 Client Secret (트렌드 분석용)
   SUPABASE_URL         - Supabase 프로젝트 URL
   SUPABASE_KEY         - Supabase service_role 키
 """
@@ -83,6 +86,7 @@ UPSERT_CHUNK = 50
 #  - 속도 제한: 0.5초 간격 (서버 부담 최소화)
 
 DANAWA_SEARCH_URL = "https://search.danawa.com/dsearch.php"
+NAVER_SHOP_SEARCH_URL = "https://openapi.naver.com/v1/search/shop.json"
 NAVER_INSIGHT_URL = "https://openapi.naver.com/v1/datalab/shopping/category/keywords"
 NAVER_INSIGHT_CATEGORY_URL = "https://openapi.naver.com/v1/datalab/shopping/categories"
 
@@ -269,6 +273,104 @@ def danawa_search(query: str, display: int = 10) -> list[dict]:
     except requests.RequestException as e:
         _danawa_fail_streak += 1
         log.error(f"다나와 검색 실패 [{query}]: {e}")
+        return []
+
+
+# ═══════════════════════════════════════════════════════
+#  1-A. 네이버 쇼핑 검색 API (가격 수집 — 1차 채널)
+# ═══════════════════════════════════════════════════════
+#  - 공식 REST API, JSON 응답 → 봇 차단 없음
+#  - 일 25,000회 호출 가능 (넉넉)
+#  - lprice(최저가), hprice(최고가), mallName, link, image 제공
+#  - NAVER_CLIENT_ID / NAVER_CLIENT_SECRET 필요
+
+# 네이버 쇼핑 API 사용 가능 여부 (첫 호출 시 자동 판단)
+_naver_shop_available: Optional[bool] = None
+
+
+def naver_shop_search(query: str, display: int = 5) -> list[dict]:
+    """
+    네이버 쇼핑 검색 API.
+    공식 API로 JSON 응답 — 봇 차단 없이 안정적으로 가격 수집.
+
+    Args:
+        query: 검색어
+        display: 결과 수 (1~100, 기본 5)
+
+    Returns:
+        [{title, link, image, lprice, mallName, productId}, ...]
+        danawa_search()와 동일한 포맷으로 반환하여 호환성 유지.
+    """
+    global _naver_shop_available
+
+    if not NAVER_CLIENT_ID or not NAVER_CLIENT_SECRET:
+        if _naver_shop_available is not False:
+            log.warning("NAVER_CLIENT_ID/SECRET 미설정 — 네이버 쇼핑 API 스킵")
+            _naver_shop_available = False
+        return []
+
+    if _naver_shop_available is False:
+        return []
+
+    headers = {
+        "X-Naver-Client-Id": NAVER_CLIENT_ID,
+        "X-Naver-Client-Secret": NAVER_CLIENT_SECRET,
+    }
+    params = {
+        "query": query,
+        "display": min(display, 100),
+        "sort": "sim",  # 정확도순
+    }
+
+    try:
+        resp = requests.get(
+            NAVER_SHOP_SEARCH_URL,
+            headers=headers,
+            params=params,
+            timeout=10,
+        )
+
+        if resp.status_code == 429:
+            log.warning("네이버 쇼핑 API 일일 한도 초과 (429)")
+            _naver_shop_available = False
+            return []
+
+        if resp.status_code != 200:
+            log.warning(f"네이버 쇼핑 API HTTP {resp.status_code} [{query}]")
+            return []
+
+        # 첫 성공 시 로깅
+        if _naver_shop_available is None:
+            _naver_shop_available = True
+            log.info("네이버 쇼핑 검색 API 사용 가능 확인!")
+
+        data = resp.json()
+        items = data.get("items", [])
+
+        results = []
+        for item in items:
+            lprice = 0
+            try:
+                lprice = int(item.get("lprice", "0"))
+            except (ValueError, TypeError):
+                pass
+
+            if lprice <= 0:
+                continue
+
+            results.append({
+                "productId": item.get("productId", ""),
+                "title": strip_html(item.get("title", "")),
+                "lprice": lprice,
+                "link": item.get("link", ""),
+                "image": item.get("image", ""),
+                "mallName": item.get("mallName", "naver"),
+            })
+
+        return results
+
+    except requests.RequestException as e:
+        log.error(f"네이버 쇼핑 API 실패 [{query}]: {e}")
         return []
 
 
@@ -528,6 +630,30 @@ def danawa_to_price_record(
     }
 
 
+def naver_to_price_record(
+    product_id: str,
+    item: dict,
+) -> Optional[dict]:
+    """
+    네이버 쇼핑 검색 결과 1건 → product_prices 레코드 변환.
+    mallName 필드에 실제 판매 쇼핑몰 이름이 들어감.
+    """
+    price = int(item.get("lprice") or 0)
+    if price <= 0:
+        return None
+
+    return {
+        "product_id": product_id,
+        "platform": "naver",
+        "price": price,
+        "price_per_serving": None,
+        "url": item.get("link", ""),
+        "image_url": item.get("image", None) or None,
+        "is_available": True,
+        "last_crawled_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
 # ═══════════════════════════════════════════════════════
 #  2. 쿠팡 파트너스 API
 # ═══════════════════════════════════════════════════════
@@ -774,25 +900,40 @@ def crawl_streaming(
                 processed += 1
                 continue
 
-            # ─── 다나와 가격비교 스크래핑 ───
-            danawa_items = danawa_search(query, display=5)
+            # ─── 1차: 네이버 쇼핑 검색 API (공식 API, 안정적) ───
+            got_price = False
+            naver_items = naver_shop_search(query, display=5)
             searched += 1
 
-            got_price = False
-            if danawa_items:
-                # 최저가 1건만 사용 (다나와 자체가 가격비교)
-                best = danawa_items[0]
-                record = danawa_to_price_record(product_id, best)
+            if naver_items:
+                best = naver_items[0]
+                record = naver_to_price_record(product_id, best)
                 if record:
                     buffer.append(record)
                     prices_found += 1
                     got_price = True
-                    platform_counts["danawa"] = (
-                        platform_counts.get("danawa", 0) + 1
+                    platform_counts["naver"] = (
+                        platform_counts.get("naver", 0) + 1
                     )
-            del danawa_items
+            del naver_items
 
-            # ─── 봇 차단 감지: 연속 가격 0 → 백오프 ───
+            # ─── 2차 fallback: 다나와 (네이버 실패 시만) ───
+            if not got_price:
+                danawa_items = danawa_search(query, display=5)
+                if danawa_items:
+                    best = danawa_items[0]
+                    record = danawa_to_price_record(product_id, best)
+                    if record:
+                        buffer.append(record)
+                        prices_found += 1
+                        got_price = True
+                        platform_counts["danawa"] = (
+                            platform_counts.get("danawa", 0) + 1
+                        )
+                del danawa_items
+
+            # ─── 봇 차단 감지: 연속 가격 0 → 백오프 (다나와 전용) ───
+            # 네이버 API는 봇 차단이 없으므로, 네이버 사용 가능하면 스킵
             if got_price:
                 consecutive_empty = 0
             else:
@@ -802,7 +943,7 @@ def crawl_streaming(
                 if backoff_count >= MAX_BACKOFF:
                     log.warning(
                         f"  연속 {consecutive_empty}건 가격 0 + "
-                        f"백오프 {MAX_BACKOFF}회 소진 → 차단 추정, 종료"
+                        f"백오프 {MAX_BACKOFF}회 소진 → 종료"
                     )
                     done = True
                     break
@@ -810,7 +951,7 @@ def crawl_streaming(
                 wait_sec = 120 * backoff_count
                 log.info(
                     f"  연속 {consecutive_empty}건 가격 0 — "
-                    f"봇 차단 추정, {wait_sec}초 대기 "
+                    f"{wait_sec}초 대기 "
                     f"(백오프 #{backoff_count}/{MAX_BACKOFF})"
                 )
                 time.sleep(wait_sec)
@@ -868,8 +1009,13 @@ def crawl_streaming(
                     done = True
                     break
 
-            # 다나와 스크래핑 속도 제한 (충분한 딜레이로 봇 탐지 회피)
-            time.sleep(random.uniform(1.5, 3.5))
+            # API 속도 제한
+            # 네이버 API: 초당 10건 가능하지만 여유 있게 0.3~0.6초
+            # 다나와 fallback 사용 시: 봇 탐지 회피를 위해 길게
+            if got_price and platform_counts.get("naver", 0) > platform_counts.get("danawa", 0):
+                time.sleep(random.uniform(0.3, 0.6))
+            else:
+                time.sleep(random.uniform(1.5, 3.5))
 
         if len(products) < page_size:
             del products, result
@@ -901,11 +1047,24 @@ def crawl_streaming(
 # ═══════════════════════════════════════════════════════
 
 def test_search(keyword: str):
-    """단일 검색 테스트 (API 키 불필요 — 다나와 스크래핑)."""
+    """단일 검색 테스트."""
     log.info(f"=== 테스트 검색: '{keyword}' ===\n")
 
-    # 다나와
-    log.info("[다나와 가격비교]")
+    # 네이버 쇼핑 API
+    log.info("[네이버 쇼핑 검색 API]")
+    items = naver_shop_search(keyword, display=10)
+    if items:
+        for item in items[:10]:
+            log.info(
+                f"  {item['title'][:40]:40s}  "
+                f"{int(item.get('lprice', 0)):>8,}원  "
+                f"{item.get('mallName', '?')}"
+            )
+    else:
+        log.info("  검색 결과 없음")
+
+    # 다나와 (fallback)
+    log.info("\n[다나와 가격비교]")
     items = danawa_search(keyword, display=10)
     if items:
         for item in items[:10]:
@@ -947,7 +1106,10 @@ def _run_single_batch(args) -> dict:
         log.error("SUPABASE_URL/KEY가 설정되지 않았습니다.")
         sys.exit(1)
 
-    channels = ["다나와"]
+    channels = []
+    if NAVER_CLIENT_ID:
+        channels.append("네이버쇼핑API")
+    channels.append("다나와(fallback)")
     if COUPANG_ACCESS_KEY and not args.no_coupang:
         channels.append("쿠팡")
 
