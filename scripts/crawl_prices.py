@@ -727,6 +727,12 @@ def crawl_streaming(
     coupang_calls = 0
     MAX_COUPANG_PER_HOUR = 9
 
+    # ─── 봇 차단 감지용 ───
+    consecutive_empty = 0       # 연속으로 가격 0인 검색 횟수
+    EMPTY_THRESHOLD = 30        # 이 횟수 넘으면 차단으로 판단
+    backoff_count = 0           # 백오프 시도 횟수
+    MAX_BACKOFF = 2             # 최대 백오프 시도
+
     # ─── 버퍼 (upsert 배치용) ───
     buffer: list[dict] = []
 
@@ -772,6 +778,7 @@ def crawl_streaming(
             danawa_items = danawa_search(query, display=5)
             searched += 1
 
+            got_price = False
             if danawa_items:
                 # 최저가 1건만 사용 (다나와 자체가 가격비교)
                 best = danawa_items[0]
@@ -779,10 +786,35 @@ def crawl_streaming(
                 if record:
                     buffer.append(record)
                     prices_found += 1
+                    got_price = True
                     platform_counts["danawa"] = (
                         platform_counts.get("danawa", 0) + 1
                     )
             del danawa_items
+
+            # ─── 봇 차단 감지: 연속 가격 0 → 백오프 ───
+            if got_price:
+                consecutive_empty = 0
+            else:
+                consecutive_empty += 1
+
+            if consecutive_empty >= EMPTY_THRESHOLD:
+                if backoff_count >= MAX_BACKOFF:
+                    log.warning(
+                        f"  연속 {consecutive_empty}건 가격 0 + "
+                        f"백오프 {MAX_BACKOFF}회 소진 → 차단 추정, 종료"
+                    )
+                    done = True
+                    break
+                backoff_count += 1
+                wait_sec = 120 * backoff_count
+                log.info(
+                    f"  연속 {consecutive_empty}건 가격 0 — "
+                    f"봇 차단 추정, {wait_sec}초 대기 "
+                    f"(백오프 #{backoff_count}/{MAX_BACKOFF})"
+                )
+                time.sleep(wait_sec)
+                consecutive_empty = 0
 
             # ─── 쿠팡 (선택적) ───
             if use_coupang and coupang_calls < MAX_COUPANG_PER_HOUR:
@@ -836,8 +868,8 @@ def crawl_streaming(
                     done = True
                     break
 
-            # 다나와 스크래핑 속도 제한 (랜덤 딜레이로 봇 탐지 회피)
-            time.sleep(random.uniform(0.4, 1.2))
+            # 다나와 스크래핑 속도 제한 (충분한 딜레이로 봇 탐지 회피)
+            time.sleep(random.uniform(1.5, 3.5))
 
         if len(products) < page_size:
             del products, result
@@ -973,10 +1005,12 @@ def main():
     )
     args = parser.parse_args()
 
-    # 환경변수 CRAWL_MAX가 있으면 --max 오버라이드
-    crawl_max_env = os.environ.get("CRAWL_MAX")
-    if crawl_max_env:
-        args.max = int(crawl_max_env)
+    # 환경변수 CRAWL_MAX가 있으면 --max 오버라이드 (오케스트레이터만)
+    # 워커 모드에서는 오케스트레이터가 전달한 --max 값을 사용
+    if not args.worker:
+        crawl_max_env = os.environ.get("CRAWL_MAX")
+        if crawl_max_env:
+            args.max = int(crawl_max_env)
 
     # 테스트 모드
     if args.test:
