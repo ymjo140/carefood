@@ -1,29 +1,26 @@
 """
-마켓컬리(Kurly) 밀키트/간편식 크롤러
+마켓컬리(Kurly) 전체 식품 크롤러
 ================================================================
 카테고리별 상품 목록 → 상품 상세 정보 수집 → Supabase 적재
 
 수집 흐름:
   1) Playwright로 카테고리 페이지 순회 → 상품 ID 목록 수집
-  2) requests + SSR(__NEXT_DATA__)로 상품 상세 추출
+  2) requests + SSR(__NEXT_DATA__)로 상품 상세 추출 (병렬 4 workers)
   3) Supabase kurly_products 테이블에 upsert
+  4) MFDS 영양 DB 매칭 + 매운맛 점수 산출
 
-대상 카테고리 (912 간편식·밀키트·샐러드):
-  912001: 밀키트
-  912002: 샐러드·샌드위치
-  912003: 도시락·볶음밥
-  912004: 죽·스프·시리얼
-  912005: 간편국·탕·찌개
-
-추가 카테고리:
-  911: 국·반찬·메인요리
-  907: 채소
-  908: 과일
+대상 카테고리 (전체 식품):
+  907: 채소 / 908: 과일·견과·쌀 / 909: 수산·해산·건어물
+  910: 정육·가공육·달걀 / 911: 국·반찬·메인요리
+  912: 간편식·밀키트·샐러드 / 913: 면·양념·오일
+  914: 생수·음료 / 383: 커피·차 / 249: 간식·과자·떡
+  915: 베이커리 / 018: 유제품 / 032: 건강식품
 
 사용법:
   python crawl_kurly.py                  # 전체 크롤링
-  python crawl_kurly.py --test           # 테스트 (카테고리 1개, 상품 5개)
-  python crawl_kurly.py --categories 912001,912002  # 특정 카테고리만
+  python crawl_kurly.py --test           # 테스트 (1 카테고리, 5 상품)
+  python crawl_kurly.py --categories 912,911  # 특정 카테고리만
+  python crawl_kurly.py --workers 8      # 병렬 워커 수 조절
 
 환경변수:
   SUPABASE_URL  - Supabase 프로젝트 URL
@@ -41,6 +38,8 @@ import asyncio
 import argparse
 from datetime import datetime, timezone
 from typing import Optional
+
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import requests
 from bs4 import BeautifulSoup
@@ -64,17 +63,30 @@ USER_AGENT = (
     "Chrome/120.0.0.0 Safari/537.36"
 )
 
-# 크롤링 대상 카테고리
+# 크롤링 대상 카테고리 (전체 식품)
 CATEGORIES = {
+    "907": "채소",
+    "908": "과일·견과·쌀",
+    "909": "수산·해산·건어물",
+    "910": "정육·가공육·달걀",
+    "911": "국·반찬·메인요리",
+    "912": "간편식·밀키트·샐러드",
+    "913": "면·양념·오일",
+    "914": "생수·음료",
+    "383": "커피·차",
+    "249": "간식·과자·떡",
+    "915": "베이커리",
+    "018": "유제품",
+    "032": "건강식품",
+}
+
+# 하위 카테고리 (개별 지정 시 사용)
+SUB_CATEGORIES = {
     "912001": "밀키트",
     "912002": "샐러드·샌드위치",
     "912003": "도시락·볶음밥",
     "912004": "죽·스프·시리얼",
     "912005": "간편국·탕·찌개",
-}
-
-# 확장 카테고리 (필요시 활성화)
-EXTRA_CATEGORIES = {
     "911001": "국·탕·찌개",
     "911002": "밑반찬",
     "911003": "김치·젓갈·장류",
@@ -82,8 +94,9 @@ EXTRA_CATEGORIES = {
 }
 
 CHROMIUM_PATH = "/opt/pw-browsers/chromium-1194/chrome-linux/chrome"
-REQUEST_DELAY = (0.5, 1.5)  # 상품 상세 요청 간 랜덤 딜레이 (초)
-MAX_PAGES_PER_CATEGORY = 20  # 카테고리당 최대 페이지
+REQUEST_DELAY = (0.3, 1.0)  # 상품 상세 요청 간 랜덤 딜레이 (초)
+MAX_PAGES_PER_CATEGORY = 50  # 카테고리당 최대 페이지
+DEFAULT_WORKERS = 6  # 병렬 워커 수
 
 
 # ── Playwright: 카테고리 → 상품 ID 수집 ──────────────────────
@@ -292,29 +305,55 @@ def upsert_kurly_products(supabase, products: list[dict]) -> int:
         return 0
 
 
+# ── 병렬 상품 상세 수집 ─────────────────────────────────────
+def fetch_products_parallel(product_ids: list, workers: int = DEFAULT_WORKERS) -> tuple[list, int]:
+    """ThreadPoolExecutor로 병렬 상품 상세 수집"""
+    products = []
+    failed = 0
+    total = len(product_ids)
+
+    def _fetch_with_delay(pid):
+        time.sleep(random.uniform(*REQUEST_DELAY))
+        return fetch_product_detail(pid)
+
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        futures = {executor.submit(_fetch_with_delay, pid): pid for pid in product_ids}
+        for i, future in enumerate(as_completed(futures), 1):
+            result = future.result()
+            if result:
+                products.append(result)
+            else:
+                failed += 1
+
+            if i % 100 == 0 or i == total:
+                log.info(f"  진행: {i}/{total} (성공 {len(products)}, 실패 {failed})")
+
+    return products, failed
+
+
 # ── 메인 실행 ────────────────────────────────────────────────
 async def main():
-    parser = argparse.ArgumentParser(description="마켓컬리 크롤러")
+    parser = argparse.ArgumentParser(description="마켓컬리 전체 식품 크롤러")
     parser.add_argument("--test", action="store_true", help="테스트 모드 (1 카테고리, 5 상품)")
-    parser.add_argument("--categories", type=str, help="카테고리 ID 콤마 구분 (예: 912001,912002)")
+    parser.add_argument("--categories", type=str, help="카테고리 ID 콤마 구분 (예: 912,911)")
     parser.add_argument("--max-products", type=int, default=0, help="카테고리당 최대 상품 수 (0=무제한)")
-    parser.add_argument("--extra", action="store_true", help="확장 카테고리(국·반찬) 포함")
+    parser.add_argument("--workers", type=int, default=DEFAULT_WORKERS, help=f"병렬 워커 수 (기본 {DEFAULT_WORKERS})")
     parser.add_argument("--dry-run", action="store_true", help="DB 적재 없이 수집만")
     args = parser.parse_args()
 
     # 카테고리 결정
+    all_cats = {**CATEGORIES, **SUB_CATEGORIES}
     if args.categories:
         cat_ids = args.categories.split(",")
-        categories = {cid: CATEGORIES.get(cid, EXTRA_CATEGORIES.get(cid, cid)) for cid in cat_ids}
+        categories = {cid: all_cats.get(cid, cid) for cid in cat_ids}
     elif args.test:
-        categories = {"912001": "밀키트"}
+        categories = {"912": "간편식·밀키트·샐러드"}
     else:
         categories = dict(CATEGORIES)
-        if args.extra:
-            categories.update(EXTRA_CATEGORIES)
 
     log.info(f"=== 마켓컬리 크롤러 시작 ===")
-    log.info(f"대상 카테고리: {list(categories.values())}")
+    log.info(f"대상 카테고리: {len(categories)}개 - {list(categories.values())}")
+    log.info(f"병렬 워커: {args.workers}개")
 
     # 1. 카테고리 → 상품 ID 수집
     log.info("--- 1단계: 카테고리 페이지에서 상품 ID 수집 ---")
@@ -339,23 +378,9 @@ async def main():
         unique_ids = set(list(unique_ids)[:args.max_products])
         log.info(f"최대 {args.max_products}개 제한: {len(unique_ids)}개 처리")
 
-    # 2. 상품 상세 수집
-    log.info("--- 2단계: 상품 상세 정보 수집 ---")
-    products = []
-    failed = 0
-    for i, pid in enumerate(unique_ids, 1):
-        detail = fetch_product_detail(pid)
-        if detail:
-            products.append(detail)
-            if i % 20 == 0 or i == len(unique_ids):
-                log.info(f"  진행: {i}/{len(unique_ids)} (성공 {len(products)}, 실패 {failed})")
-        else:
-            failed += 1
-
-        # 요청 간 랜덤 딜레이
-        delay = random.uniform(*REQUEST_DELAY)
-        time.sleep(delay)
-
+    # 2. 상품 상세 수집 (병렬)
+    log.info(f"--- 2단계: 상품 상세 정보 수집 ({len(unique_ids)}개, {args.workers} workers) ---")
+    products, failed = fetch_products_parallel(list(unique_ids), workers=args.workers)
     log.info(f"상세 수집 완료: 성공 {len(products)}개, 실패 {failed}개")
 
     # 3. 결과 출력 / DB 적재

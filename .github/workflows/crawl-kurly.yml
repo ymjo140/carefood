@@ -14,16 +14,15 @@ on:
         description: "카테고리당 최대 상품 수 (0=무제한)"
         required: false
         default: "0"
-      extra:
-        description: "확장 카테고리(국·반찬) 포함"
+      workers:
+        description: "병렬 워커 수 (기본 6)"
         required: false
-        type: boolean
-        default: false
+        default: "6"
 
 jobs:
   crawl:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 90
 
     steps:
       - uses: actions/checkout@v4
@@ -50,8 +49,8 @@ jobs:
           if [ "${{ github.event.inputs.max_products }}" != "0" ] && [ -n "${{ github.event.inputs.max_products }}" ]; then
             ARGS="$ARGS --max-products ${{ github.event.inputs.max_products }}"
           fi
-          if [ "${{ github.event.inputs.extra }}" = "true" ]; then
-            ARGS="$ARGS --extra"
+          if [ -n "${{ github.event.inputs.workers }}" ]; then
+            ARGS="$ARGS --workers ${{ github.event.inputs.workers }}"
           fi
           python crawl_kurly.py $ARGS
 
