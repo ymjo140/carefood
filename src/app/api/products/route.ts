@@ -59,7 +59,7 @@ export async function GET(request: NextRequest) {
     query = query.gte("fat_g", min).lt("fat_g", max);
   }
   if (spicy >= 1 && spicy <= 5) {
-    query = query.eq("spicy_score", spicy);
+    query = query.gte("spicy_score", spicy);
   }
 
   // 상용제품만 (구매 가능 제품)
