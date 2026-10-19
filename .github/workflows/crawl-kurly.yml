@@ -1,0 +1,64 @@
+name: Kurly 크롤러
+
+on:
+  schedule:
+    # 매일 KST 02:00 (UTC 17:00)
+    - cron: "0 17 * * *"
+  workflow_dispatch:
+    inputs:
+      categories:
+        description: "카테고리 ID (콤마 구분, 비우면 전체)"
+        required: false
+        default: ""
+      max_products:
+        description: "카테고리당 최대 상품 수 (0=무제한)"
+        required: false
+        default: "0"
+      extra:
+        description: "확장 카테고리(국·반찬) 포함"
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  crawl:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install requests beautifulsoup4 supabase python-dotenv playwright
+          playwright install chromium
+
+      - name: Run Kurly crawler
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: |
+          cd scripts
+          ARGS=""
+          if [ -n "${{ github.event.inputs.categories }}" ]; then
+            ARGS="$ARGS --categories ${{ github.event.inputs.categories }}"
+          fi
+          if [ "${{ github.event.inputs.max_products }}" != "0" ] && [ -n "${{ github.event.inputs.max_products }}" ]; then
+            ARGS="$ARGS --max-products ${{ github.event.inputs.max_products }}"
+          fi
+          if [ "${{ github.event.inputs.extra }}" = "true" ]; then
+            ARGS="$ARGS --extra"
+          fi
+          python crawl_kurly.py $ARGS
+
+      - name: Upload crawl log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: crawl-kurly-log
+          path: scripts/crawl_kurly.log
+          retention-days: 7
