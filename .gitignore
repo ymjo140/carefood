@@ -56,5 +56,6 @@ scripts/ingest.log
 scripts/crawl_prices.log
 scripts/crawl_kurly.log
 kurly_products.json
+kurly_products_full.json
 venv/
 .venv/
