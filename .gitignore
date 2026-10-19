@@ -54,5 +54,7 @@ __pycache__/
 *_backup_*.json
 scripts/ingest.log
 scripts/crawl_prices.log
+scripts/crawl_kurly.log
+kurly_products.json
 venv/
 .venv/
