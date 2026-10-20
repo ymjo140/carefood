@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import Header from "@/components/Header";
+import Footer from "@/components/Footer";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -13,13 +15,13 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "케어푸드 | 내 입맛에 맞는 건강한 한 끼",
+  title: "케어푸드 | 상황에 맞는 건강한 한 끼",
   description:
-    "짠맛·단맛·매운맛·기름진맛 취향을 설정하면, 영양성분 데이터 기반으로 딱 맞는 식품을 추천합니다.",
-  keywords: ["케어푸드", "맛 추천", "영양성분", "건강식", "간편식"],
+    "어르신, 환자, 산모 등 상황별 맞춤 식품 추천. 식약처 영양성분 데이터 기반 안전한 큐레이션.",
+  keywords: ["케어푸드", "환자식", "어르신식사", "산모식단", "맞춤식품", "건강식"],
   openGraph: {
-    title: "케어푸드 | 내 입맛에 맞는 건강한 한 끼",
-    description: "맛 취향 기반 식품 큐레이션 플랫폼",
+    title: "케어푸드 | 상황에 맞는 건강한 한 끼",
+    description: "상황 맞춤 식품 큐레이션 플랫폼",
     type: "website",
   },
 };
@@ -30,7 +32,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       lang="ko"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col bg-background text-foreground">
+        <Header />
+        <main className="flex-1">{children}</main>
+        <Footer />
+      </body>
     </html>
   );
 }

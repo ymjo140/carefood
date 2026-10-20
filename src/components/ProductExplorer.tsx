@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
 import type { ProductWithPrices, TasteLevel } from "@/types/database";
 
 type TasteFilters = {
@@ -248,9 +249,11 @@ export default function ProductExplorer() {
                 >
                   {/* 헤더 */}
                   <div className="mb-3">
-                    <h3 className="font-bold text-sm leading-tight line-clamp-2">
-                      {product.name}
-                    </h3>
+                    <Link href={`/products/${product.id}`}>
+                      <h3 className="font-bold text-sm leading-tight line-clamp-2 hover:text-primary transition-colors cursor-pointer">
+                        {product.name}
+                      </h3>
+                    </Link>
                     <div className="flex items-center gap-2 mt-1 flex-wrap">
                       {product.manufacturer && (
                         <span className="text-xs text-muted truncate max-w-[140px]">

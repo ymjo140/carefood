@@ -119,6 +119,32 @@ export type Database = {
         Insert: Omit<Database["public"]["Tables"]["taste_feedback"]["Row"], "id" | "created_at">;
         Update: Partial<Database["public"]["Tables"]["taste_feedback"]["Insert"]>;
       };
+      safety_rules: {
+        Row: {
+          id: string;
+          condition: string;
+          nutrient: string;
+          max_per_serving: number;
+          description: string | null;
+          created_at: string;
+        };
+        Insert: Omit<Database["public"]["Tables"]["safety_rules"]["Row"], "id" | "created_at">;
+        Update: Partial<Database["public"]["Tables"]["safety_rules"]["Insert"]>;
+      };
+      user_health_profiles: {
+        Row: {
+          id: string;
+          user_id: string;
+          conditions: string[];
+          allergies: string[];
+          pregnancy_stage: string | null;
+          health_goal: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: Omit<Database["public"]["Tables"]["user_health_profiles"]["Row"], "id" | "created_at" | "updated_at">;
+        Update: Partial<Database["public"]["Tables"]["user_health_profiles"]["Insert"]>;
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;
@@ -133,6 +159,28 @@ export type User = Database["public"]["Tables"]["users"]["Row"];
 export type UserTasteProfile = Database["public"]["Tables"]["user_taste_profiles"]["Row"];
 export type TasteFeedback = Database["public"]["Tables"]["taste_feedback"]["Row"];
 export type DefaultTasteMapping = Database["public"]["Tables"]["default_taste_mappings"]["Row"];
+export type SafetyRule = Database["public"]["Tables"]["safety_rules"]["Row"];
+export type UserHealthProfile = Database["public"]["Tables"]["user_health_profiles"]["Row"];
+
+// 페르소나 타입
+export type Persona = "elderly" | "patient" | "pregnant" | "general";
+export type OrdererRelation = "self" | "child" | "spouse" | "caregiver" | "other";
+
+// 온보딩 프로필 (localStorage 저장용)
+export type OnboardingProfile = {
+  persona: Persona;
+  ordererRelation: OrdererRelation;
+  conditions: string[];
+  allergies: string[];
+  pregnancyStage: string;
+  healthGoal: string;
+  tastes: {
+    salty: number;
+    sweet: number;
+    spicy: number;
+    fatty: number;
+  };
+};
 
 // 통합 가격 정보 (v_all_prices 뷰에서)
 export type MallPrice = {

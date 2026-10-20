@@ -1,189 +1,157 @@
 import Link from "next/link";
 
-const TASTE_CARDS = [
-  { emoji: "🧂", label: "짠맛", desc: "나트륨 기반", color: "bg-blue-50 dark:bg-blue-950" },
-  { emoji: "🍬", label: "단맛", desc: "당류 기반", color: "bg-pink-50 dark:bg-pink-950" },
-  { emoji: "🌶️", label: "매운맛", desc: "원재료 분석", color: "bg-red-50 dark:bg-red-950" },
-  { emoji: "🧈", label: "기름진맛", desc: "지방 기반", color: "bg-yellow-50 dark:bg-yellow-950" },
+const PERSONA_CARDS = [
+  {
+    emoji: "👴",
+    label: "어르신",
+    desc: "고령의 부모님을 위한 부드럽고 영양 균형 잡힌 식단",
+    color: "bg-amber-50 dark:bg-amber-950 border-amber-200 dark:border-amber-800",
+    href: "/onboarding?persona=elderly",
+  },
+  {
+    emoji: "🏥",
+    label: "환자",
+    desc: "당뇨·고혈압·신장질환 등 건강 상태에 맞는 안전한 식품",
+    color: "bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800",
+    href: "/onboarding?persona=patient",
+  },
+  {
+    emoji: "🤰",
+    label: "산모",
+    desc: "임신·산후 시기별 필요한 영양소를 채워주는 식품",
+    color: "bg-pink-50 dark:bg-pink-950 border-pink-200 dark:border-pink-800",
+    href: "/onboarding?persona=pregnant",
+  },
+  {
+    emoji: "🥗",
+    label: "일반 건강식",
+    desc: "체중 관리, 근육 증가 등 건강 목표에 맞는 식품",
+    color: "bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800",
+    href: "/onboarding?persona=general",
+  },
 ];
 
-const STEPS = [
-  {
-    step: "01",
-    title: "맛 취향 설정",
-    desc: "짠맛·단맛·매운맛·기름진맛, 1~5 슬라이더로 내 입맛을 알려주세요.",
-  },
-  {
-    step: "02",
-    title: "AI 매칭",
-    desc: "식약처 영양성분 데이터 기반으로, 내 취향에 딱 맞는 제품을 찾아드려요.",
-  },
-  {
-    step: "03",
-    title: "바로 구매",
-    desc: "쿠팡·마켓컬리·네이버 최저가로 비교하고 바로 구매 링크로 이동!",
-  },
+const TRUST_BADGES = [
+  { icon: "🏛️", label: "식약처 MFDS", desc: "공식 영양성분 DB 기반" },
+  { icon: "🔒", label: "안전 필터", desc: "질환별 금기 자동 차단" },
+  { icon: "💰", label: "최저가 비교", desc: "4개 쇼핑몰 실시간 가격" },
 ];
 
 export default function HomePage() {
   return (
     <>
-      {/* 헤더 */}
-      <header className="border-b border-border bg-card/80 backdrop-blur-sm sticky top-0 z-50">
-        <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
-          <Link href="/" className="text-lg font-bold text-primary">
-            케어푸드
+      {/* 히어로 */}
+      <section className="py-16 sm:py-24 px-4">
+        <div className="max-w-3xl mx-auto text-center">
+          <div className="inline-block px-3 py-1 rounded-full bg-primary/10 text-primary text-sm font-medium mb-6">
+            가입 없이 추천 체험 가능
+          </div>
+          <h1 className="text-3xl sm:text-5xl font-bold tracking-tight leading-tight">
+            누구를 위해
+            <br />
+            <span className="text-primary">식품을 찾으시나요?</span>
+          </h1>
+          <p className="mt-4 text-lg text-muted max-w-xl mx-auto">
+            어르신, 환자, 산모 등 상황에 따라
+            <br className="sm:hidden" />
+            {" "}안전하고 맞춤화된 식품을 추천합니다.
+          </p>
+        </div>
+      </section>
+
+      {/* 페르소나 카드 */}
+      <section className="px-4 pb-16">
+        <div className="max-w-4xl mx-auto grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {PERSONA_CARDS.map((card) => (
+            <Link
+              key={card.label}
+              href={card.href}
+              className={`${card.color} border rounded-2xl p-6 hover:scale-[1.02] transition-transform`}
+            >
+              <div className="text-4xl mb-3">{card.emoji}</div>
+              <h3 className="text-lg font-bold mb-1">{card.label}</h3>
+              <p className="text-sm text-muted">{card.desc}</p>
+            </Link>
+          ))}
+        </div>
+      </section>
+
+      {/* 신뢰 배지 */}
+      <section className="py-16 px-4 bg-card">
+        <div className="max-w-4xl mx-auto">
+          <h2 className="text-2xl font-bold text-center mb-10">
+            데이터 기반 안전한 추천
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+            {TRUST_BADGES.map((badge) => (
+              <div
+                key={badge.label}
+                className="text-center p-6 rounded-xl border border-border bg-background"
+              >
+                <div className="text-3xl mb-3">{badge.icon}</div>
+                <h3 className="font-bold mb-1">{badge.label}</h3>
+                <p className="text-sm text-muted">{badge.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* 작동 방식 */}
+      <section className="py-16 px-4">
+        <div className="max-w-3xl mx-auto">
+          <h2 className="text-2xl font-bold text-center mb-12">
+            3단계로 시작하세요
+          </h2>
+          <div className="space-y-8">
+            {[
+              {
+                step: "1",
+                title: "상황을 알려주세요",
+                desc: "누구를 위한 식품인지, 어떤 건강 상태인지 간단히 선택합니다.",
+              },
+              {
+                step: "2",
+                title: "안전 필터가 작동합니다",
+                desc: "질환별 금기 성분을 자동으로 걸러내고, 영양 기준에 맞는 식품만 남깁니다.",
+              },
+              {
+                step: "3",
+                title: "맞춤 추천을 받으세요",
+                desc: "상황에 맞는 큐레이션 패키지와 최저가 구매 링크를 제공합니다.",
+              },
+            ].map((s) => (
+              <div key={s.step} className="flex gap-5 items-start">
+                <div className="w-10 h-10 rounded-full bg-primary text-white flex items-center justify-center font-bold text-lg shrink-0">
+                  {s.step}
+                </div>
+                <div>
+                  <h3 className="font-bold text-lg">{s.title}</h3>
+                  <p className="text-muted text-sm mt-1">{s.desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* CTA */}
+      <section className="py-16 px-4 bg-card">
+        <div className="max-w-2xl mx-auto text-center">
+          <h2 className="text-2xl font-bold mb-3">
+            지금 바로 맞춤 추천을 받아보세요
+          </h2>
+          <p className="text-muted mb-6">
+            가입 없이도 추천을 체험할 수 있어요. 30초면 충분합니다.
+          </p>
+          <Link
+            href="/onboarding"
+            className="bg-primary text-white px-8 py-3 rounded-xl font-medium hover:bg-primary-dark transition-colors inline-block"
+          >
+            무료로 시작하기
           </Link>
-          <nav className="flex items-center gap-4 text-sm">
-            <Link href="/products" className="text-muted hover:text-foreground transition-colors">
-              제품 탐색
-            </Link>
-            <Link
-              href="/onboarding"
-              className="bg-primary text-white px-4 py-1.5 rounded-full text-sm font-medium hover:bg-primary-dark transition-colors"
-            >
-              시작하기
-            </Link>
-          </nav>
         </div>
-      </header>
-
-      <main className="flex-1">
-        {/* 히어로 */}
-        <section className="py-20 px-4">
-          <div className="max-w-3xl mx-auto text-center">
-            <h1 className="text-4xl sm:text-5xl font-bold tracking-tight leading-tight">
-              내 입맛에 맞는
-              <br />
-              <span className="text-primary">건강한 한 끼</span>
-            </h1>
-            <p className="mt-4 text-lg text-muted max-w-xl mx-auto">
-              짠맛·단맛·매운맛·기름진맛 취향만 설정하면,
-              <br />
-              영양성분 데이터 기반으로 딱 맞는 식품을 추천합니다.
-            </p>
-            <div className="mt-8 flex gap-3 justify-center">
-              <Link
-                href="/onboarding"
-                className="bg-primary text-white px-6 py-3 rounded-xl font-medium hover:bg-primary-dark transition-colors"
-              >
-                무료로 시작하기
-              </Link>
-              <Link
-                href="/products"
-                className="border border-border px-6 py-3 rounded-xl font-medium hover:bg-card transition-colors"
-              >
-                제품 둘러보기
-              </Link>
-            </div>
-          </div>
-        </section>
-
-        {/* 맛 카드 */}
-        <section className="py-16 px-4 bg-card">
-          <div className="max-w-4xl mx-auto">
-            <h2 className="text-2xl font-bold text-center mb-8">
-              4가지 맛 축으로 분석합니다
-            </h2>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {TASTE_CARDS.map((card) => (
-                <div
-                  key={card.label}
-                  className={`${card.color} rounded-2xl p-6 text-center`}
-                >
-                  <div className="text-4xl mb-2">{card.emoji}</div>
-                  <div className="font-bold text-lg">{card.label}</div>
-                  <div className="text-sm text-muted mt-1">{card.desc}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* 작동 방식 */}
-        <section className="py-16 px-4">
-          <div className="max-w-4xl mx-auto">
-            <h2 className="text-2xl font-bold text-center mb-12">
-              어떻게 작동하나요?
-            </h2>
-            <div className="grid md:grid-cols-3 gap-8">
-              {STEPS.map((s) => (
-                <div key={s.step} className="text-center">
-                  <div className="text-5xl font-bold text-primary/20 mb-2">
-                    {s.step}
-                  </div>
-                  <h3 className="text-lg font-bold mb-2">{s.title}</h3>
-                  <p className="text-muted text-sm">{s.desc}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* 데이터 신뢰성 */}
-        <section className="py-16 px-4 bg-card">
-          <div className="max-w-3xl mx-auto text-center">
-            <h2 className="text-2xl font-bold mb-4">
-              식약처 공공 데이터 기반
-            </h2>
-            <p className="text-muted">
-              식품의약품안전처 식품영양성분 DB(I2790)의 공식 데이터를 활용합니다.
-              <br />
-              칼로리, 나트륨, 당류, 지방 등 핵심 영양성분을 정확하게 분석합니다.
-            </p>
-            <div className="mt-8 flex justify-center gap-8 text-sm text-muted">
-              <div>
-                <div className="text-3xl font-bold text-foreground">9+</div>
-                <div>영양성분 분석</div>
-              </div>
-              <div>
-                <div className="text-3xl font-bold text-foreground">3</div>
-                <div>쇼핑 플랫폼</div>
-              </div>
-              <div>
-                <div className="text-3xl font-bold text-foreground">4</div>
-                <div>맛 분석 축</div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* CTA */}
-        <section className="py-20 px-4">
-          <div className="max-w-2xl mx-auto text-center">
-            <h2 className="text-2xl font-bold mb-4">
-              지금 바로 내 맛 프로필을 만들어보세요
-            </h2>
-            <p className="text-muted mb-6">
-              무료 회원은 제품 검색과 맛 필터를 자유롭게 이용할 수 있어요.
-            </p>
-            <Link
-              href="/onboarding"
-              className="bg-primary text-white px-8 py-3 rounded-xl font-medium hover:bg-primary-dark transition-colors inline-block"
-            >
-              무료로 시작하기
-            </Link>
-          </div>
-        </section>
-      </main>
-
-      {/* 푸터 */}
-      <footer className="border-t border-border py-8 px-4">
-        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-4 text-sm text-muted">
-          <div>
-            <span className="font-bold text-foreground">케어푸드</span> · 맛
-            취향 기반 식품 큐레이션
-          </div>
-          <div className="flex gap-4">
-            <Link href="/terms" className="hover:text-foreground">
-              이용약관
-            </Link>
-            <Link href="/privacy" className="hover:text-foreground">
-              개인정보처리방침
-            </Link>
-          </div>
-        </div>
-      </footer>
+      </section>
     </>
   );
 }
