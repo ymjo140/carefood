@@ -3,6 +3,8 @@
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { TasteLevel } from "@/types/database";
+import { createClient } from "@/lib/supabase/client";
+import { saveProfile } from "@/app/auth/actions";
 
 // ── 타입 ─────────────────────────────────────────────
 type Persona = "elderly" | "patient" | "pregnant" | "general";
@@ -154,7 +156,6 @@ function OnboardingContent() {
   };
 
   const handleComplete = async () => {
-    // 쿠키/localStorage에 프로필 저장 (비로그인 체험용)
     const profile = {
       persona: state.persona,
       ordererRelation: state.ordererRelation,
@@ -164,9 +165,23 @@ function OnboardingContent() {
       healthGoal: state.healthGoal,
       tastes: state.tastes,
     };
+
+    // 항상 localStorage에 저장 (빠른 복원 + 비로그인 체험용)
     try {
       localStorage.setItem("carefood_profile", JSON.stringify(profile));
     } catch { /* silent */ }
+
+    // 로그인 상태면 Supabase에도 저장
+    try {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await saveProfile(JSON.stringify(profile));
+      }
+    } catch {
+      // DB 저장 실패해도 localStorage가 있으니 진행
+    }
+
     router.push("/recommend");
   };
 

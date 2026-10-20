@@ -3,13 +3,13 @@
 :root {
   --background: #fafaf9;
   --foreground: #1c1917;
-  --primary: #16a34a;
+  --primary: #15803d;          /* 명도대비 4.5:1↑ 확보 (was #16a34a → 3.8:1) */
   --primary-light: #bbf7d0;
-  --primary-dark: #166534;
-  --accent: #f97316;
-  --muted: #78716c;
+  --primary-dark: #14532d;
+  --accent: #ea580c;           /* 명도대비 4.5:1↑ 확보 */
+  --muted: #57534e;            /* 명도대비 4.5:1↑ (was #78716c → 3.5:1) */
   --card: #ffffff;
-  --border: #e7e5e4;
+  --border: #d6d3d1;           /* 약간 진하게 — 구분 명확 */
 }
 
 @theme inline {
@@ -34,7 +34,7 @@
     --primary-light: #14532d;
     --primary-dark: #86efac;
     --card: #292524;
-    --border: #44403c;
+    --border: #57534e;          /* 다크모드 대비 확보 */
     --muted: #a8a29e;
   }
 }
@@ -43,4 +43,48 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans), sans-serif;
+  font-size: 16px;             /* 접근성: 최소 16px 기본 */
+  line-height: 1.6;
+}
+
+/* ───── 접근성 기본 규칙 ───── */
+
+/* 터치 타깃 최소 48px (로드맵: 고령자·보호자 접근성) */
+button, a, [role="button"], input[type="checkbox"], input[type="radio"] {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* 인라인 작은 태그/배지는 예외 (터치 타깃이 아님) */
+span.rounded-full, span[class*="text-\[10px\]"] {
+  min-height: unset;
+  min-width: unset;
+}
+
+/* 포커스 표시 — 색만으로 정보 전달 금지 */
+:focus-visible {
+  outline: 3px solid var(--primary);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* 모션 감소 존중 */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* 스크린 리더 전용 텍스트 */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
 }

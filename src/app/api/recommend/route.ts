@@ -177,39 +177,128 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // 3. 스코어링 (단순 규칙 기반)
+    // 3. 스코어링 + 개인화 이유 생성
+    // 로드맵: "왜 이 제품인가" — 쉬운 말, 사실 중심, 효능 주장 금지
     const scored = products.map((p) => {
-      let score = 50; // 기본 점수
-      let reasons: string[] = [];
+      let score = 50;
+      const reasons: string[] = [];
+      const reasonDetails: string[] = []; // 상세 설명 (1줄)
 
-      // 영양 균형 점수
+      // 영양 균형
       if (p.calories && p.calories > 0 && p.calories < 600) score += 5;
-      if (p.protein_g && p.protein_g >= 10) { score += 5; reasons.push("단백질 풍부"); }
+      if (p.protein_g && p.protein_g >= 10) {
+        score += 5;
+        reasons.push("단백질 풍부");
+      }
 
-      // 페르소나별 보너스
+      // 페르소나별 보너스 — 이유를 사람이 읽는 말로
       if (persona === "elderly") {
-        if (p.sodium_mg && p.sodium_mg < 400) { score += 10; reasons.push("저나트륨"); }
-        if (p.fiber_g && p.fiber_g < 3) { score += 5; reasons.push("소화 부담 적음"); }
+        if (p.sodium_mg !== null && p.sodium_mg < 400) {
+          score += 10;
+          reasons.push("저나트륨");
+          reasonDetails.push(`나트륨 ${Math.round(p.sodium_mg)}mg — 싱거운 맛 선호에 맞춰요`);
+        }
+        if (p.fiber_g !== null && p.fiber_g < 3) {
+          score += 5;
+          reasons.push("부드러운 식감");
+          reasonDetails.push("식이섬유가 적어 소화 부담이 적어요");
+        }
+        if (p.spicy_score <= 1) {
+          score += 3;
+          reasons.push("자극 적음");
+        }
       }
       if (persona === "patient") {
-        if (p.sugar_g !== null && p.sugar_g < 5) { score += 10; reasons.push("저당"); }
-        if (p.sodium_mg && p.sodium_mg < 300) { score += 10; reasons.push("저나트륨"); }
+        if (p.sugar_g !== null && p.sugar_g < 5) {
+          score += 10;
+          reasons.push("저당");
+          reasonDetails.push(`당류 ${p.sugar_g}g — 당류 조절 식단에 적합해요`);
+        }
+        if (p.sodium_mg !== null && p.sodium_mg < 300) {
+          score += 10;
+          reasons.push("저나트륨");
+          reasonDetails.push(`나트륨 ${Math.round(p.sodium_mg)}mg으로 낮아요`);
+        }
+        if (p.protein_g && p.protein_g >= 15) {
+          score += 5;
+          reasons.push("고단백");
+          reasonDetails.push(`단백질 ${p.protein_g}g 포함 — 고단백 설계`);
+        }
       }
       if (persona === "pregnant") {
-        if (p.protein_g && p.protein_g >= 15) { score += 10; reasons.push("고단백"); }
-        if (p.calories && p.calories >= 200) { score += 5; reasons.push("적정 칼로리"); }
+        if (p.protein_g && p.protein_g >= 15) {
+          score += 10;
+          reasons.push("고단백");
+          reasonDetails.push(`단백질 ${p.protein_g}g — 1일 권장량의 ${Math.round(p.protein_g / 55 * 100)}%`);
+        }
+        if (p.calories && p.calories >= 200 && p.calories <= 500) {
+          score += 5;
+          reasons.push("적정 칼로리");
+          reasonDetails.push(`${p.calories}kcal — 균형 잡힌 열량이에요`);
+        }
       }
-      if (persona === "general" && healthGoal === "weight_loss") {
-        if (p.calories && p.calories < 300) { score += 10; reasons.push("저칼로리"); }
+      if (persona === "general") {
+        if (healthGoal === "weight_loss") {
+          if (p.calories && p.calories < 300) {
+            score += 10;
+            reasons.push("저칼로리");
+            reasonDetails.push(`${p.calories}kcal로 가벼워요`);
+          }
+          if (p.protein_g && p.protein_g >= 15) {
+            score += 5;
+            reasons.push("고단백");
+            reasonDetails.push(`단백질 ${p.protein_g}g 고단백 설계`);
+          }
+        }
+        if (healthGoal === "muscle_gain" && p.protein_g && p.protein_g >= 20) {
+          score += 10;
+          reasons.push("고단백");
+          reasonDetails.push(`단백질 ${p.protein_g}g — 1일 권장량의 ${Math.round(p.protein_g / 55 * 100)}%`);
+        }
+      }
+
+      // 건강 조건별 안전 메시지
+      if (conditions.includes("diabetes") && p.sugar_g !== null && p.sugar_g < 5) {
+        if (!reasons.includes("저당")) {
+          reasons.push("저당");
+          reasonDetails.push(`당류 ${p.sugar_g}g — 저당 설계`);
+        }
+        score += 3;
+      }
+      if (conditions.includes("hypertension") && p.sodium_mg !== null && p.sodium_mg < 400) {
+        if (!reasons.includes("저나트륨")) {
+          reasons.push("저나트륨");
+          reasonDetails.push(`나트륨 ${Math.round(p.sodium_mg)}mg — 저나트륨 설계`);
+        }
+        score += 3;
+      }
+      if (conditions.includes("kidney") && p.protein_g !== null && p.protein_g < 10) {
+        reasons.push("저단백");
+        reasonDetails.push(`단백질 ${p.protein_g}g — 저단백 설계`);
+        score += 5;
       }
 
       // 맛 일치도 (완벽 일치 보너스)
+      let tasteMatch = 0;
       if (tastes.salty >= 1 && tastes.salty <= 5 && p.sodium_mg) {
         const [idealMin, idealMax] = TASTE_RANGES.salty[tastes.salty];
-        if (p.sodium_mg >= idealMin && p.sodium_mg < idealMax) score += 5;
+        if (p.sodium_mg >= idealMin && p.sodium_mg < idealMax) { score += 5; tasteMatch++; }
+      }
+      if (tastes.sweet >= 1 && tastes.sweet <= 5 && p.sugar_g !== null) {
+        const [idealMin, idealMax] = TASTE_RANGES.sweet[tastes.sweet];
+        if (p.sugar_g >= idealMin && p.sugar_g < idealMax) { score += 5; tasteMatch++; }
+      }
+      if (tasteMatch >= 2) {
+        reasons.push("맛 취향 일치");
+        reasonDetails.push("선호하시는 맛 프로필에 가까워요");
       }
 
-      return { ...p, match_score: Math.min(score, 100), reasons };
+      return {
+        ...p,
+        match_score: Math.min(score, 100),
+        reasons: reasons.slice(0, 4),
+        reason_detail: reasonDetails[0] || null, // 대표 이유 1줄
+      };
     });
 
     // 점수순 정렬 후 상위 30개
@@ -236,12 +325,36 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // 5. 맛평가 통계 가져오기 (리뷰 있는 제품만)
+    const { data: reviewStats } = await ((supabase
+      .from("taste_reviews") as any)
+      .select("product_id, star_rating, consumption_pct")
+      .in("product_id", productIds)) as { data: { product_id: string; star_rating: number; consumption_pct: number }[] | null };
+
+    const reviewMap: Record<string, { avgRating: number; avgConsumption: number; count: number }> = {};
+    if (reviewStats && reviewStats.length > 0) {
+      const grouped: Record<string, { stars: number[]; consumption: number[] }> = {};
+      for (const r of reviewStats) {
+        if (!grouped[r.product_id]) grouped[r.product_id] = { stars: [], consumption: [] };
+        grouped[r.product_id].stars.push(r.star_rating);
+        grouped[r.product_id].consumption.push(r.consumption_pct);
+      }
+      for (const [pid, data] of Object.entries(grouped)) {
+        reviewMap[pid] = {
+          avgRating: Math.round((data.stars.reduce((a, b) => a + b, 0) / data.stars.length) * 10) / 10,
+          avgConsumption: Math.round(data.consumption.reduce((a, b) => a + b, 0) / data.consumption.length),
+          count: data.stars.length,
+        };
+      }
+    }
+
     const recommendations = top.map((p) => ({
       ...p,
       product_prices: (priceMap[p.id] || []).sort((a, b) => a.price - b.price),
+      review_stats: reviewMap[p.id] || null,
     }));
 
-    // 5. 큐레이션 그룹 생성
+    // 6. 큐레이션 그룹 생성
     const curationGroups = buildCurationGroups(recommendations, persona, conditions);
 
     return NextResponse.json({
@@ -288,7 +401,7 @@ function buildCurationGroups(
       if (lowSugar.length > 0) {
         groups.push({
           title: "당류 5g 이하",
-          description: "혈당 관리에 적합한 저당 식품",
+          description: "당류 5g 이하로 설계된 식품 모음",
           emoji: "🩸",
           productIds: lowSugar.map((p) => p.id),
         });
@@ -299,7 +412,7 @@ function buildCurationGroups(
       if (lowSodium.length > 0) {
         groups.push({
           title: "나트륨 400mg 이하",
-          description: "혈압 관리에 적합한 저나트륨 식품",
+          description: "나트륨 400mg 이하로 설계된 식품 모음",
           emoji: "❤️",
           productIds: lowSodium.map((p) => p.id),
         });

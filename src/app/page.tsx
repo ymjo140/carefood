@@ -1,4 +1,5 @@
 import Link from "next/link";
+import HomePersonalized from "@/components/HomePersonalized";
 
 const PERSONA_CARDS = [
   {
@@ -59,6 +60,9 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* 재방문 사용자 개인화 추천 (클라이언트) */}
+      <HomePersonalized />
+
       {/* 페르소나 카드 */}
       <section className="px-4 pb-16">
         <div className="max-w-4xl mx-auto grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -66,9 +70,10 @@ export default function HomePage() {
             <Link
               key={card.label}
               href={card.href}
-              className={`${card.color} border rounded-2xl p-6 hover:scale-[1.02] transition-transform`}
+              aria-label={`${card.label} 맞춤 추천 시작`}
+              className={`${card.color} border rounded-2xl p-6 hover:scale-[1.02] transition-transform focus-visible:ring-2 focus-visible:ring-primary`}
             >
-              <div className="text-4xl mb-3">{card.emoji}</div>
+              <div className="text-4xl mb-3" aria-hidden="true">{card.emoji}</div>
               <h3 className="text-lg font-bold mb-1">{card.label}</h3>
               <p className="text-sm text-muted">{card.desc}</p>
             </Link>

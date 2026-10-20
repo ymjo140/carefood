@@ -4,6 +4,12 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 
 /* ───── 타입 ───── */
+type ReviewStats = {
+  avgRating: number;
+  avgConsumption: number;
+  count: number;
+};
+
 type RecommendedProduct = {
   id: string;
   name: string;
@@ -21,7 +27,9 @@ type RecommendedProduct = {
   spicy_score: number;
   match_score: number;
   reasons: string[];
+  reason_detail: string | null;
   product_prices: { platform: string; price: number; url: string; image_url: string | null }[];
+  review_stats: ReviewStats | null;
 };
 
 type CurationGroup = {
@@ -86,6 +94,19 @@ function NutritionBar({ label, value, max, unit }: { label: string; value: numbe
   );
 }
 
+/* ───── 별점 표시 ───── */
+function Stars({ rating, size = "text-xs" }: { rating: number; size?: string }) {
+  return (
+    <span className={`${size} tracking-tight`}>
+      {[1, 2, 3, 4, 5].map((n) => (
+        <span key={n} className={n <= Math.round(rating) ? "text-yellow-400" : "text-border"}>
+          ★
+        </span>
+      ))}
+    </span>
+  );
+}
+
 /* ───── 제품 카드 ───── */
 function ProductCard({ product }: { product: RecommendedProduct }) {
   const prices = product.product_prices?.filter((p) => p.price > 0) || [];
@@ -93,39 +114,62 @@ function ProductCard({ product }: { product: RecommendedProduct }) {
   const imageUrl = prices.find((p) => p.image_url)?.image_url;
 
   return (
-    <div className="bg-card rounded-xl border border-border p-4 hover:border-primary/30 transition-colors">
-      {/* 매칭 점수 */}
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex gap-1 flex-wrap">
-          {product.reasons.slice(0, 3).map((r) => (
-            <span key={r} className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
-              {r}
-            </span>
-          ))}
-        </div>
-        <span className="text-xs font-bold text-primary">{product.match_score}점</span>
-      </div>
-
-      {/* 이미지 + 이름 */}
+    <div className="bg-card rounded-xl border border-border p-4 hover:border-primary/30 hover:shadow-sm transition-all">
+      {/* 이미지 + 이름 + 점수 */}
       <div className="flex gap-3 mb-3">
         {imageUrl && (
-          <div className="w-16 h-16 rounded-lg overflow-hidden shrink-0 bg-border">
+          <div className="w-20 h-20 rounded-lg overflow-hidden shrink-0 bg-border">
             <img src={imageUrl} alt="" className="w-full h-full object-cover" />
           </div>
         )}
-        <div className="min-w-0">
-          <Link href={`/products/${product.id}`}>
-            <h3 className="font-bold text-sm leading-tight line-clamp-2 hover:text-primary transition-colors cursor-pointer">
-              {product.name}
-            </h3>
-          </Link>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-1">
+            <Link href={`/products/${product.id}`}>
+              <h3 className="font-bold text-sm leading-tight line-clamp-2 hover:text-primary transition-colors cursor-pointer">
+                {product.name}
+              </h3>
+            </Link>
+            <span className="shrink-0 text-[10px] font-bold text-white bg-primary rounded-full w-7 h-7 flex items-center justify-center">
+              {product.match_score}
+            </span>
+          </div>
           {product.manufacturer && (
             <p className="text-xs text-muted mt-0.5 truncate">{product.manufacturer}</p>
+          )}
+          {/* 맛평가 통계 */}
+          {product.review_stats && (
+            <div className="flex items-center gap-1.5 mt-1.5">
+              <Stars rating={product.review_stats.avgRating} />
+              <span className="text-[10px] text-muted">
+                {product.review_stats.avgRating} ({product.review_stats.count})
+              </span>
+              <span className="text-[10px] text-muted">
+                · 섭취율 {product.review_stats.avgConsumption}%
+              </span>
+            </div>
           )}
         </div>
       </div>
 
-      {/* 영양 */}
+      {/* 개인화 이유 — 왜 이 제품인지 한 줄 */}
+      {product.reason_detail && (
+        <div className="bg-primary/5 rounded-lg px-3 py-2 mb-3">
+          <p className="text-xs text-primary">
+            💡 {product.reason_detail}
+          </p>
+        </div>
+      )}
+
+      {/* 추천 태그 */}
+      <div className="flex gap-1 flex-wrap mb-3">
+        {product.reasons.slice(0, 4).map((r) => (
+          <span key={r} className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
+            {r}
+          </span>
+        ))}
+      </div>
+
+      {/* 영양 (축약) */}
       <div className="space-y-1 mb-3">
         <NutritionBar label="칼로리" value={product.calories} max={800} unit="kcal" />
         <NutritionBar label="나트륨" value={product.sodium_mg} max={2000} unit="mg" />
@@ -133,7 +177,7 @@ function ProductCard({ product }: { product: RecommendedProduct }) {
         <NutritionBar label="단백질" value={product.protein_g} max={30} unit="g" />
       </div>
 
-      {/* 가격 */}
+      {/* 가격 + 구매 */}
       {bestPrice ? (
         <div className="flex items-center justify-between pt-3 border-t border-border">
           <span className="text-lg font-bold text-primary">{formatPrice(bestPrice)}</span>
@@ -160,11 +204,19 @@ function ProductCard({ product }: { product: RecommendedProduct }) {
           <span className="text-xs text-muted">가격 정보 수집 중</span>
         </div>
       )}
+
+      {/* 신뢰 배지 */}
+      <div className="flex gap-2 mt-2 pt-2">
+        <span className="text-[10px] text-muted">🏛️ 식약처 데이터</span>
+        {prices.length > 1 && (
+          <span className="text-[10px] text-muted">🔄 {prices.length}곳 가격비교</span>
+        )}
+      </div>
     </div>
   );
 }
 
-/* ───── 큐레이션 섹션 ───── */
+/* ───── 큐레이션 섹션 (컬리식 큐레이션 카드) ───── */
 function CurationSection({
   group,
   products,
@@ -177,11 +229,13 @@ function CurationSection({
 
   return (
     <section className="mb-10">
-      <div className="flex items-center gap-2 mb-1">
-        <span className="text-2xl">{group.emoji}</span>
-        <h2 className="text-lg font-bold">{group.title}</h2>
+      <div className="bg-gradient-to-r from-primary/5 to-transparent rounded-2xl p-5 mb-4">
+        <div className="flex items-center gap-2.5 mb-1.5">
+          <span className="text-2xl">{group.emoji}</span>
+          <h2 className="text-lg font-bold">{group.title}</h2>
+        </div>
+        <p className="text-sm text-muted">{group.description}</p>
       </div>
-      <p className="text-sm text-muted mb-4">{group.description}</p>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {groupProducts.map((p) => (
           <ProductCard key={p.id} product={p} />

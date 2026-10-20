@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { createServiceRoleClient } from "@/lib/supabase/server";
+import TasteReview from "@/components/TasteReview";
 
 // 동적 라우트 — DB 조회 필요
 export const instant = false;
@@ -221,6 +222,9 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
           </div>
         </section>
       )}
+
+      {/* 맛평가 */}
+      <TasteReview productId={productId} />
 
       {/* 영양 성분표 */}
       <section className="mb-8">
