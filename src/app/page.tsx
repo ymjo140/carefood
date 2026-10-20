@@ -1,61 +1,93 @@
 import Link from "next/link";
 import HomePersonalized from "@/components/HomePersonalized";
 
+/* ── SVG 아이콘 컴포넌트 (이모지 대체) ── */
+function IconHeart({ className = "" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
+    </svg>
+  );
+}
+
+function IconShield({ className = "" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z" />
+    </svg>
+  );
+}
+
+function IconLeaf({ className = "" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M17 8C8 10 5.9 16.17 3.82 21.34l1.89.66C7.72 17.14 9.23 12 17 10V8z" />
+      <path d="M20.08 3.47L18.5 5.06C14.83 8.72 12.05 12.21 10.29 16.13l1.83.79C13.77 13.35 16.38 10.05 19.87 6.58l1.59-1.59-1.38-1.52z" />
+    </svg>
+  );
+}
+
+function IconBowl({ className = "" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M2 12c0 3.87 3.13 7 7 7h6c3.87 0 7-3.13 7-7H2zM12 4C7.58 4 4 6.69 4 10h16c0-3.31-3.58-6-8-6z" />
+    </svg>
+  );
+}
+
 const PERSONA_CARDS = [
   {
-    emoji: "👴",
+    icon: IconHeart,
     label: "어르신",
-    desc: "고령의 부모님을 위한 부드럽고 영양 균형 잡힌 식단",
-    color: "bg-amber-50 dark:bg-amber-950 border-amber-200 dark:border-amber-800",
+    desc: "부드러운 식단",
+    color: "bg-amber-500",
     href: "/onboarding?persona=elderly",
   },
   {
-    emoji: "🏥",
+    icon: IconShield,
     label: "환자",
-    desc: "당뇨·고혈압·신장질환 등 건강 상태에 맞는 안전한 식품",
-    color: "bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800",
+    desc: "질환별 안전",
+    color: "bg-blue-500",
     href: "/onboarding?persona=patient",
   },
   {
-    emoji: "🤰",
+    icon: IconLeaf,
     label: "산모",
-    desc: "임신·산후 시기별 필요한 영양소를 채워주는 식품",
-    color: "bg-pink-50 dark:bg-pink-950 border-pink-200 dark:border-pink-800",
+    desc: "시기별 영양",
+    color: "bg-pink-500",
     href: "/onboarding?persona=pregnant",
   },
   {
-    emoji: "🥗",
-    label: "일반 건강식",
-    desc: "체중 관리, 근육 증가 등 건강 목표에 맞는 식품",
-    color: "bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800",
+    icon: IconBowl,
+    label: "일반",
+    desc: "건강 목표",
+    color: "bg-violet-500",
     href: "/onboarding?persona=general",
   },
 ];
 
-const TRUST_BADGES = [
-  { icon: "🏛️", label: "식약처 MFDS", desc: "공식 영양성분 DB 기반" },
-  { icon: "🔒", label: "안전 필터", desc: "질환별 금기 자동 차단" },
-  { icon: "💰", label: "최저가 비교", desc: "4개 쇼핑몰 실시간 가격" },
+const TRUST_ITEMS = [
+  { label: "식약처 공식 DB", desc: "31만 건 영양성분 데이터 기반" },
+  { label: "금기 자동 차단", desc: "질환별 위험 성분 필터링" },
+  { label: "4곳 최저가", desc: "컬리·오아시스·홈플러스·11번가" },
 ];
 
 export default function HomePage() {
   return (
     <>
       {/* 히어로 */}
-      <section className="py-16 sm:py-24 px-4">
-        <div className="max-w-3xl mx-auto text-center">
-          <div className="inline-block px-3 py-1 rounded-full bg-primary/10 text-primary text-sm font-medium mb-6">
-            가입 없이 추천 체험 가능
+      <section className="py-12 sm:py-20 px-4">
+        <div className="max-w-2xl mx-auto">
+          <div className="inline-block px-3 py-1 rounded-full bg-primary-light text-primary text-xs font-bold mb-5">
+            가입 없이 체험 가능
           </div>
-          <h1 className="text-3xl sm:text-5xl font-bold tracking-tight leading-tight">
-            누구를 위해
+          <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight leading-snug">
+            상황에 맞는 식품,
             <br />
-            <span className="text-primary">식품을 찾으시나요?</span>
+            안전하게 추천합니다
           </h1>
-          <p className="mt-4 text-lg text-muted max-w-xl mx-auto">
-            어르신, 환자, 산모 등 상황에 따라
-            <br className="sm:hidden" />
-            {" "}안전하고 맞춤화된 식품을 추천합니다.
+          <p className="mt-3 text-sm sm:text-base text-muted max-w-md">
+            식약처 DB + 4개 쇼핑몰 최저가 비교
           </p>
         </div>
       </section>
@@ -63,39 +95,46 @@ export default function HomePage() {
       {/* 재방문 사용자 개인화 추천 (클라이언트) */}
       <HomePersonalized />
 
-      {/* 페르소나 카드 */}
-      <section className="px-4 pb-16">
-        <div className="max-w-4xl mx-auto grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {PERSONA_CARDS.map((card) => (
-            <Link
-              key={card.label}
-              href={card.href}
-              aria-label={`${card.label} 맞춤 추천 시작`}
-              className={`${card.color} border rounded-2xl p-6 hover:scale-[1.02] transition-transform focus-visible:ring-2 focus-visible:ring-primary`}
-            >
-              <div className="text-4xl mb-3" aria-hidden="true">{card.emoji}</div>
-              <h3 className="text-lg font-bold mb-1">{card.label}</h3>
-              <p className="text-sm text-muted">{card.desc}</p>
-            </Link>
-          ))}
+      {/* 페르소나 선택 — 4열 그리드 */}
+      <section className="px-4 pb-12">
+        <div className="max-w-2xl mx-auto grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {PERSONA_CARDS.map((card) => {
+            const Icon = card.icon;
+            return (
+              <Link
+                key={card.label}
+                href={card.href}
+                aria-label={`${card.label} 맞춤 추천 시작`}
+                className="bg-card rounded-2xl p-4 sm:p-5 text-center hover:-translate-y-0.5 transition-transform shadow-[0_1px_3px_rgba(0,0,0,0.04)] focus-visible:ring-2 focus-visible:ring-primary"
+              >
+                <div
+                  className={`${card.color} w-11 h-11 rounded-[14px] flex items-center justify-center mx-auto mb-3`}
+                >
+                  <Icon className="w-5 h-5 text-white" />
+                </div>
+                <h3 className="text-sm font-bold">{card.label}</h3>
+                <p className="text-[11px] text-muted mt-0.5">{card.desc}</p>
+              </Link>
+            );
+          })}
         </div>
       </section>
 
       {/* 신뢰 배지 */}
-      <section className="py-16 px-4 bg-card">
-        <div className="max-w-4xl mx-auto">
-          <h2 className="text-2xl font-bold text-center mb-10">
+      <section className="py-12 px-4">
+        <div className="max-w-2xl mx-auto">
+          <h2 className="text-lg font-extrabold mb-6">
             데이터 기반 안전한 추천
           </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-            {TRUST_BADGES.map((badge) => (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {TRUST_ITEMS.map((item) => (
               <div
-                key={badge.label}
-                className="text-center p-6 rounded-xl border border-border bg-background"
+                key={item.label}
+                className="bg-card rounded-2xl p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)]"
               >
-                <div className="text-3xl mb-3">{badge.icon}</div>
-                <h3 className="font-bold mb-1">{badge.label}</h3>
-                <p className="text-sm text-muted">{badge.desc}</p>
+                <div className="w-2 h-2 rounded-full bg-primary mb-3" />
+                <h3 className="font-bold text-sm mb-1">{item.label}</h3>
+                <p className="text-xs text-muted">{item.desc}</p>
               </div>
             ))}
           </div>
@@ -103,12 +142,12 @@ export default function HomePage() {
       </section>
 
       {/* 작동 방식 */}
-      <section className="py-16 px-4">
-        <div className="max-w-3xl mx-auto">
-          <h2 className="text-2xl font-bold text-center mb-12">
+      <section className="py-12 px-4">
+        <div className="max-w-2xl mx-auto">
+          <h2 className="text-lg font-extrabold mb-8">
             3단계로 시작하세요
           </h2>
-          <div className="space-y-8">
+          <div className="space-y-6">
             {[
               {
                 step: "1",
@@ -122,17 +161,17 @@ export default function HomePage() {
               },
               {
                 step: "3",
-                title: "맞춤 추천을 받으세요",
-                desc: "상황에 맞는 큐레이션 패키지와 최저가 구매 링크를 제공합니다.",
+                title: "적합도 기반 추천",
+                desc: "건강 상태와 맛 선호도에 따른 적합도 점수로 최적의 식품을 추천합니다.",
               },
             ].map((s) => (
-              <div key={s.step} className="flex gap-5 items-start">
-                <div className="w-10 h-10 rounded-full bg-primary text-white flex items-center justify-center font-bold text-lg shrink-0">
+              <div key={s.step} className="flex gap-4 items-start">
+                <div className="w-9 h-9 rounded-xl bg-primary text-white flex items-center justify-center font-bold text-sm shrink-0">
                   {s.step}
                 </div>
                 <div>
-                  <h3 className="font-bold text-lg">{s.title}</h3>
-                  <p className="text-muted text-sm mt-1">{s.desc}</p>
+                  <h3 className="font-bold">{s.title}</h3>
+                  <p className="text-muted text-sm mt-0.5">{s.desc}</p>
                 </div>
               </div>
             ))}
@@ -141,17 +180,17 @@ export default function HomePage() {
       </section>
 
       {/* CTA */}
-      <section className="py-16 px-4 bg-card">
-        <div className="max-w-2xl mx-auto text-center">
-          <h2 className="text-2xl font-bold mb-3">
-            지금 바로 맞춤 추천을 받아보세요
+      <section className="py-12 px-4">
+        <div className="max-w-2xl mx-auto bg-card rounded-2xl p-8 text-center shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+          <h2 className="text-lg font-extrabold mb-2">
+            지금 바로 추천을 받아보세요
           </h2>
-          <p className="text-muted mb-6">
+          <p className="text-sm text-muted mb-5">
             가입 없이도 추천을 체험할 수 있어요. 30초면 충분합니다.
           </p>
           <Link
             href="/onboarding"
-            className="bg-primary text-white px-8 py-3 rounded-xl font-medium hover:bg-primary-dark transition-colors inline-block"
+            className="bg-primary text-white px-8 py-3 rounded-full text-sm font-bold hover:bg-primary-dark transition-colors inline-block"
           >
             무료로 시작하기
           </Link>

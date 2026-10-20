@@ -50,10 +50,10 @@ export default function Header() {
   };
 
   return (
-    <header className="border-b border-border bg-card/80 backdrop-blur-sm sticky top-0 z-50">
-      <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
+    <header className="border-b border-border bg-background/80 backdrop-blur-sm sticky top-0 z-50">
+      <div className="max-w-3xl mx-auto px-4 h-14 flex items-center justify-between">
         <Link href="/" className="flex items-center gap-2">
-          <span className="text-xl font-bold text-primary">케어푸드</span>
+          <span className="text-lg font-extrabold text-foreground tracking-tight">케어푸드</span>
         </Link>
 
         <nav className="flex items-center gap-1">
@@ -127,7 +127,7 @@ export default function Header() {
               </Link>
               <Link
                 href="/onboarding"
-                className="ml-1 bg-primary text-white px-4 py-1.5 rounded-full text-sm font-medium hover:bg-primary-dark transition-colors"
+                className="ml-1 bg-primary text-white px-4 py-1.5 rounded-full text-xs font-bold hover:bg-primary-dark transition-colors"
               >
                 시작하기
               </Link>

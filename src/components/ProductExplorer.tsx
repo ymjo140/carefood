@@ -20,10 +20,10 @@ type ApiResponse = {
 };
 
 const TASTE_CONFIG = [
-  { key: "salty" as const, label: "짠맛", emoji: "🧂" },
-  { key: "sweet" as const, label: "단맛", emoji: "🍬" },
-  { key: "spicy" as const, label: "매운맛", emoji: "🌶️" },
-  { key: "fatty" as const, label: "기름진맛", emoji: "🧈" },
+  { key: "salty" as const, label: "짠맛" },
+  { key: "sweet" as const, label: "단맛" },
+  { key: "spicy" as const, label: "매운맛" },
+  { key: "fatty" as const, label: "기름진맛" },
 ];
 
 function formatPrice(price: number): string {
@@ -160,7 +160,7 @@ export default function ProductExplorer() {
           />
           <button
             type="submit"
-            className="px-5 py-2.5 bg-primary text-white rounded-xl text-sm font-medium hover:bg-primary-dark transition-colors"
+            className="px-5 py-2.5 bg-primary text-white rounded-full text-sm font-bold hover:bg-primary-dark transition-colors"
           >
             검색
           </button>
@@ -168,9 +168,9 @@ export default function ProductExplorer() {
       </form>
 
       {/* 맛 필터 */}
-      <div className="bg-card rounded-2xl border border-border p-5 mb-6">
+      <div className="bg-card rounded-2xl border border-border p-5 mb-6 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="font-bold text-sm">맛 필터</h2>
+          <h2 className="font-extrabold text-sm">맛 필터</h2>
           {hasActiveFilters && (
             <button
               onClick={clearFilters}
@@ -184,7 +184,6 @@ export default function ProductExplorer() {
           {TASTE_CONFIG.map((taste) => (
             <div key={taste.key}>
               <div className="flex items-center gap-1.5 mb-2">
-                <span className="text-sm">{taste.emoji}</span>
                 <span className="text-xs font-medium">{taste.label}</span>
               </div>
               <div className="flex gap-1">
@@ -232,7 +231,7 @@ export default function ProductExplorer() {
         </div>
       ) : data?.products?.length ? (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {data.products.map((product) => {
               const prices = product.product_prices?.filter(
                 (p) => p.price && p.price > 0
@@ -245,7 +244,7 @@ export default function ProductExplorer() {
               return (
                 <div
                   key={product.id}
-                  className="bg-card rounded-xl border border-border p-4 hover:border-primary/30 transition-colors"
+                  className="bg-card rounded-2xl border border-border p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)] hover:border-primary/30 hover:shadow-md transition-all"
                 >
                   {/* 헤더 */}
                   <div className="mb-3">

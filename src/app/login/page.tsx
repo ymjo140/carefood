@@ -18,13 +18,13 @@ function LoginContent() {
       <div className="w-full max-w-sm">
         {/* 헤더 */}
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold mb-2">
+          <h1 className="text-2xl font-extrabold mb-2">
             {mode === "login" ? "로그인" : "회원가입"}
           </h1>
           <p className="text-sm text-muted">
             {mode === "login"
-              ? "맞춤 추천과 프로필을 저장하세요"
-              : "간편하게 가입하고 맞춤 추천을 받으세요"}
+              ? "추천 결과와 프로필을 저장하세요"
+              : "간편하게 가입하고 추천을 받으세요"}
           </p>
         </div>
 
@@ -75,7 +75,7 @@ function LoginContent() {
           <button
             type="submit"
             disabled={isPending}
-            className="w-full bg-primary text-white py-3 rounded-xl font-medium hover:bg-primary-dark transition-colors disabled:opacity-50"
+            className="w-full bg-primary text-white py-3 rounded-full font-bold hover:bg-primary-dark transition-colors disabled:opacity-50"
           >
             {isPending
               ? "처리 중..."

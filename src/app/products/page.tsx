@@ -7,8 +7,8 @@ export const metadata = {
 
 export default function ProductsPage() {
   return (
-    <div className="max-w-6xl mx-auto px-4 py-8">
-      <h1 className="text-2xl font-bold mb-6">제품 탐색</h1>
+    <div className="max-w-3xl mx-auto px-4 py-8">
+      <h1 className="text-2xl font-extrabold mb-6">제품 탐색</h1>
       <ProductExplorer />
     </div>
   );

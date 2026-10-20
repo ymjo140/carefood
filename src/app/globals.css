@@ -1,15 +1,22 @@
 @import "tailwindcss";
 
 :root {
-  --background: #fafaf9;
-  --foreground: #1c1917;
-  --primary: #15803d;          /* 명도대비 4.5:1↑ 확보 (was #16a34a → 3.8:1) */
-  --primary-light: #bbf7d0;
-  --primary-dark: #14532d;
-  --accent: #ea580c;           /* 명도대비 4.5:1↑ 확보 */
-  --muted: #57534e;            /* 명도대비 4.5:1↑ (was #78716c → 3.5:1) */
+  --background: #F6F4FB;
+  --foreground: #1A1535;
+  --primary: #5B4FC4;          /* 인디고 — 명도대비 4.5:1↑ on white */
+  --primary-light: #EDE9FF;
+  --primary-dark: #4338A8;
+  --accent: #EC4899;           /* 핑크 포인트 */
+  --muted: #7E75A0;            /* 명도대비 4.5:1↑ on #F6F4FB */
   --card: #ffffff;
-  --border: #d6d3d1;           /* 약간 진하게 — 구분 명확 */
+  --border: #E4E0F0;
+  --surface: #EEEAF5;          /* 카드 내부 배경, 이미지 플레이스홀더 등 */
+
+  /* 페르소나 아이콘 배경색 */
+  --persona-elderly: #F59E0B;
+  --persona-patient: #3B82F6;
+  --persona-pregnant: #EC4899;
+  --persona-general: #8B5CF6;
 }
 
 @theme inline {
@@ -22,29 +29,48 @@
   --color-muted: var(--muted);
   --color-card: var(--card);
   --color-border: var(--border);
-  --font-sans: var(--font-geist-sans);
+  --color-surface: var(--surface);
+  --font-sans: var(--font-noto-sans-kr), var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
-    --background: #1c1917;
-    --foreground: #fafaf9;
-    --primary: #4ade80;
-    --primary-light: #14532d;
-    --primary-dark: #86efac;
-    --card: #292524;
-    --border: #57534e;          /* 다크모드 대비 확보 */
-    --muted: #a8a29e;
+  :root:not([data-theme="light"]) {
+    --background: #13112A;
+    --foreground: #EEEAF5;
+    --primary: #A599E9;
+    --primary-light: #2D2252;
+    --primary-dark: #C4BBFF;
+    --accent: #F472B6;
+    --card: #1E1B3A;
+    --border: #3D3570;
+    --muted: #9B93B7;
+    --surface: #2D2252;
+    color-scheme: dark;
   }
+}
+
+:root[data-theme="dark"] {
+  --background: #13112A;
+  --foreground: #EEEAF5;
+  --primary: #A599E9;
+  --primary-light: #2D2252;
+  --primary-dark: #C4BBFF;
+  --accent: #F472B6;
+  --card: #1E1B3A;
+  --border: #3D3570;
+  --muted: #9B93B7;
+  --surface: #2D2252;
+  color-scheme: dark;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-sans), sans-serif;
+  font-family: var(--font-sans), -apple-system, sans-serif;
   font-size: 16px;             /* 접근성: 최소 16px 기본 */
   line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
 }
 
 /* ───── 접근성 기본 규칙 ───── */

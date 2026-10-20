@@ -134,21 +134,21 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
   const imageUrl = sortedPrices.find((p) => p.image_url)?.image_url;
 
   // 안전 정보 계산
-  const safetyNotes: { emoji: string; text: string }[] = [];
+  const safetyNotes: { type: "good" | "warn"; text: string }[] = [];
   if (product.sodium_mg !== null && product.sodium_mg < 400)
-    safetyNotes.push({ emoji: "💚", text: "저나트륨 (400mg 미만)" });
+    safetyNotes.push({ type: "good", text: "저나트륨 (400mg 미만)" });
   if (product.sodium_mg !== null && product.sodium_mg > 1000)
-    safetyNotes.push({ emoji: "⚠️", text: "고나트륨 — 고혈압 환자 주의" });
+    safetyNotes.push({ type: "warn", text: "고나트륨 — 고혈압 환자 주의" });
   if (product.sugar_g !== null && product.sugar_g < 5)
-    safetyNotes.push({ emoji: "💚", text: "저당 (5g 미만)" });
+    safetyNotes.push({ type: "good", text: "저당 (5g 미만)" });
   if (product.sugar_g !== null && product.sugar_g > 15)
-    safetyNotes.push({ emoji: "⚠️", text: "높은 당류 — 당뇨 환자 주의" });
+    safetyNotes.push({ type: "warn", text: "높은 당류 — 당뇨 환자 주의" });
   if (product.protein_g !== null && product.protein_g >= 15)
-    safetyNotes.push({ emoji: "💪", text: "고단백 (15g 이상)" });
+    safetyNotes.push({ type: "good", text: "고단백 (15g 이상)" });
   if (product.fiber_g !== null && product.fiber_g < 3)
-    safetyNotes.push({ emoji: "🥄", text: "소화 부담 적음 (저섬유)" });
+    safetyNotes.push({ type: "good", text: "소화 부담 적음 (저섬유)" });
   if (product.spicy_score >= 3)
-    safetyNotes.push({ emoji: "🌶️", text: `매운맛 ${product.spicy_score}단계 — 어르신/환자 주의` });
+    safetyNotes.push({ type: "warn", text: `매운맛 ${product.spicy_score}단계 — 어르신/환자 주의` });
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-8">
@@ -165,7 +165,7 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
           </div>
         )}
         <div className="min-w-0">
-          <h1 className="text-xl sm:text-2xl font-bold leading-tight">{product.name}</h1>
+          <h1 className="text-xl sm:text-2xl font-extrabold leading-tight">{product.name}</h1>
           {product.manufacturer && (
             <p className="text-sm text-muted mt-1">{product.manufacturer}</p>
           )}
@@ -188,7 +188,7 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
       {/* 구매 링크 */}
       {sortedPrices.length > 0 && (
         <section className="mb-8">
-          <h2 className="text-sm font-bold mb-3">구매처 비교</h2>
+          <h2 className="text-sm font-extrabold mb-3">구매처 비교</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {sortedPrices.map((pp) => (
               <a
@@ -211,11 +211,11 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
       {/* 안전 정보 */}
       {safetyNotes.length > 0 && (
         <section className="mb-8">
-          <h2 className="text-sm font-bold mb-3">건강 안전 정보</h2>
-          <div className="bg-card rounded-xl border border-border p-4 space-y-2">
+          <h2 className="text-sm font-extrabold mb-3">건강 안전 정보</h2>
+          <div className="bg-card rounded-2xl border border-border p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)] space-y-2">
             {safetyNotes.map((note) => (
               <div key={note.text} className="flex items-start gap-2 text-sm">
-                <span className="shrink-0">{note.emoji}</span>
+                <span className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${note.type === "good" ? "bg-green-500" : "bg-orange-500"}`} />
                 <span>{note.text}</span>
               </div>
             ))}
@@ -229,12 +229,12 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
       {/* 영양 성분표 */}
       <section className="mb-8">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-bold">영양 성분</h2>
+          <h2 className="text-sm font-extrabold">영양 성분</h2>
           {product.serving_size_g && (
             <span className="text-xs text-muted">1회 제공량 {product.serving_size_g}g 기준</span>
           )}
         </div>
-        <div className="bg-card rounded-xl border border-border overflow-hidden">
+        <div className="bg-card rounded-2xl border border-border overflow-hidden shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
           <table className="w-full">
             <thead>
               <tr className="border-b border-border bg-background/50">
@@ -268,8 +268,8 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
       {/* 원재료 */}
       {product.ingredients_raw && (
         <section className="mb-8">
-          <h2 className="text-sm font-bold mb-3">원재료</h2>
-          <div className="bg-card rounded-xl border border-border p-4">
+          <h2 className="text-sm font-extrabold mb-3">원재료</h2>
+          <div className="bg-card rounded-2xl border border-border p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
             <p className="text-sm text-muted leading-relaxed">{product.ingredients_raw}</p>
           </div>
         </section>
@@ -279,11 +279,11 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
       <section className="mb-8">
         <div className="flex gap-3 flex-wrap">
           <div className="flex items-center gap-1.5 text-xs text-muted bg-card border border-border rounded-full px-3 py-1.5">
-            <span>🏛️</span> 식약처 MFDS 데이터
+            <span className="w-1.5 h-1.5 rounded-full bg-primary/40" /> 식약처 MFDS 데이터
           </div>
           {product.food_code && (
             <div className="flex items-center gap-1.5 text-xs text-muted bg-card border border-border rounded-full px-3 py-1.5">
-              <span>📋</span> 식품코드 {product.food_code}
+              <span className="w-1.5 h-1.5 rounded-full bg-primary/40" /> 식품코드 {product.food_code}
             </div>
           )}
         </div>

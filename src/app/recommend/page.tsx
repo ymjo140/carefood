@@ -114,7 +114,7 @@ function ProductCard({ product }: { product: RecommendedProduct }) {
   const imageUrl = prices.find((p) => p.image_url)?.image_url;
 
   return (
-    <div className="bg-card rounded-xl border border-border p-4 hover:border-primary/30 hover:shadow-sm transition-all">
+    <div className="bg-card rounded-2xl border border-border p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)] hover:border-primary/30 hover:shadow-md transition-all">
       {/* 이미지 + 이름 + 점수 */}
       <div className="flex gap-3 mb-3">
         {imageUrl && (
@@ -155,7 +155,7 @@ function ProductCard({ product }: { product: RecommendedProduct }) {
       {product.reason_detail && (
         <div className="bg-primary/5 rounded-lg px-3 py-2 mb-3">
           <p className="text-xs text-primary">
-            💡 {product.reason_detail}
+            {product.reason_detail}
           </p>
         </div>
       )}
@@ -207,9 +207,13 @@ function ProductCard({ product }: { product: RecommendedProduct }) {
 
       {/* 신뢰 배지 */}
       <div className="flex gap-2 mt-2 pt-2">
-        <span className="text-[10px] text-muted">🏛️ 식약처 데이터</span>
+        <span className="text-[10px] text-muted flex items-center gap-1">
+          <span className="w-1.5 h-1.5 rounded-full bg-primary/40" />식약처 데이터
+        </span>
         {prices.length > 1 && (
-          <span className="text-[10px] text-muted">🔄 {prices.length}곳 가격비교</span>
+          <span className="text-[10px] text-muted flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-primary/40" />{prices.length}곳 가격비교
+          </span>
         )}
       </div>
     </div>
@@ -229,14 +233,11 @@ function CurationSection({
 
   return (
     <section className="mb-10">
-      <div className="bg-gradient-to-r from-primary/5 to-transparent rounded-2xl p-5 mb-4">
-        <div className="flex items-center gap-2.5 mb-1.5">
-          <span className="text-2xl">{group.emoji}</span>
-          <h2 className="text-lg font-bold">{group.title}</h2>
-        </div>
+      <div className="bg-surface rounded-2xl p-5 mb-4">
+        <h2 className="text-lg font-extrabold mb-1">{group.title}</h2>
         <p className="text-sm text-muted">{group.description}</p>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {groupProducts.map((p) => (
           <ProductCard key={p.id} product={p} />
         ))}
@@ -294,9 +295,9 @@ export default function RecommendPage() {
 
   if (loading) {
     return (
-      <div className="max-w-6xl mx-auto px-4 py-16 text-center">
+      <div className="max-w-3xl mx-auto px-4 py-16 text-center">
         <div className="inline-block w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin mb-4" />
-        <p className="text-muted">맞춤 추천을 분석하고 있습니다...</p>
+        <p className="text-muted">적합도 분석 중...</p>
         <p className="text-xs text-muted mt-1">건강 조건과 맛 선호도를 기반으로 안전한 식품을 찾고 있어요</p>
       </div>
     );
@@ -305,7 +306,7 @@ export default function RecommendPage() {
   if (error) {
     return (
       <div className="max-w-md mx-auto px-4 py-16 text-center">
-        <p className="text-lg font-bold mb-2">😢 {error}</p>
+        <p className="text-lg font-extrabold mb-2">{error}</p>
         <Link href="/onboarding" className="text-primary hover:underline text-sm">
           온보딩 시작하기 →
         </Link>
@@ -314,14 +315,14 @@ export default function RecommendPage() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-8">
+    <div className="max-w-3xl mx-auto px-4 py-8">
       {/* 프로필 요약 */}
       {profile && (
-        <div className="bg-card rounded-2xl border border-border p-5 mb-8">
+        <div className="bg-card rounded-2xl border border-border p-5 mb-8 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div>
-              <h1 className="text-xl font-bold">
-                {PERSONA_LABELS[profile.persona] || profile.persona} 맞춤 추천
+              <h1 className="text-xl font-extrabold">
+                {PERSONA_LABELS[profile.persona] || profile.persona} 추천
               </h1>
               <p className="text-sm text-muted mt-1">
                 {profile.conditions.length > 0
@@ -348,8 +349,8 @@ export default function RecommendPage() {
         ))
       ) : products.length > 0 ? (
         <>
-          <h2 className="text-lg font-bold mb-4">추천 제품</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <h2 className="text-lg font-extrabold mb-4">추천 제품</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {products.map((p) => (
               <ProductCard key={p.id} product={p} />
             ))}

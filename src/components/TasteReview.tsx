@@ -77,11 +77,11 @@ function ConsumptionSelector({
   onChange: (v: number) => void;
 }) {
   const options = [
-    { pct: 100, label: "다 먹었어요", emoji: "😋" },
-    { pct: 75, label: "조금 남겼어요", emoji: "🙂" },
-    { pct: 50, label: "반 정도 먹었어요", emoji: "😐" },
-    { pct: 25, label: "조금만 먹었어요", emoji: "😕" },
-    { pct: 0, label: "거의 못 먹었어요", emoji: "😞" },
+    { pct: 100, label: "다 먹었어요" },
+    { pct: 75, label: "조금 남겼어요" },
+    { pct: 50, label: "반 정도 먹었어요" },
+    { pct: 25, label: "조금만 먹었어요" },
+    { pct: 0, label: "거의 못 먹었어요" },
   ];
 
   return (
@@ -97,7 +97,9 @@ function ConsumptionSelector({
               : "border-border hover:border-primary/30"
           }`}
         >
-          <span className="text-xl">{opt.emoji}</span>
+          <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${
+            opt.pct >= 75 ? "bg-green-500" : opt.pct >= 50 ? "bg-yellow-500" : "bg-orange-500"
+          }`} />
           <span className="text-sm font-medium">{opt.label}</span>
           {value === opt.pct && (
             <span className="ml-auto text-primary text-xs font-bold">✓</span>
@@ -149,7 +151,7 @@ function ReviewStatsCard({ stats }: { stats: ReviewStats }) {
   if (stats.count === 0) return null;
 
   return (
-    <div className="bg-card rounded-xl border border-border p-4">
+    <div className="bg-card rounded-2xl border border-border p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
       <div className="flex items-center gap-4 flex-wrap">
         <div className="text-center">
           <div className="text-2xl font-bold text-primary">
@@ -311,7 +313,7 @@ export default function TasteReview({ productId }: { productId: string }) {
   return (
     <section className="mb-8">
       <div className="flex items-center justify-between mb-3">
-        <h2 className="text-sm font-bold">맛평가</h2>
+        <h2 className="text-sm font-extrabold">맛평가</h2>
         {isLoggedIn && !showForm && (
           <button
             onClick={() => {
@@ -338,7 +340,7 @@ export default function TasteReview({ productId }: { productId: string }) {
 
       {/* 리뷰 작성 폼 (토스식: 한 번에 하나씩) */}
       {showForm && (
-        <div className="bg-card rounded-xl border-2 border-primary/20 p-5 mt-3">
+        <div className="bg-card rounded-2xl border-2 border-primary/20 p-5 mt-3 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
           {/* 진행 바 */}
           <div className="flex gap-1 mb-5">
             {formSteps.map((_, i) => (
@@ -354,7 +356,7 @@ export default function TasteReview({ productId }: { productId: string }) {
           {/* 스텝 1: 섭취 완료율 */}
           {currentFormStep === "consumption" && (
             <div>
-              <h3 className="text-lg font-bold mb-1">다 드셨나요?</h3>
+              <h3 className="text-lg font-extrabold mb-1">다 드셨나요?</h3>
               <p className="text-xs text-muted mb-4">
                 실제로 얼마나 드셨는지 알려주세요
               </p>
@@ -368,7 +370,7 @@ export default function TasteReview({ productId }: { productId: string }) {
           {/* 스텝 2: 편의성 */}
           {currentFormStep === "ease" && (
             <div>
-              <h3 className="text-lg font-bold mb-1">드시기 편했나요?</h3>
+              <h3 className="text-lg font-extrabold mb-1">드시기 편했나요?</h3>
               <p className="text-xs text-muted mb-4">
                 조리·섭취 편의성을 평가해주세요
               </p>
@@ -379,7 +381,7 @@ export default function TasteReview({ productId }: { productId: string }) {
           {/* 스텝 3: 별점 */}
           {currentFormStep === "rating" && (
             <div>
-              <h3 className="text-lg font-bold mb-1">전체적으로 어떠셨나요?</h3>
+              <h3 className="text-lg font-extrabold mb-1">전체적으로 어떠셨나요?</h3>
               <p className="text-xs text-muted mb-4">
                 맛과 만족도를 별점으로 알려주세요
               </p>
@@ -392,7 +394,7 @@ export default function TasteReview({ productId }: { productId: string }) {
           {/* 스텝 4: 코멘트 */}
           {currentFormStep === "comment" && (
             <div>
-              <h3 className="text-lg font-bold mb-1">한마디 남겨주세요</h3>
+              <h3 className="text-lg font-extrabold mb-1">한마디 남겨주세요</h3>
               <p className="text-xs text-muted mb-4">
                 다른 분들에게 도움이 됩니다 (선택)
               </p>
@@ -423,7 +425,7 @@ export default function TasteReview({ productId }: { productId: string }) {
             {formStep > 0 && (
               <button
                 onClick={() => setFormStep((s) => s - 1)}
-                className="flex-1 border border-border py-2.5 rounded-xl text-sm font-medium hover:bg-background transition-colors"
+                className="flex-1 border border-border py-2.5 rounded-full text-sm font-medium hover:bg-background transition-colors"
               >
                 이전
               </button>
@@ -432,7 +434,7 @@ export default function TasteReview({ productId }: { productId: string }) {
               <button
                 onClick={() => setFormStep((s) => s + 1)}
                 disabled={formStep === 2 && starRating === 0}
-                className="flex-1 bg-primary text-white py-2.5 rounded-xl text-sm font-medium hover:bg-primary-dark transition-colors disabled:opacity-40"
+                className="flex-1 bg-primary text-white py-2.5 rounded-full text-sm font-bold hover:bg-primary-dark transition-colors disabled:opacity-40"
               >
                 다음
               </button>
@@ -440,7 +442,7 @@ export default function TasteReview({ productId }: { productId: string }) {
               <button
                 onClick={handleSubmit}
                 disabled={submitting || starRating === 0}
-                className="flex-1 bg-primary text-white py-2.5 rounded-xl text-sm font-medium hover:bg-primary-dark transition-colors disabled:opacity-40"
+                className="flex-1 bg-primary text-white py-2.5 rounded-full text-sm font-bold hover:bg-primary-dark transition-colors disabled:opacity-40"
               >
                 {submitting ? "저장 중..." : "평가 완료"}
               </button>
@@ -469,10 +471,10 @@ export default function TasteReview({ productId }: { productId: string }) {
       {/* 리뷰 목록 */}
       {reviews.length > 0 && (
         <div className="mt-4">
-          <h3 className="text-xs font-bold text-muted mb-2">
+          <h3 className="text-xs font-extrabold text-muted mb-2">
             평가 {reviews.length}개
           </h3>
-          <div className="bg-card rounded-xl border border-border px-4">
+          <div className="bg-card rounded-2xl border border-border px-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
             {reviews.map((r) => (
               <ReviewItem key={r.id} review={r} />
             ))}

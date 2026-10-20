@@ -21,20 +21,51 @@ type OnboardingState = {
 };
 
 // ── 상수 ─────────────────────────────────────────────
-const PERSONAS: { key: Persona; emoji: string; label: string; desc: string; color: string }[] = [
-  { key: "elderly", emoji: "👴", label: "어르신", desc: "고령의 부모님을 위해", color: "border-amber-300 bg-amber-50 dark:bg-amber-950" },
-  { key: "patient", emoji: "🏥", label: "환자", desc: "건강 관리가 필요한 분을 위해", color: "border-blue-300 bg-blue-50 dark:bg-blue-950" },
-  { key: "pregnant", emoji: "🤰", label: "산모", desc: "임산부·산후 관리를 위해", color: "border-pink-300 bg-pink-50 dark:bg-pink-950" },
-  { key: "general", emoji: "🥗", label: "일반", desc: "건강한 식생활을 위해", color: "border-green-300 bg-green-50 dark:bg-green-950" },
+/* SVG 아이콘 */
+function IconHeart({ className = "" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
+    </svg>
+  );
+}
+function IconShield({ className = "" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z" />
+    </svg>
+  );
+}
+function IconLeaf({ className = "" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M17 8C8 10 5.9 16.17 3.82 21.34l1.89.66C7.72 17.14 9.23 12 17 10V8z" />
+      <path d="M20.08 3.47L18.5 5.06C14.83 8.72 12.05 12.21 10.29 16.13l1.83.79C13.77 13.35 16.38 10.05 19.87 6.58l1.59-1.59-1.38-1.52z" />
+    </svg>
+  );
+}
+function IconBowl({ className = "" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M2 12c0 3.87 3.13 7 7 7h6c3.87 0 7-3.13 7-7H2zM12 4C7.58 4 4 6.69 4 10h16c0-3.31-3.58-6-8-6z" />
+    </svg>
+  );
+}
+
+const PERSONAS: { key: Persona; icon: typeof IconHeart; label: string; desc: string; iconBg: string }[] = [
+  { key: "elderly", icon: IconHeart, label: "어르신", desc: "고령의 부모님을 위해", iconBg: "bg-amber-500" },
+  { key: "patient", icon: IconShield, label: "환자", desc: "건강 관리가 필요한 분을 위해", iconBg: "bg-blue-500" },
+  { key: "pregnant", icon: IconLeaf, label: "산모", desc: "임산부·산후 관리를 위해", iconBg: "bg-pink-500" },
+  { key: "general", icon: IconBowl, label: "일반", desc: "건강한 식생활을 위해", iconBg: "bg-violet-500" },
 ];
 
 const CONDITIONS = [
-  { key: "diabetes", label: "당뇨", emoji: "🩸" },
-  { key: "hypertension", label: "고혈압", emoji: "❤️" },
-  { key: "kidney", label: "신장질환", emoji: "🫘" },
-  { key: "gout", label: "통풍", emoji: "🦶" },
-  { key: "hyperlipidemia", label: "고지혈증", emoji: "🧪" },
-  { key: "elderly_soft", label: "연하곤란 (부드러운 음식 필요)", emoji: "🥄" },
+  { key: "diabetes", label: "당뇨" },
+  { key: "hypertension", label: "고혈압" },
+  { key: "kidney", label: "신장질환" },
+  { key: "gout", label: "통풍" },
+  { key: "hyperlipidemia", label: "고지혈증" },
+  { key: "elderly_soft", label: "연하곤란 (부드러운 음식 필요)" },
 ];
 
 const ALLERGIES = [
@@ -52,17 +83,17 @@ const ALLERGIES = [
 ];
 
 const PREGNANCY_STAGES = [
-  { key: "early", label: "임신 초기 (1~3개월)", emoji: "🌱" },
-  { key: "mid", label: "임신 중기 (4~6개월)", emoji: "🌿" },
-  { key: "late", label: "임신 후기 (7~9개월)", emoji: "🌳" },
-  { key: "postpartum", label: "산후 조리", emoji: "🤱" },
+  { key: "early", label: "임신 초기 (1~3개월)" },
+  { key: "mid", label: "임신 중기 (4~6개월)" },
+  { key: "late", label: "임신 후기 (7~9개월)" },
+  { key: "postpartum", label: "산후 조리" },
 ];
 
 const HEALTH_GOALS = [
-  { key: "weight_loss", label: "체중 관리", emoji: "⚖️" },
-  { key: "muscle_gain", label: "근육 증가", emoji: "💪" },
-  { key: "balanced", label: "균형 잡힌 식단", emoji: "🥗" },
-  { key: "recovery", label: "회복 식단", emoji: "🩹" },
+  { key: "weight_loss", label: "체중 관리" },
+  { key: "muscle_gain", label: "근육 증가" },
+  { key: "balanced", label: "균형 잡힌 식단" },
+  { key: "recovery", label: "회복 식단" },
 ];
 
 const ORDERER_OPTIONS: Record<Persona, { key: OrdererRelation; label: string }[]> = {
@@ -86,10 +117,10 @@ const ORDERER_OPTIONS: Record<Persona, { key: OrdererRelation; label: string }[]
 };
 
 const TASTE_CONFIG = [
-  { key: "salty" as const, label: "짠맛", emoji: "🧂" },
-  { key: "sweet" as const, label: "단맛", emoji: "🍬" },
-  { key: "spicy" as const, label: "매운맛", emoji: "🌶️" },
-  { key: "fatty" as const, label: "기름진맛", emoji: "🧈" },
+  { key: "salty" as const, label: "짠맛" },
+  { key: "sweet" as const, label: "단맛" },
+  { key: "spicy" as const, label: "매운맛" },
+  { key: "fatty" as const, label: "기름진맛" },
 ];
 
 // ── 메인 컴포넌트 (Suspense 래퍼) ────────────────────
@@ -272,7 +303,7 @@ function OnboardingContent() {
           {step > 0 && (
             <button
               onClick={() => setStep((s) => s - 1)}
-              className="flex-1 border border-border py-3 rounded-xl font-medium hover:bg-card transition-colors"
+              className="flex-1 border border-border py-3 rounded-full font-medium hover:bg-card transition-colors"
             >
               이전
             </button>
@@ -280,7 +311,7 @@ function OnboardingContent() {
           <button
             onClick={handleNext}
             disabled={!canProceed()}
-            className="flex-1 bg-primary text-white py-3 rounded-xl font-medium hover:bg-primary-dark transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="flex-1 bg-primary text-white py-3 rounded-full font-bold hover:bg-primary-dark transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {step === totalSteps - 1 ? "추천 받기" : "다음"}
           </button>
@@ -327,32 +358,37 @@ function StepPersona({
 }) {
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-2">
+      <h1 className="text-2xl font-extrabold mb-2">
         누구를 위해 식품을 찾으시나요?
       </h1>
       <p className="text-muted text-sm mb-6">
-        상황에 맞는 맞춤 추천을 해드립니다.
+        상황에 맞는 추천을 해드립니다.
       </p>
       <div className="space-y-3">
-        {PERSONAS.map((p) => (
-          <button
-            key={p.key}
-            onClick={() => onSelect(p.key)}
-            className={`w-full text-left p-4 rounded-xl border-2 transition-all ${
-              selected === p.key
-                ? `${p.color} border-primary scale-[1.01]`
-                : "border-border hover:border-primary/30"
-            }`}
-          >
-            <div className="flex items-center gap-3">
-              <span className="text-2xl">{p.emoji}</span>
-              <div>
-                <div className="font-bold">{p.label}</div>
-                <div className="text-sm text-muted">{p.desc}</div>
+        {PERSONAS.map((p) => {
+          const Icon = p.icon;
+          return (
+            <button
+              key={p.key}
+              onClick={() => onSelect(p.key)}
+              className={`w-full text-left p-4 rounded-2xl border-2 transition-all ${
+                selected === p.key
+                  ? "border-primary bg-primary/5 scale-[1.01]"
+                  : "border-border hover:border-primary/30"
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <div className={`${p.iconBg} w-10 h-10 rounded-[12px] flex items-center justify-center shrink-0`}>
+                  <Icon className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <div className="font-bold">{p.label}</div>
+                  <div className="text-sm text-muted">{p.desc}</div>
+                </div>
               </div>
-            </div>
-          </button>
-        ))}
+            </button>
+          );
+        })}
       </div>
     </div>
   );
@@ -372,7 +408,7 @@ function StepOrderer({
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-2">
+      <h1 className="text-2xl font-extrabold mb-2">
         주문하시는 분은 누구신가요?
       </h1>
       <p className="text-muted text-sm mb-6">
@@ -414,7 +450,7 @@ function StepConditions({
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-2">
+      <h1 className="text-2xl font-extrabold mb-2">
         해당되는 건강 상태를 선택하세요
       </h1>
       <p className="text-muted text-sm mb-6">
@@ -433,7 +469,7 @@ function StepConditions({
                 : "border-border hover:border-primary/30"
             }`}
           >
-            <span className="text-lg mr-1">{c.emoji}</span>
+            <span className="w-2 h-2 rounded-full bg-primary/40 inline-block mr-1.5" />
             <span className="text-sm font-medium">{c.label}</span>
           </button>
         ))}
@@ -451,7 +487,7 @@ function StepPregnancy({
 }) {
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-2">현재 어느 단계인가요?</h1>
+      <h1 className="text-2xl font-extrabold mb-2">현재 어느 단계인가요?</h1>
       <p className="text-muted text-sm mb-6">
         시기에 따라 필요한 영양소가 달라집니다.
       </p>
@@ -466,7 +502,6 @@ function StepPregnancy({
                 : "border-border hover:border-primary/30"
             }`}
           >
-            <span className="text-xl mr-2">{s.emoji}</span>
             <span className="font-medium">{s.label}</span>
           </button>
         ))}
@@ -484,7 +519,7 @@ function StepGoal({
 }) {
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-2">건강 목표를 알려주세요</h1>
+      <h1 className="text-2xl font-extrabold mb-2">건강 목표를 알려주세요</h1>
       <p className="text-muted text-sm mb-6">
         목표에 맞는 영양 기준으로 추천합니다.
       </p>
@@ -499,7 +534,6 @@ function StepGoal({
                 : "border-border hover:border-primary/30"
             }`}
           >
-            <span className="text-xl mr-2">{g.emoji}</span>
             <span className="font-medium">{g.label}</span>
           </button>
         ))}
@@ -517,7 +551,7 @@ function StepAllergies({
 }) {
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-2">알레르기가 있으신가요?</h1>
+      <h1 className="text-2xl font-extrabold mb-2">알레르기가 있으신가요?</h1>
       <p className="text-muted text-sm mb-6">
         해당 원재료가 포함된 식품을 제외합니다.
         <br />
@@ -551,7 +585,7 @@ function StepTastes({
 }) {
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-2">맛 선호도를 알려주세요</h1>
+      <h1 className="text-2xl font-extrabold mb-2">맛 선호도를 알려주세요</h1>
       <p className="text-muted text-sm mb-6">
         영양성분 데이터 기반으로 입맛에 맞는 식품을 찾습니다.
       </p>
@@ -560,7 +594,7 @@ function StepTastes({
           <div key={t.key}>
             <div className="flex items-center justify-between mb-2">
               <span className="font-medium">
-                {t.emoji} {t.label}
+                {t.label}
               </span>
               <span className="text-sm text-primary font-bold">
                 {tastes[t.key]}단계
