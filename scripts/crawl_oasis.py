@@ -1,11 +1,11 @@
 """
 오아시스마켓(oasis.co.kr) 식품 크롤러
 ================================================================
-카테고리별 상품 목록 HTML 파싱 → Supabase oasis_products 적재
+Playwright 브라우저를 활용한 카테고리별 상품 수집 → Supabase oasis_products 적재
 
 수집 흐름:
-  1) requests + Referer 헤더로 카테고리 페이지 순회
-  2) BeautifulSoup으로 상품 정보 파싱 (SSR)
+  1) Playwright로 카테고리 페이지 렌더링
+  2) BeautifulSoup으로 상품 정보 파싱 (SSR HTML)
   3) Supabase oasis_products 테이블에 upsert
   4) 매운맛 점수 산출
 
@@ -24,7 +24,7 @@ import re
 import sys
 import json
 import time
-import random
+import asyncio
 import logging
 import argparse
 from datetime import datetime, timezone
@@ -45,12 +45,6 @@ log = logging.getLogger(__name__)
 
 # ── 설정 ──────────────────────────────────────────────────────
 OASIS_BASE = "https://www.oasis.co.kr"
-USER_AGENT = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) "
-    "Chrome/120.0.0.0 Safari/537.36"
-)
-REFERER = "https://www.oasis.co.kr/main"
 
 # 식품 카테고리 (카테고리ID: 이름)
 CATEGORIES = {
@@ -70,7 +64,6 @@ CATEGORIES = {
 
 ROWS_PER_PAGE = 60
 MAX_PAGES = 30
-REQUEST_DELAY = (0.5, 1.5)
 
 # ── 매운맛 키워드 ─────────────────────────────────────────────
 SPICY_KEYWORDS = {
@@ -102,22 +95,7 @@ def calc_spicy_score(name: str) -> int:
     return 0
 
 
-# ── 크롤링 ────────────────────────────────────────────────────
-def create_session() -> requests.Session:
-    s = requests.Session()
-    s.headers.update({
-        "User-Agent": USER_AGENT,
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "ko-KR,ko;q=0.9",
-    })
-    # 메인 페이지에서 쿠키 획득 (필수 — 쿠키 없으면 403)
-    log.info("쿠키 획득을 위해 메인 페이지 요청...")
-    resp = s.get(f"{OASIS_BASE}/main", timeout=30)
-    log.info(f"메인 페이지 응답: {resp.status_code}, 쿠키: {len(s.cookies)}개")
-    s.headers["Referer"] = REFERER
-    return s
-
-
+# ── HTML 파싱 ────────────────────────────────────────────────
 def parse_product_list(html: str) -> list:
     """상품 목록 HTML에서 상품 정보 추출"""
     soup = BeautifulSoup(html, "html.parser")
@@ -138,7 +116,6 @@ def parse_product_list(html: str) -> list:
                 alt = img_el.get("alt", "").strip()
                 name = re.sub(r"\s*대표이미지\s*섬네일\s*$", "", alt).strip()
             if not name:
-                # wrapInfo 영역에서 텍스트 추출
                 info_el = item.select_one(".info_group2, .wrapInfo")
                 if info_el:
                     name = info_el.get_text(strip=True).split("쿠폰")[0].strip()
@@ -159,7 +136,7 @@ def parse_product_list(html: str) -> list:
                 if price_text:
                     base_price = int(price_text)
 
-            # 할인가 없으면 info_price에서 가격 추출
+            # 할인가 없으면 info_price에서 추출
             if not discounted_price:
                 price_el = item.select_one(".info_price")
                 if price_el:
@@ -199,50 +176,58 @@ def parse_product_list(html: str) -> list:
     return products
 
 
-def crawl_category(session: requests.Session, cat_id: str, cat_name: str,
-                   max_pages: int = MAX_PAGES) -> list:
-    """카테고리 전체 페이지 크롤링"""
+# ── Playwright 크롤링 ────────────────────────────────────────
+async def crawl_category_pw(page, cat_id: str, cat_name: str,
+                             max_pages: int = MAX_PAGES) -> list:
+    """Playwright로 카테고리 전체 페이지 크롤링"""
     all_products = []
     seen_ids = set()
 
-    for page in range(1, max_pages + 1):
+    for pg in range(1, max_pages + 1):
         url = (
             f"{OASIS_BASE}/product/list"
-            f"?categoryId={cat_id}&page={page}"
+            f"?categoryId={cat_id}&page={pg}"
             f"&sort=priority&direction=desc&rows={ROWS_PER_PAGE}"
         )
 
         try:
-            resp = session.get(url, timeout=30)
-            if resp.status_code == 403:
-                log.warning(f"  {cat_name} 페이지 {page}: 403 차단")
+            resp = await page.goto(url, timeout=30000, wait_until="domcontentloaded")
+            if not resp or resp.status == 403:
+                log.warning(f"  {cat_name} 페이지 {pg}: 차단 (status {resp.status if resp else 'None'})")
                 break
-            resp.raise_for_status()
+            if resp.status != 200:
+                log.warning(f"  {cat_name} 페이지 {pg}: status {resp.status}")
+                break
         except Exception as e:
-            log.warning(f"  {cat_name} 페이지 {page} 요청 실패: {e}")
+            log.warning(f"  {cat_name} 페이지 {pg} 요청 실패: {e}")
             break
 
-        products = parse_product_list(resp.text)
+        content = await page.content()
+        products = parse_product_list(content)
 
         if not products:
-            log.info(f"  {cat_name} 페이지 {page}: 상품 없음, 종료")
+            log.info(f"  {cat_name} 페이지 {pg}: 상품 없음, 종료")
             break
 
         new_products = []
-        for p in products:
-            if p["oasis_id"] not in seen_ids:
-                seen_ids.add(p["oasis_id"])
-                p["categories"] = json.dumps({"id": cat_id, "name": cat_name}, ensure_ascii=False)
-                p["spicy_score"] = calc_spicy_score(p["name"])
-                new_products.append(p)
+        for p_item in products:
+            if p_item["oasis_id"] not in seen_ids:
+                seen_ids.add(p_item["oasis_id"])
+                p_item["categories"] = json.dumps(
+                    {"id": cat_id, "name": cat_name}, ensure_ascii=False
+                )
+                p_item["spicy_score"] = calc_spicy_score(p_item["name"])
+                new_products.append(p_item)
 
         all_products.extend(new_products)
-        log.info(f"  {cat_name} 페이지 {page}: {len(new_products)}개 신규 (누적 {len(all_products)})")
+        log.info(
+            f"  {cat_name} 페이지 {pg}: {len(new_products)}개 신규 (누적 {len(all_products)})"
+        )
 
         if len(products) < ROWS_PER_PAGE:
             break
 
-        time.sleep(random.uniform(*REQUEST_DELAY))
+        await asyncio.sleep(1.0)
 
     return all_products
 
@@ -265,19 +250,23 @@ def upsert_to_supabase(products: list, supabase_url: str, supabase_key: str):
     for i in range(0, total, batch_size):
         batch = products[i : i + batch_size]
         rows = []
-        for p in batch:
+        for p_item in batch:
             rows.append({
-                "oasis_id": p["oasis_id"],
-                "name": p["name"],
-                "base_price": p.get("base_price"),
-                "discounted_price": p.get("discounted_price"),
-                "discount_rate": p.get("discount_rate"),
-                "categories": json.loads(p["categories"]) if isinstance(p["categories"], str) else p["categories"],
-                "main_image_url": p.get("main_image_url"),
-                "url": p.get("url"),
+                "oasis_id": p_item["oasis_id"],
+                "name": p_item["name"],
+                "base_price": p_item.get("base_price"),
+                "discounted_price": p_item.get("discounted_price"),
+                "discount_rate": p_item.get("discount_rate"),
+                "categories": (
+                    json.loads(p_item["categories"])
+                    if isinstance(p_item["categories"], str)
+                    else p_item["categories"]
+                ),
+                "main_image_url": p_item.get("main_image_url"),
+                "url": p_item.get("url"),
                 "is_available": True,
                 "last_crawled_at": datetime.now(timezone.utc).isoformat(),
-                "spicy_score": p.get("spicy_score", 0),
+                "spicy_score": p_item.get("spicy_score", 0),
                 "match_status": "pending",
             })
 
@@ -306,17 +295,8 @@ def upsert_to_supabase(products: list, supabase_url: str, supabase_key: str):
 
 
 # ── 메인 ──────────────────────────────────────────────────────
-def main():
-    parser = argparse.ArgumentParser(description="오아시스마켓 크롤러")
-    parser.add_argument("--test", action="store_true", help="테스트 모드 (1 카테고리, 1 페이지)")
-    parser.add_argument("--categories", type=str, help="크롤링할 카테고리 ID (콤마 구분)")
-    args = parser.parse_args()
-
-    supabase_url = os.environ.get("SUPABASE_URL", "")
-    supabase_key = os.environ.get("SUPABASE_KEY", "")
-    if not supabase_url or not supabase_key:
-        log.error("SUPABASE_URL, SUPABASE_KEY 환경변수 필요")
-        sys.exit(1)
+async def async_main(args, supabase_url, supabase_key):
+    from playwright.async_api import async_playwright
 
     # 크롤링 대상 결정
     categories = CATEGORIES.copy()
@@ -331,15 +311,32 @@ def main():
 
     log.info(f"=== 오아시스마켓 크롤링 시작 ({len(categories)}개 카테고리) ===")
 
-    session = create_session()
-    all_products = []
+    # Playwright 브라우저 시작
+    async with async_playwright() as p:
+        launch_args = ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"]
+        browser = await p.chromium.launch(
+            headless=True,
+            args=launch_args,
+        )
 
-    for cat_id, cat_name in categories.items():
-        log.info(f"카테고리: {cat_name} ({cat_id})")
-        products = crawl_category(session, cat_id, cat_name, max_pages)
-        all_products.extend(products)
-        log.info(f"  → {cat_name}: {len(products)}개 수집")
-        time.sleep(random.uniform(1.0, 2.0))
+        context = await browser.new_context(locale="ko-KR")
+        page = await context.new_page()
+
+        # 메인 페이지 방문 (쿠키/세션 초기화 — 필수)
+        log.info("브라우저 세션 초기화 (메인 페이지 방문)...")
+        await page.goto(f"{OASIS_BASE}/main", timeout=30000)
+        await asyncio.sleep(1)
+
+        all_products = []
+
+        for cat_id, cat_name in categories.items():
+            log.info(f"카테고리: {cat_name} ({cat_id})")
+            products = await crawl_category_pw(page, cat_id, cat_name, max_pages)
+            all_products.extend(products)
+            log.info(f"  → {cat_name}: {len(products)}개 수집")
+            await asyncio.sleep(1.5)
+
+        await browser.close()
 
     log.info(f"총 수집: {len(all_products)}개 상품")
 
@@ -348,22 +345,38 @@ def main():
         return
 
     # 통계
-    prices = [p["discounted_price"] for p in all_products if p.get("discounted_price")]
+    prices = [p_item["discounted_price"] for p_item in all_products if p_item.get("discounted_price")]
     if prices:
-        log.info(f"가격 통계: 평균 {sum(prices)//len(prices):,}원, "
-                 f"최저 {min(prices):,}원, 최고 {max(prices):,}원")
+        log.info(
+            f"가격 통계: 평균 {sum(prices)//len(prices):,}원, "
+            f"최저 {min(prices):,}원, 최고 {max(prices):,}원"
+        )
 
     spicy_dist = {}
-    for p in all_products:
-        s = p.get("spicy_score", 0)
+    for p_item in all_products:
+        s = p_item.get("spicy_score", 0)
         spicy_dist[s] = spicy_dist.get(s, 0) + 1
     log.info(f"매운맛 분포: {dict(sorted(spicy_dist.items()))}")
 
     # Supabase 업로드
     log.info("Supabase 업로드 시작...")
     upsert_to_supabase(all_products, supabase_url, supabase_key)
-
     log.info("=== 오아시스마켓 크롤링 완료 ===")
+
+
+def main():
+    parser = argparse.ArgumentParser(description="오아시스마켓 크롤러")
+    parser.add_argument("--test", action="store_true", help="테스트 모드 (1 카테고리, 1 페이지)")
+    parser.add_argument("--categories", type=str, help="크롤링할 카테고리 ID (콤마 구분)")
+    args = parser.parse_args()
+
+    supabase_url = os.environ.get("SUPABASE_URL", "")
+    supabase_key = os.environ.get("SUPABASE_KEY", "")
+    if not supabase_url or not supabase_key:
+        log.error("SUPABASE_URL, SUPABASE_KEY 환경변수 필요")
+        sys.exit(1)
+
+    asyncio.run(async_main(args, supabase_url, supabase_key))
 
 
 if __name__ == "__main__":

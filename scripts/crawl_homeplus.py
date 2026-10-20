@@ -1,11 +1,11 @@
 """
 홈플러스 온라인(mfront.homeplus.co.kr) 식품 크롤러
 ================================================================
-검색 API를 활용한 카테고리별 상품 수집 → Supabase homeplus_products 적재
+Playwright 브라우저를 활용한 검색 API 크롤링 → Supabase homeplus_products 적재
 
 수집 흐름:
-  1) 카테고리 맵 API로 전체 식품 카테고리 키워드 수집
-  2) 검색 API(initSearch.json)로 키워드별 상품 목록 조회
+  1) Playwright 브라우저로 검색 API JSON 요청
+  2) 키워드별 상품 목록 파싱
   3) Supabase homeplus_products 테이블에 upsert
   4) 매운맛 점수 산출
 
@@ -23,7 +23,7 @@ import re
 import sys
 import json
 import time
-import random
+import asyncio
 import logging
 import argparse
 from datetime import datetime, timezone
@@ -43,11 +43,6 @@ log = logging.getLogger(__name__)
 
 # ── 설정 ──────────────────────────────────────────────────────
 HOMEPLUS_BASE = "https://mfront.homeplus.co.kr"
-USER_AGENT = (
-    "Mozilla/5.0 (Linux; Android 13; SM-G991B) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) "
-    "Chrome/120.0.0.0 Mobile Safari/537.36"
-)
 
 # 식품 카테고리 검색 키워드 (홈플러스 중분류 기반)
 FOOD_KEYWORDS = [
@@ -122,56 +117,41 @@ def calc_spicy_score(name: str) -> int:
     return 0
 
 
-# ── 크롤링 ────────────────────────────────────────────────────
-def create_session() -> requests.Session:
-    s = requests.Session()
-    s.headers.update({
-        "User-Agent": USER_AGENT,
-        "Accept": "application/json",
-        "Accept-Language": "ko-KR,ko;q=0.9",
-        "Referer": f"{HOMEPLUS_BASE}/",
-    })
-    return s
-
-
-def search_products(session: requests.Session, keyword: str,
-                    max_pages: int = MAX_PAGES_PER_KEYWORD) -> list:
-    """홈플러스 검색 API로 상품 목록 조회"""
+# ── Playwright 크롤링 ────────────────────────────────────────
+async def search_products_pw(page, keyword: str,
+                              max_pages: int = MAX_PAGES_PER_KEYWORD) -> list:
+    """Playwright 브라우저로 홈플러스 검색 API 조회"""
     all_products = []
     seen_ids = set()
 
-    for page in range(1, max_pages + 1):
+    for pg in range(1, max_pages + 1):
         url = (
             f"{HOMEPLUS_BASE}/totalsearch/total/search/initSearch.json"
-            f"?keyword={keyword}&page={page}&perPage={PER_PAGE}"
+            f"?keyword={keyword}&page={pg}&perPage={PER_PAGE}"
             f"&storeType=HYPER&storeId=37&sortType=POPULAR"
         )
 
         try:
-            resp = session.get(url, timeout=30)
-            if resp.status_code != 200:
+            resp = await page.goto(url, timeout=30000)
+            if not resp or resp.status != 200:
+                log.warning(f"  '{keyword}' 페이지 {pg}: status {resp.status if resp else 'None'}")
                 break
-            data = resp.json()
+            text = await resp.text()
+            data = json.loads(text)
         except Exception as e:
-            log.warning(f"  '{keyword}' 페이지 {page} 요청 실패: {e}")
+            log.warning(f"  '{keyword}' 페이지 {pg} 요청 실패: {e}")
             break
 
-        # 상품 목록 추출
+        # 상품 목록 추출: data.itemTD.dataList
         items = []
         try:
-            search_result = data.get("data", {})
-            if isinstance(search_result, dict):
-                items = search_result.get("dataList", [])
+            data_obj = data.get("data", {})
+            if isinstance(data_obj, dict):
+                item_td = data_obj.get("itemTD", {})
+                if isinstance(item_td, dict):
+                    items = item_td.get("dataList", []) or []
                 if not items:
-                    items = search_result.get("itemList", [])
-                if not items:
-                    # 다른 구조 시도
-                    for key in search_result:
-                        val = search_result[key]
-                        if isinstance(val, list) and len(val) > 0 and isinstance(val[0], dict):
-                            if "itemNm" in val[0] or "itemNo" in val[0]:
-                                items = val
-                                break
+                    items = data_obj.get("dataList", []) or []
         except Exception:
             pass
 
@@ -195,7 +175,6 @@ def search_products(session: requests.Session, keyword: str,
                 rating = item.get("grade")
                 review_count = item.get("reviewCnt")
 
-                # 무게/용량
                 weight = None
                 unit_qty = item.get("totalUnitQty")
                 unit_measure = item.get("unitMeasure", "")
@@ -207,18 +186,19 @@ def search_products(session: requests.Session, keyword: str,
                 if up:
                     unit_price = f"{up}원/100{unit_measure}" if unit_measure else str(up)
 
-                # 카테고리
                 categories = {}
                 for key in ("lcateNm", "mcateNm", "scateNm", "rcateNm"):
                     val = item.get(key)
                     if val:
                         categories[key] = val
 
-                # 이미지 URL
                 img_url = ""
                 img_dt = item.get("imgChgDt", "")
                 if img_dt:
-                    img_url = f"https://image.homeplus.kr/td/d15081b8-b273-4eef-b3ae-d30e785cb71b/item/image/goods/{item_no}/goodsDetail/{item_no}_1.jpg"
+                    img_url = (
+                        f"https://image.homeplus.kr/td/d15081b8-b273-4eef-b3ae-d30e785cb71b"
+                        f"/item/image/goods/{item_no}/goodsDetail/{item_no}_1.jpg"
+                    )
 
                 sold_out = item.get("soldOutYn", "N") == "Y"
 
@@ -245,7 +225,7 @@ def search_products(session: requests.Session, keyword: str,
         if len(items) < PER_PAGE:
             break
 
-        time.sleep(random.uniform(*REQUEST_DELAY))
+        await asyncio.sleep(0.5)
 
     return all_products
 
@@ -313,6 +293,81 @@ def upsert_to_supabase(products: list, supabase_url: str, supabase_key: str):
 
 
 # ── 메인 ──────────────────────────────────────────────────────
+async def async_main(args, supabase_url, supabase_key):
+    from playwright.async_api import async_playwright
+
+    keywords = FOOD_KEYWORDS[:5] if args.test else FOOD_KEYWORDS
+    log.info(f"=== 홈플러스 크롤링 시작 ({len(keywords)}개 키워드) ===")
+
+    # Playwright 브라우저 시작
+    async with async_playwright() as p:
+        # GitHub Actions 또는 로컬 환경 모두 지원
+        launch_args = ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"]
+        browser = await p.chromium.launch(
+            headless=True,
+            args=launch_args,
+        )
+
+        context = await browser.new_context(
+            user_agent=(
+                "Mozilla/5.0 (Linux; Android 13; SM-G991B) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/120.0.0.0 Mobile Safari/537.36"
+            ),
+            locale="ko-KR",
+        )
+        page = await context.new_page()
+
+        # 메인 페이지 방문 (쿠키/세션 초기화)
+        log.info("브라우저 세션 초기화...")
+        await page.goto(f"{HOMEPLUS_BASE}/", timeout=30000)
+        await asyncio.sleep(1)
+
+        all_products = []
+        seen_ids = set()
+
+        for i, keyword in enumerate(keywords, 1):
+            products = await search_products_pw(page, keyword)
+            new_products = []
+            for p_item in products:
+                if p_item["homeplus_id"] not in seen_ids:
+                    seen_ids.add(p_item["homeplus_id"])
+                    new_products.append(p_item)
+            all_products.extend(new_products)
+            log.info(
+                f"[{i}/{len(keywords)}] '{keyword}': {len(products)}개 → "
+                f"신규 {len(new_products)}개 (누적 {len(all_products)})"
+            )
+            await asyncio.sleep(0.5)
+
+        await browser.close()
+
+    log.info(f"총 수집: {len(all_products)}개 상품 (중복 제거 후)")
+
+    if not all_products:
+        log.warning("수집된 상품 없음")
+        return
+
+    # 통계
+    prices = [p_item["discounted_price"] for p_item in all_products if p_item.get("discounted_price")]
+    if prices:
+        log.info(
+            f"가격 통계: 평균 {sum(prices)//len(prices):,}원, "
+            f"최저 {min(prices):,}원, 최고 {max(prices):,}원"
+        )
+
+    spicy_dist = {}
+    for p_item in all_products:
+        s = p_item.get("spicy_score", 0)
+        spicy_dist[s] = spicy_dist.get(s, 0) + 1
+    log.info(f"매운맛 분포: {dict(sorted(spicy_dist.items()))}")
+
+    # Supabase 업로드
+    log.info("Supabase 업로드 시작...")
+    upsert_to_supabase(all_products, supabase_url, supabase_key)
+    log.info("=== 홈플러스 크롤링 완료 ===")
+
+
 def main():
     parser = argparse.ArgumentParser(description="홈플러스 크롤러")
     parser.add_argument("--test", action="store_true", help="테스트 모드 (5개 키워드만)")
@@ -324,49 +379,7 @@ def main():
         log.error("SUPABASE_URL, SUPABASE_KEY 환경변수 필요")
         sys.exit(1)
 
-    keywords = FOOD_KEYWORDS[:5] if args.test else FOOD_KEYWORDS
-
-    log.info(f"=== 홈플러스 크롤링 시작 ({len(keywords)}개 키워드) ===")
-
-    session = create_session()
-    all_products = []
-    seen_ids = set()
-
-    for i, keyword in enumerate(keywords, 1):
-        products = search_products(session, keyword)
-        # 중복 제거
-        new_products = []
-        for p in products:
-            if p["homeplus_id"] not in seen_ids:
-                seen_ids.add(p["homeplus_id"])
-                new_products.append(p)
-        all_products.extend(new_products)
-        log.info(f"[{i}/{len(keywords)}] '{keyword}': {len(products)}개 → 신규 {len(new_products)}개 (누적 {len(all_products)})")
-        time.sleep(random.uniform(*REQUEST_DELAY))
-
-    log.info(f"총 수집: {len(all_products)}개 상품 (중복 제거 후)")
-
-    if not all_products:
-        log.warning("수집된 상품 없음")
-        return
-
-    # 통계
-    prices = [p["discounted_price"] for p in all_products if p.get("discounted_price")]
-    if prices:
-        log.info(f"가격 통계: 평균 {sum(prices)//len(prices):,}원, "
-                 f"최저 {min(prices):,}원, 최고 {max(prices):,}원")
-
-    spicy_dist = {}
-    for p in all_products:
-        s = p.get("spicy_score", 0)
-        spicy_dist[s] = spicy_dist.get(s, 0) + 1
-    log.info(f"매운맛 분포: {dict(sorted(spicy_dist.items()))}")
-
-    # Supabase 업로드
-    log.info("Supabase 업로드 시작...")
-    upsert_to_supabase(all_products, supabase_url, supabase_key)
-
-    log.info("=== 홈플러스 크롤링 완료 ===")
+    asyncio.run(async_main(args, supabase_url, supabase_key))
 
 
 if __name__ == "__main__":
