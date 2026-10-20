@@ -134,9 +134,17 @@ export type UserTasteProfile = Database["public"]["Tables"]["user_taste_profiles
 export type TasteFeedback = Database["public"]["Tables"]["taste_feedback"]["Row"];
 export type DefaultTasteMapping = Database["public"]["Tables"]["default_taste_mappings"]["Row"];
 
+// 통합 가격 정보 (v_all_prices 뷰에서)
+export type MallPrice = {
+  platform: string;
+  price: number;
+  url: string;
+  image_url: string | null;
+};
+
 // 제품 + 가격 조인 타입
 export type ProductWithPrices = Product & {
-  product_prices: ProductPrice[];
+  product_prices: (ProductPrice | MallPrice)[];
 };
 
 // 맛 레벨 타입

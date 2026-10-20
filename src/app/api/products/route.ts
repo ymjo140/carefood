@@ -26,6 +26,14 @@ const TASTE_RANGES: Record<string, Record<number, [number, number]>> = {
   },
 };
 
+// 가격 정보 타입
+type MallPrice = {
+  platform: string;
+  price: number;
+  url: string;
+  image_url: string | null;
+};
+
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;
 
@@ -36,12 +44,13 @@ export async function GET(request: NextRequest) {
   const search = searchParams.get("q") || null;
   const page = Number(searchParams.get("page") || 1);
   const limit = Math.min(Number(searchParams.get("limit") || 20), 50);
+  const source = searchParams.get("source") || null; // kurly, oasis, homeplus, all
 
   const supabase = createServiceRoleClient();
 
   let query = supabase
     .from("products")
-    .select("*, product_prices(*)", { count: "exact" })
+    .select("*", { count: "exact" })
     .eq("is_active", true)
     .order("name");
 
@@ -74,14 +83,65 @@ export async function GET(request: NextRequest) {
   const from = (page - 1) * limit;
   query = query.range(from, from + limit - 1);
 
-  const { data, error, count } = await query;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: products, error, count } = await query as { data: any[] | null; error: any; count: number | null };
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  if (!products || products.length === 0) {
+    return NextResponse.json({
+      products: [],
+      total: count,
+      page,
+      limit,
+      totalPages: Math.ceil((count || 0) / limit),
+    });
+  }
+
+  // 2단계: 이 제품들의 가격 정보를 v_all_prices에서 가져오기
+  const productIds = products.map((p: { id: string }) => p.id);
+
+  let priceQuery = supabase
+    .from("v_all_prices" as "product_prices")
+    .select("product_id, platform, price, url, image_url")
+    .in("product_id", productIds);
+
+  // 특정 쇼핑몰만 필터
+  if (source && source !== "all") {
+    priceQuery = priceQuery.eq("platform", source);
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: prices } = await priceQuery as { data: any[] | null };
+
+  // 가격을 product_id별로 그룹핑
+  const priceMap: Record<string, MallPrice[]> = {};
+  if (prices) {
+    for (const p of prices) {
+      if (!priceMap[p.product_id]) {
+        priceMap[p.product_id] = [];
+      }
+      priceMap[p.product_id].push({
+        platform: p.platform,
+        price: p.price,
+        url: p.url,
+        image_url: p.image_url,
+      });
+    }
+  }
+
+  // 가격 정보 합치기 (가격순 정렬)
+  const productsWithPrices = products.map((product: { id: string }) => ({
+    ...product,
+    product_prices: (priceMap[product.id] || []).sort(
+      (a: MallPrice, b: MallPrice) => a.price - b.price
+    ),
+  }));
+
   return NextResponse.json({
-    products: data,
+    products: productsWithPrices,
     total: count,
     page,
     limit,

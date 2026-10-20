@@ -30,12 +30,21 @@ function formatPrice(price: number): string {
 }
 
 const PLATFORM_LABELS: Record<string, string> = {
+  kurly: "컬리",
+  oasis: "오아시스",
+  homeplus: "홈플러스",
   danawa: "다나와",
   coupang: "쿠팡",
   naver: "네이버",
-  kurly: "컬리",
   gmarket: "G마켓",
   ssg: "SSG",
+};
+
+const PLATFORM_COLORS: Record<string, string> = {
+  kurly: "border-purple-300 text-purple-700 bg-purple-50",
+  oasis: "border-green-300 text-green-700 bg-green-50",
+  homeplus: "border-orange-300 text-orange-700 bg-orange-50",
+  danawa: "border-blue-300 text-blue-700 bg-blue-50",
 };
 
 function platformLabel(platform: string): string {
@@ -299,9 +308,13 @@ export default function ProductExplorer() {
                               href={pp.url}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="text-[10px] px-1.5 py-0.5 bg-card border border-border rounded hover:border-primary/50 transition-colors"
+                              className={`text-[10px] px-1.5 py-0.5 rounded border transition-colors hover:opacity-80 ${
+                                PLATFORM_COLORS[pp.platform] ||
+                                "bg-card border-border"
+                              }`}
                             >
-                              {platformLabel(pp.platform)}
+                              {platformLabel(pp.platform)}{" "}
+                              {formatPrice(pp.price!)}
                             </a>
                           ) : null
                         )}

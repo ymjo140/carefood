@@ -1,0 +1,50 @@
+name: MFDS 영양 매칭
+
+on:
+  schedule:
+    # 매일 KST 05:00 (UTC 20:00) - 모든 크롤링 완료 후
+    - cron: "0 20 * * *"
+  workflow_dispatch:
+    inputs:
+      table:
+        description: "대상 테이블 (all, kurly_products, oasis_products, homeplus_products)"
+        required: false
+        default: "all"
+
+jobs:
+  match:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Run MFDS matching
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: |
+          TABLE="${{ github.event.inputs.table || 'all' }}"
+          cd scripts
+
+          if [ "$TABLE" = "all" ] || [ "$TABLE" = "kurly_products" ]; then
+            echo "=== 컬리 매칭 ==="
+            python match_mall_mfds.py --table kurly_products --id-col kurly_id
+          fi
+
+          if [ "$TABLE" = "all" ] || [ "$TABLE" = "oasis_products" ]; then
+            echo "=== 오아시스 매칭 ==="
+            python match_mall_mfds.py --table oasis_products --id-col oasis_id
+          fi
+
+          if [ "$TABLE" = "all" ] || [ "$TABLE" = "homeplus_products" ]; then
+            echo "=== 홈플러스 매칭 ==="
+            python match_mall_mfds.py --table homeplus_products --id-col homeplus_id
+          fi
