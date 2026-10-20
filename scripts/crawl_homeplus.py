@@ -271,7 +271,7 @@ def upsert_to_supabase(products: list, supabase_url: str, supabase_key: str):
         for attempt in range(3):
             try:
                 resp = session.post(
-                    f"{supabase_url}/rest/v1/homeplus_products",
+                    f"{supabase_url}/rest/v1/homeplus_products?on_conflict=homeplus_id",
                     json=rows,
                     headers=headers,
                     timeout=30,
