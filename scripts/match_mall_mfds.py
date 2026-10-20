@@ -39,29 +39,51 @@ def clean_name(name: str) -> str:
 
 
 def fetch_all_paginated(table: str, select: str, filters: str = "", page_size: int = 1000):
-    """Supabase REST API로 페이징 조회"""
+    """Supabase REST API로 커서 기반 페이징 조회 (대용량 테이블 대응)"""
     all_rows = []
-    offset = 0
+    last_id = ""  # UUID 커서 기반 페이징
+    hdrs = {**HEADERS, "Prefer": "return=representation"}
+
     while True:
-        url = f"{SUPABASE_URL}/rest/v1/{table}?select={select}&limit={page_size}&offset={offset}"
+        url = f"{SUPABASE_URL}/rest/v1/{table}?select={select}&limit={page_size}&order=id.asc"
         if filters:
             url += f"&{filters}"
-        hdrs = {**HEADERS, "Prefer": "return=representation"}
-        for attempt in range(3):
-            resp = requests.get(url, headers=hdrs, timeout=30)
-            if resp.status_code < 500:
-                break
-            time.sleep(2 * (attempt + 1))
-        resp.raise_for_status()
-        rows = resp.json()
+        if last_id:
+            url += f"&id=gt.{last_id}"
+
+        rows = None
+        for attempt in range(5):
+            try:
+                resp = requests.get(url, headers=hdrs, timeout=60)
+                if resp.status_code == 200:
+                    rows = resp.json()
+                    break
+                if resp.status_code >= 500:
+                    log.warning(f"  {table}: 서버 에러 {resp.status_code}, 재시도 {attempt+1}/5...")
+                    time.sleep(3 * (attempt + 1))
+                    continue
+                resp.raise_for_status()
+            except requests.exceptions.Timeout:
+                log.warning(f"  {table}: 타임아웃, 재시도 {attempt+1}/5...")
+                time.sleep(3 * (attempt + 1))
+            except Exception as e:
+                log.warning(f"  {table}: 요청 실패 ({e}), 재시도 {attempt+1}/5...")
+                time.sleep(3 * (attempt + 1))
+
+        if rows is None:
+            log.error(f"  {table}: {len(all_rows)}건까지 로드 후 중단 (마지막 시도 실패)")
+            break
         if not rows:
             break
+
         all_rows.extend(rows)
-        offset += page_size
+        last_id = rows[-1]["id"]
+
         if len(rows) < page_size:
             break
-        if len(all_rows) % 5000 < page_size:
+        if len(all_rows) % 10000 < page_size:
             log.info(f"  {table}: {len(all_rows)}건 로드...")
+
     return all_rows
 
 
