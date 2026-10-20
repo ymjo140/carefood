@@ -1,0 +1,47 @@
+name: 11번가 크롤러
+
+on:
+  schedule:
+    # 매일 KST 03:30 (UTC 18:30) — 오아시스 크롤링 30분 후
+    - cron: "30 18 * * *"
+  workflow_dispatch:
+    inputs:
+      test:
+        description: "테스트 모드 (true/false)"
+        required: false
+        default: "false"
+
+jobs:
+  crawl:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Run 11st crawler
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: |
+          cd scripts
+          ARGS=""
+          if [ "${{ github.event.inputs.test }}" = "true" ]; then
+            ARGS="$ARGS --test"
+          fi
+          python crawl_11st.py $ARGS
+
+      - name: Upload crawl log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: crawl-11st-log
+          path: scripts/crawl_11st.log
+          retention-days: 7

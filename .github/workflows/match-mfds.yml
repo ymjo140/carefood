@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       table:
-        description: "대상 테이블 (all, kurly_products, oasis_products, homeplus_products)"
+        description: "대상 테이블 (all, kurly_products, oasis_products, homeplus_products, st11_products)"
         required: false
         default: "all"
 
@@ -47,4 +47,9 @@ jobs:
           if [ "$TABLE" = "all" ] || [ "$TABLE" = "homeplus_products" ]; then
             echo "=== 홈플러스 매칭 ==="
             python match_mall_mfds.py --table homeplus_products --id-col homeplus_id
+          fi
+
+          if [ "$TABLE" = "all" ] || [ "$TABLE" = "st11_products" ]; then
+            echo "=== 11번가 매칭 ==="
+            python match_mall_mfds.py --table st11_products --id-col st11_id
           fi
