@@ -36,31 +36,31 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --background: #13112A;
-    --foreground: #EEEAF5;
-    --primary: #A599E9;
-    --primary-light: #2D2252;
-    --primary-dark: #C4BBFF;
-    --accent: #F472B6;
-    --card: #1E1B3A;
-    --border: #3D3570;
-    --muted: #9B93B7;
-    --surface: #2D2252;
+    --background: #1E1B38;
+    --foreground: #F0ECF8;
+    --primary: #B0A4F0;
+    --primary-light: #322A5C;
+    --primary-dark: #D0C8FF;
+    --accent: #F9A8D4;
+    --card: #28244A;
+    --border: #4A4278;
+    --muted: #A8A0C4;
+    --surface: #322A5C;
     color-scheme: dark;
   }
 }
 
 :root[data-theme="dark"] {
-  --background: #13112A;
-  --foreground: #EEEAF5;
-  --primary: #A599E9;
-  --primary-light: #2D2252;
-  --primary-dark: #C4BBFF;
-  --accent: #F472B6;
-  --card: #1E1B3A;
-  --border: #3D3570;
-  --muted: #9B93B7;
-  --surface: #2D2252;
+  --background: #1E1B38;
+  --foreground: #F0ECF8;
+  --primary: #B0A4F0;
+  --primary-light: #322A5C;
+  --primary-dark: #D0C8FF;
+  --accent: #F9A8D4;
+  --card: #28244A;
+  --border: #4A4278;
+  --muted: #A8A0C4;
+  --surface: #322A5C;
   color-scheme: dark;
 }
 
@@ -75,14 +75,16 @@ body {
 
 /* ───── 접근성 기본 규칙 ───── */
 
-/* 터치 타깃 최소 48px (로드맵: 고령자·보호자 접근성) */
+/* 터치 타깃 최소 44px (로드맵: 고령자·보호자 접근성) */
+/* CTA 버튼, 링크, 체크박스 등 주요 인터랙션 요소 */
 button, a, [role="button"], input[type="checkbox"], input[type="radio"] {
   min-height: 44px;
   min-width: 44px;
 }
 
-/* 인라인 작은 태그/배지는 예외 (터치 타깃이 아님) */
-span.rounded-full, span[class*="text-\[10px\]"] {
+/* 인라인 작은 태그/배지, 그리드 내 소형 필터 버튼은 예외 */
+span.rounded-full, span[class*="text-\[10px\]"],
+button[class*="w-7"], button[class*="w-8"], button[class*="w-6"] {
   min-height: unset;
   min-width: unset;
 }

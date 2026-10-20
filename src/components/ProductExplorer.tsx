@@ -180,18 +180,18 @@ export default function ProductExplorer() {
             </button>
           )}
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 gap-x-6 gap-y-4">
           {TASTE_CONFIG.map((taste) => (
             <div key={taste.key}>
               <div className="flex items-center gap-1.5 mb-2">
                 <span className="text-xs font-medium">{taste.label}</span>
               </div>
-              <div className="flex gap-1">
+              <div className="flex gap-1.5">
                 {([1, 2, 3, 4, 5] as TasteLevel[]).map((level) => (
                   <button
                     key={level}
                     onClick={() => toggleFilter(taste.key, level)}
-                    className={`w-8 h-8 rounded-lg border text-xs font-medium transition-colors ${
+                    className={`w-7 h-7 rounded-lg border text-xs font-medium transition-colors ${
                       filters[taste.key] === level
                         ? "bg-primary text-white border-primary"
                         : "border-border hover:border-primary/50"
