@@ -369,8 +369,8 @@ function StepSensitivity({
         {/* 첨가물 민감도 */}
         <div>
           <div className="flex items-center gap-2 mb-3">
-            <div className="w-8 h-8 rounded-lg bg-violet-500/10 flex items-center justify-center">
-              <svg className="w-4 h-4 text-violet-600" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center">
+              <svg className="w-4 h-4 text-amber-600" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                 <path d="M7 2v11h3v9l7-12h-4l4-8z" />
               </svg>
             </div>

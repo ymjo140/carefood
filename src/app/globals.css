@@ -1,18 +1,18 @@
 @import "tailwindcss";
 
 :root {
-  --background: #F6F4FB;
-  --foreground: #1A1535;
-  --primary: #5B4FC4;          /* 인디고 — 명도대비 4.5:1↑ on white */
-  --primary-light: #EDE9FF;
-  --primary-dark: #4338A8;
-  --accent: #EC4899;           /* 핑크 포인트 */
-  --muted: #7E75A0;            /* 명도대비 4.5:1↑ on #F6F4FB */
+  --background: #FAF6EF;
+  --foreground: #2D2518;
+  --primary: #C4870A;          /* 앰버 골드 — 따뜻한 식품 톤 */
+  --primary-light: #FFF4DC;
+  --primary-dark: #A06D00;
+  --accent: #E06030;           /* 코랄/테라코타 포인트 */
+  --muted: #8C7B66;            /* 웜 브라운 그레이 */
   --card: #ffffff;
-  --border: #E4E0F0;
-  --surface: #EEEAF5;          /* 카드 내부 배경, 이미지 플레이스홀더 등 */
+  --border: #EBE2D4;
+  --surface: #F2EBE0;          /* 카드 내부 배경, 이미지 플레이스홀더 등 */
 
-  /* 페르소나 아이콘 배경색 */
+  /* 페르소나 아이콘 배경색 (레거시 호환) */
   --persona-elderly: #F59E0B;
   --persona-patient: #3B82F6;
   --persona-pregnant: #EC4899;
@@ -36,31 +36,31 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --background: #1E1B38;
-    --foreground: #F0ECF8;
-    --primary: #B0A4F0;
-    --primary-light: #322A5C;
-    --primary-dark: #D0C8FF;
-    --accent: #F9A8D4;
-    --card: #28244A;
-    --border: #4A4278;
-    --muted: #A8A0C4;
-    --surface: #322A5C;
+    --background: #131110;
+    --foreground: #F2EBE0;
+    --primary: #E8AD3F;
+    --primary-light: #332A1A;
+    --primary-dark: #F5C76A;
+    --accent: #F08B6A;
+    --card: #382F28;
+    --border: #584D40;
+    --muted: #A6977F;
+    --surface: #4A4038;
     color-scheme: dark;
   }
 }
 
 :root[data-theme="dark"] {
-  --background: #1E1B38;
-  --foreground: #F0ECF8;
-  --primary: #B0A4F0;
-  --primary-light: #322A5C;
-  --primary-dark: #D0C8FF;
-  --accent: #F9A8D4;
-  --card: #28244A;
-  --border: #4A4278;
-  --muted: #A8A0C4;
-  --surface: #322A5C;
+  --background: #131110;
+  --foreground: #F2EBE0;
+  --primary: #E8AD3F;
+  --primary-light: #332A1A;
+  --primary-dark: #F5C76A;
+  --accent: #F08B6A;
+  --card: #382F28;
+  --border: #584D40;
+  --muted: #A6977F;
+  --surface: #4A4038;
   color-scheme: dark;
 }
 
