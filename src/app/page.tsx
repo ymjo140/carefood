@@ -1,19 +1,11 @@
 import Link from "next/link";
 import HomePersonalized from "@/components/HomePersonalized";
 
-/* ── SVG 아이콘 컴포넌트 (이모지 대체) ── */
-function IconHeart({ className = "" }: { className?: string }) {
+/* ── SVG 아이콘 컴포넌트 ── */
+function IconGut({ className = "" }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
-    </svg>
-  );
-}
-
-function IconShield({ className = "" }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z" />
+      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9v-2h2v2zm4 0h-2v-2h2v2zm1-4H8c-.55 0-1-.45-1-1V8c0-.55.45-1 1-1h8c.55 0 1 .45 1 1v3c0 .55-.45 1-1 1z" />
     </svg>
   );
 }
@@ -21,55 +13,99 @@ function IconShield({ className = "" }: { className?: string }) {
 function IconLeaf({ className = "" }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M6.05 8.05a7.001 7.001 0 0 0 .02 9.88c1.47-3.4 4.09-6.24 7.36-7.93A15.95 15.95 0 0 0 8.54 16c-1-1.8-1.6-3.82-1.6-5.99l-.89-1.96zM17 1c-1.52 4.7-3.34 7.83-6.93 11.07 1.72-.37 3.5-.53 5.3-.47a8.004 8.004 0 0 0 1.36-10.17L17 1z" />
       <path d="M17 8C8 10 5.9 16.17 3.82 21.34l1.89.66C7.72 17.14 9.23 12 17 10V8z" />
-      <path d="M20.08 3.47L18.5 5.06C14.83 8.72 12.05 12.21 10.29 16.13l1.83.79C13.77 13.35 16.38 10.05 19.87 6.58l1.59-1.59-1.38-1.52z" />
     </svg>
   );
 }
 
-function IconBowl({ className = "" }: { className?: string }) {
+function IconScale({ className = "" }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <path d="M2 12c0 3.87 3.13 7 7 7h6c3.87 0 7-3.13 7-7H2zM12 4C7.58 4 4 6.69 4 10h16c0-3.31-3.58-6-8-6z" />
+      <path d="M12 3L1 9l4 2.18v6L12 21l7-3.82v-6l2-1.09V17h2V9L12 3zm6.82 6L12 12.72 5.18 9 12 5.28 18.82 9zM17 15.99l-5 2.73-5-2.73v-3.72L12 15l5-2.73v3.72z" />
     </svg>
   );
 }
 
-const PERSONA_CARDS = [
+function IconBolt({ className = "" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M11 21h-1l1-7H7.5c-.88 0-.33-.75-.31-.78C8.48 10.94 10.42 7.54 13.01 3h1l-1 7h3.51c.4 0 .62.19.4.66C12.97 17.55 11 21 11 21z" />
+    </svg>
+  );
+}
+
+function IconSearch({ className = "" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" />
+    </svg>
+  );
+}
+
+function IconTag({ className = "" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M21.41 11.58l-9-9C12.05 2.22 11.55 2 11 2H4c-1.1 0-2 .9-2 2v7c0 .55.22 1.05.59 1.42l9 9c.36.36.86.58 1.41.58.55 0 1.05-.22 1.41-.59l7-7c.37-.36.59-.86.59-1.41 0-.55-.23-1.06-.59-1.42zM5.5 7C4.67 7 4 6.33 4 5.5S4.67 4 5.5 4 7 4.67 7 5.5 6.33 7 5.5 7z" />
+    </svg>
+  );
+}
+
+function IconPrice({ className = "" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M11.8 10.9c-2.27-.59-3-1.2-3-2.15 0-1.09 1.01-1.85 2.7-1.85 1.78 0 2.44.85 2.5 2.1h2.21c-.07-1.72-1.12-3.3-3.21-3.81V3h-3v2.16c-1.94.42-3.5 1.68-3.5 3.61 0 2.31 1.91 3.46 4.7 4.13 2.5.6 3 1.48 3 2.41 0 .69-.49 1.79-2.7 1.79-2.06 0-2.87-.92-2.98-2.1h-2.2c.12 2.19 1.76 3.42 3.68 3.83V21h3v-2.15c1.95-.37 3.5-1.5 3.5-3.55 0-2.84-2.43-3.81-4.7-4.4z" />
+    </svg>
+  );
+}
+
+const CONCERN_CARDS = [
   {
-    icon: IconHeart,
-    label: "어르신",
-    desc: "부드러운 식단",
-    color: "bg-amber-500",
-    href: "/onboarding?persona=elderly",
-  },
-  {
-    icon: IconShield,
-    label: "환자",
-    desc: "질환별 안전",
-    color: "bg-blue-500",
-    href: "/onboarding?persona=patient",
+    icon: IconGut,
+    label: "장건강",
+    desc: "예민한 속, 편안하게",
+    color: "bg-emerald-500",
+    href: "/onboarding?concern=gut_health",
   },
   {
     icon: IconLeaf,
-    label: "산모",
-    desc: "시기별 영양",
+    label: "피부건강",
+    desc: "속부터 맑게",
     color: "bg-pink-500",
-    href: "/onboarding?persona=pregnant",
+    href: "/onboarding?concern=skin",
   },
   {
-    icon: IconBowl,
-    label: "일반",
-    desc: "건강 목표",
-    color: "bg-violet-500",
-    href: "/onboarding?persona=general",
+    icon: IconScale,
+    label: "체중관리",
+    desc: "가볍고 든든하게",
+    color: "bg-blue-500",
+    href: "/onboarding?concern=weight",
+  },
+  {
+    icon: IconBolt,
+    label: "활력충전",
+    desc: "하루를 채우는 영양",
+    color: "bg-amber-500",
+    href: "/onboarding?concern=energy",
   },
 ];
 
 const TRUST_ITEMS = [
-  { label: "식약처 공식 DB", desc: "31만 건 영양성분 데이터 기반" },
-  { label: "금기 자동 차단", desc: "질환별 위험 성분 필터링" },
-  { label: "4곳 최저가", desc: "컬리·오아시스·홈플러스·11번가" },
+  {
+    icon: IconSearch,
+    label: "식약처 영양 DB",
+    desc: "31만 건 성분 데이터 기반 분석",
+  },
+  {
+    icon: IconTag,
+    label: "성분 분석 태그",
+    desc: "소화편의·첨가물·자극성 자동 분류",
+  },
+  {
+    icon: IconPrice,
+    label: "4곳 최저가",
+    desc: "컬리·오아시스·홈플러스·11번가",
+  },
 ];
 
 export default function HomePage() {
@@ -82,12 +118,12 @@ export default function HomePage() {
             가입 없이 체험 가능
           </div>
           <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight leading-snug">
-            상황에 맞는 식품,
+            성분으로 찾는,
             <br />
-            안전하게 추천합니다
+            내 몸에 맞는 식품
           </h1>
           <p className="mt-3 text-sm sm:text-base text-muted max-w-md">
-            식약처 DB + 4개 쇼핑몰 최저가 비교
+            식약처 영양성분 DB 기반 · 4개 쇼핑몰 최저가 비교
           </p>
         </div>
       </section>
@@ -95,28 +131,33 @@ export default function HomePage() {
       {/* 재방문 사용자 개인화 추천 (클라이언트) */}
       <HomePersonalized />
 
-      {/* 페르소나 선택 — 4열 그리드 */}
+      {/* 건강 관심사 선택 — 4열 그리드 */}
       <section className="px-4 pb-12">
-        <div className="max-w-2xl mx-auto grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {PERSONA_CARDS.map((card) => {
-            const Icon = card.icon;
-            return (
-              <Link
-                key={card.label}
-                href={card.href}
-                aria-label={`${card.label} 맞춤 추천 시작`}
-                className="bg-card rounded-2xl p-4 sm:p-5 text-center hover:-translate-y-0.5 transition-transform shadow-[0_1px_3px_rgba(0,0,0,0.04)] focus-visible:ring-2 focus-visible:ring-primary"
-              >
-                <div
-                  className={`${card.color} w-11 h-11 rounded-[14px] flex items-center justify-center mx-auto mb-3`}
+        <div className="max-w-2xl mx-auto">
+          <h2 className="text-lg font-extrabold mb-4">
+            어떤 건강이 궁금하세요?
+          </h2>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {CONCERN_CARDS.map((card) => {
+              const Icon = card.icon;
+              return (
+                <Link
+                  key={card.label}
+                  href={card.href}
+                  aria-label={`${card.label} 맞춤 추천 시작`}
+                  className="bg-card rounded-2xl p-4 sm:p-5 text-center hover:-translate-y-0.5 transition-transform shadow-[0_1px_3px_rgba(0,0,0,0.04)] focus-visible:ring-2 focus-visible:ring-primary"
                 >
-                  <Icon className="w-5 h-5 text-white" />
-                </div>
-                <h3 className="text-sm font-bold">{card.label}</h3>
-                <p className="text-[11px] text-muted mt-0.5">{card.desc}</p>
-              </Link>
-            );
-          })}
+                  <div
+                    className={`${card.color} w-11 h-11 rounded-[14px] flex items-center justify-center mx-auto mb-3`}
+                  >
+                    <Icon className="w-5 h-5 text-white" />
+                  </div>
+                  <h3 className="text-sm font-bold">{card.label}</h3>
+                  <p className="text-[11px] text-muted mt-0.5">{card.desc}</p>
+                </Link>
+              );
+            })}
+          </div>
         </div>
       </section>
 
@@ -124,19 +165,24 @@ export default function HomePage() {
       <section className="py-12 px-4">
         <div className="max-w-2xl mx-auto">
           <h2 className="text-lg font-extrabold mb-6">
-            데이터 기반 안전한 추천
+            데이터로 분석하는 식품 성분
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {TRUST_ITEMS.map((item) => (
-              <div
-                key={item.label}
-                className="bg-card rounded-2xl p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)]"
-              >
-                <div className="w-2 h-2 rounded-full bg-primary mb-3" />
-                <h3 className="font-bold text-sm mb-1">{item.label}</h3>
-                <p className="text-xs text-muted">{item.desc}</p>
-              </div>
-            ))}
+            {TRUST_ITEMS.map((item) => {
+              const Icon = item.icon;
+              return (
+                <div
+                  key={item.label}
+                  className="bg-card rounded-2xl p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)]"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center mb-3">
+                    <Icon className="w-4 h-4 text-primary" />
+                  </div>
+                  <h3 className="font-bold text-sm mb-1">{item.label}</h3>
+                  <p className="text-xs text-muted">{item.desc}</p>
+                </div>
+              );
+            })}
           </div>
         </div>
       </section>
@@ -151,18 +197,18 @@ export default function HomePage() {
             {[
               {
                 step: "1",
-                title: "상황을 알려주세요",
-                desc: "누구를 위한 식품인지, 어떤 건강 상태인지 간단히 선택합니다.",
+                title: "관심사를 알려주세요",
+                desc: "장건강, 피부, 체중관리 등 건강 관심사와 민감도를 선택합니다.",
               },
               {
                 step: "2",
-                title: "안전 필터가 작동합니다",
-                desc: "질환별 금기 성분을 자동으로 걸러내고, 영양 기준에 맞는 식품만 남깁니다.",
+                title: "성분을 분석합니다",
+                desc: "31만 건 영양성분 DB에서 관심사에 맞는 성분 프로필을 매칭합니다.",
               },
               {
                 step: "3",
-                title: "적합도 기반 추천",
-                desc: "건강 상태와 맛 선호도에 따른 적합도 점수로 최적의 식품을 추천합니다.",
+                title: "맞춤 식품 추천",
+                desc: "성분 매칭 + 맛 선호도로 최적의 식품을 추천합니다.",
               },
             ].map((s) => (
               <div key={s.step} className="flex gap-4 items-start">
@@ -183,10 +229,10 @@ export default function HomePage() {
       <section className="py-12 px-4">
         <div className="max-w-2xl mx-auto bg-card rounded-2xl p-8 text-center shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
           <h2 className="text-lg font-extrabold mb-2">
-            지금 바로 추천을 받아보세요
+            내 몸에 맞는 식품, 지금 찾아보세요
           </h2>
           <p className="text-sm text-muted mb-5">
-            가입 없이도 추천을 체험할 수 있어요. 30초면 충분합니다.
+            가입 없이도 체험할 수 있어요. 30초면 충분합니다.
           </p>
           <Link
             href="/onboarding"

@@ -162,24 +162,35 @@ export type DefaultTasteMapping = Database["public"]["Tables"]["default_taste_ma
 export type SafetyRule = Database["public"]["Tables"]["safety_rules"]["Row"];
 export type UserHealthProfile = Database["public"]["Tables"]["user_health_profiles"]["Row"];
 
-// 페르소나 타입
+// 페르소나 타입 (레거시 — 하위호환용)
 export type Persona = "elderly" | "patient" | "pregnant" | "general";
 export type OrdererRelation = "self" | "child" | "spouse" | "caregiver" | "other";
 
-// 온보딩 프로필 (localStorage 저장용)
+// 이너케어 건강 관심사 타입
+export type HealthConcern = "gut_health" | "skin" | "weight" | "energy";
+export type SensitivityLevel = 1 | 2 | 3; // 1: 둔감, 2: 보통, 3: 예민
+
+// 온보딩 프로필 (localStorage 저장용) — 이너케어 버전
 export type OnboardingProfile = {
-  persona: Persona;
-  ordererRelation: OrdererRelation;
-  conditions: string[];
+  // v2: 이너케어 방식
+  concerns: HealthConcern[];
+  sensitivity: {
+    digestive: SensitivityLevel;  // 소화 민감도
+    additive: SensitivityLevel;   // 첨가물 민감도
+  };
   allergies: string[];
-  pregnancyStage: string;
-  healthGoal: string;
   tastes: {
     salty: number;
     sweet: number;
     spicy: number;
     fatty: number;
   };
+  // v1 레거시 (하위호환)
+  persona?: Persona;
+  ordererRelation?: OrdererRelation;
+  conditions?: string[];
+  pregnancyStage?: string;
+  healthGoal?: string;
 };
 
 // 통합 가격 정보 (v_all_prices 뷰에서)

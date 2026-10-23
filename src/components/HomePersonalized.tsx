@@ -3,11 +3,11 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 
-const PERSONA_LABELS: Record<string, string> = {
-  elderly: "어르신",
-  patient: "환자",
-  pregnant: "산모",
-  general: "일반",
+const CONCERN_LABELS: Record<string, string> = {
+  gut_health: "장건강",
+  skin: "피부건강",
+  weight: "체중관리",
+  energy: "활력충전",
 };
 
 type QuickProduct = {
@@ -28,7 +28,7 @@ const PLATFORM_LABELS: Record<string, string> = {
 
 /**
  * 홈 개인화 섹션 — 재방문 사용자에게 빠른 추천 카드 표시
- * 로드맵: "재주문 마찰 0", "가입 전 추천 체험"
+ * 이너케어 방식: concerns 기반
  */
 export default function HomePersonalized() {
   const [profile, setProfile] = useState<any>(null);
@@ -50,6 +50,10 @@ export default function HomePersonalized() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          // v2 이너케어
+          concerns: parsed.concerns || [],
+          sensitivity: parsed.sensitivity || { digestive: 2, additive: 2 },
+          // v1 레거시 하위호환
           persona: parsed.persona,
           conditions: parsed.conditions || [],
           allergies: parsed.allergies || [],
@@ -71,13 +75,28 @@ export default function HomePersonalized() {
 
   if (loading || !profile) return null;
 
+  // 섹션 헤더 라벨: v2 concerns 우선, v1 persona 폴백
+  const sectionLabel = (() => {
+    if (profile.concerns && profile.concerns.length > 0) {
+      return profile.concerns.map((c: string) => CONCERN_LABELS[c] || c).join(" · ");
+    }
+    // v1 레거시
+    const legacyLabels: Record<string, string> = {
+      elderly: "어르신",
+      patient: "환자",
+      pregnant: "산모",
+      general: "일반",
+    };
+    return legacyLabels[profile.persona] || "맞춤";
+  })();
+
   return (
     <section className="px-4 pb-8">
       <div className="max-w-2xl mx-auto">
         {/* 섹션 헤더 */}
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-extrabold">
-            {PERSONA_LABELS[profile.persona] || "맞춤"} 추천
+            {sectionLabel} 추천
           </h2>
           <div className="flex gap-2">
             <Link

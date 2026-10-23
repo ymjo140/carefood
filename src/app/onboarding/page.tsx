@@ -2,37 +2,28 @@
 
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import type { TasteLevel } from "@/types/database";
+import type { TasteLevel, HealthConcern, SensitivityLevel } from "@/types/database";
 import { createClient } from "@/lib/supabase/client";
 import { saveProfile } from "@/app/auth/actions";
 
 // ── 타입 ─────────────────────────────────────────────
-type Persona = "elderly" | "patient" | "pregnant" | "general";
-type OrdererRelation = "self" | "guardian" | "caregiver" | "spouse";
-
 type OnboardingState = {
-  persona: Persona | null;
-  ordererRelation: OrdererRelation;
-  conditions: string[];
+  concerns: HealthConcern[];
+  sensitivity: {
+    digestive: SensitivityLevel;
+    additive: SensitivityLevel;
+  };
   allergies: string[];
-  pregnancyStage: string | null;
-  healthGoal: string | null;
   tastes: { salty: TasteLevel; sweet: TasteLevel; spicy: TasteLevel; fatty: TasteLevel };
 };
 
 // ── 상수 ─────────────────────────────────────────────
+
 /* SVG 아이콘 */
-function IconHeart({ className = "" }: { className?: string }) {
+function IconGut({ className = "" }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
-    </svg>
-  );
-}
-function IconShield({ className = "" }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z" />
+      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9v-2h2v2zm4 0h-2v-2h2v2zm1-4H8c-.55 0-1-.45-1-1V8c0-.55.45-1 1-1h8c.55 0 1 .45 1 1v3c0 .55-.45 1-1 1z" />
     </svg>
   );
 }
@@ -44,28 +35,26 @@ function IconLeaf({ className = "" }: { className?: string }) {
     </svg>
   );
 }
-function IconBowl({ className = "" }: { className?: string }) {
+function IconScale({ className = "" }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <path d="M2 12c0 3.87 3.13 7 7 7h6c3.87 0 7-3.13 7-7H2zM12 4C7.58 4 4 6.69 4 10h16c0-3.31-3.58-6-8-6z" />
+      <path d="M12 3L1 9l4 2.18v6L12 21l7-3.82v-6l2-1.09V17h2V9L12 3zm6.82 6L12 12.72 5.18 9 12 5.28 18.82 9zM17 15.99l-5 2.73-5-2.73v-3.72L12 15l5-2.73v3.72z" />
+    </svg>
+  );
+}
+function IconBolt({ className = "" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M11 21h-1l1-7H7.5c-.88 0-.33-.75-.31-.78C8.48 10.94 10.42 7.54 13.01 3h1l-1 7h3.51c.4 0 .62.19.4.66C12.97 17.55 11 21 11 21z" />
     </svg>
   );
 }
 
-const PERSONAS: { key: Persona; icon: typeof IconHeart; label: string; desc: string; iconBg: string }[] = [
-  { key: "elderly", icon: IconHeart, label: "어르신", desc: "고령의 부모님을 위해", iconBg: "bg-amber-500" },
-  { key: "patient", icon: IconShield, label: "환자", desc: "건강 관리가 필요한 분을 위해", iconBg: "bg-blue-500" },
-  { key: "pregnant", icon: IconLeaf, label: "산모", desc: "임산부·산후 관리를 위해", iconBg: "bg-pink-500" },
-  { key: "general", icon: IconBowl, label: "일반", desc: "건강한 식생활을 위해", iconBg: "bg-violet-500" },
-];
-
-const CONDITIONS = [
-  { key: "diabetes", label: "당뇨" },
-  { key: "hypertension", label: "고혈압" },
-  { key: "kidney", label: "신장질환" },
-  { key: "gout", label: "통풍" },
-  { key: "hyperlipidemia", label: "고지혈증" },
-  { key: "elderly_soft", label: "연하곤란 (부드러운 음식 필요)" },
+const CONCERNS: { key: HealthConcern; icon: typeof IconGut; label: string; desc: string; iconBg: string }[] = [
+  { key: "gut_health", icon: IconGut, label: "장건강", desc: "소화가 예민하거나, 속이 편한 식품을 찾고 있어요", iconBg: "bg-emerald-500" },
+  { key: "skin", icon: IconLeaf, label: "피부건강", desc: "속부터 관리해서 피부 컨디션을 챙기고 싶어요", iconBg: "bg-pink-500" },
+  { key: "weight", icon: IconScale, label: "체중관리", desc: "가볍지만 든든한 식품을 찾고 있어요", iconBg: "bg-blue-500" },
+  { key: "energy", icon: IconBolt, label: "활력충전", desc: "하루에 필요한 영양을 골고루 채우고 싶어요", iconBg: "bg-amber-500" },
 ];
 
 const ALLERGIES = [
@@ -82,46 +71,18 @@ const ALLERGIES = [
   { key: "sulfite", label: "아황산류" },
 ];
 
-const PREGNANCY_STAGES = [
-  { key: "early", label: "임신 초기 (1~3개월)" },
-  { key: "mid", label: "임신 중기 (4~6개월)" },
-  { key: "late", label: "임신 후기 (7~9개월)" },
-  { key: "postpartum", label: "산후 조리" },
-];
-
-const HEALTH_GOALS = [
-  { key: "weight_loss", label: "체중 관리" },
-  { key: "muscle_gain", label: "근육 증가" },
-  { key: "balanced", label: "균형 잡힌 식단" },
-  { key: "recovery", label: "회복 식단" },
-];
-
-const ORDERER_OPTIONS: Record<Persona, { key: OrdererRelation; label: string }[]> = {
-  elderly: [
-    { key: "guardian", label: "자녀로서 부모님을 위해 주문해요" },
-    { key: "self", label: "본인이 직접 주문해요" },
-    { key: "caregiver", label: "간병인/도우미로서 주문해요" },
-  ],
-  patient: [
-    { key: "self", label: "본인이 직접 주문해요" },
-    { key: "caregiver", label: "간병인/보호자로서 주문해요" },
-    { key: "guardian", label: "가족으로서 주문해요" },
-  ],
-  pregnant: [
-    { key: "self", label: "본인이 직접 주문해요" },
-    { key: "spouse", label: "배우자로서 주문해요" },
-  ],
-  general: [
-    { key: "self", label: "본인이 직접 주문해요" },
-  ],
-};
-
 const TASTE_CONFIG = [
   { key: "salty" as const, label: "짠맛" },
   { key: "sweet" as const, label: "단맛" },
   { key: "spicy" as const, label: "매운맛" },
   { key: "fatty" as const, label: "기름진맛" },
 ];
+
+const SENSITIVITY_LABELS: Record<number, string> = {
+  1: "둔감한 편",
+  2: "보통",
+  3: "예민한 편",
+};
 
 // ── 메인 컴포넌트 (Suspense 래퍼) ────────────────────
 export default function OnboardingPage() {
@@ -136,42 +97,40 @@ export default function OnboardingPage() {
   );
 }
 
+const STEPS = ["concerns", "sensitivity", "allergies", "tastes"] as const;
+type StepKey = typeof STEPS[number];
+
 function OnboardingContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
   const [step, setStep] = useState(0);
   const [state, setState] = useState<OnboardingState>({
-    persona: null,
-    ordererRelation: "self",
-    conditions: [],
+    concerns: [],
+    sensitivity: { digestive: 2, additive: 2 },
     allergies: [],
-    pregnancyStage: null,
-    healthGoal: null,
     tastes: { salty: 3, sweet: 3, spicy: 3, fatty: 3 },
   });
 
-  // URL 파라미터로 페르소나 프리셋
+  // URL 파라미터로 관심사 프리셋
   useEffect(() => {
-    const p = searchParams.get("persona") as Persona | null;
-    if (p && PERSONAS.some((pp) => pp.key === p)) {
-      setState((prev) => ({ ...prev, persona: p }));
-      setStep(1);
+    const c = searchParams.get("concern") as HealthConcern | null;
+    if (c && CONCERNS.some((cc) => cc.key === c)) {
+      setState((prev) => ({
+        ...prev,
+        concerns: prev.concerns.includes(c) ? prev.concerns : [...prev.concerns, c],
+      }));
+      setStep(1); // 관심사 이미 선택됨 → 민감도 단계로
     }
   }, [searchParams]);
 
-  // 스텝 구성 (페르소나에 따라 다름)
-  const steps = getSteps(state.persona);
-  const totalSteps = steps.length;
-  const currentStepKey = steps[step] || "persona";
+  const totalSteps = STEPS.length;
+  const currentStepKey: StepKey = STEPS[step] || "concerns";
 
   const canProceed = (): boolean => {
     switch (currentStepKey) {
-      case "persona": return state.persona !== null;
-      case "orderer": return true;
-      case "conditions": return true;
-      case "pregnancy": return state.pregnancyStage !== null;
-      case "goal": return state.healthGoal !== null;
+      case "concerns": return state.concerns.length > 0;
+      case "sensitivity": return true;
       case "allergies": return true;
       case "tastes": return true;
       default: return true;
@@ -188,12 +147,9 @@ function OnboardingContent() {
 
   const handleComplete = async () => {
     const profile = {
-      persona: state.persona,
-      ordererRelation: state.ordererRelation,
-      conditions: state.conditions,
+      concerns: state.concerns,
+      sensitivity: state.sensitivity,
       allergies: state.allergies,
-      pregnancyStage: state.pregnancyStage,
-      healthGoal: state.healthGoal,
       tastes: state.tastes,
     };
 
@@ -221,7 +177,7 @@ function OnboardingContent() {
       <div className="w-full max-w-lg">
         {/* 진행 바 */}
         <div className="flex gap-1.5 mb-8">
-          {steps.map((_, i) => (
+          {STEPS.map((_, i) => (
             <div
               key={i}
               className={`h-1 flex-1 rounded-full transition-colors duration-300 ${
@@ -233,43 +189,28 @@ function OnboardingContent() {
 
         {/* 스텝 콘텐츠 */}
         <div className="min-h-[360px]">
-          {currentStepKey === "persona" && (
-            <StepPersona
-              selected={state.persona}
-              onSelect={(p) => setState((prev) => ({ ...prev, persona: p }))}
-            />
-          )}
-          {currentStepKey === "orderer" && state.persona && (
-            <StepOrderer
-              persona={state.persona}
-              selected={state.ordererRelation}
-              onSelect={(r) => setState((prev) => ({ ...prev, ordererRelation: r }))}
-            />
-          )}
-          {currentStepKey === "conditions" && (
-            <StepConditions
-              persona={state.persona!}
-              selected={state.conditions}
+          {currentStepKey === "concerns" && (
+            <StepConcerns
+              selected={state.concerns}
               onToggle={(c) =>
                 setState((prev) => ({
                   ...prev,
-                  conditions: prev.conditions.includes(c)
-                    ? prev.conditions.filter((x) => x !== c)
-                    : [...prev.conditions, c],
+                  concerns: prev.concerns.includes(c)
+                    ? prev.concerns.filter((x) => x !== c)
+                    : [...prev.concerns, c],
                 }))
               }
             />
           )}
-          {currentStepKey === "pregnancy" && (
-            <StepPregnancy
-              selected={state.pregnancyStage}
-              onSelect={(s) => setState((prev) => ({ ...prev, pregnancyStage: s }))}
-            />
-          )}
-          {currentStepKey === "goal" && (
-            <StepGoal
-              selected={state.healthGoal}
-              onSelect={(g) => setState((prev) => ({ ...prev, healthGoal: g }))}
+          {currentStepKey === "sensitivity" && (
+            <StepSensitivity
+              sensitivity={state.sensitivity}
+              onChange={(key, val) =>
+                setState((prev) => ({
+                  ...prev,
+                  sensitivity: { ...prev.sensitivity, [key]: val },
+                }))
+              }
             />
           )}
           {currentStepKey === "allergies" && (
@@ -318,7 +259,7 @@ function OnboardingContent() {
         </div>
 
         {/* 건너뛰기 */}
-        {(currentStepKey === "allergies" || currentStepKey === "conditions") && (
+        {currentStepKey === "allergies" && (
           <button
             onClick={handleNext}
             className="w-full mt-3 text-sm text-muted hover:text-foreground transition-colors"
@@ -331,59 +272,45 @@ function OnboardingContent() {
   );
 }
 
-// ── 스텝 정의 ────────────────────────────────────────
-function getSteps(persona: Persona | null): string[] {
-  const base = ["persona"];
-  if (!persona) return base;
-
-  // 일반은 주문자 관계 건너뜀 (무조건 self)
-  if (persona !== "general") base.push("orderer");
-
-  // 페르소나별 질문
-  if (persona === "elderly" || persona === "patient") base.push("conditions");
-  if (persona === "pregnant") base.push("pregnancy");
-  if (persona === "general") base.push("goal");
-
-  base.push("allergies", "tastes");
-  return base;
-}
-
 // ── 서브 컴포넌트들 ──────────────────────────────────
-function StepPersona({
+
+function StepConcerns({
   selected,
-  onSelect,
+  onToggle,
 }: {
-  selected: Persona | null;
-  onSelect: (p: Persona) => void;
+  selected: HealthConcern[];
+  onToggle: (c: HealthConcern) => void;
 }) {
   return (
     <div>
       <h1 className="text-2xl font-extrabold mb-2">
-        누구를 위해 식품을 찾으시나요?
+        어떤 건강이 궁금하세요?
       </h1>
       <p className="text-muted text-sm mb-6">
-        상황에 맞는 추천을 해드립니다.
+        관심 있는 건강 영역을 선택하면, 성분 기반으로 식품을 매칭해드려요.
+        <br />
+        <span className="text-xs">복수 선택 가능</span>
       </p>
       <div className="space-y-3">
-        {PERSONAS.map((p) => {
-          const Icon = p.icon;
+        {CONCERNS.map((c) => {
+          const Icon = c.icon;
           return (
             <button
-              key={p.key}
-              onClick={() => onSelect(p.key)}
+              key={c.key}
+              onClick={() => onToggle(c.key)}
               className={`w-full text-left p-4 rounded-2xl border-2 transition-all ${
-                selected === p.key
+                selected.includes(c.key)
                   ? "border-primary bg-primary/5 scale-[1.01]"
                   : "border-border hover:border-primary/30"
               }`}
             >
               <div className="flex items-center gap-3">
-                <div className={`${p.iconBg} w-10 h-10 rounded-[12px] flex items-center justify-center shrink-0`}>
+                <div className={`${c.iconBg} w-10 h-10 rounded-[12px] flex items-center justify-center shrink-0`}>
                   <Icon className="w-5 h-5 text-white" />
                 </div>
                 <div>
-                  <div className="font-bold">{p.label}</div>
-                  <div className="text-sm text-muted">{p.desc}</div>
+                  <div className="font-bold">{c.label}</div>
+                  <div className="text-sm text-muted">{c.desc}</div>
                 </div>
               </div>
             </button>
@@ -394,149 +321,80 @@ function StepPersona({
   );
 }
 
-function StepOrderer({
-  persona,
-  selected,
-  onSelect,
+function StepSensitivity({
+  sensitivity,
+  onChange,
 }: {
-  persona: Persona;
-  selected: OrdererRelation;
-  onSelect: (r: OrdererRelation) => void;
+  sensitivity: { digestive: SensitivityLevel; additive: SensitivityLevel };
+  onChange: (key: "digestive" | "additive", val: SensitivityLevel) => void;
 }) {
-  const options = ORDERER_OPTIONS[persona] || [];
-  const personaLabel = PERSONAS.find((p) => p.key === persona)?.label || "";
-
   return (
     <div>
       <h1 className="text-2xl font-extrabold mb-2">
-        주문하시는 분은 누구신가요?
+        민감도를 알려주세요
       </h1>
-      <p className="text-muted text-sm mb-6">
-        {personaLabel}을 위한 주문 — 주문자에 따라 안내를 맞춤화합니다.
+      <p className="text-muted text-sm mb-8">
+        평소 체질에 맞게 식품을 걸러드려요. 의학적 진단이 아닌, 체감 기준으로 편하게 선택하세요.
       </p>
-      <div className="space-y-3">
-        {options.map((opt) => (
-          <button
-            key={opt.key}
-            onClick={() => onSelect(opt.key)}
-            className={`w-full text-left p-4 rounded-xl border-2 transition-all ${
-              selected === opt.key
-                ? "border-primary bg-primary/5"
-                : "border-border hover:border-primary/30"
-            }`}
-          >
-            <span className="font-medium">{opt.label}</span>
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
 
-function StepConditions({
-  persona,
-  selected,
-  onToggle,
-}: {
-  persona: Persona;
-  selected: string[];
-  onToggle: (c: string) => void;
-}) {
-  // 어르신용이면 연하곤란 포함, 환자용이면 전부
-  const items =
-    persona === "elderly"
-      ? CONDITIONS
-      : CONDITIONS.filter((c) => c.key !== "elderly_soft");
+      <div className="space-y-8">
+        {/* 소화 민감도 */}
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+              <IconGut className="w-4 h-4 text-emerald-600" />
+            </div>
+            <div>
+              <h3 className="font-bold text-sm">소화 민감도</h3>
+              <p className="text-xs text-muted">평소 배가 예민한 편인가요?</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            {([1, 2, 3] as SensitivityLevel[]).map((level) => (
+              <button
+                key={level}
+                onClick={() => onChange("digestive", level)}
+                className={`py-3 rounded-xl border-2 text-sm font-medium transition-all ${
+                  sensitivity.digestive === level
+                    ? "border-primary bg-primary/5 text-primary"
+                    : "border-border hover:border-primary/30"
+                }`}
+              >
+                {SENSITIVITY_LABELS[level]}
+              </button>
+            ))}
+          </div>
+        </div>
 
-  return (
-    <div>
-      <h1 className="text-2xl font-extrabold mb-2">
-        해당되는 건강 상태를 선택하세요
-      </h1>
-      <p className="text-muted text-sm mb-6">
-        선택하신 조건에 맞지 않는 식품을 자동으로 걸러드립니다.
-        <br />
-        <span className="text-xs">복수 선택 가능 · 없으면 건너뛰기</span>
-      </p>
-      <div className="grid grid-cols-2 gap-3">
-        {items.map((c) => (
-          <button
-            key={c.key}
-            onClick={() => onToggle(c.key)}
-            className={`text-left p-3 rounded-xl border-2 transition-all ${
-              selected.includes(c.key)
-                ? "border-primary bg-primary/5"
-                : "border-border hover:border-primary/30"
-            }`}
-          >
-            <span className="w-2 h-2 rounded-full bg-primary/40 inline-block mr-1.5" />
-            <span className="text-sm font-medium">{c.label}</span>
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function StepPregnancy({
-  selected,
-  onSelect,
-}: {
-  selected: string | null;
-  onSelect: (s: string) => void;
-}) {
-  return (
-    <div>
-      <h1 className="text-2xl font-extrabold mb-2">현재 어느 단계인가요?</h1>
-      <p className="text-muted text-sm mb-6">
-        시기에 따라 필요한 영양소가 달라집니다.
-      </p>
-      <div className="space-y-3">
-        {PREGNANCY_STAGES.map((s) => (
-          <button
-            key={s.key}
-            onClick={() => onSelect(s.key)}
-            className={`w-full text-left p-4 rounded-xl border-2 transition-all ${
-              selected === s.key
-                ? "border-primary bg-primary/5"
-                : "border-border hover:border-primary/30"
-            }`}
-          >
-            <span className="font-medium">{s.label}</span>
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function StepGoal({
-  selected,
-  onSelect,
-}: {
-  selected: string | null;
-  onSelect: (g: string) => void;
-}) {
-  return (
-    <div>
-      <h1 className="text-2xl font-extrabold mb-2">건강 목표를 알려주세요</h1>
-      <p className="text-muted text-sm mb-6">
-        목표에 맞는 영양 기준으로 추천합니다.
-      </p>
-      <div className="space-y-3">
-        {HEALTH_GOALS.map((g) => (
-          <button
-            key={g.key}
-            onClick={() => onSelect(g.key)}
-            className={`w-full text-left p-4 rounded-xl border-2 transition-all ${
-              selected === g.key
-                ? "border-primary bg-primary/5"
-                : "border-border hover:border-primary/30"
-            }`}
-          >
-            <span className="font-medium">{g.label}</span>
-          </button>
-        ))}
+        {/* 첨가물 민감도 */}
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-8 h-8 rounded-lg bg-violet-500/10 flex items-center justify-center">
+              <svg className="w-4 h-4 text-violet-600" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M7 2v11h3v9l7-12h-4l4-8z" />
+              </svg>
+            </div>
+            <div>
+              <h3 className="font-bold text-sm">첨가물 민감도</h3>
+              <p className="text-xs text-muted">식품첨가물에 신경 쓰는 편인가요?</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            {([1, 2, 3] as SensitivityLevel[]).map((level) => (
+              <button
+                key={level}
+                onClick={() => onChange("additive", level)}
+                className={`py-3 rounded-xl border-2 text-sm font-medium transition-all ${
+                  sensitivity.additive === level
+                    ? "border-primary bg-primary/5 text-primary"
+                    : "border-border hover:border-primary/30"
+                }`}
+              >
+                {SENSITIVITY_LABELS[level]}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );

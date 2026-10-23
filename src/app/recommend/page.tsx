@@ -39,17 +39,21 @@ type CurationGroup = {
   productIds: string[];
 };
 
-type OnboardingProfile = {
-  persona: string;
-  ordererRelation: string;
-  conditions: string[];
-  allergies: string[];
-  pregnancyStage: string;
-  healthGoal: string;
-  tastes: { salty: number; sweet: number; spicy: number; fatty: number };
+/* ───── 상수 ───── */
+const CONCERN_LABELS: Record<string, string> = {
+  gut_health: "장건강",
+  skin: "피부건강",
+  weight: "체중관리",
+  energy: "활력충전",
 };
 
-/* ───── 상수 ───── */
+const SENSITIVITY_LABELS: Record<number, string> = {
+  1: "둔감",
+  2: "보통",
+  3: "예민",
+};
+
+// 레거시 폴백
 const PERSONA_LABELS: Record<string, string> = {
   elderly: "어르신",
   patient: "환자",
@@ -220,7 +224,7 @@ function ProductCard({ product }: { product: RecommendedProduct }) {
   );
 }
 
-/* ───── 큐레이션 섹션 (컬리식 큐레이션 카드) ───── */
+/* ───── 큐레이션 섹션 ───── */
 function CurationSection({
   group,
   products,
@@ -246,9 +250,64 @@ function CurationSection({
   );
 }
 
+/* ───── 프로필 요약 컴포넌트 ───── */
+function ProfileSummary({ profile }: { profile: any }) {
+  // v2 이너케어 프로필
+  if (profile.concerns && profile.concerns.length > 0) {
+    const concernLabels = profile.concerns.map((c: string) => CONCERN_LABELS[c] || c).join(" · ");
+    const sensitivity = profile.sensitivity || { digestive: 2, additive: 2 };
+    return (
+      <div className="bg-card rounded-2xl border border-border p-5 mb-8 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div>
+            <h1 className="text-xl font-extrabold">
+              {concernLabels} 맞춤 추천
+            </h1>
+            <p className="text-sm text-muted mt-1">
+              소화 {SENSITIVITY_LABELS[sensitivity.digestive as number] || "보통"} · 첨가물 {SENSITIVITY_LABELS[sensitivity.additive as number] || "보통"} · 맛 선호 — 짠맛 {profile.tastes?.salty || 3} · 단맛 {profile.tastes?.sweet || 3} · 매운맛 {profile.tastes?.spicy || 3} · 기름진맛 {profile.tastes?.fatty || 3}
+            </p>
+          </div>
+          <Link
+            href="/onboarding"
+            className="text-sm text-muted hover:text-primary transition-colors shrink-0"
+          >
+            프로필 수정 →
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  // v1 레거시 프로필 (하위호환)
+  return (
+    <div className="bg-card rounded-2xl border border-border p-5 mb-8 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-xl font-extrabold">
+            {PERSONA_LABELS[profile.persona] || profile.persona} 추천
+          </h1>
+          <p className="text-sm text-muted mt-1">
+            {profile.conditions?.length > 0
+              ? `건강 조건: ${profile.conditions.join(", ")} · `
+              : ""}
+            맛 선호 — 짠맛 {profile.tastes?.salty || 3} · 단맛 {profile.tastes?.sweet || 3} · 매운맛{" "}
+            {profile.tastes?.spicy || 3} · 기름진맛 {profile.tastes?.fatty || 3}
+          </p>
+        </div>
+        <Link
+          href="/onboarding"
+          className="text-sm text-muted hover:text-primary transition-colors shrink-0"
+        >
+          프로필 수정 →
+        </Link>
+      </div>
+    </div>
+  );
+}
+
 /* ───── 메인 ───── */
 export default function RecommendPage() {
-  const [profile, setProfile] = useState<OnboardingProfile | null>(null);
+  const [profile, setProfile] = useState<any>(null);
   const [products, setProducts] = useState<RecommendedProduct[]>([]);
   const [groups, setGroups] = useState<CurationGroup[]>([]);
   const [loading, setLoading] = useState(true);
@@ -262,7 +321,7 @@ export default function RecommendPage() {
       return;
     }
 
-    const parsed: OnboardingProfile = JSON.parse(saved);
+    const parsed = JSON.parse(saved);
     setProfile(parsed);
 
     (async () => {
@@ -271,12 +330,16 @@ export default function RecommendPage() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
+            // v2 이너케어
+            concerns: parsed.concerns || [],
+            sensitivity: parsed.sensitivity || { digestive: 2, additive: 2 },
+            // v1 레거시 하위호환
             persona: parsed.persona,
-            conditions: parsed.conditions,
-            allergies: parsed.allergies,
-            pregnancyStage: parsed.pregnancyStage,
-            healthGoal: parsed.healthGoal,
-            tastes: parsed.tastes,
+            conditions: parsed.conditions || [],
+            allergies: parsed.allergies || [],
+            pregnancyStage: parsed.pregnancyStage || "",
+            healthGoal: parsed.healthGoal || "",
+            tastes: parsed.tastes || { salty: 3, sweet: 3, spicy: 3, fatty: 3 },
           }),
         });
 
@@ -298,7 +361,7 @@ export default function RecommendPage() {
       <div className="max-w-3xl mx-auto px-4 py-16 text-center">
         <div className="inline-block w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin mb-4" />
         <p className="text-muted">적합도 분석 중...</p>
-        <p className="text-xs text-muted mt-1">건강 조건과 맛 선호도를 기반으로 안전한 식품을 찾고 있어요</p>
+        <p className="text-xs text-muted mt-1">건강 관심사와 성분 데이터를 기반으로 식품을 매칭하고 있어요</p>
       </div>
     );
   }
@@ -317,30 +380,7 @@ export default function RecommendPage() {
   return (
     <div className="max-w-3xl mx-auto px-4 py-8">
       {/* 프로필 요약 */}
-      {profile && (
-        <div className="bg-card rounded-2xl border border-border p-5 mb-8 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
-          <div className="flex items-center justify-between flex-wrap gap-3">
-            <div>
-              <h1 className="text-xl font-extrabold">
-                {PERSONA_LABELS[profile.persona] || profile.persona} 추천
-              </h1>
-              <p className="text-sm text-muted mt-1">
-                {profile.conditions.length > 0
-                  ? `건강 조건: ${profile.conditions.join(", ")} · `
-                  : ""}
-                맛 선호 — 짠맛 {profile.tastes.salty} · 단맛 {profile.tastes.sweet} · 매운맛{" "}
-                {profile.tastes.spicy} · 기름진맛 {profile.tastes.fatty}
-              </p>
-            </div>
-            <Link
-              href="/onboarding"
-              className="text-sm text-muted hover:text-primary transition-colors shrink-0"
-            >
-              프로필 수정 →
-            </Link>
-          </div>
-        </div>
-      )}
+      {profile && <ProfileSummary profile={profile} />}
 
       {/* 큐레이션 그룹 */}
       {groups.length > 0 ? (
