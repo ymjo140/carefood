@@ -683,25 +683,88 @@ def build_search_query(product: dict) -> str:
     """
     제품 정보로 쇼핑 검색 쿼리 생성.
 
-    식약처 식품명이 길고 영양소 정보를 포함하는 경우가 많으므로,
+    식약처 식품명이 길고 특수문자·용량 정보를 포함하는 경우가 많으므로,
     핵심 키워드만 추출.
-    예: "CJ 햇반 백미밥 210g" → "CJ 햇반 백미밥"
+    예: "!페스츄리 호두과자-오리지널" → "페스츄리 호두과자 오리지널"
+        "(냉동)타임 레몬마들렌" → "타임 레몬마들렌"
+        "CJ 햇반 백미밥 210g" → "CJ 햇반 백미밥"
     """
     name = product.get("name", "")
+    manufacturer = product.get("manufacturer", "") or ""
 
-    # 용량 정보 제거 (검색 정확도 향상)
+    # 1) 특수문자 제거 (!, ?, ', ', ", ", ·, *, ~ 등)
+    name = re.sub(r"[!?\*~·\-]", " ", name)
+    name = re.sub(r"[''""\"']", "", name)
+
+    # 2) 용량 정보 제거 (검색 정확도 향상)
     name = re.sub(r"\d+\.?\d*\s*(g|kg|ml|l|kcal)\b", "", name, flags=re.IGNORECASE)
-    # 괄호 내용 제거
-    name = re.sub(r"[(\[].*?[)\]]", "", name)
-    # 연속 공백 정리
+
+    # 3) 괄호 내용 중 의미 없는 것만 제거 (냉동, 냉장, 숫자, 영문약어)
+    #    브랜드명이 들어있을 수 있으므로 한글 2자 이상은 유지
+    def _strip_bracket(m: re.Match) -> str:
+        inner = m.group(1).strip()
+        # 냉동/냉장/해동 등 보관 방법, 순수 숫자, 1자 이하 → 제거
+        if re.match(r"^(냉동|냉장|해동|상온|B|AOP|\+?\w)$", inner):
+            return ""
+        # 순수 영문+숫자 약어 (KG, 6절 등) → 제거
+        if re.match(r"^[A-Za-z0-9\s]+$", inner):
+            return ""
+        return inner + " "
+    name = re.sub(r"\(([^)]*)\)", _strip_bracket, name)
+    name = re.sub(r"\[([^\]]*)\]", _strip_bracket, name)
+
+    # 4) 연속 공백 정리
     name = re.sub(r"\s+", " ", name).strip()
 
-    # 너무 긴 검색어 자르기 (핵심 앞부분만)
+    # 5) 너무 짧으면 제조사명 추가
+    if len(name) < 3 and manufacturer:
+        mfr_short = re.sub(r"(주식회사|㈜|\(주\)|유한회사|유한책임회사)", "", manufacturer).strip()
+        if mfr_short:
+            name = f"{mfr_short} {name}"
+
+    # 6) 너무 긴 검색어 자르기 (핵심 앞부분만)
     words = name.split()
     if len(words) > 5:
         name = " ".join(words[:5])
 
     return name
+
+
+def _normalize_for_compare(text: str) -> str:
+    """비교용 정규화: 소문자, 공백·특수문자 제거."""
+    text = text.lower()
+    text = re.sub(r"[^가-힣a-z0-9]", "", text)
+    return text
+
+
+def _name_similarity(name_a: str, name_b: str) -> float:
+    """
+    두 제품명의 유사도 (0.0~1.0).
+    토큰 겹침 기반 Jaccard + 부분 문자열 매칭 혼합.
+    """
+    a = _normalize_for_compare(name_a)
+    b = _normalize_for_compare(name_b)
+
+    if not a or not b:
+        return 0.0
+
+    # 부분 문자열 매칭 (한쪽이 다른 쪽에 포함)
+    if a in b or b in a:
+        return 0.9
+
+    # 2-gram 기반 Jaccard 유사도
+    def bigrams(s: str) -> set:
+        return {s[i:i+2] for i in range(len(s) - 1)} if len(s) >= 2 else {s}
+
+    bg_a = bigrams(a)
+    bg_b = bigrams(b)
+    intersection = bg_a & bg_b
+    union = bg_a | bg_b
+
+    if not union:
+        return 0.0
+
+    return len(intersection) / len(union)
 
 
 def _flush_buffer(supabase: Client, buffer: list[dict]) -> tuple[int, int]:
@@ -823,14 +886,30 @@ def crawl_streaming(
             searched += 1
 
             if danawa_items:
-                best = danawa_items[0]
-                record = danawa_to_price_record(product_id, best)
-                if record:
-                    buffer.append(record)
-                    prices_found += 1
-                    got_price = True
-                    platform_counts["danawa"] = (
-                        platform_counts.get("danawa", 0) + 1
+                # 이름 유사도 검증: 가장 유사한 결과 선택
+                product_name = product.get("name", "")
+                best = None
+                best_sim = 0.0
+                for item in danawa_items:
+                    sim = _name_similarity(product_name, item.get("title", ""))
+                    if sim > best_sim:
+                        best_sim = sim
+                        best = item
+
+                # 유사도 0.3 이상일 때만 매칭 수락
+                if best and best_sim >= 0.3:
+                    record = danawa_to_price_record(product_id, best)
+                    if record:
+                        buffer.append(record)
+                        prices_found += 1
+                        got_price = True
+                        platform_counts["danawa"] = (
+                            platform_counts.get("danawa", 0) + 1
+                        )
+                elif best:
+                    log.debug(
+                        f"  다나와 매칭 거부: [{product_name}] vs "
+                        f"[{best.get('title', '')}] (sim={best_sim:.2f})"
                     )
             del danawa_items
 
