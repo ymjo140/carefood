@@ -417,15 +417,34 @@ export default function RecommendPage() {
         </div>
       )}
 
-      {/* 전체 탐색 유도 */}
-      <div className="mt-12 text-center py-8 border-t border-border">
-        <p className="text-sm text-muted mb-3">더 많은 제품을 직접 탐색하고 싶다면</p>
-        <Link
-          href="/products"
-          className="text-primary font-medium hover:underline"
-        >
-          전체 제품 둘러보기 →
-        </Link>
+      {/* 하단 CTA */}
+      <div className="mt-12 border-t border-border pt-8 space-y-4">
+        <div className="grid grid-cols-2 gap-3">
+          <Link
+            href="/weekly-box"
+            className="bg-primary/5 border border-primary/20 rounded-2xl p-4 hover:bg-primary/10 transition-colors text-center"
+          >
+            <p className="text-2xl mb-1">📦</p>
+            <p className="text-sm font-bold">주간 박스</p>
+            <p className="text-xs text-muted mt-0.5">7일 식단 자동 구성</p>
+          </Link>
+          <Link
+            href="/health"
+            className="bg-primary/5 border border-primary/20 rounded-2xl p-4 hover:bg-primary/10 transition-colors text-center"
+          >
+            <p className="text-2xl mb-1">📊</p>
+            <p className="text-sm font-bold">영양 리포트</p>
+            <p className="text-xs text-muted mt-0.5">건강검진 기반 분석</p>
+          </Link>
+        </div>
+        <div className="text-center">
+          <Link
+            href="/products"
+            className="text-sm text-muted hover:text-primary transition-colors"
+          >
+            전체 제품 둘러보기 →
+          </Link>
+        </div>
       </div>
     </div>
   );

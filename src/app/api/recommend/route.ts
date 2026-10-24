@@ -222,7 +222,13 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 2. 상품 쿼리
+    // 2. 구매 가능 제품 ID 셋 로드 (스코어 부스트용)
+    const { data: priceIds } = await supabase
+      .from("v_all_prices" as any)
+      .select("product_id") as { data: { product_id: string }[] | null };
+    const purchasableSet = new Set<string>((priceIds || []).map((p) => p.product_id));
+
+    // 3. 상품 쿼리
     let query = supabase
       .from("products")
       .select("*", { count: "exact" })
@@ -362,6 +368,11 @@ export async function POST(request: NextRequest) {
         reasons.push("저단백");
         reasonDetails.push(`단백질 ${p.protein_g}g — 저단백 설계`);
         score += 5;
+      }
+
+      // ── 구매 가능 보너스 (구매할 수 있는 제품 우선) ──
+      if (purchasableSet.has(p.id)) {
+        score += 10;
       }
 
       // ── 맛 일치도 보너스 ──
