@@ -27,6 +27,31 @@ type RecommendRequest = {
   tastes: { salty: number; sweet: number; spicy: number; fatty: number };
 };
 
+// ─── 관심사별 기능성 성분 태그 매핑 ───
+// 제품명에서 추출한 functional_tags와 관심사의 연관성
+const CONCERN_TAG_BOOSTS: Record<HealthConcern, { tag: string; score: number; reason: string; detail: string }[]> = {
+  gut_health: [
+    { tag: "probiotics", score: 20, reason: "유산균 함유", detail: "유산균이 포함된 제품이에요" },
+    { tag: "prebiotic", score: 18, reason: "식이섬유 함유", detail: "프리바이오틱스(식이섬유)가 포함돼 있어요" },
+  ],
+  skin: [
+    { tag: "collagen", score: 20, reason: "콜라겐 함유", detail: "콜라겐이 포함된 제품이에요" },
+    { tag: "vitamin", score: 12, reason: "비타민 함유", detail: "비타민이 포함돼 있어요" },
+    { tag: "zinc", score: 10, reason: "아연 함유", detail: "아연이 포함된 제품이에요" },
+  ],
+  weight: [
+    { tag: "protein", score: 15, reason: "프로틴 제품", detail: "단백질 보충용으로 설계된 제품이에요" },
+    { tag: "diet", score: 15, reason: "다이어트 설계", detail: "저칼로리/다이어트용으로 설계됐어요" },
+    { tag: "sugar_free", score: 12, reason: "무설탕", detail: "설탕 없이 만든 제품이에요" },
+  ],
+  energy: [
+    { tag: "vitamin", score: 15, reason: "비타민 함유", detail: "비타민이 포함돼 있어요" },
+    { tag: "iron", score: 12, reason: "철분 함유", detail: "철분이 포함된 제품이에요" },
+    { tag: "calcium", score: 10, reason: "칼슘 함유", detail: "칼슘이 포함돼 있어요" },
+    { tag: "omega3", score: 10, reason: "오메가3 함유", detail: "오메가3가 포함된 제품이에요" },
+  ],
+};
+
 // ─── 관심사별 영양 스코어링 규칙 ───
 // 각 관심사는 "어떤 영양성분이 높으면/낮으면 좋은가"를 정의
 // boost: 해당 범위면 점수 추가, reason도 생성
@@ -257,6 +282,23 @@ export async function POST(request: NextRequest) {
       let score = 40; // 기본 점수
       const reasons: string[] = [];
       const reasonDetails: string[] = [];
+
+      // ── 관심사별 기능성 태그 매칭 (고가치) ──
+      const productTags: string[] = p.functional_tags || [];
+      for (const concern of concerns) {
+        const tagBoosts = CONCERN_TAG_BOOSTS[concern];
+        if (tagBoosts) {
+          for (const boost of tagBoosts) {
+            if (productTags.includes(boost.tag)) {
+              score += boost.score;
+              if (!reasons.includes(boost.reason)) {
+                reasons.push(boost.reason);
+                reasonDetails.push(boost.detail);
+              }
+            }
+          }
+        }
+      }
 
       // ── 관심사별 영양 매칭 ──
       for (const concern of concerns) {
