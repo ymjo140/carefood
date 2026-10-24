@@ -82,9 +82,12 @@ button, a, [role="button"], input[type="checkbox"], input[type="radio"] {
   min-width: 44px;
 }
 
-/* 인라인 작은 태그/배지, 그리드 내 소형 필터 버튼은 예외 */
+/* 인라인 작은 태그/배지, 그리드 내 소형 필터 버튼, 헤더 내부 요소 예외 */
 span.rounded-full, span[class*="text-\[10px\]"],
-button[class*="w-7"], button[class*="w-8"], button[class*="w-6"] {
+button[class*="w-7"], button[class*="w-8"], button[class*="w-6"],
+header a, header button,
+nav a, nav button,
+a[class*="text-\[10px\]"], a[class*="rounded-full"][class*="px-"] {
   min-height: unset;
   min-width: unset;
 }
