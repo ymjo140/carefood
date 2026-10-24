@@ -42,9 +42,11 @@ export async function GET(request: NextRequest) {
   const spicy = Number(searchParams.get("spicy") || 0);
   const fatty = Number(searchParams.get("fatty") || 0);
   const search = searchParams.get("q") || null;
+  const tag = searchParams.get("tag") || null; // 기능성 태그 필터
+  const hasPriceOnly = searchParams.get("hasPrice") === "1"; // 구매 가능만
   const page = Number(searchParams.get("page") || 1);
   const limit = Math.min(Number(searchParams.get("limit") || 20), 50);
-  const source = searchParams.get("source") || null; // kurly, oasis, homeplus, all
+  const source = searchParams.get("source") || null;
 
   const supabase = createServiceRoleClient();
 
@@ -73,6 +75,11 @@ export async function GET(request: NextRequest) {
 
   // 상용제품만 (구매 가능 제품)
   query = query.eq("category_large", "상용제품");
+
+  // 기능성 태그 필터
+  if (tag) {
+    query = query.contains("functional_tags", [tag]);
+  }
 
   // 검색 (패턴 매칭)
   if (search) {

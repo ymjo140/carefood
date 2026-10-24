@@ -204,6 +204,7 @@ export type MallPrice = {
 // 제품 + 가격 조인 타입
 export type ProductWithPrices = Product & {
   product_prices: (ProductPrice | MallPrice)[];
+  functional_tags?: string[];
 };
 
 // 맛 레벨 타입

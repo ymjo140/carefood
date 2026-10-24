@@ -82,6 +82,19 @@ function NutritionBar({
   );
 }
 
+const TAG_OPTIONS = [
+  { key: "probiotics", label: "유산균" },
+  { key: "collagen", label: "콜라겐" },
+  { key: "protein", label: "프로틴" },
+  { key: "vitamin", label: "비타민" },
+  { key: "omega3", label: "오메가3" },
+  { key: "prebiotic", label: "식이섬유" },
+  { key: "diet", label: "다이어트" },
+  { key: "sugar_free", label: "무설탕" },
+  { key: "calcium", label: "칼슘" },
+  { key: "iron", label: "철분" },
+];
+
 export default function ProductExplorer() {
   const [filters, setFilters] = useState<TasteFilters>({
     salty: 0,
@@ -91,6 +104,8 @@ export default function ProductExplorer() {
   });
   const [search, setSearch] = useState("");
   const [searchInput, setSearchInput] = useState("");
+  const [selectedTag, setSelectedTag] = useState<string | null>(null);
+  const [hasPriceOnly, setHasPriceOnly] = useState(false);
   const [page, setPage] = useState(1);
   const [data, setData] = useState<ApiResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -104,6 +119,7 @@ export default function ProductExplorer() {
       if (filters.spicy) params.set("spicy", String(filters.spicy));
       if (filters.fatty) params.set("fatty", String(filters.fatty));
       if (search) params.set("q", search);
+      if (selectedTag) params.set("tag", selectedTag);
       params.set("page", String(page));
       params.set("limit", "20");
 
@@ -116,7 +132,7 @@ export default function ProductExplorer() {
     } finally {
       setLoading(false);
     }
-  }, [filters, search, page]);
+  }, [filters, search, selectedTag, page]);
 
   useEffect(() => {
     fetchProducts();
@@ -140,11 +156,13 @@ export default function ProductExplorer() {
     setFilters({ salty: 0, sweet: 0, spicy: 0, fatty: 0 });
     setSearch("");
     setSearchInput("");
+    setSelectedTag(null);
+    setHasPriceOnly(false);
     setPage(1);
   };
 
   const hasActiveFilters =
-    Object.values(filters).some((v) => v > 0) || search;
+    Object.values(filters).some((v) => v > 0) || search || selectedTag || hasPriceOnly;
 
   return (
     <div>
@@ -206,6 +224,43 @@ export default function ProductExplorer() {
         </div>
       </div>
 
+      {/* 기능성 성분 필터 */}
+      <div className="bg-card rounded-2xl border border-border p-5 mb-6 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+        <h2 className="font-extrabold text-sm mb-3">성분 필터</h2>
+        <div className="flex flex-wrap gap-2">
+          {TAG_OPTIONS.map((tag) => (
+            <button
+              key={tag.key}
+              onClick={() => {
+                setSelectedTag(selectedTag === tag.key ? null : tag.key);
+                setPage(1);
+              }}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                selectedTag === tag.key
+                  ? "bg-primary text-white"
+                  : "bg-surface border border-border hover:border-primary/30"
+              }`}
+            >
+              {tag.label}
+            </button>
+          ))}
+        </div>
+
+        {/* 구매 가능만 토글 */}
+        <label className="flex items-center gap-2 mt-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={hasPriceOnly}
+            onChange={(e) => {
+              setHasPriceOnly(e.target.checked);
+              setPage(1);
+            }}
+            className="w-4 h-4 rounded border-border accent-primary"
+          />
+          <span className="text-xs text-muted">구매 가능한 제품만 보기</span>
+        </label>
+      </div>
+
       {/* 결과 카운트 */}
       <div className="flex items-center justify-between mb-4">
         <p className="text-sm text-muted">
@@ -232,7 +287,9 @@ export default function ProductExplorer() {
       ) : data?.products?.length ? (
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {data.products.map((product) => {
+            {data.products
+            .filter((product) => !hasPriceOnly || (product.product_prices?.length ?? 0) > 0)
+            .map((product) => {
               const prices = product.product_prices?.filter(
                 (p) => p.price && p.price > 0
               );
@@ -295,6 +352,20 @@ export default function ProductExplorer() {
                       unit="g"
                     />
                   </div>
+
+                  {/* 기능성 태그 */}
+                  {product.functional_tags && product.functional_tags.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mb-2">
+                      {product.functional_tags.slice(0, 4).map((t: string) => {
+                        const tagInfo = TAG_OPTIONS.find((o) => o.key === t);
+                        return (
+                          <span key={t} className="text-[10px] px-2 py-0.5 rounded-full bg-primary/5 text-primary border border-primary/10 font-medium">
+                            {tagInfo?.label || t}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  )}
 
                   {/* 가격 */}
                   {bestPrice ? (
