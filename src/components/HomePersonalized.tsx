@@ -50,20 +50,26 @@ export default function HomePersonalized() {
       const parsed = JSON.parse(raw);
       setProfile(parsed);
 
+      // 건강검진 데이터에서 자동 감지된 질환 병합
+      let healthConditions: string[] = [];
+      try {
+        const healthRaw = localStorage.getItem("carefood_health");
+        if (healthRaw) {
+          const hd = JSON.parse(healthRaw);
+          healthConditions = hd.conditions || [];
+        }
+      } catch { /* silent */ }
+      const mergedConditions = [...new Set([...(parsed.conditions || []), ...healthConditions])];
+
       // 빠른 추천 3개 가져오기
       fetch("/api/recommend", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          // v2 이너케어
           concerns: parsed.concerns || [],
           sensitivity: parsed.sensitivity || { digestive: 2, additive: 2 },
-          // v1 레거시 하위호환
-          persona: parsed.persona,
-          conditions: parsed.conditions || [],
+          conditions: mergedConditions,
           allergies: parsed.allergies || [],
-          pregnancyStage: parsed.pregnancyStage || "",
-          healthGoal: parsed.healthGoal || "",
           tastes: parsed.tastes || { salty: 3, sweet: 3, spicy: 3, fatty: 3 },
         }),
       })

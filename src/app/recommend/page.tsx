@@ -324,6 +324,20 @@ export default function RecommendPage() {
     const parsed = JSON.parse(saved);
     setProfile(parsed);
 
+    // 건강검진 데이터에서 자동 감지된 질환 conditions 병합
+    let healthConditions: string[] = [];
+    try {
+      const healthRaw = localStorage.getItem("carefood_health");
+      if (healthRaw) {
+        const healthData = JSON.parse(healthRaw);
+        healthConditions = healthData.conditions || [];
+      }
+    } catch { /* silent */ }
+    const mergedConditions = [...new Set([
+      ...(parsed.conditions || []),
+      ...healthConditions,
+    ])];
+
     (async () => {
       try {
         const res = await fetch("/api/recommend", {
@@ -333,12 +347,9 @@ export default function RecommendPage() {
             // v2 이너케어
             concerns: parsed.concerns || [],
             sensitivity: parsed.sensitivity || { digestive: 2, additive: 2 },
-            // v1 레거시 하위호환
-            persona: parsed.persona,
-            conditions: parsed.conditions || [],
+            // 건강검진 자동 감지 + 온보딩 conditions 병합
+            conditions: mergedConditions,
             allergies: parsed.allergies || [],
-            pregnancyStage: parsed.pregnancyStage || "",
-            healthGoal: parsed.healthGoal || "",
             tastes: parsed.tastes || { salty: 3, sweet: 3, spicy: 3, fatty: 3 },
           }),
         });
