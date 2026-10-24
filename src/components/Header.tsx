@@ -9,6 +9,7 @@ import { logout } from "@/app/auth/actions";
 const NAV_ITEMS = [
   { href: "/", label: "홈" },
   { href: "/products", label: "제품 탐색" },
+  { href: "/weekly-box", label: "주간 박스" },
 ];
 
 export default function Header() {
@@ -99,9 +100,30 @@ export default function Header() {
                       <p className="text-xs text-muted truncate">{user.email}</p>
                     </div>
                     <Link
-                      href="/onboarding"
+                      href="/health"
                       onClick={() => setMenuOpen(false)}
                       className="block px-4 py-2.5 text-sm hover:bg-primary/5 transition-colors"
+                    >
+                      건강검진 정보
+                    </Link>
+                    <Link
+                      href="/meals"
+                      onClick={() => setMenuOpen(false)}
+                      className="block px-4 py-2.5 text-sm hover:bg-primary/5 transition-colors"
+                    >
+                      식사 기록
+                    </Link>
+                    <Link
+                      href="/health/report"
+                      onClick={() => setMenuOpen(false)}
+                      className="block px-4 py-2.5 text-sm hover:bg-primary/5 transition-colors"
+                    >
+                      영양 리포트
+                    </Link>
+                    <Link
+                      href="/onboarding"
+                      onClick={() => setMenuOpen(false)}
+                      className="block px-4 py-2.5 text-sm hover:bg-primary/5 transition-colors border-t border-border"
                     >
                       프로필 수정
                     </Link>
