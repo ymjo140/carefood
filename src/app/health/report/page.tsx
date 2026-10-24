@@ -183,21 +183,56 @@ const STATUS_COLORS = {
   warning: { bg: "bg-red-50 dark:bg-red-900/20", text: "text-red-700 dark:text-red-400", border: "border-red-200 dark:border-red-800", dot: "bg-red-500" },
 };
 
+type QuickProduct = {
+  id: string;
+  name: string;
+  match_score: number;
+  reasons: string[];
+  reason_detail: string | null;
+  product_prices: { platform: string; price: number }[];
+};
+
 export default function HealthReportPage() {
   const router = useRouter();
   const [report, setReport] = useState<ReportData | null>(null);
+  const [topProducts, setTopProducts] = useState<QuickProduct[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let healthData: HealthData | null = null;
+
     // localStorage에서 건강 데이터 로드
     try {
       const saved = localStorage.getItem("carefood_health");
       if (saved) {
-        const data: HealthData = JSON.parse(saved);
-        const result = analyzeHealth(data);
+        healthData = JSON.parse(saved);
+        const result = analyzeHealth(healthData!);
         setReport(result);
       }
     } catch { /* silent */ }
+
+    // 맞춤 추천 제품 5개 로드
+    try {
+      const profileRaw = localStorage.getItem("carefood_profile");
+      if (profileRaw && healthData) {
+        const profile = JSON.parse(profileRaw);
+        fetch("/api/recommend", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            concerns: profile.concerns || [],
+            sensitivity: profile.sensitivity || { digestive: 2, additive: 2 },
+            conditions: [...new Set([...(profile.conditions || []), ...(healthData.conditions || [])])],
+            allergies: profile.allergies || [],
+            tastes: profile.tastes || { salty: 3, sweet: 3, spicy: 3, fatty: 3 },
+          }),
+        })
+          .then((r) => r.json())
+          .then((data) => setTopProducts((data.recommendations || []).slice(0, 5)))
+          .catch(() => {});
+      }
+    } catch { /* silent */ }
+
     setLoading(false);
   }, []);
 
@@ -315,6 +350,39 @@ export default function HealthReportPage() {
                   {c === "diabetes" ? "당류 제한" : c === "hypertension" ? "나트륨 제한" : c === "hyperlipidemia" ? "지방 제한" : c}
                 </span>
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* 맞춤 추천 제품 Top 5 */}
+        {topProducts.length > 0 && (
+          <div className="mb-6">
+            <h2 className="font-bold text-sm text-muted uppercase tracking-wide mb-3">건강검진 맞춤 추천</h2>
+            <div className="space-y-2">
+              {topProducts.map((p, i) => {
+                const bestPrice = p.product_prices?.[0]?.price;
+                return (
+                  <Link
+                    key={p.id}
+                    href={`/products/${p.id}`}
+                    className="flex items-center gap-3 p-3 bg-card border border-border rounded-xl hover:border-primary/30 transition-colors"
+                  >
+                    <span className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center text-xs font-bold text-primary shrink-0">
+                      {i + 1}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium leading-tight line-clamp-1">{p.name}</p>
+                      <p className="text-xs text-muted mt-0.5">
+                        {p.reasons.slice(0, 2).join(" · ")}
+                        {bestPrice ? ` · ${bestPrice.toLocaleString()}원` : ""}
+                      </p>
+                    </div>
+                    <span className="text-xs font-bold text-primary shrink-0">
+                      {p.match_score}점
+                    </span>
+                  </Link>
+                );
+              })}
             </div>
           </div>
         )}
