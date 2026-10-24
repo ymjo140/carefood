@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
   const fatty = Number(searchParams.get("fatty") || 0);
   const search = searchParams.get("q") || null;
   const tag = searchParams.get("tag") || null; // 기능성 태그 필터
-  const hasPriceOnly = searchParams.get("hasPrice") === "1"; // 구매 가능만
+  const hasPriceOnly = searchParams.get("hasPrice") === "1"; // 구매 가능만 (서버사이드)
   const page = Number(searchParams.get("page") || 1);
   const limit = Math.min(Number(searchParams.get("limit") || 20), 50);
   const source = searchParams.get("source") || null;
@@ -75,6 +75,11 @@ export async function GET(request: NextRequest) {
 
   // 상용제품만 (구매 가능 제품)
   query = query.eq("category_large", "상용제품");
+
+  // 구매 가능 제품만 (서버사이드 필터)
+  if (hasPriceOnly) {
+    query = query.eq("is_purchasable", true);
+  }
 
   // 기능성 태그 필터
   if (tag) {

@@ -118,6 +118,7 @@ export default function ProductExplorer() {
       if (filters.fatty) params.set("fatty", String(filters.fatty));
       if (search) params.set("q", search);
       if (selectedTag) params.set("tag", selectedTag);
+      if (hasPriceOnly) params.set("hasPrice", "1");
       params.set("page", String(page));
       params.set("limit", "20");
 
@@ -130,7 +131,7 @@ export default function ProductExplorer() {
     } finally {
       setLoading(false);
     }
-  }, [filters, search, selectedTag, page]);
+  }, [filters, search, selectedTag, hasPriceOnly, page]);
 
   useEffect(() => {
     fetchProducts();
