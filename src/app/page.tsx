@@ -225,6 +225,41 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* 더 많은 기능 */}
+      <section className="px-4 pb-12">
+        <div className="max-w-2xl mx-auto">
+          <h2 className="text-lg font-extrabold mb-4">
+            더 알아보기
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <Link
+              href="/weekly-box"
+              className="bg-card rounded-2xl p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)] hover:-translate-y-0.5 transition-transform"
+            >
+              <p className="text-2xl mb-2">📦</p>
+              <h3 className="font-bold text-sm mb-1">주간 추천 박스</h3>
+              <p className="text-xs text-muted">7일 맞춤 식단을 자동으로 구성해드려요</p>
+            </Link>
+            <Link
+              href="/health"
+              className="bg-card rounded-2xl p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)] hover:-translate-y-0.5 transition-transform"
+            >
+              <p className="text-2xl mb-2">📊</p>
+              <h3 className="font-bold text-sm mb-1">영양 리포트</h3>
+              <p className="text-xs text-muted">건강검진 수치 입력하면 맞춤 분석해줘요</p>
+            </Link>
+            <Link
+              href="/family"
+              className="bg-card rounded-2xl p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)] hover:-translate-y-0.5 transition-transform"
+            >
+              <p className="text-2xl mb-2">👨‍👩‍👧</p>
+              <h3 className="font-bold text-sm mb-1">가족 건강 관리</h3>
+              <p className="text-xs text-muted">부모님 건강까지 한 번에 관리하세요</p>
+            </Link>
+          </div>
+        </div>
+      </section>
+
       {/* CTA */}
       <section className="py-12 px-4">
         <div className="max-w-2xl mx-auto bg-card rounded-2xl p-8 text-center shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
