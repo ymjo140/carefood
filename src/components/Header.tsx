@@ -121,6 +121,13 @@ export default function Header() {
                       영양 리포트
                     </Link>
                     <Link
+                      href="/family"
+                      onClick={() => setMenuOpen(false)}
+                      className="block px-4 py-2.5 text-sm hover:bg-primary/5 transition-colors"
+                    >
+                      가족 건강 관리
+                    </Link>
+                    <Link
                       href="/onboarding"
                       onClick={() => setMenuOpen(false)}
                       className="block px-4 py-2.5 text-sm hover:bg-primary/5 transition-colors border-t border-border"

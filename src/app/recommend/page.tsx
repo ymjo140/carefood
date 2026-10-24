@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 
 /* ───── 타입 ───── */
@@ -307,65 +308,110 @@ function ProfileSummary({ profile }: { profile: any }) {
 
 /* ───── 메인 ───── */
 export default function RecommendPage() {
+  return (
+    <Suspense fallback={
+      <div className="max-w-3xl mx-auto px-4 py-16 text-center">
+        <div className="inline-block w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin mb-4" />
+        <p className="text-muted">적합도 분석 중...</p>
+      </div>
+    }>
+      <RecommendContent />
+    </Suspense>
+  );
+}
+
+function RecommendContent() {
+  const searchParams = useSearchParams();
+  const familyId = searchParams.get("family");
+
   const [profile, setProfile] = useState<any>(null);
+  const [familyName, setFamilyName] = useState<string | null>(null);
   const [products, setProducts] = useState<RecommendedProduct[]>([]);
   const [groups, setGroups] = useState<CurationGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const saved = localStorage.getItem("carefood_profile");
-    if (!saved) {
-      setError("프로필이 없습니다. 온보딩을 먼저 완료해주세요.");
-      setLoading(false);
-      return;
-    }
-
-    const parsed = JSON.parse(saved);
-    setProfile(parsed);
-
-    // 건강검진 데이터에서 자동 감지된 질환 conditions 병합
-    let healthConditions: string[] = [];
-    try {
-      const healthRaw = localStorage.getItem("carefood_health");
-      if (healthRaw) {
-        const healthData = JSON.parse(healthRaw);
-        healthConditions = healthData.conditions || [];
-      }
-    } catch { /* silent */ }
-    const mergedConditions = [...new Set([
-      ...(parsed.conditions || []),
-      ...healthConditions,
-    ])];
-
     (async () => {
+      // 가족 대리 추천 모드
+      if (familyId) {
+        try {
+          const { createClient } = await import("@/lib/supabase/client");
+          const supabase = createClient();
+          const { data: { user } } = await supabase.auth.getUser();
+          if (!user) { setError("로그인이 필요합니다."); setLoading(false); return; }
+
+          const famRes = await fetch(`/api/family?userId=${user.id}`);
+          const famData = await famRes.json();
+          const member = (famData.profiles || []).find((p: any) => p.id === familyId);
+          if (!member) { setError("가족 프로필을 찾을 수 없습니다."); setLoading(false); return; }
+
+          setFamilyName(member.nickname);
+          setProfile({
+            concerns: member.concerns || [],
+            sensitivity: { digestive: member.sensitivity_digestive || 2, additive: member.sensitivity_additive || 2 },
+          });
+
+          const res = await fetch("/api/recommend", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              concerns: member.concerns || [],
+              sensitivity: { digestive: member.sensitivity_digestive || 2, additive: member.sensitivity_additive || 2 },
+              conditions: member.conditions || [],
+              allergies: member.allergies || [],
+              tastes: {
+                salty: member.taste_salty || 3, sweet: member.taste_sweet || 3,
+                spicy: member.taste_spicy || 3, fatty: member.taste_fatty || 3,
+              },
+            }),
+          });
+          const data = await res.json();
+          setProducts(data.recommendations || []);
+          setGroups(data.curationGroups || []);
+        } catch { setError("추천 결과를 불러오지 못했습니다."); }
+        setLoading(false);
+        return;
+      }
+
+      // 일반 추천 모드
+      const saved = localStorage.getItem("carefood_profile");
+      if (!saved) {
+        setError("프로필이 없습니다. 온보딩을 먼저 완료해주세요.");
+        setLoading(false);
+        return;
+      }
+
+      const parsed = JSON.parse(saved);
+      setProfile(parsed);
+
+      let healthConditions: string[] = [];
+      try {
+        const healthRaw = localStorage.getItem("carefood_health");
+        if (healthRaw) healthConditions = JSON.parse(healthRaw).conditions || [];
+      } catch { /* silent */ }
+      const mergedConditions = [...new Set([...(parsed.conditions || []), ...healthConditions])];
+
       try {
         const res = await fetch("/api/recommend", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            // v2 이너케어
             concerns: parsed.concerns || [],
             sensitivity: parsed.sensitivity || { digestive: 2, additive: 2 },
-            // 건강검진 자동 감지 + 온보딩 conditions 병합
             conditions: mergedConditions,
             allergies: parsed.allergies || [],
             tastes: parsed.tastes || { salty: 3, sweet: 3, spicy: 3, fatty: 3 },
           }),
         });
-
         if (!res.ok) throw new Error("추천 API 오류");
         const data = await res.json();
         setProducts(data.recommendations || []);
         setGroups(data.curationGroups || []);
-      } catch (err) {
-        setError("추천 결과를 불러오지 못했습니다.");
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
+      } catch { setError("추천 결과를 불러오지 못했습니다."); }
+      setLoading(false);
     })();
-  }, []);
+  }, [familyId]);
 
   if (loading) {
     return (
@@ -390,6 +436,19 @@ export default function RecommendPage() {
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-8">
+      {/* 가족 대리 추천 배너 */}
+      {familyName && (
+        <div className="bg-primary/5 border border-primary/20 rounded-2xl p-4 mb-4 flex items-center justify-between">
+          <div>
+            <p className="text-sm font-bold text-primary">👨‍👩‍👧 {familyName}님 맞춤 추천</p>
+            <p className="text-xs text-muted">가족 프로필 기반으로 추천하고 있어요</p>
+          </div>
+          <Link href="/family" className="text-xs text-primary font-medium hover:underline">
+            가족 관리 →
+          </Link>
+        </div>
+      )}
+
       {/* 프로필 요약 */}
       {profile && <ProfileSummary profile={profile} />}
 
