@@ -34,9 +34,14 @@ export default function HomePersonalized() {
   const [profile, setProfile] = useState<any>(null);
   const [products, setProducts] = useState<QuickProduct[]>([]);
   const [loading, setLoading] = useState(true);
+  const [hasHealthData, setHasHealthData] = useState(false);
 
   useEffect(() => {
     try {
+      // 건강검진 데이터 유무 확인
+      const healthRaw = localStorage.getItem("carefood_health");
+      if (healthRaw) setHasHealthData(true);
+
       const raw = localStorage.getItem("carefood_profile");
       if (!raw) {
         setLoading(false);
@@ -107,6 +112,29 @@ export default function HomePersonalized() {
             </Link>
           </div>
         </div>
+
+        {/* 건강검진 입력 유도 배너 */}
+        {!hasHealthData && (
+          <Link
+            href="/health"
+            className="block mb-4 p-4 rounded-2xl border border-primary/20 bg-primary/5 hover:bg-primary/10 transition-colors"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                <svg className="w-5 h-5 text-primary" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 3c1.93 0 3.5 1.57 3.5 3.5S13.93 13 12 13s-3.5-1.57-3.5-3.5S10.07 6 12 6zm7 13H5v-.23c0-.62.28-1.2.76-1.58C7.47 15.82 9.64 15 12 15s4.53.82 6.24 2.19c.48.38.76.97.76 1.58V19z" />
+                </svg>
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-bold text-primary">건강검진 정보 입력하기</p>
+                <p className="text-xs text-muted">혈당·혈압·콜레스테롤 입력하면 더 정확한 추천을 받아요</p>
+              </div>
+              <svg className="w-5 h-5 text-primary/50 shrink-0" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6z" />
+              </svg>
+            </div>
+          </Link>
+        )}
 
         {/* 가로 스크롤 제품 카드 */}
         {products.length > 0 && (
