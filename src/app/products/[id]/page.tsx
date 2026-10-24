@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import TasteReview from "@/components/TasteReview";
+import MealLogButton from "@/components/MealLogButton";
 
 // 동적 라우트 — DB 조회 필요
 export const instant = false;
@@ -164,8 +165,11 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
             <img src={imageUrl} alt={product.name} className="w-full h-full object-cover" />
           </div>
         )}
-        <div className="min-w-0">
-          <h1 className="text-xl sm:text-2xl font-extrabold leading-tight">{product.name}</h1>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-2">
+            <h1 className="text-xl sm:text-2xl font-extrabold leading-tight">{product.name}</h1>
+            <MealLogButton productId={product.id} />
+          </div>
           {product.manufacturer && (
             <p className="text-sm text-muted mt-1">{product.manufacturer}</p>
           )}
