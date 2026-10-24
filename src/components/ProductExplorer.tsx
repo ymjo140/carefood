@@ -34,17 +34,15 @@ const PLATFORM_LABELS: Record<string, string> = {
   kurly: "컬리",
   oasis: "오아시스",
   homeplus: "홈플러스",
+  "11st": "11번가",
   danawa: "다나와",
-  coupang: "쿠팡",
-  naver: "네이버",
-  gmarket: "G마켓",
-  ssg: "SSG",
 };
 
 const PLATFORM_COLORS: Record<string, string> = {
   kurly: "border-purple-300 text-purple-700 bg-purple-50",
   oasis: "border-green-300 text-green-700 bg-green-50",
   homeplus: "border-orange-300 text-orange-700 bg-orange-50",
+  "11st": "border-red-300 text-red-700 bg-red-50",
   danawa: "border-blue-300 text-blue-700 bg-blue-50",
 };
 
