@@ -3,6 +3,7 @@ import Link from "next/link";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import TasteReview from "@/components/TasteReview";
 import MealLogButton from "@/components/MealLogButton";
+import ProductViewTracker from "@/components/ProductViewTracker";
 
 // 동적 라우트 — DB 조회 필요
 export const instant = false;
@@ -152,7 +153,8 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
     safetyNotes.push({ type: "warn", text: `매운맛 ${product.spicy_score}단계 — 어르신/환자 주의` });
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-8">
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
+      <ProductViewTracker productId={product.id} />
       {/* 뒤로가기 */}
       <Link href="/recommend" className="text-sm text-muted hover:text-primary transition-colors mb-6 inline-block">
         ← 추천 목록으로
