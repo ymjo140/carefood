@@ -93,7 +93,8 @@ SUB_CATEGORIES = {
     "911004": "메인요리",
 }
 
-CHROMIUM_PATH = "/opt/pw-browsers/chromium-1194/chrome-linux/chrome"
+# Playwright가 자동으로 설치된 Chromium 경로를 찾도록 None 사용
+CHROMIUM_PATH = None
 REQUEST_DELAY = (0.3, 1.0)  # 상품 상세 요청 간 랜덤 딜레이 (초)
 MAX_PAGES_PER_CATEGORY = 50  # 카테고리당 최대 페이지
 DEFAULT_WORKERS = 6  # 병렬 워커 수
