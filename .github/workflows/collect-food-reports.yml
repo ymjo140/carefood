@@ -22,6 +22,10 @@ on:
         description: "시작 위치 (이어서 수집, 기본 1)"
         required: false
         default: "1"
+      save_local:
+        description: "로컬 파일로 저장 (true/false)"
+        required: false
+        default: "true"
 
 permissions:
   actions: write
@@ -42,6 +46,14 @@ jobs:
       - name: Install dependencies
         run: pip install requests
 
+      # 이전 run의 데이터 파일 다운로드 (이어서 병합)
+      - name: Download previous data
+        uses: actions/download-artifact@v4
+        with:
+          name: food-reports-data
+          path: scripts/
+        continue-on-error: true
+
       - name: Run collection
         id: collect
         env:
@@ -55,6 +67,7 @@ jobs:
           FOOD_TYPE="${{ github.event.inputs.food_type }}"
           MAX_ROWS="${{ github.event.inputs.max_rows || '0' }}"
           START_FROM="${{ github.event.inputs.start_from || '1' }}"
+          SAVE_LOCAL="${{ github.event.inputs.save_local || 'true' }}"
 
           ARGS=""
           if [ "$MODE" = "full" ]; then
@@ -75,8 +88,12 @@ jobs:
             ARGS="$ARGS --start-from $START_FROM"
           fi
 
+          if [ "$SAVE_LOCAL" = "true" ]; then
+            ARGS="$ARGS --save-local"
+          fi
+
           echo "=== 품목제조보고 수집 시작 ==="
-          echo "모드: $MODE, 시작: $START_FROM, 품목유형: ${FOOD_TYPE:-전체}, 최대: ${MAX_ROWS:-무제한}"
+          echo "모드: $MODE, 시작: $START_FROM, 로컬저장: $SAVE_LOCAL"
           eval python collect_food_reports.py $ARGS
 
           # 다음 시작 위치 저장
@@ -86,13 +103,17 @@ jobs:
             echo "다음 시작 위치: $NEXT"
           fi
 
-      - name: Upload position artifact
+      # 수집한 데이터 파일 업로드 (다음 run에서 이어서 병합)
+      - name: Upload data artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: collect-position
-          path: scripts/last_position.txt
-          retention-days: 7
+          name: food-reports-data
+          path: |
+            scripts/food_reports_data.json
+            scripts/last_position.txt
+          retention-days: 30
+          overwrite: true
 
   # 타임아웃/실패 시 자동 재트리거
   retry-on-timeout:
@@ -105,7 +126,7 @@ jobs:
       - name: Download position
         uses: actions/download-artifact@v4
         with:
-          name: collect-position
+          name: food-reports-data
         continue-on-error: true
 
       - name: Re-trigger with resume position
@@ -119,11 +140,11 @@ jobs:
 
           echo "=== 자동 재트리거: 위치 $NEXT_START 부터 ==="
 
-          # 동일 워크플로우를 start_from 파라미터와 함께 재트리거
-          gh api repos/${{ github.repository }}/actions/workflows/${{ github.workflow_ref && 'collect-food-reports.yml' || 'collect-food-reports.yml' }}/dispatches \
+          gh api repos/${{ github.repository }}/actions/workflows/collect-food-reports.yml/dispatches \
             -X POST \
             -f ref=main \
             -f "inputs[mode]=full" \
-            -f "inputs[start_from]=$NEXT_START"
+            -f "inputs[start_from]=$NEXT_START" \
+            -f "inputs[save_local]=true"
 
           echo "재트리거 완료"

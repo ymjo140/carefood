@@ -237,6 +237,50 @@ def upsert_to_supabase(products: dict, batch_size: int = 200):
     return saved, errors
 
 
+# ── 로컬 저장/로드 ──
+
+def save_to_local(products: dict, filepath: str = "food_reports_data.json"):
+    """제품 데이터를 로컬 JSON 파일로 저장 (기존 파일에 병합)"""
+    existing = {}
+    if os.path.exists(filepath):
+        with open(filepath, "r", encoding="utf-8") as f:
+            existing_list = json.load(f)
+            for p in existing_list:
+                existing[p["report_no"]] = p
+        log.info(f"기존 파일: {len(existing):,}건 로드")
+
+    # 병합
+    for k, v in products.items():
+        existing[k] = v
+
+    with open(filepath, "w", encoding="utf-8") as f:
+        json.dump(list(existing.values()), f, ensure_ascii=False)
+
+    log.info(f"로컬 저장: {len(existing):,}건 → {filepath}")
+    return len(existing)
+
+
+def import_from_local(filepath: str):
+    """로컬 JSON 파일을 Supabase로 import"""
+    log.info(f"=== 로컬 파일 import: {filepath} ===")
+    if not os.path.exists(filepath):
+        log.error(f"파일 없음: {filepath}")
+        sys.exit(1)
+
+    with open(filepath, "r", encoding="utf-8") as f:
+        items = json.load(f)
+
+    log.info(f"로드: {len(items):,}건")
+
+    # dict 형태로 변환
+    products = {}
+    for item in items:
+        products[item["report_no"]] = item
+
+    saved, errors = upsert_to_supabase(products)
+    log.info(f"=== import 완료: {saved:,}건 저장, {errors}건 오류 ===")
+
+
 # ── 메인 ──
 
 def main():
@@ -247,13 +291,23 @@ def main():
     parser.add_argument("--max-rows", type=int, default=0, help="최대 수집 건수 (0=무제한)")
     parser.add_argument("--start-from", type=int, default=1, help="시작 위치 (이어서 수집)")
     parser.add_argument("--dry-run", action="store_true", help="수집만 하고 저장 안 함")
+    parser.add_argument("--save-local", action="store_true", help="Supabase 대신 로컬 JSON 파일로 저장")
+    parser.add_argument("--import-local", type=str, default="", help="로컬 JSON 파일을 Supabase로 import")
     args = parser.parse_args()
+
+    # import 모드: 로컬 파일 → Supabase
+    if args.import_local:
+        if not SUPABASE_URL or not SUPABASE_KEY:
+            log.error("SUPABASE_URL, SUPABASE_KEY 환경변수 필요")
+            sys.exit(1)
+        import_from_local(args.import_local)
+        return
 
     if not API_KEY:
         log.error("FOOD_REPORT_API_KEY 또는 FOOD_INGREDIENT_API_KEY 환경변수 필요")
         sys.exit(1)
 
-    if not args.dry_run and (not SUPABASE_URL or not SUPABASE_KEY):
+    if not args.dry_run and not args.save_local and (not SUPABASE_URL or not SUPABASE_KEY):
         log.error("SUPABASE_URL, SUPABASE_KEY 환경변수 필요")
         sys.exit(1)
 
@@ -294,22 +348,26 @@ def main():
 
     if args.dry_run:
         log.info("Dry run — 저장 건너뜀")
-        # 샘플 출력
         for i, (k, p) in enumerate(products.items()):
             if i >= 5:
                 break
-            ings = ", ".join(ing["name"] for ing in p["ingredients"][:5])
+            ings = ", ".join(p["ingredients"][:5])
             log.info(f"  [{p['food_type']}] {p['name']} ({p['manufacturer']}) — 원재료: {ings}...")
         return
 
-    # Supabase 저장
-    saved, errors = upsert_to_supabase(products)
-    log.info(f"=== 수집 완료: {saved:,}건 저장, {errors}건 오류 ===")
+    # 위치 파일 저장 (재시도용)
     log.info(f"NEXT_START_FROM={last_pos + 1}")
-
-    # 워크플로우 자동 재시도를 위해 위치 파일 저장
     with open("last_position.txt", "w") as f:
         f.write(str(last_pos + 1))
+
+    if args.save_local:
+        # 로컬 JSON 파일로 저장
+        total_saved = save_to_local(products)
+        log.info(f"=== 로컬 수집 완료: {len(products):,}건 추가, 누적 {total_saved:,}건 ===")
+    else:
+        # Supabase 저장
+        saved, errors = upsert_to_supabase(products)
+        log.info(f"=== 수집 완료: {saved:,}건 저장, {errors}건 오류 ===")
 
     # 전체 수집 모드에서 아직 남은 데이터가 있으면 exit 1 → 자동 재트리거
     if args.full and args.max_rows == 0:
