@@ -392,7 +392,7 @@ export default function ProductExplorer() {
   const [searchInput, setSearchInput] = useState("");
   const [selectedPurposes, setSelectedPurposes] = useState<string[]>([]);
   const [selectedIngredients, setSelectedIngredients] = useState<string[]>([]);
-  const [hasPriceOnly, setHasPriceOnly] = useState(false);
+  const [hasPriceOnly, setHasPriceOnly] = useState(true);
   const [priceMin, setPriceMin] = useState(0);
   const [priceMax, setPriceMax] = useState(0);
   const [nutrition, setNutrition] = useState<NutritionFilters>(INITIAL_NUTRITION);
