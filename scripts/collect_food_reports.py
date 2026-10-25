@@ -91,20 +91,22 @@ def get_total_count(params: dict = None) -> int:
     return int(total)
 
 
-def fetch_all_rows(params: dict = None, max_rows: int = 0) -> list:
-    """전체 데이터 페이징 조회"""
+def fetch_all_rows(params: dict = None, max_rows: int = 0, start_from: int = 1) -> tuple:
+    """전체 데이터 페이징 조회. (rows, last_position) 반환"""
     total = get_total_count(params)
     if total == 0:
         log.info("데이터 없음")
-        return []
+        return [], 0
 
     log.info(f"총 {total:,}건 조회 예정")
+    if start_from > 1:
+        log.info(f"  {start_from:,}번째부터 이어서 수집")
     if max_rows > 0:
-        total = min(total, max_rows)
+        total = min(total, start_from - 1 + max_rows)
         log.info(f"최대 {max_rows:,}건으로 제한")
 
     all_rows = []
-    start = 1
+    start = start_from
 
     while start <= total:
         end = min(start + PAGE_SIZE - 1, total)
@@ -124,13 +126,13 @@ def fetch_all_rows(params: dict = None, max_rows: int = 0) -> list:
         all_rows.extend(rows)
 
         if len(all_rows) % 10000 < PAGE_SIZE:
-            log.info(f"  {len(all_rows):,}/{total:,}건 수집...")
+            log.info(f"  {len(all_rows):,}건 수집... (위치: {start}-{end}/{total:,})")
 
         start = end + 1
         time.sleep(RATE_LIMIT_DELAY)
 
-    log.info(f"수집 완료: {len(all_rows):,}건")
-    return all_rows
+    log.info(f"수집 완료: {len(all_rows):,}건 (마지막 위치: {start - 1})")
+    return all_rows, start - 1
 
 
 # ── 데이터 변환 ──
@@ -243,6 +245,7 @@ def main():
     parser.add_argument("--days", type=int, default=0, help="최근 N일 증분 수집")
     parser.add_argument("--food-type", type=str, default="", help="특정 품목유형만 수집")
     parser.add_argument("--max-rows", type=int, default=0, help="최대 수집 건수 (0=무제한)")
+    parser.add_argument("--start-from", type=int, default=1, help="시작 위치 (이어서 수집)")
     parser.add_argument("--dry-run", action="store_true", help="수집만 하고 저장 안 함")
     args = parser.parse_args()
 
@@ -274,7 +277,7 @@ def main():
         log.info(f"품목유형 필터: {args.food_type}")
 
     # 데이터 수집
-    rows = fetch_all_rows(params, max_rows=args.max_rows)
+    rows, last_pos = fetch_all_rows(params, max_rows=args.max_rows, start_from=args.start_from)
 
     if not rows:
         log.info("수집할 데이터 없음")
@@ -302,6 +305,11 @@ def main():
     # Supabase 저장
     saved, errors = upsert_to_supabase(products)
     log.info(f"=== 수집 완료: {saved:,}건 저장, {errors}건 오류 ===")
+    log.info(f"NEXT_START_FROM={last_pos + 1}")
+
+    # 워크플로우 자동 재시도를 위해 위치 파일 저장
+    with open("last_position.txt", "w") as f:
+        f.write(str(last_pos + 1))
 
 
 if __name__ == "__main__":

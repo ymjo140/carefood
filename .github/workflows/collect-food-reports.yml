@@ -18,11 +18,15 @@ on:
         description: "최대 수집 건수 (0=무제한)"
         required: false
         default: "0"
+      start_from:
+        description: "시작 위치 (이어서 수집, 기본 1)"
+        required: false
+        default: "1"
 
 jobs:
   collect:
     runs-on: ubuntu-latest
-    timeout-minutes: 360
+    timeout-minutes: 330
 
     steps:
       - uses: actions/checkout@v4
@@ -35,6 +39,7 @@ jobs:
         run: pip install requests
 
       - name: Run collection
+        id: collect
         env:
           FOOD_REPORT_API_KEY: ${{ secrets.FOOD_REPORT_API_KEY }}
           FOOD_INGREDIENT_API_KEY: ${{ secrets.FOOD_INGREDIENT_API_KEY }}
@@ -45,6 +50,7 @@ jobs:
           MODE="${{ github.event.inputs.mode || 'incremental' }}"
           FOOD_TYPE="${{ github.event.inputs.food_type }}"
           MAX_ROWS="${{ github.event.inputs.max_rows || '0' }}"
+          START_FROM="${{ github.event.inputs.start_from || '1' }}"
 
           ARGS=""
           if [ "$MODE" = "full" ]; then
@@ -61,6 +67,59 @@ jobs:
             ARGS="$ARGS --max-rows $MAX_ROWS"
           fi
 
+          if [ "$START_FROM" != "1" ] && [ -n "$START_FROM" ]; then
+            ARGS="$ARGS --start-from $START_FROM"
+          fi
+
           echo "=== 품목제조보고 수집 시작 ==="
-          echo "모드: $MODE, 품목유형: ${FOOD_TYPE:-전체}, 최대: ${MAX_ROWS:-무제한}"
+          echo "모드: $MODE, 시작: $START_FROM, 품목유형: ${FOOD_TYPE:-전체}, 최대: ${MAX_ROWS:-무제한}"
           eval python collect_food_reports.py $ARGS
+
+          # 다음 시작 위치 저장
+          if [ -f last_position.txt ]; then
+            NEXT=$(cat last_position.txt)
+            echo "next_start=$NEXT" >> "$GITHUB_OUTPUT"
+            echo "다음 시작 위치: $NEXT"
+          fi
+
+      - name: Upload position artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: collect-position
+          path: scripts/last_position.txt
+          retention-days: 7
+
+  # 타임아웃/실패 시 자동 재트리거
+  retry-on-timeout:
+    needs: collect
+    if: failure() || cancelled()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Download position
+        uses: actions/download-artifact@v4
+        with:
+          name: collect-position
+        continue-on-error: true
+
+      - name: Re-trigger with resume position
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          NEXT_START="1"
+          if [ -f last_position.txt ]; then
+            NEXT_START=$(cat last_position.txt)
+          fi
+
+          echo "=== 자동 재트리거: 위치 $NEXT_START 부터 ==="
+
+          # 동일 워크플로우를 start_from 파라미터와 함께 재트리거
+          gh api repos/${{ github.repository }}/actions/workflows/${{ github.workflow_ref && 'collect-food-reports.yml' || 'collect-food-reports.yml' }}/dispatches \
+            -X POST \
+            -f ref=main \
+            -f "inputs[mode]=full" \
+            -f "inputs[start_from]=$NEXT_START"
+
+          echo "재트리거 완료"
