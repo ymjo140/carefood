@@ -17,6 +17,17 @@ const TASTE_RANGES: Record<string, Record<number, [number, number]>> = {
   },
 };
 
+// 목적 → 관련 태그 매핑 (OR 조합)
+const PURPOSE_TAG_MAP: Record<string, string[]> = {
+  gut_health: ["probiotics", "prebiotic"],
+  skin: ["collagen", "vitamin"],
+  weight: ["diet", "sugar_free"],
+  muscle: ["protein"],
+  immunity: ["vitamin", "omega3", "zinc"],
+  bone: ["calcium"],
+  eye: ["lutein"],
+};
+
 // 가격 정보 타입
 type MallPrice = {
   platform: string;
@@ -33,8 +44,12 @@ export async function GET(request: NextRequest) {
   const spicy = Number(searchParams.get("spicy") || 0);
   const fatty = Number(searchParams.get("fatty") || 0);
   const search = searchParams.get("q") || null;
-  const tag = searchParams.get("tag") || null; // 기능성 태그 필터
-  const hasPriceOnly = searchParams.get("hasPrice") === "1"; // 구매 가능만 (서버사이드)
+  const tag = searchParams.get("tag") || null; // 단일 태그 (하위 호환)
+  const tags = searchParams.get("tags") || null; // 다중 성분 태그 (OR)
+  const purpose = searchParams.get("purpose") || null; // 목적 필터 (OR)
+  const hasPriceOnly = searchParams.get("hasPrice") === "1";
+  const priceMin = Number(searchParams.get("price_min") || 0);
+  const priceMax = Number(searchParams.get("price_max") || 0);
   const page = Number(searchParams.get("page") || 1);
   const limit = Math.min(Number(searchParams.get("limit") || 20), 50);
   const source = searchParams.get("source") || null;
@@ -61,23 +76,48 @@ export async function GET(request: NextRequest) {
     query = query.gte("fat_g", min).lt("fat_g", max);
   }
   if (spicy >= 1 && spicy <= 10) {
-    query = query.gte("spicy_score", Math.ceil(spicy / 2)); // 10단계→5단계 변환 (spicy_score는 1-5)
+    query = query.gte("spicy_score", Math.ceil(spicy / 2));
   }
 
-  // 상용제품만 (구매 가능 제품)
+  // 상용제품만
   query = query.eq("category_large", "상용제품");
 
-  // 구매 가능 제품만 (서버사이드 필터)
+  // 구매 가능 제품만
   if (hasPriceOnly) {
     query = query.eq("is_purchasable", true);
   }
 
-  // 기능성 태그 필터
+  // 기능성 태그 필터 (단일 - 하위호환)
   if (tag) {
     query = query.contains("functional_tags", [tag]);
   }
 
-  // 검색 (패턴 매칭)
+  // 다중 성분 태그 필터 (OR: 선택한 성분 중 하나라도 포함)
+  if (tags) {
+    const tagList = tags.split(",").filter(Boolean);
+    if (tagList.length === 1) {
+      query = query.contains("functional_tags", [tagList[0]]);
+    } else if (tagList.length > 1) {
+      query = query.or(tagList.map(t => `functional_tags.cs.{${t}}`).join(","));
+    }
+  }
+
+  // 목적 필터 (OR: 목적에 해당하는 태그 중 하나라도 포함)
+  if (purpose) {
+    const purposes = purpose.split(",").filter(Boolean);
+    const allTags = new Set<string>();
+    for (const p of purposes) {
+      const mapped = PURPOSE_TAG_MAP[p];
+      if (mapped) mapped.forEach(t => allTags.add(t));
+    }
+    if (allTags.size === 1) {
+      query = query.contains("functional_tags", [[...allTags][0]]);
+    } else if (allTags.size > 1) {
+      query = query.or([...allTags].map(t => `functional_tags.cs.{${t}}`).join(","));
+    }
+  }
+
+  // 검색
   if (search) {
     query = query.ilike("name", `%${search}%`);
   }
@@ -103,7 +143,7 @@ export async function GET(request: NextRequest) {
     });
   }
 
-  // 2단계: 이 제품들의 가격 정보를 v_all_prices에서 가져오기
+  // 2단계: 가격 정보
   const productIds = products.map((p: { id: string }) => p.id);
 
   let priceQuery = supabase
@@ -111,7 +151,6 @@ export async function GET(request: NextRequest) {
     .select("product_id, platform, price, url, image_url")
     .in("product_id", productIds);
 
-  // 특정 쇼핑몰만 필터
   if (source && source !== "all") {
     priceQuery = priceQuery.eq("platform", source);
   }
@@ -119,7 +158,6 @@ export async function GET(request: NextRequest) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: prices } = await priceQuery as { data: any[] | null };
 
-  // 가격을 product_id별로 그룹핑
   const priceMap: Record<string, MallPrice[]> = {};
   if (prices) {
     for (const p of prices) {
@@ -135,19 +173,31 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // 가격 정보 합치기 (가격순 정렬)
-  const productsWithPrices = products.map((product: { id: string }) => ({
+  // 가격 정보 합치기
+  let productsWithPrices = products.map((product: { id: string }) => ({
     ...product,
     product_prices: (priceMap[product.id] || []).sort(
       (a: MallPrice, b: MallPrice) => a.price - b.price
     ),
   }));
 
+  // 클라이언트사이드 가격 필터 (DB에서 직접 조인이 안 되므로)
+  if (priceMin > 0 || priceMax > 0) {
+    productsWithPrices = productsWithPrices.filter((p: { product_prices: MallPrice[] }) => {
+      const validPrices = p.product_prices.filter((pp: MallPrice) => pp.price > 0);
+      if (validPrices.length === 0) return false;
+      const best = Math.min(...validPrices.map((pp: MallPrice) => pp.price));
+      if (priceMin > 0 && best < priceMin) return false;
+      if (priceMax > 0 && best > priceMax) return false;
+      return true;
+    });
+  }
+
   return NextResponse.json({
     products: productsWithPrices,
-    total: count,
+    total: priceMin > 0 || priceMax > 0 ? productsWithPrices.length : count,
     page,
     limit,
-    totalPages: Math.ceil((count || 0) / limit),
+    totalPages: Math.ceil((priceMin > 0 || priceMax > 0 ? productsWithPrices.length : (count || 0)) / limit),
   });
 }

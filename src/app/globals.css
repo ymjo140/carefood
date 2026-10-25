@@ -1,16 +1,16 @@
 @import "tailwindcss";
 
 :root {
-  --background: #FAF6EF;
-  --foreground: #2D2518;
+  --background: #ffffff;
+  --foreground: #1a1a1a;
   --primary: #C4870A;          /* 앰버 골드 — 따뜻한 식품 톤 */
-  --primary-light: #FFF4DC;
+  --primary-light: #FFF8EC;
   --primary-dark: #A06D00;
   --accent: #E06030;           /* 코랄/테라코타 포인트 */
-  --muted: #8C7B66;            /* 웜 브라운 그레이 */
+  --muted: #888888;            /* 뉴트럴 그레이 */
   --card: #ffffff;
-  --border: #EBE2D4;
-  --surface: #F2EBE0;          /* 카드 내부 배경, 이미지 플레이스홀더 등 */
+  --border: #E5E5E5;
+  --surface: #F5F5F5;          /* 필터칩·플레이스홀더 배경 */
 
   /* 페르소나 아이콘 배경색 (레거시 호환) */
   --persona-elderly: #F59E0B;

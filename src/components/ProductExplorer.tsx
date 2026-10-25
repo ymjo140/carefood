@@ -31,79 +31,97 @@ function formatPrice(price: number): string {
 }
 
 const PLATFORM_LABELS: Record<string, string> = {
-  kurly: "컬리",
-  oasis: "오아시스",
-  homeplus: "홈플러스",
-  "11st": "11번가",
-  danawa: "다나와",
+  kurly: "컬리", oasis: "오아시스", homeplus: "홈플러스", "11st": "11번가", danawa: "다나와",
 };
 
 const PLATFORM_COLORS: Record<string, string> = {
-  kurly: "border-purple-300 text-purple-700 bg-purple-50",
-  oasis: "border-green-300 text-green-700 bg-green-50",
-  homeplus: "border-orange-300 text-orange-700 bg-orange-50",
-  "11st": "border-red-300 text-red-700 bg-red-50",
-  danawa: "border-blue-300 text-blue-700 bg-blue-50",
+  kurly: "text-purple-600", oasis: "text-green-600",
+  homeplus: "text-orange-600", "11st": "text-red-500", danawa: "text-blue-600",
 };
 
-function platformLabel(platform: string): string {
-  return PLATFORM_LABELS[platform] || platform;
-}
+/* ───── 목적 필터 ───── */
+const PURPOSE_OPTIONS = [
+  { key: "gut_health", label: "장건강" },
+  { key: "skin", label: "피부건강" },
+  { key: "weight", label: "체중관리" },
+  { key: "muscle", label: "근력/운동" },
+  { key: "immunity", label: "면역력" },
+  { key: "bone", label: "뼈건강" },
+  { key: "eye", label: "눈건강" },
+];
 
-function NutritionBar({
-  label,
-  value,
-  max,
-  unit,
-}: {
-  label: string;
-  value: number | null;
-  max: number;
-  unit: string;
-}) {
+/* ───── 성분 필터 ───── */
+const INGREDIENT_OPTIONS = [
+  { key: "probiotics", label: "유산균" },
+  { key: "collagen", label: "콜라겐" },
+  { key: "prebiotic", label: "식이섬유" },
+  { key: "vitamin", label: "비타민" },
+  { key: "omega3", label: "오메가3" },
+  { key: "calcium", label: "칼슘" },
+  { key: "iron", label: "철분" },
+  { key: "zinc", label: "아연" },
+  { key: "lutein", label: "루테인" },
+];
+
+// 태그 라벨 lookup (카드에서 사용)
+const ALL_TAG_LABELS: Record<string, string> = {};
+[...PURPOSE_OPTIONS, ...INGREDIENT_OPTIONS,
+  { key: "protein", label: "고단백" },
+  { key: "sugar_free", label: "무설탕" },
+  { key: "diet", label: "다이어트" },
+].forEach(t => { ALL_TAG_LABELS[t.key] = t.label; });
+
+/* ───── 가격 프리셋 ───── */
+const PRICE_PRESETS = [
+  { label: "1만원 이하", min: 0, max: 10000 },
+  { label: "3만원 이하", min: 0, max: 30000 },
+  { label: "5만원 이하", min: 0, max: 50000 },
+  { label: "10만원 이상", min: 100000, max: 0 },
+];
+
+/* ───── 영양바 ───── */
+function NutritionBar({ label, value, max, unit }: { label: string; value: number | null; max: number; unit: string }) {
   if (value === null || value === undefined) return null;
   const pct = Math.min((value / max) * 100, 100);
   return (
     <div className="flex items-center gap-2 text-xs">
       <span className="w-14 text-muted shrink-0">{label}</span>
       <div className="flex-1 h-1.5 bg-border rounded-full overflow-hidden">
-        <div
-          className="h-full bg-primary/60 rounded-full transition-all"
-          style={{ width: `${pct}%` }}
-        />
+        <div className="h-full bg-primary/60 rounded-full transition-all" style={{ width: `${pct}%` }} />
       </div>
-      <span className="w-16 text-right text-muted shrink-0">
-        {Math.round(value)}
-        {unit}
-      </span>
+      <span className="w-16 text-right text-muted shrink-0">{Math.round(value)}{unit}</span>
     </div>
   );
 }
 
-const TAG_OPTIONS = [
-  { key: "probiotics", label: "유산균" },
-  { key: "collagen", label: "콜라겐" },
-  { key: "protein", label: "프로틴" },
-  { key: "vitamin", label: "비타민" },
-  { key: "omega3", label: "오메가3" },
-  { key: "prebiotic", label: "식이섬유" },
-  { key: "diet", label: "다이어트" },
-  { key: "sugar_free", label: "무설탕" },
-  { key: "calcium", label: "칼슘" },
-  { key: "iron", label: "철분" },
-];
+/* ───── 칩 버튼 ───── */
+function Chip({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`text-xs px-3 py-1 rounded-full transition-colors ${
+        active
+          ? "bg-foreground text-card font-medium"
+          : "bg-surface text-foreground/70 hover:bg-border"
+      }`}
+      style={{ minHeight: "32px", minWidth: "unset" }}
+    >
+      {label}
+    </button>
+  );
+}
 
 export default function ProductExplorer() {
   const [filters, setFilters] = useState<TasteFilters>({
-    salty: 0,
-    sweet: 0,
-    spicy: 0,
-    fatty: 0,
+    salty: 0, sweet: 0, spicy: 0, fatty: 0,
   });
   const [search, setSearch] = useState("");
   const [searchInput, setSearchInput] = useState("");
-  const [selectedTag, setSelectedTag] = useState<string | null>(null);
+  const [selectedPurposes, setSelectedPurposes] = useState<string[]>([]);
+  const [selectedIngredients, setSelectedIngredients] = useState<string[]>([]);
   const [hasPriceOnly, setHasPriceOnly] = useState(false);
+  const [priceMin, setPriceMin] = useState(0);
+  const [priceMax, setPriceMax] = useState(0);
   const [page, setPage] = useState(1);
   const [data, setData] = useState<ApiResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -117,8 +135,11 @@ export default function ProductExplorer() {
       if (filters.spicy) params.set("spicy", String(filters.spicy));
       if (filters.fatty) params.set("fatty", String(filters.fatty));
       if (search) params.set("q", search);
-      if (selectedTag) params.set("tag", selectedTag);
+      if (selectedPurposes.length > 0) params.set("purpose", selectedPurposes.join(","));
+      if (selectedIngredients.length > 0) params.set("tags", selectedIngredients.join(","));
       if (hasPriceOnly) params.set("hasPrice", "1");
+      if (priceMin > 0) params.set("price_min", String(priceMin));
+      if (priceMax > 0) params.set("price_max", String(priceMax));
       params.set("page", String(page));
       params.set("limit", "20");
 
@@ -131,19 +152,11 @@ export default function ProductExplorer() {
     } finally {
       setLoading(false);
     }
-  }, [filters, search, selectedTag, hasPriceOnly, page]);
+  }, [filters, search, selectedPurposes, selectedIngredients, hasPriceOnly, priceMin, priceMax, page]);
 
   useEffect(() => {
     fetchProducts();
   }, [fetchProducts]);
-
-  const toggleFilter = (key: keyof TasteFilters, level: TasteLevel) => {
-    setFilters((prev) => ({
-      ...prev,
-      [key]: prev[key] === level ? 0 : level,
-    }));
-    setPage(1);
-  };
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -151,112 +164,146 @@ export default function ProductExplorer() {
     setPage(1);
   };
 
+  const togglePurpose = (key: string) => {
+    setSelectedPurposes(prev =>
+      prev.includes(key) ? prev.filter(p => p !== key) : [...prev, key]
+    );
+    setPage(1);
+  };
+
+  const toggleIngredient = (key: string) => {
+    setSelectedIngredients(prev =>
+      prev.includes(key) ? prev.filter(p => p !== key) : [...prev, key]
+    );
+    setPage(1);
+  };
+
+  const setPricePreset = (min: number, max: number) => {
+    if (priceMin === min && priceMax === max) {
+      setPriceMin(0);
+      setPriceMax(0);
+    } else {
+      setPriceMin(min);
+      setPriceMax(max);
+    }
+    setPage(1);
+  };
+
   const clearFilters = () => {
     setFilters({ salty: 0, sweet: 0, spicy: 0, fatty: 0 });
-    setSearch("");
-    setSearchInput("");
-    setSelectedTag(null);
-    setHasPriceOnly(false);
+    setSearch(""); setSearchInput("");
+    setSelectedPurposes([]); setSelectedIngredients([]);
+    setHasPriceOnly(false); setPriceMin(0); setPriceMax(0);
     setPage(1);
   };
 
   const hasActiveFilters =
-    Object.values(filters).some((v) => v > 0) || search || selectedTag || hasPriceOnly;
+    Object.values(filters).some(v => v > 0) || search ||
+    selectedPurposes.length > 0 || selectedIngredients.length > 0 ||
+    hasPriceOnly || priceMin > 0 || priceMax > 0;
 
   return (
     <div>
       {/* 검색 */}
-      <form onSubmit={handleSearch} className="mb-6">
+      <form onSubmit={handleSearch} className="mb-5">
         <div className="flex gap-2">
           <input
             type="text"
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             placeholder="제품명으로 검색 (예: 햇반, 닭가슴살, 두부...)"
-            className="flex-1 px-4 py-2.5 rounded-xl border border-border bg-card text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+            className="flex-1 px-4 py-2.5 rounded-lg border border-border bg-card text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
           />
-          <button
-            type="submit"
-            className="px-5 py-2.5 bg-primary text-white rounded-full text-sm font-bold hover:bg-primary-dark transition-colors"
-          >
+          <button type="submit"
+            className="px-5 py-2.5 bg-primary text-white rounded-lg text-sm font-bold hover:bg-primary-dark transition-colors">
             검색
           </button>
         </div>
       </form>
 
-      {/* 맛 필터 */}
-      <div className="bg-card rounded-2xl border border-border p-5 mb-6 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="font-extrabold text-sm">맛 필터</h2>
+      {/* 필터 영역 */}
+      <div className="border border-border rounded-xl p-4 sm:p-5 mb-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-bold">필터</h2>
           {hasActiveFilters && (
-            <button
-              onClick={clearFilters}
+            <button onClick={clearFilters}
               className="text-xs text-muted hover:text-foreground transition-colors"
-            >
+              style={{ minHeight: "unset", minWidth: "unset" }}>
               초기화
             </button>
           )}
         </div>
-        <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-          {TASTE_CONFIG.map((taste) => (
-            <div key={taste.key}>
-              <div className="flex items-center gap-1.5 mb-2">
-                <span className="text-xs font-medium">{taste.label}</span>
-              </div>
-              <input
-                type="range"
-                min={0}
-                max={10}
-                step={1}
-                value={filters[taste.key]}
-                onChange={(e) => {
-                  const val = Number(e.target.value);
-                  setFilters((prev) => ({ ...prev, [taste.key]: val as TasteLevel | 0 }));
-                  setPage(1);
-                }}
-                className="w-full accent-primary"
-              />
-              <div className="flex justify-between text-[10px] text-muted">
-                <span>전체</span>
-                <span>{filters[taste.key] === 0 ? "필터 없음" : `${filters[taste.key]}단계`}</span>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
 
-      {/* 기능성 성분 필터 */}
-      <div className="bg-card rounded-2xl border border-border p-5 mb-6 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
-        <h2 className="font-extrabold text-sm mb-3">성분 필터</h2>
-        <div className="flex flex-wrap gap-2">
-          {TAG_OPTIONS.map((tag) => (
-            <button
-              key={tag.key}
-              onClick={() => {
-                setSelectedTag(selectedTag === tag.key ? null : tag.key);
-                setPage(1);
-              }}
-              className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
-                selectedTag === tag.key
-                  ? "bg-primary text-white"
-                  : "bg-surface border border-border hover:border-primary/30"
-              }`}
-            >
-              {tag.label}
-            </button>
-          ))}
+        {/* 목적 필터 */}
+        <div>
+          <h3 className="text-[13px] font-bold text-foreground/80 mb-2">목적</h3>
+          <div className="flex flex-wrap gap-1.5">
+            {PURPOSE_OPTIONS.map(opt => (
+              <Chip key={opt.key} label={opt.label}
+                active={selectedPurposes.includes(opt.key)}
+                onClick={() => togglePurpose(opt.key)} />
+            ))}
+          </div>
         </div>
 
-        {/* 구매 가능만 토글 */}
-        <label className="flex items-center gap-2 mt-3 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={hasPriceOnly}
-            onChange={(e) => {
-              setHasPriceOnly(e.target.checked);
-              setPage(1);
-            }}
+        {/* 성분 필터 */}
+        <div>
+          <h3 className="text-[13px] font-bold text-foreground/80 mb-2">성분</h3>
+          <div className="flex flex-wrap gap-1.5">
+            {INGREDIENT_OPTIONS.map(opt => (
+              <Chip key={opt.key} label={opt.label}
+                active={selectedIngredients.includes(opt.key)}
+                onClick={() => toggleIngredient(opt.key)} />
+            ))}
+          </div>
+        </div>
+
+        {/* 가격대 */}
+        <div>
+          <h3 className="text-[13px] font-bold text-foreground/80 mb-2">가격대</h3>
+          <div className="flex flex-wrap gap-1.5">
+            {PRICE_PRESETS.map(p => (
+              <Chip key={p.label} label={p.label}
+                active={priceMin === p.min && priceMax === p.max && (p.min > 0 || p.max > 0)}
+                onClick={() => setPricePreset(p.min, p.max)} />
+            ))}
+          </div>
+        </div>
+
+        {/* 맛 필터 */}
+        <div>
+          <h3 className="text-[13px] font-bold text-foreground/80 mb-2">맛</h3>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-3">
+            {TASTE_CONFIG.map(taste => (
+              <div key={taste.key}>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-medium">{taste.label}</span>
+                  <span className="text-[10px] text-muted">
+                    {filters[taste.key] === 0 ? "전체" : `${filters[taste.key]}단계`}
+                  </span>
+                </div>
+                <input
+                  type="range" min={0} max={10} step={1}
+                  value={filters[taste.key]}
+                  onChange={(e) => {
+                    const val = Number(e.target.value);
+                    setFilters(prev => ({ ...prev, [taste.key]: val as TasteLevel | 0 }));
+                    setPage(1);
+                  }}
+                  className="w-full accent-primary"
+                  style={{ minHeight: "unset" }}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* 구매 가능만 */}
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" checked={hasPriceOnly}
+            onChange={(e) => { setHasPriceOnly(e.target.checked); setPage(1); }}
             className="w-4 h-4 rounded border-border accent-primary"
+            style={{ minHeight: "16px", minWidth: "16px" }}
           />
           <span className="text-xs text-muted">구매 가능한 제품만 보기</span>
         </label>
@@ -266,16 +313,8 @@ export default function ProductExplorer() {
       <div className="flex items-center justify-between mb-4">
         <p className="text-sm text-muted">
           {data ? (
-            <>
-              총{" "}
-              <span className="font-bold text-foreground">
-                {(data.total ?? 0).toLocaleString()}
-              </span>
-              개 제품
-            </>
-          ) : (
-            "로딩 중..."
-          )}
+            <>총 <span className="font-bold text-foreground">{(data.total ?? 0).toLocaleString()}</span>개 제품</>
+          ) : "로딩 중..."}
         </p>
       </div>
 
@@ -287,145 +326,81 @@ export default function ProductExplorer() {
         </div>
       ) : data?.products?.length ? (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {data.products
-            .filter((product) => !hasPriceOnly || (product.product_prices?.length ?? 0) > 0)
-            .map((product) => {
-              const prices = product.product_prices?.filter(
-                (p) => p.price && p.price > 0
-              );
-              const bestPrice =
-                prices && prices.length > 0
-                  ? Math.min(...prices.map((p) => p.price!))
-                  : null;
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {data.products.map(product => {
+              const prices = product.product_prices?.filter(p => p.price && p.price > 0);
+              const bestPrice = prices && prices.length > 0
+                ? Math.min(...prices.map(p => p.price!)) : null;
 
               return (
-                <div
-                  key={product.id}
-                  className="bg-card rounded-2xl border border-border p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)] hover:border-primary/30 hover:shadow-md transition-all"
-                >
-                  {/* 헤더 */}
+                <article key={product.id}
+                  className="bg-card rounded-xl border border-border p-4 hover:shadow-sm transition-all">
                   <div className="mb-3">
                     <Link href={`/products/${product.id}`}>
-                      <h3 className="font-bold text-sm leading-tight line-clamp-2 hover:text-primary transition-colors cursor-pointer">
+                      <h3 className="font-bold text-sm leading-tight line-clamp-2 hover:text-primary transition-colors">
                         {product.name}
                       </h3>
                     </Link>
-                    <div className="flex items-center gap-2 mt-1 flex-wrap">
-                      {product.manufacturer && (
-                        <span className="text-xs text-muted truncate max-w-[140px]">
-                          {product.manufacturer}
-                        </span>
-                      )}
-                    </div>
+                    {product.manufacturer && (
+                      <p className="text-xs text-muted mt-0.5 truncate">{product.manufacturer}</p>
+                    )}
                   </div>
 
-                  {/* 영양정보 */}
-                  <div className="space-y-1.5 mb-3">
-                    <NutritionBar
-                      label="칼로리"
-                      value={product.calories}
-                      max={800}
-                      unit="kcal"
-                    />
-                    <NutritionBar
-                      label="나트륨"
-                      value={product.sodium_mg}
-                      max={2000}
-                      unit="mg"
-                    />
-                    <NutritionBar
-                      label="당류"
-                      value={product.sugar_g}
-                      max={30}
-                      unit="g"
-                    />
-                    <NutritionBar
-                      label="지방"
-                      value={product.fat_g}
-                      max={30}
-                      unit="g"
-                    />
-                    <NutritionBar
-                      label="단백질"
-                      value={product.protein_g}
-                      max={30}
-                      unit="g"
-                    />
+                  <div className="space-y-1 mb-3">
+                    <NutritionBar label="칼로리" value={product.calories} max={800} unit="kcal" />
+                    <NutritionBar label="나트륨" value={product.sodium_mg} max={2000} unit="mg" />
+                    <NutritionBar label="당류" value={product.sugar_g} max={30} unit="g" />
+                    <NutritionBar label="지방" value={product.fat_g} max={30} unit="g" />
+                    <NutritionBar label="단백질" value={product.protein_g} max={30} unit="g" />
                   </div>
 
-                  {/* 기능성 태그 */}
                   {product.functional_tags && product.functional_tags.length > 0 && (
                     <div className="flex flex-wrap gap-1 mb-2">
-                      {product.functional_tags.slice(0, 4).map((t: string) => {
-                        const tagInfo = TAG_OPTIONS.find((o) => o.key === t);
-                        return (
-                          <span key={t} className="text-[10px] px-2 py-0.5 rounded-full bg-primary/5 text-primary border border-primary/10 font-medium">
-                            {tagInfo?.label || t}
-                          </span>
-                        );
-                      })}
+                      {product.functional_tags.slice(0, 4).map((t: string) => (
+                        <span key={t} className="text-[11px] px-2 py-0.5 rounded bg-primary/8 text-primary/80 font-medium"
+                          style={{ minHeight: "unset", minWidth: "unset" }}>
+                          {ALL_TAG_LABELS[t] || t}
+                        </span>
+                      ))}
                     </div>
                   )}
 
-                  {/* 가격 */}
                   {bestPrice ? (
                     <div className="flex items-center justify-between pt-3 border-t border-border">
-                      <span className="text-lg font-bold text-primary">
-                        {formatPrice(bestPrice)}
-                      </span>
-                      <div className="flex gap-1 flex-wrap justify-end">
-                        {prices!.map((pp) =>
-                          pp.url ? (
-                            <a
-                              key={pp.platform}
-                              href={pp.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className={`text-[10px] px-1.5 py-0.5 rounded border transition-colors hover:opacity-80 ${
-                                PLATFORM_COLORS[pp.platform] ||
-                                "bg-card border-border"
-                              }`}
-                            >
-                              {platformLabel(pp.platform)}{" "}
-                              {formatPrice(pp.price!)}
-                            </a>
-                          ) : null
-                        )}
+                      <span className="text-lg font-bold">{formatPrice(bestPrice)}</span>
+                      <div className="flex gap-2 flex-wrap justify-end">
+                        {prices!.map(pp => pp.url ? (
+                          <a key={pp.platform} href={pp.url} target="_blank" rel="noopener noreferrer"
+                            className={`text-[11px] hover:underline ${PLATFORM_COLORS[pp.platform] || "text-muted"}`}
+                            style={{ minHeight: "unset", minWidth: "unset" }}>
+                            {PLATFORM_LABELS[pp.platform] || pp.platform} {formatPrice(pp.price!)}
+                          </a>
+                        ) : null)}
                       </div>
                     </div>
                   ) : (
                     <div className="pt-3 border-t border-border">
-                      <span className="text-xs text-muted">
-                        가격 정보 수집 중
-                      </span>
+                      <span className="text-xs text-muted">가격 정보 수집 중</span>
                     </div>
                   )}
-                </div>
+                </article>
               );
             })}
           </div>
 
-          {/* 페이지네이션 */}
           {data.totalPages > 1 && (
             <div className="flex items-center justify-center gap-2 mt-8">
               <button
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                onClick={() => setPage(p => Math.max(1, p - 1))}
                 disabled={page <= 1}
-                className="px-3 py-2 rounded-lg border border-border text-sm disabled:opacity-30 hover:border-primary/50 transition-colors"
-              >
+                className="px-3 py-2 rounded-lg border border-border text-sm disabled:opacity-30 hover:border-primary/50 transition-colors">
                 이전
               </button>
-              <span className="text-sm text-muted px-3">
-                {data.page} / {data.totalPages}
-              </span>
+              <span className="text-sm text-muted px-3">{data.page} / {data.totalPages}</span>
               <button
-                onClick={() =>
-                  setPage((p) => Math.min(data.totalPages, p + 1))
-                }
+                onClick={() => setPage(p => Math.min(data.totalPages, p + 1))}
                 disabled={page >= data.totalPages}
-                className="px-3 py-2 rounded-lg border border-border text-sm disabled:opacity-30 hover:border-primary/50 transition-colors"
-              >
+                className="px-3 py-2 rounded-lg border border-border text-sm disabled:opacity-30 hover:border-primary/50 transition-colors">
                 다음
               </button>
             </div>
@@ -433,10 +408,8 @@ export default function ProductExplorer() {
         </>
       ) : (
         <div className="text-center py-16 text-muted">
-          <p className="text-lg mb-2">조건에 맞는 제품이 없습니다</p>
-          <p className="text-sm">
-            필터를 조정하거나 다른 검색어를 사용해보세요.
-          </p>
+          <p className="text-base mb-1">조건에 맞는 제품이 없습니다</p>
+          <p className="text-sm">필터를 조정하거나 다른 검색어를 사용해보세요.</p>
         </div>
       )}
     </div>
