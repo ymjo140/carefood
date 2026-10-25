@@ -207,7 +207,62 @@ export type ProductWithPrices = Product & {
   functional_tags?: string[];
 };
 
-// 맛 레벨 타입
-export type TasteLevel = 1 | 2 | 3 | 4 | 5;
+// 맛 레벨 타입 (10단계)
+export type TasteLevel = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
 export type TasteDimension = "salty" | "sweet" | "spicy" | "fatty";
 export type FeedbackRating = "too_much" | "just_right" | "too_little";
+
+// 음식 카테고리
+export type DishCategory =
+  | "soup"       // 국/탕/찌개
+  | "noodle"     // 면/파스타
+  | "rice"       // 밥/죽/덮밥
+  | "grill"      // 구이/스테이크
+  | "stew"       // 찜/조림
+  | "side"       // 반찬/밑반찬
+  | "seafood"    // 해산물
+  | "snack"      // 간식/빵/떡
+  | "salad"      // 샐러드/채소
+  | "beverage"   // 음료/차
+  | "supplement" // 건강기능식품
+  | "powder"     // 분말/선식
+  | "sauce"      // 소스/양념
+  | "other";     // 기타
+
+export const DISH_CATEGORY_LABELS: Record<DishCategory, string> = {
+  soup: "국/탕/찌개",
+  noodle: "면/파스타",
+  rice: "밥/죽/덮밥",
+  grill: "구이/스테이크",
+  stew: "찜/조림",
+  side: "반찬/밑반찬",
+  seafood: "해산물",
+  snack: "간식/빵/떡",
+  salad: "샐러드/채소",
+  beverage: "음료/차",
+  supplement: "건강기능식품",
+  powder: "분말/선식",
+  sauce: "소스/양념",
+  other: "기타",
+};
+
+// 추천 그룹 (식재료 기반)
+export type RecommendGroup = {
+  dish_name: string;
+  dish_category: DishCategory;
+  product_count: number;
+  representative: ScoredProduct;
+  products: ScoredProduct[];
+};
+
+// 스코어링된 제품
+export type ScoredProduct = ProductWithPrices & {
+  match_score: number;
+  reasons: string[];
+  reason_detail: string | null;
+  dish_keyword: string;
+  dish_category: DishCategory | null;
+};
+
+// 정렬 옵션
+export type SortOption = "score" | "price_asc" | "price_desc" | "protein_desc" | "calories_asc";

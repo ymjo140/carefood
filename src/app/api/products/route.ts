@@ -1,28 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 
-// 맛 레벨 → 영양성분 범위 매핑 (기본값)
+// 맛 레벨 → 영양성분 범위 매핑 (10단계)
 const TASTE_RANGES: Record<string, Record<number, [number, number]>> = {
   salty: {
-    1: [0, 300],
-    2: [300, 500],
-    3: [500, 800],
-    4: [800, 1200],
-    5: [1200, 9999],
+    1: [0, 100], 2: [100, 200], 3: [200, 350], 4: [350, 500], 5: [500, 650],
+    6: [650, 800], 7: [800, 1000], 8: [1000, 1200], 9: [1200, 1500], 10: [1500, 9999],
   },
   sweet: {
-    1: [0, 3],
-    2: [3, 6],
-    3: [6, 12],
-    4: [12, 20],
-    5: [20, 99],
+    1: [0, 1], 2: [1, 2], 3: [2, 4], 4: [4, 6], 5: [6, 9],
+    6: [9, 12], 7: [12, 16], 8: [16, 20], 9: [20, 25], 10: [25, 99],
   },
   fatty: {
-    1: [0, 3],
-    2: [3, 7],
-    3: [7, 15],
-    4: [15, 25],
-    5: [25, 99],
+    1: [0, 1], 2: [1, 3], 3: [3, 5], 4: [5, 7], 5: [7, 10],
+    6: [10, 15], 7: [15, 20], 8: [20, 25], 9: [25, 30], 10: [30, 99],
   },
 };
 
@@ -56,21 +47,21 @@ export async function GET(request: NextRequest) {
     .eq("is_active", true)
     .order("name");
 
-  // 맛 필터 적용
-  if (salty >= 1 && salty <= 5) {
+  // 맛 필터 적용 (10단계)
+  if (salty >= 1 && salty <= 10) {
     const [min, max] = TASTE_RANGES.salty[salty];
     query = query.gte("sodium_mg", min).lt("sodium_mg", max);
   }
-  if (sweet >= 1 && sweet <= 5) {
+  if (sweet >= 1 && sweet <= 10) {
     const [min, max] = TASTE_RANGES.sweet[sweet];
     query = query.gte("sugar_g", min).lt("sugar_g", max);
   }
-  if (fatty >= 1 && fatty <= 5) {
+  if (fatty >= 1 && fatty <= 10) {
     const [min, max] = TASTE_RANGES.fatty[fatty];
     query = query.gte("fat_g", min).lt("fat_g", max);
   }
-  if (spicy >= 1 && spicy <= 5) {
-    query = query.gte("spicy_score", spicy);
+  if (spicy >= 1 && spicy <= 10) {
+    query = query.gte("spicy_score", Math.ceil(spicy / 2)); // 10단계→5단계 변환 (spicy_score는 1-5)
   }
 
   // 상용제품만 (구매 가능 제품)

@@ -109,7 +109,7 @@ function OnboardingContent() {
     concerns: [],
     sensitivity: { digestive: 2, additive: 2 },
     allergies: [],
-    tastes: { salty: 3, sweet: 3, spicy: 3, fatty: 3 },
+    tastes: { salty: 5, sweet: 5, spicy: 5, fatty: 5 },
   });
 
   // URL 파라미터로 관심사 프리셋
@@ -461,7 +461,7 @@ function StepTastes({
             <input
               type="range"
               min={1}
-              max={5}
+              max={10}
               step={1}
               value={tastes[t.key]}
               onChange={(e) =>
@@ -471,7 +471,9 @@ function StepTastes({
             />
             <div className="flex justify-between text-[10px] text-muted mt-0.5">
               <span>약하게</span>
+              <span>3</span>
               <span>보통</span>
+              <span>7</span>
               <span>강하게</span>
             </div>
           </div>

@@ -203,20 +203,22 @@ export default function ProductExplorer() {
               <div className="flex items-center gap-1.5 mb-2">
                 <span className="text-xs font-medium">{taste.label}</span>
               </div>
-              <div className="flex gap-1.5">
-                {([1, 2, 3, 4, 5] as TasteLevel[]).map((level) => (
-                  <button
-                    key={level}
-                    onClick={() => toggleFilter(taste.key, level)}
-                    className={`w-7 h-7 rounded-lg border text-xs font-medium transition-colors ${
-                      filters[taste.key] === level
-                        ? "bg-primary text-white border-primary"
-                        : "border-border hover:border-primary/50"
-                    }`}
-                  >
-                    {level}
-                  </button>
-                ))}
+              <input
+                type="range"
+                min={0}
+                max={10}
+                step={1}
+                value={filters[taste.key]}
+                onChange={(e) => {
+                  const val = Number(e.target.value);
+                  setFilters((prev) => ({ ...prev, [taste.key]: val as TasteLevel | 0 }));
+                  setPage(1);
+                }}
+                className="w-full accent-primary"
+              />
+              <div className="flex justify-between text-[10px] text-muted">
+                <span>전체</span>
+                <span>{filters[taste.key] === 0 ? "필터 없음" : `${filters[taste.key]}단계`}</span>
               </div>
             </div>
           ))}
