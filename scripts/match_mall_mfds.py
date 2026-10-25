@@ -230,21 +230,34 @@ def find_best_match(
         else:
             overlap = 0.0
 
-        # (3) 제조사 보너스 (0 ~ +0.15)
+        # (3) 제조사 보너스 — 이름 유사도가 충분할 때만 적용
         mfr_bonus = 0.0
-        if brand and p.get("manufacturer"):
+        if brand and p.get("manufacturer") and name_sim >= 0.55:
             mfr_sim = manufacturer_match_score(brand, p["manufacturer"])
             if mfr_sim >= 0.6:
-                mfr_bonus = 0.15
+                mfr_bonus = 0.10
             elif mfr_sim >= 0.4:
-                mfr_bonus = 0.08
+                mfr_bonus = 0.05
 
         # (4) 중량 감점 (0 ~ -0.15)
         mfds_weight = extract_weight(p["name"])
         w_penalty = weight_penalty(mall_weight, mfds_weight)
 
-        # 종합 점수: 이름유사도 50% + 토큰오버랩 30% + 제조사보너스 + 중량감점
-        combined = name_sim * 0.5 + overlap * 0.3 + mfr_bonus + w_penalty
+        # (5) 고유 토큰 불일치 감점
+        # 양쪽 모두 2글자 이상 고유 토큰이 있으면 다른 제품일 가능성 높음
+        unique_query = query_tokens - p_tokens  # 쇼핑몰에만 있는 토큰
+        unique_mfds = p_tokens - query_tokens    # MFDS에만 있는 토큰
+        # 2글자 이상인 의미 있는 고유 토큰만 카운트
+        sig_query = {t for t in unique_query if len(t) >= 2}
+        sig_mfds = {t for t in unique_mfds if len(t) >= 2}
+        distinct_penalty = 0.0
+        if sig_query and sig_mfds:
+            # 양쪽 다 핵심 고유 토큰이 있으면 다른 제품 (육회 vs 수육)
+            distinct_penalty = -0.08 * min(len(sig_query), len(sig_mfds))
+            distinct_penalty = max(distinct_penalty, -0.15)
+
+        # 종합 점수: 이름유사도 55% + 토큰오버랩 30% + 보정
+        combined = name_sim * 0.55 + overlap * 0.30 + mfr_bonus + w_penalty + distinct_penalty
 
         # 추가 보정: 핵심 토큰이 전부 포함되면 보너스
         if len(query_tokens) >= 2 and query_tokens.issubset(p_tokens):

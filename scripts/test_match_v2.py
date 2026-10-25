@@ -64,4 +64,33 @@ print(f"  토큰 오버랩: {overlap:.3f}")
 print(f"  종합 점수: {combined:.3f} (임계값 0.7)")
 print(f"  → {'매칭됨 ✗' if combined >= 0.7 else '매칭 거부 ✓'}")
 
+# ── 오매칭 케이스 2: 같은 브랜드, 다른 제품 ──
+print("\n오매칭 테스트 2: 같은 브랜드 다른 제품")
+c3 = clean_name("1++ 한우 육회 200g (육회소스증정)")
+c4 = clean_name("1++ 한우 도가니수육")
+sim2 = SequenceMatcher(None, c3.lower(), c4.lower()).ratio()
+print(f"  '{c3}' vs '{c4}'")
+print(f"  이름 유사도: {sim2:.3f}")
+
+t3 = set(c3.lower().split())
+t4 = set(c4.lower().split())
+overlap2 = len(t3 & t4) / max(len(t3), len(t4))
+print(f"  토큰 오버랩: {overlap2:.3f} (겹침: {t3 & t4}, 쇼핑몰만: {t3 - t4}, MFDS만: {t4 - t3})")
+
+# 제조사 보너스: name_sim < 0.55면 0
+mfr_bonus2 = 0.10 if sim2 >= 0.55 else 0.0
+print(f"  제조사 보너스: {mfr_bonus2} (name_sim >= 0.55? {sim2 >= 0.55})")
+
+# 고유 토큰 감점
+sig_q = {t for t in (t3 - t4) if len(t) >= 2}
+sig_m = {t for t in (t4 - t3) if len(t) >= 2}
+dp = -0.08 * min(len(sig_q), len(sig_m)) if sig_q and sig_m else 0
+dp = max(dp, -0.15)
+print(f"  고유토큰 감점: {dp} (쇼핑몰: {sig_q}, MFDS: {sig_m})")
+
+combined2 = sim2 * 0.55 + overlap2 * 0.30 + mfr_bonus2 + dp
+print(f"  종합 점수: {combined2:.3f} (임계값 0.7)")
+print(f"  → {'매칭됨 ✗' if combined2 >= 0.7 else '매칭 거부 ✓'}")
+assert combined2 < 0.7, f"오매칭이 통과됨! score={combined2:.3f}"
+
 print("\n모든 테스트 통과!")
