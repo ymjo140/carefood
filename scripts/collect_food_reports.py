@@ -311,6 +311,13 @@ def main():
     with open("last_position.txt", "w") as f:
         f.write(str(last_pos + 1))
 
+    # 전체 수집 모드에서 아직 남은 데이터가 있으면 exit 1 → 자동 재트리거
+    if args.full and args.max_rows == 0:
+        total_expected = get_total_count(params)
+        if last_pos < total_expected:
+            log.warning(f"아직 {total_expected - last_pos:,}건 남음 → exit 1 (자동 재트리거)")
+            sys.exit(1)
+
 
 if __name__ == "__main__":
     main()
