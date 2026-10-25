@@ -81,8 +81,9 @@ const ALL_TAG_LABELS: Record<string, string> = {};
 
 const PRICE_PRESETS = [
   { label: "1만원 이하", min: 0, max: 10000 },
-  { label: "3만원 이하", min: 0, max: 30000 },
-  { label: "5만원 이하", min: 0, max: 50000 },
+  { label: "1~3만원", min: 10000, max: 30000 },
+  { label: "3~5만원", min: 30000, max: 50000 },
+  { label: "5~10만원", min: 50000, max: 100000 },
   { label: "10만원 이상", min: 100000, max: 0 },
 ];
 
@@ -199,6 +200,26 @@ function FilterPanel({
       {/* 가격대 */}
       <section>
         <h3 className="text-[13px] font-bold text-foreground mb-2">가격대</h3>
+        <div className="flex items-center gap-1.5 mb-2">
+          <input
+            type="number"
+            value={priceMin || ""}
+            onChange={e => onPriceChange(Number(e.target.value) || 0, priceMax)}
+            placeholder="최소"
+            className="w-[72px] px-2 py-1 rounded border border-border bg-card text-xs text-center focus:outline-none focus:border-primary"
+            style={{ minHeight: "28px" }}
+          />
+          <span className="text-xs text-muted">~</span>
+          <input
+            type="number"
+            value={priceMax || ""}
+            onChange={e => onPriceChange(priceMin, Number(e.target.value) || 0)}
+            placeholder="최대"
+            className="w-[72px] px-2 py-1 rounded border border-border bg-card text-xs text-center focus:outline-none focus:border-primary"
+            style={{ minHeight: "28px" }}
+          />
+          <span className="text-[11px] text-muted">원</span>
+        </div>
         <div className="flex flex-wrap gap-1.5">
           {PRICE_PRESETS.map(p => (
             <Chip key={p.label} label={p.label}
