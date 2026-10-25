@@ -50,17 +50,34 @@ export async function GET(request: NextRequest) {
   const hasPriceOnly = searchParams.get("hasPrice") === "1";
   const priceMin = Number(searchParams.get("price_min") || 0);
   const priceMax = Number(searchParams.get("price_max") || 0);
+  const proteinMin = Number(searchParams.get("protein_min") || 0);
+  const caloriesMax = Number(searchParams.get("calories_max") || 0);
+  const sodiumMax = Number(searchParams.get("sodium_max") || 0);
+  const sugarMax = Number(searchParams.get("sugar_max") || 0);
+  const fiberMin = Number(searchParams.get("fiber_min") || 0);
+  const sort = searchParams.get("sort") || "name";
   const page = Number(searchParams.get("page") || 1);
   const limit = Math.min(Number(searchParams.get("limit") || 20), 50);
   const source = searchParams.get("source") || null;
 
   const supabase = createServiceRoleClient();
 
+  // 정렬 매핑
+  type OrderCol = "name" | "protein_g" | "calories";
+  const sortMap: Record<string, { column: OrderCol; ascending: boolean }> = {
+    name: { column: "name", ascending: true },
+    price_asc: { column: "name", ascending: true }, // 가격정렬은 후처리
+    price_desc: { column: "name", ascending: true },
+    protein_desc: { column: "protein_g", ascending: false },
+    calories_asc: { column: "calories", ascending: true },
+  };
+  const orderBy = sortMap[sort] || sortMap.name;
+
   let query = supabase
     .from("products")
     .select("*", { count: "exact" })
     .eq("is_active", true)
-    .order("name");
+    .order(orderBy.column, { ascending: orderBy.ascending });
 
   // 맛 필터 적용 (10단계)
   if (salty >= 1 && salty <= 10) {
@@ -116,6 +133,13 @@ export async function GET(request: NextRequest) {
       query = query.or([...allTags].map(t => `functional_tags.cs.{${t}}`).join(","));
     }
   }
+
+  // 영양 조건 필터
+  if (proteinMin > 0) query = query.gte("protein_g", proteinMin);
+  if (caloriesMax > 0) query = query.lte("calories", caloriesMax);
+  if (sodiumMax > 0) query = query.lte("sodium_mg", sodiumMax);
+  if (sugarMax > 0) query = query.lte("sugar_g", sugarMax);
+  if (fiberMin > 0) query = query.gte("fiber_g", fiberMin);
 
   // 검색
   if (search) {
@@ -181,7 +205,7 @@ export async function GET(request: NextRequest) {
     ),
   }));
 
-  // 클라이언트사이드 가격 필터 (DB에서 직접 조인이 안 되므로)
+  // 가격 필터 (후처리)
   if (priceMin > 0 || priceMax > 0) {
     productsWithPrices = productsWithPrices.filter((p: { product_prices: MallPrice[] }) => {
       const validPrices = p.product_prices.filter((pp: MallPrice) => pp.price > 0);
@@ -193,11 +217,22 @@ export async function GET(request: NextRequest) {
     });
   }
 
+  // 가격 정렬 (후처리)
+  if (sort === "price_asc" || sort === "price_desc") {
+    const asc = sort === "price_asc";
+    productsWithPrices.sort((a: { product_prices: MallPrice[] }, b: { product_prices: MallPrice[] }) => {
+      const aPrice = a.product_prices.length > 0 ? a.product_prices[0].price : Infinity;
+      const bPrice = b.product_prices.length > 0 ? b.product_prices[0].price : Infinity;
+      return asc ? aPrice - bPrice : bPrice - aPrice;
+    });
+  }
+
+  const filtered = priceMin > 0 || priceMax > 0;
   return NextResponse.json({
     products: productsWithPrices,
-    total: priceMin > 0 || priceMax > 0 ? productsWithPrices.length : count,
+    total: filtered ? productsWithPrices.length : count,
     page,
     limit,
-    totalPages: Math.ceil((priceMin > 0 || priceMax > 0 ? productsWithPrices.length : (count || 0)) / limit),
+    totalPages: Math.ceil((filtered ? productsWithPrices.length : (count || 0)) / limit),
   });
 }
