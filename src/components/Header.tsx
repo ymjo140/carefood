@@ -64,7 +64,7 @@ export default function Header() {
 
   return (
     <header className="border-b border-border bg-background/80 backdrop-blur-sm sticky top-0 z-50">
-      <div className="max-w-3xl mx-auto px-4 h-14 flex items-center justify-between">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
         {/* 로고 */}
         <Link href="/" className="shrink-0">
           <span className="text-lg font-extrabold text-foreground tracking-tight whitespace-nowrap">케어푸드</span>
@@ -177,7 +177,7 @@ export default function Header() {
       {/* 모바일 드롭다운 메뉴 */}
       {mobileNavOpen && (
         <div className="sm:hidden border-t border-border bg-background">
-          <nav className="max-w-3xl mx-auto px-4 py-3 space-y-1">
+          <nav className="max-w-6xl mx-auto px-4 sm:px-6 py-3 space-y-1">
             {NAV_ITEMS.map((item) => (
               <Link
                 key={item.href}

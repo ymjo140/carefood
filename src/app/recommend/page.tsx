@@ -52,20 +52,21 @@ const CONCERN_LABELS: Record<string, string> = {
 
 const SORT_OPTIONS: { value: SortOption; label: string }[] = [
   { value: "score", label: "추천순" },
-  { value: "price_asc", label: "가격 낮은순" },
-  { value: "price_desc", label: "가격 높은순" },
-  { value: "protein_desc", label: "단백질순" },
-  { value: "calories_asc", label: "칼로리 낮은순" },
+  { value: "price_asc", label: "낮은 가격순" },
+  { value: "price_desc", label: "높은 가격순" },
+  { value: "protein_desc", label: "고단백순" },
+  { value: "calories_asc", label: "저칼로리순" },
 ];
 
 const PLATFORM_LABELS: Record<string, string> = {
   kurly: "컬리", oasis: "오아시스", homeplus: "홈플러스", "11st": "11번가",
 };
+
 const PLATFORM_COLORS: Record<string, string> = {
-  kurly: "border-purple-300 text-purple-700 bg-purple-50",
-  oasis: "border-green-300 text-green-700 bg-green-50",
-  homeplus: "border-orange-300 text-orange-700 bg-orange-50",
-  "11st": "border-red-300 text-red-700 bg-red-50",
+  kurly: "text-purple-600",
+  oasis: "text-green-600",
+  homeplus: "text-orange-600",
+  "11st": "text-red-500",
 };
 
 const NUTRITION_PRESETS = {
@@ -74,16 +75,16 @@ const NUTRITION_PRESETS = {
     { label: "초고단백 30g+", value: 30 },
   ],
   calories_max: [
-    { label: "저칼로리 200↓", value: 200 },
-    { label: "초저칼 100↓", value: 100 },
+    { label: "200kcal 이하", value: 200 },
+    { label: "100kcal 이하", value: 100 },
   ],
   sodium_max: [
-    { label: "저나트륨 300↓", value: 300 },
-    { label: "초저나트륨 120↓", value: 120 },
+    { label: "300mg 이하", value: 300 },
+    { label: "120mg 이하", value: 120 },
   ],
   sugar_max: [
-    { label: "저당 5g↓", value: 5 },
-    { label: "무설탕 1g↓", value: 1 },
+    { label: "5g 이하", value: 5 },
+    { label: "무설탕", value: 1 },
   ],
   fiber_min: [
     { label: "고섬유 5g+", value: 5 },
@@ -95,58 +96,81 @@ const CATEGORY_FILTERS: DishCategory[] = [
   "seafood", "snack", "salad", "beverage", "supplement", "powder",
 ];
 
+const PRICE_PRESETS = [
+  { label: "1만원 이하", min: 0, max: 10000 },
+  { label: "3만원 이하", min: 0, max: 30000 },
+  { label: "5만원 이하", min: 0, max: 50000 },
+  { label: "10만원 이상", min: 100000, max: 0 },
+];
+
 function formatPrice(price: number): string {
   return price.toLocaleString("ko-KR") + "원";
 }
 
-/* ───── 영양 바 ───── */
-function NutritionBar({ label, value, max, unit }: { label: string; value: number | null; max: number; unit: string }) {
-  if (value === null || value === undefined) return null;
-  const pct = Math.min((value / max) * 100, 100);
+/* ───── 점수 뱃지 ───── */
+function ScoreBadge({ score }: { score: number }) {
+  const color = score >= 90 ? "bg-primary text-white"
+    : score >= 75 ? "bg-primary/80 text-white"
+    : "bg-primary/50 text-white";
   return (
-    <div className="flex items-center gap-2 text-xs">
-      <span className="w-14 text-muted shrink-0">{label}</span>
-      <div className="flex-1 h-1.5 bg-border rounded-full overflow-hidden">
-        <div className="h-full bg-primary/60 rounded-full" style={{ width: `${pct}%` }} />
-      </div>
-      <span className="w-16 text-right text-muted shrink-0">{Math.round(value)}{unit}</span>
+    <span className={`inline-flex items-center justify-center text-[11px] font-bold rounded-md px-1.5 py-0.5 leading-none ${color}`}
+      style={{ minHeight: "unset", minWidth: "unset" }}>
+      {score}점
+    </span>
+  );
+}
+
+/* ───── 영양 인라인 ───── */
+function NutritionPills({ product }: { product: ProductItem }) {
+  const items: { label: string; value: string }[] = [];
+  if (product.calories != null) items.push({ label: "칼로리", value: `${Math.round(product.calories)}kcal` });
+  if (product.protein_g != null) items.push({ label: "단백질", value: `${Math.round(product.protein_g)}g` });
+  if (product.sodium_mg != null) items.push({ label: "나트륨", value: `${Math.round(product.sodium_mg)}mg` });
+  if (product.sugar_g != null) items.push({ label: "당류", value: `${Math.round(product.sugar_g)}g` });
+
+  return (
+    <div className="flex flex-wrap gap-x-3 gap-y-1">
+      {items.map((it) => (
+        <span key={it.label} className="text-xs text-muted">
+          <span className="text-foreground/70 font-medium">{it.label}</span>{" "}
+          {it.value}
+        </span>
+      ))}
     </div>
   );
 }
 
-/* ───── 제품 카드 (컴팩트) ───── */
-function ProductCardCompact({ product }: { product: ProductItem }) {
+/* ───── 제품 카드 (그룹 내 하위) ───── */
+function SubProductCard({ product }: { product: ProductItem }) {
   const prices = product.product_prices?.filter((p) => p.price > 0) || [];
   const bestPrice = prices.length > 0 ? Math.min(...prices.map((p) => p.price)) : null;
 
   return (
-    <div className="bg-card rounded-xl border border-border p-3 hover:border-primary/30 transition-all">
-      <div className="flex items-start justify-between gap-2 mb-2">
-        <Link href={`/products/${product.id}`}>
-          <h4 className="font-bold text-sm leading-tight line-clamp-2 hover:text-primary transition-colors cursor-pointer">
+    <div className="flex items-start gap-3 py-3 border-t border-border/50">
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <Link href={`/products/${product.id}`}
+            className="text-sm font-medium hover:text-primary transition-colors truncate">
             {product.name}
-          </h4>
-        </Link>
-        <span className="shrink-0 text-[10px] font-bold text-white bg-primary rounded-full w-6 h-6 flex items-center justify-center">
-          {product.match_score}
-        </span>
-      </div>
-      {product.manufacturer && (
-        <p className="text-xs text-muted mb-2 truncate">{product.manufacturer}</p>
-      )}
-      <div className="space-y-1 mb-2">
-        <NutritionBar label="칼로리" value={product.calories} max={800} unit="kcal" />
-        <NutritionBar label="나트륨" value={product.sodium_mg} max={2000} unit="mg" />
-        <NutritionBar label="단백질" value={product.protein_g} max={30} unit="g" />
+          </Link>
+          <ScoreBadge score={product.match_score} />
+        </div>
+        {product.manufacturer && (
+          <p className="text-xs text-muted mt-0.5">{product.manufacturer}</p>
+        )}
+        <div className="mt-1.5">
+          <NutritionPills product={product} />
+        </div>
       </div>
       {bestPrice && (
-        <div className="flex items-center justify-between pt-2 border-t border-border">
-          <span className="text-sm font-bold text-primary">{formatPrice(bestPrice)}</span>
-          <div className="flex gap-1">
+        <div className="shrink-0 text-right">
+          <span className="text-sm font-bold">{formatPrice(bestPrice)}</span>
+          <div className="flex gap-1.5 mt-1 justify-end">
             {prices.slice(0, 2).map((pp) => (
               <a key={pp.platform} href={pp.url} target="_blank" rel="noopener noreferrer"
-                className={`text-[10px] px-1.5 py-0.5 rounded border ${PLATFORM_COLORS[pp.platform] || "bg-card border-border"}`}>
-                {PLATFORM_LABELS[pp.platform] || pp.platform} {formatPrice(pp.price)}
+                className={`text-[11px] hover:underline ${PLATFORM_COLORS[pp.platform] || "text-muted"}`}
+                style={{ minHeight: "unset", minWidth: "unset" }}>
+                {PLATFORM_LABELS[pp.platform] || pp.platform}
               </a>
             ))}
           </div>
@@ -163,244 +187,111 @@ function DishGroupCard({ group }: { group: DishGroup }) {
   const prices = rep.product_prices?.filter((p) => p.price > 0) || [];
   const bestPrice = prices.length > 0 ? Math.min(...prices.map((p) => p.price)) : null;
   const imageUrl = prices.find((p) => p.image_url)?.image_url;
+  const extraCount = group.total_in_group - 1;
 
   return (
-    <div className="bg-card rounded-2xl border border-border shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden">
-      {/* 대표 제품 */}
-      <div className="p-4">
-        <div className="flex gap-3 mb-3">
-          {imageUrl && (
-            <div className="w-20 h-20 rounded-lg overflow-hidden shrink-0 bg-surface">
-              <img src={imageUrl} alt="" className="w-full h-full object-cover" />
+    <article className="bg-card border border-border rounded-xl overflow-hidden hover:shadow-sm transition-shadow">
+      <div className="p-4 sm:p-5">
+        <div className="flex gap-4">
+          {/* 이미지 */}
+          {imageUrl ? (
+            <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-lg overflow-hidden shrink-0 bg-surface">
+              <img src={imageUrl} alt="" className="w-full h-full object-cover" loading="lazy" />
+            </div>
+          ) : (
+            <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-lg shrink-0 bg-surface flex items-center justify-center">
+              <svg className="w-8 h-8 text-muted/40" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M11 9H9V2H7v7H5V2H3v7c0 2.12 1.66 3.84 3.75 3.97V22h2.5v-9.03C11.34 12.84 13 11.12 13 9V2h-2v7zm5-3v8h2.5v8H21V2c-2.76 0-5 2.24-5 4z"/>
+              </svg>
             </div>
           )}
-          <div className="min-w-0 flex-1">
-            <div className="flex items-start justify-between gap-1">
-              <Link href={`/products/${rep.id}`}>
-                <h3 className="font-bold text-sm leading-tight line-clamp-2 hover:text-primary transition-colors cursor-pointer">
+
+          {/* 제품 정보 */}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <Link href={`/products/${rep.id}`}
+                  className="text-base font-bold leading-snug hover:text-primary transition-colors line-clamp-2">
                   {rep.name}
-                </h3>
-              </Link>
-              <span className="shrink-0 text-[10px] font-bold text-white bg-primary rounded-full w-7 h-7 flex items-center justify-center">
-                {rep.match_score}
-              </span>
+                </Link>
+                {rep.manufacturer && (
+                  <p className="text-xs text-muted mt-0.5">{rep.manufacturer}</p>
+                )}
+              </div>
+              <ScoreBadge score={rep.match_score} />
             </div>
-            {rep.manufacturer && (
-              <p className="text-xs text-muted mt-0.5 truncate">{rep.manufacturer}</p>
+
+            {/* 추천 이유 */}
+            {rep.reason_detail && (
+              <p className="text-xs text-primary mt-2 leading-relaxed">{rep.reason_detail}</p>
+            )}
+
+            {/* 태그 */}
+            {rep.reasons.length > 0 && (
+              <div className="flex gap-1 flex-wrap mt-2">
+                {rep.reasons.slice(0, 4).map((r) => (
+                  <span key={r} className="text-[11px] px-2 py-0.5 rounded bg-primary/8 text-primary/80 font-medium"
+                    style={{ minHeight: "unset", minWidth: "unset" }}>
+                    {r}
+                  </span>
+                ))}
+              </div>
             )}
           </div>
         </div>
 
-        {/* 추천 이유 */}
-        {rep.reason_detail && (
-          <div className="bg-primary/5 rounded-lg px-3 py-2 mb-3">
-            <p className="text-xs text-primary">{rep.reason_detail}</p>
+        {/* 하단: 영양 + 가격 */}
+        <div className="mt-3 pt-3 border-t border-border/50 flex items-end justify-between gap-4">
+          <NutritionPills product={rep} />
+          <div className="shrink-0 text-right">
+            {bestPrice ? (
+              <>
+                <span className="text-lg font-bold">{formatPrice(bestPrice)}</span>
+                <div className="flex gap-2 mt-0.5 justify-end">
+                  {prices.slice(0, 3).map((pp) => pp.url ? (
+                    <a key={pp.platform} href={pp.url} target="_blank" rel="noopener noreferrer"
+                      className={`text-[11px] hover:underline ${PLATFORM_COLORS[pp.platform] || "text-muted"}`}
+                      style={{ minHeight: "unset", minWidth: "unset" }}>
+                      {PLATFORM_LABELS[pp.platform] || pp.platform} {formatPrice(pp.price)}
+                    </a>
+                  ) : null)}
+                </div>
+              </>
+            ) : (
+              <span className="text-xs text-muted">가격 수집 중</span>
+            )}
           </div>
-        )}
-
-        {/* 태그 */}
-        <div className="flex gap-1 flex-wrap mb-3">
-          {rep.reasons.slice(0, 4).map((r) => (
-            <span key={r} className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">{r}</span>
-          ))}
         </div>
-
-        {/* 영양 */}
-        <div className="space-y-1 mb-3">
-          <NutritionBar label="칼로리" value={rep.calories} max={800} unit="kcal" />
-          <NutritionBar label="나트륨" value={rep.sodium_mg} max={2000} unit="mg" />
-          <NutritionBar label="당류" value={rep.sugar_g} max={30} unit="g" />
-          <NutritionBar label="단백질" value={rep.protein_g} max={30} unit="g" />
-        </div>
-
-        {/* 가격 */}
-        {bestPrice ? (
-          <div className="flex items-center justify-between pt-3 border-t border-border">
-            <span className="text-lg font-bold text-primary">{formatPrice(bestPrice)}</span>
-            <div className="flex gap-1 flex-wrap justify-end">
-              {prices.slice(0, 3).map((pp) => pp.url ? (
-                <a key={pp.platform} href={pp.url} target="_blank" rel="noopener noreferrer"
-                  className={`text-[10px] px-1.5 py-0.5 rounded border hover:opacity-80 ${PLATFORM_COLORS[pp.platform] || "bg-card border-border"}`}>
-                  {PLATFORM_LABELS[pp.platform] || pp.platform} {formatPrice(pp.price)}
-                </a>
-              ) : null)}
-            </div>
-          </div>
-        ) : (
-          <div className="pt-3 border-t border-border">
-            <span className="text-xs text-muted">가격 정보 수집 중</span>
-          </div>
-        )}
       </div>
 
-      {/* 더보기 영역 */}
-      {group.total_in_group > 1 && (
-        <div className="border-t border-border">
+      {/* 더보기 */}
+      {extraCount > 0 && (
+        <>
           <button
             onClick={() => setExpanded(!expanded)}
-            className="w-full px-4 py-2.5 text-sm text-primary hover:bg-primary/5 transition-colors flex items-center justify-center gap-1"
+            className="w-full px-5 py-2.5 text-sm text-muted hover:text-primary hover:bg-surface/50 transition-colors flex items-center justify-center gap-1 border-t border-border/50"
           >
-            {expanded ? "접기" : `${group.dish_name} ${group.total_in_group - 1}개 더보기`}
-            <svg className={`w-4 h-4 transition-transform ${expanded ? "rotate-180" : ""}`} viewBox="0 0 24 24" fill="currentColor">
+            {expanded ? "접기" : `같은 메뉴 ${extraCount}개 더보기`}
+            <svg className={`w-4 h-4 transition-transform ${expanded ? "rotate-180" : ""}`} viewBox="0 0 24 24" fill="currentColor"
+              style={{ minHeight: "unset", minWidth: "unset" }}>
               <path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6z" />
             </svg>
           </button>
 
           {expanded && (
-            <div className="px-4 pb-4 space-y-3">
+            <div className="px-5 pb-4">
               {group.products.slice(1).map((p) => (
-                <ProductCardCompact key={p.id} product={p} />
+                <SubProductCard key={p.id} product={p} />
               ))}
             </div>
           )}
-        </div>
+        </>
       )}
-    </div>
+    </article>
   );
 }
 
 /* ───── 필터 패널 ───── */
-function FilterPanel({
-  filters,
-  onFilterChange,
-  className = "",
-}: {
-  filters: FilterState;
-  onFilterChange: (f: FilterState) => void;
-  className?: string;
-}) {
-  const updateFilter = <K extends keyof FilterState>(key: K, value: FilterState[K]) => {
-    onFilterChange({ ...filters, [key]: value });
-  };
-
-  const toggleCategory = (cat: DishCategory) => {
-    const current = filters.dish_categories;
-    if (current.includes(cat)) {
-      updateFilter("dish_categories", current.filter((c) => c !== cat));
-    } else {
-      updateFilter("dish_categories", [...current, cat]);
-    }
-  };
-
-  return (
-    <div className={`space-y-6 ${className}`}>
-      {/* 음식 종류 */}
-      <div>
-        <h3 className="font-bold text-sm mb-3">음식 종류</h3>
-        <div className="flex flex-wrap gap-1.5">
-          {CATEGORY_FILTERS.map((cat) => (
-            <button
-              key={cat}
-              onClick={() => toggleCategory(cat)}
-              className={`text-xs px-2.5 py-1.5 rounded-lg transition-colors ${
-                filters.dish_categories.includes(cat)
-                  ? "bg-primary text-white"
-                  : "bg-surface border border-border hover:border-primary/30"
-              }`}
-            >
-              {DISH_CATEGORY_LABELS[cat]}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* 가격대 */}
-      <div>
-        <h3 className="font-bold text-sm mb-3">가격대</h3>
-        <div className="flex gap-2">
-          <input
-            type="number"
-            placeholder="최소"
-            value={filters.price_min || ""}
-            onChange={(e) => updateFilter("price_min", Number(e.target.value) || 0)}
-            className="flex-1 px-3 py-2 rounded-lg border border-border bg-card text-sm"
-          />
-          <span className="text-muted self-center">~</span>
-          <input
-            type="number"
-            placeholder="최대"
-            value={filters.price_max || ""}
-            onChange={(e) => updateFilter("price_max", Number(e.target.value) || 0)}
-            className="flex-1 px-3 py-2 rounded-lg border border-border bg-card text-sm"
-          />
-        </div>
-        <div className="flex gap-1.5 mt-2">
-          {[
-            { label: "~5천", min: 0, max: 5000 },
-            { label: "5천~1만", min: 5000, max: 10000 },
-            { label: "1만~2만", min: 10000, max: 20000 },
-            { label: "2만~", min: 20000, max: 0 },
-          ].map((p) => (
-            <button
-              key={p.label}
-              onClick={() => { updateFilter("price_min", p.min); updateFilter("price_max", p.max); }}
-              className="text-[10px] px-2 py-1 rounded-md bg-surface border border-border hover:border-primary/30"
-            >
-              {p.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* 영양 조건 */}
-      <div>
-        <h3 className="font-bold text-sm mb-3">영양 조건</h3>
-        <div className="space-y-3">
-          {[
-            { key: "protein_min" as const, label: "단백질", unit: "g", placeholder: "≥", presets: NUTRITION_PRESETS.protein_min },
-            { key: "calories_max" as const, label: "칼로리", unit: "kcal", placeholder: "≤", presets: NUTRITION_PRESETS.calories_max },
-            { key: "sodium_max" as const, label: "나트륨", unit: "mg", placeholder: "≤", presets: NUTRITION_PRESETS.sodium_max },
-            { key: "sugar_max" as const, label: "당류", unit: "g", placeholder: "≤", presets: NUTRITION_PRESETS.sugar_max },
-            { key: "fiber_min" as const, label: "식이섬유", unit: "g", placeholder: "≥", presets: NUTRITION_PRESETS.fiber_min },
-          ].map((n) => (
-            <div key={n.key}>
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-xs font-medium w-14">{n.label}</span>
-                <span className="text-xs text-muted">{n.placeholder}</span>
-                <input
-                  type="number"
-                  value={filters[n.key] || ""}
-                  onChange={(e) => updateFilter(n.key, Number(e.target.value) || 0)}
-                  placeholder={n.unit}
-                  className="w-20 px-2 py-1 rounded-md border border-border bg-card text-xs"
-                />
-                <span className="text-[10px] text-muted">{n.unit}</span>
-              </div>
-              <div className="flex gap-1 ml-16">
-                {n.presets.map((p) => (
-                  <button
-                    key={p.label}
-                    onClick={() => updateFilter(n.key, p.value)}
-                    className={`text-[10px] px-2 py-0.5 rounded-md transition-colors ${
-                      filters[n.key] === p.value
-                        ? "bg-primary/10 text-primary border border-primary/20"
-                        : "bg-surface border border-border hover:border-primary/30"
-                    }`}
-                  >
-                    {p.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* 초기화 */}
-      <button
-        onClick={() => onFilterChange({
-          dish_categories: [], price_min: 0, price_max: 0,
-          protein_min: 0, calories_max: 0, sodium_max: 0, sugar_max: 0, fiber_min: 0,
-        })}
-        className="w-full py-2 text-sm text-muted hover:text-foreground transition-colors border border-border rounded-lg"
-      >
-        필터 초기화
-      </button>
-    </div>
-  );
-}
-
-/* ───── 타입: 필터 상태 ───── */
 type FilterState = {
   dish_categories: DishCategory[];
   price_min: number;
@@ -417,13 +308,145 @@ const INITIAL_FILTERS: FilterState = {
   protein_min: 0, calories_max: 0, sodium_max: 0, sugar_max: 0, fiber_min: 0,
 };
 
+function FilterPanel({
+  filters,
+  onFilterChange,
+}: {
+  filters: FilterState;
+  onFilterChange: (f: FilterState) => void;
+}) {
+  const updateFilter = <K extends keyof FilterState>(key: K, value: FilterState[K]) => {
+    onFilterChange({ ...filters, [key]: value });
+  };
+
+  const toggleCategory = (cat: DishCategory) => {
+    const current = filters.dish_categories;
+    if (current.includes(cat)) {
+      updateFilter("dish_categories", current.filter((c) => c !== cat));
+    } else {
+      updateFilter("dish_categories", [...current, cat]);
+    }
+  };
+
+  const isPricePresetActive = (p: typeof PRICE_PRESETS[number]) =>
+    filters.price_min === p.min && filters.price_max === p.max && (p.min > 0 || p.max > 0);
+
+  return (
+    <div className="space-y-5">
+      {/* 음식 종류 */}
+      <section>
+        <h3 className="text-[13px] font-bold text-foreground mb-2.5">음식 종류</h3>
+        <div className="flex flex-wrap gap-1.5">
+          {CATEGORY_FILTERS.map((cat) => (
+            <button
+              key={cat}
+              onClick={() => toggleCategory(cat)}
+              className={`text-xs px-2.5 py-1 rounded-full transition-colors ${
+                filters.dish_categories.includes(cat)
+                  ? "bg-foreground text-card font-medium"
+                  : "bg-surface text-foreground/70 hover:bg-border"
+              }`}
+              style={{ minHeight: "32px", minWidth: "unset" }}
+            >
+              {DISH_CATEGORY_LABELS[cat]}
+            </button>
+          ))}
+        </div>
+      </section>
+
+      {/* 가격대 */}
+      <section>
+        <h3 className="text-[13px] font-bold text-foreground mb-2.5">가격대</h3>
+        <div className="flex flex-wrap gap-1.5">
+          {PRICE_PRESETS.map((p) => (
+            <button
+              key={p.label}
+              onClick={() => {
+                if (isPricePresetActive(p)) {
+                  updateFilter("price_min", 0);
+                  updateFilter("price_max", 0);
+                } else {
+                  onFilterChange({ ...filters, price_min: p.min, price_max: p.max });
+                }
+              }}
+              className={`text-xs px-2.5 py-1 rounded-full transition-colors ${
+                isPricePresetActive(p)
+                  ? "bg-foreground text-card font-medium"
+                  : "bg-surface text-foreground/70 hover:bg-border"
+              }`}
+              style={{ minHeight: "32px", minWidth: "unset" }}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+      </section>
+
+      {/* 영양 조건 */}
+      <section>
+        <h3 className="text-[13px] font-bold text-foreground mb-2.5">영양 조건</h3>
+        <div className="space-y-3">
+          {([
+            { key: "protein_min" as const, label: "단백질", unit: "g", op: "≥", presets: NUTRITION_PRESETS.protein_min },
+            { key: "calories_max" as const, label: "칼로리", unit: "kcal", op: "≤", presets: NUTRITION_PRESETS.calories_max },
+            { key: "sodium_max" as const, label: "나트륨", unit: "mg", op: "≤", presets: NUTRITION_PRESETS.sodium_max },
+            { key: "sugar_max" as const, label: "당류", unit: "g", op: "≤", presets: NUTRITION_PRESETS.sugar_max },
+            { key: "fiber_min" as const, label: "식이섬유", unit: "g", op: "≥", presets: NUTRITION_PRESETS.fiber_min },
+          ]).map((n) => (
+            <div key={n.key}>
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <span className="text-xs font-medium text-foreground/80">{n.label}</span>
+                <span className="text-[11px] text-muted">{n.op}</span>
+                <input
+                  type="number"
+                  value={filters[n.key] || ""}
+                  onChange={(e) => updateFilter(n.key, Number(e.target.value) || 0)}
+                  placeholder="0"
+                  className="w-16 px-2 py-1 rounded-md border border-border bg-card text-xs text-center focus:outline-none focus:border-primary"
+                  style={{ minHeight: "28px" }}
+                />
+                <span className="text-[11px] text-muted">{n.unit}</span>
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {n.presets.map((p) => (
+                  <button
+                    key={p.label}
+                    onClick={() => updateFilter(n.key, filters[n.key] === p.value ? 0 : p.value)}
+                    className={`text-[11px] px-2 py-0.5 rounded-full transition-colors ${
+                      filters[n.key] === p.value
+                        ? "bg-primary/15 text-primary font-medium"
+                        : "bg-surface text-muted hover:text-foreground/70"
+                    }`}
+                    style={{ minHeight: "24px", minWidth: "unset" }}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* 초기화 */}
+      <button
+        onClick={() => onFilterChange(INITIAL_FILTERS)}
+        className="w-full py-2 text-xs text-muted hover:text-foreground transition-colors"
+        style={{ minHeight: "36px" }}
+      >
+        필터 초기화
+      </button>
+    </div>
+  );
+}
+
 /* ───── 메인 페이지 ───── */
 export default function RecommendPage() {
   return (
     <Suspense fallback={
-      <div className="max-w-5xl mx-auto px-4 py-16 text-center">
-        <div className="inline-block w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin mb-4" />
-        <p className="text-muted">적합도 분석 중...</p>
+      <div className="max-w-6xl mx-auto px-4 py-16 text-center">
+        <div className="inline-block w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin mb-3" />
+        <p className="text-sm text-muted">적합도 분석 중...</p>
       </div>
     }>
       <RecommendContent />
@@ -450,7 +473,6 @@ function RecommendContent() {
 
   const observerRef = useRef<HTMLDivElement>(null);
 
-  // API 호출
   const fetchGroups = useCallback(async (pageNum: number, append: boolean = false) => {
     if (pageNum === 1) setLoading(true);
     else setLoadingMore(true);
@@ -480,7 +502,6 @@ function RecommendContent() {
 
       if (pageNum === 1) setProfile(profileData);
 
-      // 건강검진 데이터 병합
       let healthConditions: string[] = [];
       try {
         const healthRaw = localStorage.getItem("carefood_health");
@@ -505,7 +526,6 @@ function RecommendContent() {
       params.set("page", String(pageNum));
       params.set("limit", "15");
 
-      // 필터 적용
       if (filters.dish_categories.length > 0) params.set("dish_category", filters.dish_categories.join(","));
       if (filters.price_min > 0) params.set("price_min", String(filters.price_min));
       if (filters.price_max > 0) params.set("price_max", String(filters.price_max));
@@ -535,13 +555,11 @@ function RecommendContent() {
     }
   }, [familyId, sortBy, filters]);
 
-  // 초기 로드 + 필터/정렬 변경 시 재로드
   useEffect(() => {
     setPage(1);
     fetchGroups(1);
   }, [fetchGroups]);
 
-  // 무한 스크롤
   useEffect(() => {
     if (!observerRef.current || !hasMore) return;
     const observer = new IntersectionObserver(
@@ -560,9 +578,9 @@ function RecommendContent() {
 
   if (loading) {
     return (
-      <div className="max-w-5xl mx-auto px-4 py-16 text-center">
-        <div className="inline-block w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin mb-4" />
-        <p className="text-muted">맞춤 추천 분석 중...</p>
+      <div className="max-w-6xl mx-auto px-4 py-16 text-center">
+        <div className="inline-block w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin mb-3" />
+        <p className="text-sm text-muted">맞춤 추천 분석 중...</p>
       </div>
     );
   }
@@ -570,7 +588,7 @@ function RecommendContent() {
   if (error) {
     return (
       <div className="max-w-md mx-auto px-4 py-16 text-center">
-        <p className="text-lg font-extrabold mb-2">{error}</p>
+        <p className="text-base font-bold mb-2">{error}</p>
         <Link href="/onboarding" className="text-primary hover:underline text-sm">온보딩 시작하기 →</Link>
       </div>
     );
@@ -578,8 +596,7 @@ function RecommendContent() {
 
   const concernLabels = ((profile?.concerns as string[]) || []).map((c) => CONCERN_LABELS[c] || c).join(" · ");
   const activeFilterCount = filters.dish_categories.length
-    + (filters.price_min > 0 ? 1 : 0)
-    + (filters.price_max > 0 ? 1 : 0)
+    + (filters.price_min > 0 || filters.price_max > 0 ? 1 : 0)
     + (filters.protein_min > 0 ? 1 : 0)
     + (filters.calories_max > 0 ? 1 : 0)
     + (filters.sodium_max > 0 ? 1 : 0)
@@ -587,42 +604,49 @@ function RecommendContent() {
     + (filters.fiber_min > 0 ? 1 : 0);
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-6">
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 py-5">
       {/* 헤더 */}
-      <div className="mb-6">
-        <div className="flex items-center justify-between flex-wrap gap-3">
-          <div>
-            <h1 className="text-xl font-extrabold">{concernLabels || "맞춤"} 추천</h1>
-            <p className="text-sm text-muted mt-1">
-              {totalProducts}개 제품 · {totalGroups}개 메뉴
-            </p>
-          </div>
-          <Link href="/onboarding" className="text-sm text-muted hover:text-primary transition-colors">프로필 수정 →</Link>
+      <div className="flex items-end justify-between mb-5">
+        <div>
+          <h1 className="text-lg sm:text-xl font-extrabold leading-tight">
+            {concernLabels || "맞춤"} 추천
+          </h1>
+          <p className="text-xs text-muted mt-1">
+            {totalProducts.toLocaleString()}개 제품 · {totalGroups.toLocaleString()}개 메뉴
+          </p>
         </div>
+        <Link href="/onboarding"
+          className="text-xs text-muted hover:text-primary transition-colors shrink-0"
+          style={{ minHeight: "unset", minWidth: "unset" }}>
+          프로필 수정 →
+        </Link>
       </div>
 
-      {/* 모바일 필터 버튼 + 정렬 */}
-      <div className="flex items-center gap-2 mb-4 sticky top-14 z-30 bg-background py-2">
+      {/* 정렬 + 모바일 필터 토글 */}
+      <div className="flex items-center gap-2 mb-4 sticky top-0 z-30 bg-background py-2 -mx-4 px-4 sm:-mx-6 sm:px-6 border-b border-border/50">
         <button
-          onClick={() => setMobileFilterOpen(!mobileFilterOpen)}
-          className="lg:hidden px-3 py-2 rounded-lg border border-border text-sm hover:border-primary/30 transition-colors flex items-center gap-1.5"
+          onClick={() => setMobileFilterOpen(true)}
+          className="lg:hidden flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-surface text-xs font-medium hover:bg-border transition-colors shrink-0"
+          style={{ minHeight: "32px", minWidth: "unset" }}
         >
-          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z" />
+          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor"
+            style={{ minHeight: "unset", minWidth: "unset" }}>
+            <path d="M3 17v2h6v-2H3zM3 5v2h10V5H3zm10 16v-2h8v-2h-8v-2h-2v6h2zM7 9v2H3v2h4v2h2V9H7zm14 4v-2H11v2h10zm-6-4h2V7h4V5h-4V3h-2v6z" />
           </svg>
           필터{activeFilterCount > 0 && <span className="text-primary font-bold">({activeFilterCount})</span>}
         </button>
 
-        <div className="flex gap-1 overflow-x-auto flex-1">
+        <div className="flex gap-1 overflow-x-auto no-scrollbar flex-1">
           {SORT_OPTIONS.map((opt) => (
             <button
               key={opt.value}
               onClick={() => setSortBy(opt.value)}
-              className={`shrink-0 px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
+              className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
                 sortBy === opt.value
-                  ? "bg-primary text-white"
-                  : "bg-surface border border-border hover:border-primary/30"
+                  ? "bg-foreground text-card"
+                  : "text-muted hover:text-foreground"
               }`}
+              style={{ minHeight: "32px", minWidth: "unset" }}
             >
               {opt.label}
             </button>
@@ -630,29 +654,33 @@ function RecommendContent() {
         </div>
       </div>
 
-      {/* 모바일 필터 바텀시트 */}
+      {/* 모바일 필터 오버레이 */}
       {mobileFilterOpen && (
         <div className="lg:hidden fixed inset-0 z-50">
-          <div className="absolute inset-0 bg-black/30" onClick={() => setMobileFilterOpen(false)} />
-          <div className="absolute bottom-0 left-0 right-0 bg-background rounded-t-2xl max-h-[80vh] overflow-y-auto p-5">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="font-extrabold text-lg">필터</h2>
-              <button onClick={() => setMobileFilterOpen(false)} className="text-muted hover:text-foreground">
-                <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setMobileFilterOpen(false)} />
+          <div className="absolute bottom-0 left-0 right-0 bg-card rounded-t-2xl max-h-[75vh] overflow-y-auto">
+            <div className="sticky top-0 bg-card px-5 pt-4 pb-3 border-b border-border/50 flex items-center justify-between">
+              <h2 className="font-bold text-base">필터</h2>
+              <button onClick={() => setMobileFilterOpen(false)} className="text-muted hover:text-foreground p-1"
+                style={{ minHeight: "32px", minWidth: "32px" }}>
+                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"
+                  style={{ minHeight: "unset", minWidth: "unset" }}>
                   <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
                 </svg>
               </button>
             </div>
-            <FilterPanel filters={filters} onFilterChange={(f) => { setFilters(f); setMobileFilterOpen(false); }} />
+            <div className="p-5">
+              <FilterPanel filters={filters} onFilterChange={(f) => { setFilters(f); setMobileFilterOpen(false); }} />
+            </div>
           </div>
         </div>
       )}
 
-      {/* 메인 레이아웃: 필터 사이드바 + 그룹 목록 */}
-      <div className="flex gap-6">
+      {/* 메인 레이아웃 */}
+      <div className="flex gap-8">
         {/* 데스크톱 사이드바 */}
-        <aside className="hidden lg:block w-64 shrink-0">
-          <div className="sticky top-20">
+        <aside className="hidden lg:block w-56 shrink-0">
+          <div className="sticky top-14 pt-2">
             <FilterPanel filters={filters} onFilterChange={setFilters} />
           </div>
         </aside>
@@ -660,29 +688,28 @@ function RecommendContent() {
         {/* 그룹 목록 */}
         <main className="flex-1 min-w-0">
           {groups.length > 0 ? (
-            <div className="space-y-4">
+            <div className="space-y-3">
               {groups.map((g, i) => (
                 <DishGroupCard key={`${g.dish_name}-${i}`} group={g} />
               ))}
             </div>
           ) : (
-            <div className="text-center py-16 text-muted">
-              <p className="text-lg mb-2">조건에 맞는 제품이 없습니다</p>
+            <div className="text-center py-20 text-muted">
+              <p className="text-base mb-1">조건에 맞는 제품이 없습니다</p>
               <p className="text-sm">필터를 조정하거나 프로필을 수정해보세요.</p>
             </div>
           )}
 
-          {/* 무한 스크롤 트리거 */}
           {hasMore && (
             <div ref={observerRef} className="py-8 text-center">
               {loadingMore && (
-                <div className="inline-block w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+                <div className="inline-block w-5 h-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
               )}
             </div>
           )}
 
           {!hasMore && groups.length > 0 && (
-            <p className="text-center text-sm text-muted py-8">
+            <p className="text-center text-xs text-muted py-8">
               모든 추천을 확인했습니다
             </p>
           )}
