@@ -63,8 +63,8 @@ const PLATFORM_COLORS: Record<string, string> = {
 
 /* ───── 음식 종류 ───── */
 const CATEGORY_FILTERS: DishCategory[] = [
-  "soup", "noodle", "rice", "grill", "stew", "side",
-  "seafood", "snack", "salad", "beverage", "supplement", "powder",
+  "set", "soup", "noodle", "rice", "grill", "stew", "side",
+  "seafood", "salad", "dairy", "bread", "snack", "beverage", "supplement", "powder",
 ];
 
 const PURPOSE_OPTIONS = [

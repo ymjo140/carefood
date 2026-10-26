@@ -251,6 +251,10 @@ export type DishCategory =
   | "supplement" // 건강기능식품
   | "powder"     // 분말/선식
   | "sauce"      // 소스/양념
+  | "dairy"      // 유제품
+  | "bread"      // 빵/베이커리
+  | "set"        // 세트/도시락
+  | "ingredient" // 식재료
   | "other";     // 기타
 
 export const DISH_CATEGORY_LABELS: Record<DishCategory, string> = {
@@ -266,6 +270,10 @@ export const DISH_CATEGORY_LABELS: Record<DishCategory, string> = {
   beverage: "음료/차",
   supplement: "건강기능식품",
   powder: "분말/선식",
+  dairy: "유제품",
+  bread: "빵/베이커리",
+  set: "세트/도시락",
+  ingredient: "식재료",
   sauce: "소스/양념",
   other: "기타",
 };
