@@ -135,6 +135,18 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
   const bestPrice = sortedPrices.length > 0 ? sortedPrices[0].price : null;
   const imageUrl = sortedPrices.find((p) => p.image_url)?.image_url;
 
+  // 원재료 데이터 (food_reports에서)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: foodReport } = await (supabase as any)
+    .from("food_reports")
+    .select("ingredients")
+    .eq("matched_product_id", productId)
+    .not("ingredients", "is", null)
+    .limit(1)
+    .maybeSingle() as { data: { ingredients: string[] } | null };
+
+  const ingredients: string[] = foodReport?.ingredients || [];
+
   // 안전 정보 계산
   const safetyNotes: { type: "good" | "warn"; text: string }[] = [];
   if (product.sodium_mg !== null && product.sodium_mg < 400)
@@ -225,6 +237,26 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
                 <span>{note.text}</span>
               </div>
             ))}
+          </div>
+        </section>
+      )}
+
+      {/* 원재료 */}
+      {ingredients.length > 0 && (
+        <section className="mb-8">
+          <h2 className="text-sm font-extrabold mb-3">원재료</h2>
+          <div className="border border-border rounded-xl p-4">
+            <div className="flex flex-wrap gap-1.5">
+              {ingredients.map((ing: string) => (
+                <span key={ing} className="text-xs px-2.5 py-1 rounded-full bg-surface text-foreground/70"
+                  style={{ minHeight: "unset", minWidth: "unset" }}>
+                  {ing}
+                </span>
+              ))}
+            </div>
+            <p className="text-[11px] text-muted mt-3">
+              출처: 식품안전나라 품목제조보고
+            </p>
           </div>
         </section>
       )}
