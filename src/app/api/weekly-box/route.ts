@@ -151,15 +151,52 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // ── 2. 제품 로드 ──
+    // ── 2. 관심사별 영양 제외 기준 설정 ──
+    const nutritionExclusions: { sodium_max?: number; sugar_max?: number; calories_max?: number } = {};
+    for (const c of concerns) {
+      switch (c) {
+        case "gut_health":
+          // 장건강: 고나트륨(소화 부담) 제외, 고당류 제외
+          nutritionExclusions.sodium_max = Math.min(nutritionExclusions.sodium_max ?? 9999, 800);
+          nutritionExclusions.sugar_max = Math.min(nutritionExclusions.sugar_max ?? 9999, 15);
+          break;
+        case "weight":
+          // 체중관리: 고칼로리 제외
+          nutritionExclusions.calories_max = Math.min(nutritionExclusions.calories_max ?? 9999, 550);
+          nutritionExclusions.sugar_max = Math.min(nutritionExclusions.sugar_max ?? 9999, 15);
+          break;
+        case "skin":
+          // 피부건강: 고당류 제외
+          nutritionExclusions.sugar_max = Math.min(nutritionExclusions.sugar_max ?? 9999, 15);
+          break;
+      }
+    }
+    // 질환 기반 제외
+    if (conditions.includes("diabetes")) {
+      nutritionExclusions.sugar_max = Math.min(nutritionExclusions.sugar_max ?? 9999, 10);
+    }
+    if (conditions.includes("hypertension")) {
+      nutritionExclusions.sodium_max = Math.min(nutritionExclusions.sodium_max ?? 9999, 800);
+    }
+
+    // ── 3. 제품 로드 (health_score 포함) ──
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let mealProducts: any[] = [];
     {
-      const { data } = await supabase.from("products")
-        .select("id, name, manufacturer, calories, protein_g, fat_g, sugar_g, sodium_mg, fiber_g, functional_tags, dish_category")
+      let query = supabase.from("products")
+        .select("id, name, manufacturer, calories, protein_g, fat_g, sugar_g, sodium_mg, fiber_g, functional_tags, dish_category, health_score")
         .eq("is_active", true).eq("category_large", "상용제품")
-        .eq("is_purchasable", true).eq("is_meal", true)
-        .limit(800);
+        .eq("is_purchasable", true).eq("is_meal", true);
+
+      // 관심사 기반 영양 제외 필터 적용
+      if (nutritionExclusions.sodium_max) query = query.lte("sodium_mg", nutritionExclusions.sodium_max);
+      if (nutritionExclusions.sugar_max) query = query.lte("sugar_g", nutritionExclusions.sugar_max);
+      if (nutritionExclusions.calories_max) query = query.lte("calories", nutritionExclusions.calories_max);
+
+      // health_score 높은 순으로 로드
+      query = query.order("health_score", { ascending: false, nullsFirst: false }).limit(800);
+
+      const { data } = await query;
       if (data) mealProducts = data;
     }
 
@@ -182,10 +219,12 @@ export async function POST(request: NextRequest) {
     // ── 3. 스코어링 + 분류 ──
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const scoreProduct = (p: any): ScoredProduct => {
-      let score = 40;
+      // ★ 건강 점수를 기본 점수로 사용 (0~100 → 0~40으로 스케일)
+      const healthBase = Math.round((p.health_score || 50) * 0.4); // health_score 60 → 24점
+      let score = healthBase;
       const tags: string[] = p.functional_tags || [];
 
-      // 관심사 매칭
+      // 관심사 매칭 (+최대 30)
       for (const concern of concerns) {
         const weights = CONCERN_WEIGHTS[concern];
         if (weights) for (const [tag, w] of Object.entries(weights)) {
@@ -197,10 +236,8 @@ export async function POST(request: NextRequest) {
       if (conditions.includes("diabetes") && p.sugar_g != null && p.sugar_g < 5) score += 10;
       if (conditions.includes("hypertension") && p.sodium_mg != null && p.sodium_mg < 400) score += 10;
       // 단백질 보너스
-      if (p.protein_g && p.protein_g >= 15) score += 8;
-      if (p.protein_g && p.protein_g >= 25) score += 5;
-      // 나트륨 패널티 (2000mg 이상)
-      if (p.sodium_mg && p.sodium_mg > 2000) score -= 10;
+      if (p.protein_g && p.protein_g >= 15) score += 6;
+      if (p.protein_g && p.protein_g >= 25) score += 4;
       // 맛 선호
       if (tastes) {
         if (tastes.salty >= 7 && p.sodium_mg >= 800) score += 3;
@@ -209,12 +246,12 @@ export async function POST(request: NextRequest) {
         else if (tastes.sweet >= 7 && p.sugar_g >= 10) score += 3;
       }
       // 행동 개인화
-      if (userPrefs.clicked_ids.has(p.id)) score += 10;
+      if (userPrefs.clicked_ids.has(p.id)) score += 8;
       if (p.dish_category && userPrefs.category_counts[p.dish_category])
-        score += Math.min(userPrefs.category_counts[p.dish_category] * 2, 8);
+        score += Math.min(userPrefs.category_counts[p.dish_category] * 2, 6);
 
-      // 랜덤 요소 (+0~8) — 매번 다른 식단을 위해
-      score += Math.floor(Math.random() * 9);
+      // 랜덤 요소 (+0~6) — 매번 다른 식단을 위해
+      score += Math.floor(Math.random() * 7);
 
       return { ...p, score: Math.min(score, 100), bestPrice: 0, prices: [], mealType: classifyMeal(p) };
     };
