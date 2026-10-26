@@ -63,7 +63,7 @@ function emptyGrid(): GridData {
   return g;
 }
 
-/* ───── 셀 컴포넌트 ───── */
+/* ───── 셀 컴포넌트 (컴팩트) ───── */
 function Cell({ cell, onClear, onSetEatingOut, onAddClick }: {
   cell: CellData;
   onClear: () => void;
@@ -72,9 +72,9 @@ function Cell({ cell, onClear, onSetEatingOut, onAddClick }: {
 }) {
   if (!cell) {
     return (
-      <div className="h-full flex flex-col items-center justify-center gap-1 cursor-pointer group"
+      <div className="h-full flex items-center justify-center cursor-pointer group py-2"
         onClick={onAddClick}>
-        <div className="w-7 h-7 rounded-full bg-surface border border-dashed border-border flex items-center justify-center text-border text-sm group-hover:border-primary group-hover:text-primary transition-colors"
+        <div className="w-5 h-5 rounded-full border border-dashed border-border flex items-center justify-center text-border text-xs group-hover:border-primary group-hover:text-primary transition-colors"
           style={{ minHeight: "unset", minWidth: "unset" }}>+</div>
       </div>
     );
@@ -82,25 +82,24 @@ function Cell({ cell, onClear, onSetEatingOut, onAddClick }: {
 
   if (cell.type === "eating_out") {
     return (
-      <div className="h-full flex items-center justify-center relative group">
-        <span className="text-[10px] text-muted bg-surface px-2 py-1 rounded-md">🍴 외식</span>
+      <div className="h-full flex items-center justify-center relative group py-1">
+        <span className="text-[9px] text-muted">🍴 외식</span>
         <button onClick={onClear}
-          className="absolute top-0 right-0 w-4 h-4 rounded-full bg-black/40 text-white text-[8px] items-center justify-center hidden group-hover:flex"
+          className="absolute top-0 right-0 w-3.5 h-3.5 rounded-full bg-black/40 text-white text-[7px] items-center justify-center hidden group-hover:flex"
           style={{ minHeight: "unset", minWidth: "unset" }}>×</button>
       </div>
     );
   }
 
   return (
-    <div className="h-full flex flex-col p-1.5 relative group cursor-pointer" onClick={onAddClick}>
-      <div className="w-full aspect-square rounded-lg bg-surface flex items-center justify-center text-lg mb-1 overflow-hidden">
-        🍱
+    <div className="h-full flex flex-col px-1 py-1 relative group cursor-pointer" onClick={onAddClick}>
+      <p className="text-[9px] font-medium leading-tight line-clamp-2">{cell.name}</p>
+      <div className="flex items-center gap-1 mt-auto">
+        <span className="text-[8px] text-muted">{cell.calories}kcal</span>
+        {cell.price && <span className="text-[8px] text-primary font-medium">{cell.price.toLocaleString()}원</span>}
       </div>
-      <p className="text-[9px] font-medium leading-tight line-clamp-2 flex-1">{cell.name}</p>
-      <p className="text-[8px] text-muted mt-auto">{cell.calories}kcal</p>
-      {cell.price && <p className="text-[8px] text-primary font-medium">{cell.price.toLocaleString()}원</p>}
       <button onClick={(e) => { e.stopPropagation(); onClear(); }}
-        className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-black/40 text-white text-[8px] items-center justify-center hidden group-hover:flex"
+        className="absolute top-0 right-0 w-3.5 h-3.5 rounded-full bg-black/40 text-white text-[7px] items-center justify-center hidden group-hover:flex"
         style={{ minHeight: "unset", minWidth: "unset" }}>×</button>
     </div>
   );
@@ -586,22 +585,22 @@ export default function WeeklyBoxPage() {
 
       {/* 식단 그리드 */}
       <div className="border border-border rounded-xl overflow-hidden mb-6">
-        <div className="grid grid-cols-[48px_repeat(7,1fr)] overflow-x-auto">
+        <div className="grid grid-cols-[36px_repeat(7,1fr)] overflow-x-auto">
           {/* 헤더 */}
           <div className="bg-surface" />
           {DAYS.map(d => (
-            <div key={d.key} className="bg-surface px-1 py-2 text-center text-xs font-bold">{d.label}</div>
+            <div key={d.key} className="bg-surface px-1 py-1.5 text-center text-[11px] font-bold">{d.label}</div>
           ))}
 
           {/* 끼니별 행 */}
           {MEALS.map(meal => (
             <>
               <div key={`label-${meal.key}`} className="bg-surface/50 flex items-center justify-center">
-                <span className="text-[10px] font-medium text-muted writing-vertical"
+                <span className="text-[9px] font-medium text-muted"
                   style={{ writingMode: "vertical-rl" }}>{meal.emoji} {meal.label}</span>
               </div>
               {DAYS.map(day => (
-                <div key={`${day.key}-${meal.key}`} className="border-t border-l border-border/50 min-h-[80px]">
+                <div key={`${day.key}-${meal.key}`} className="border-t border-l border-border/50 min-h-[48px]">
                   <Cell
                     cell={grid[day.key]?.[meal.key]}
                     onClear={() => updateCell(day.key, meal.key, null)}

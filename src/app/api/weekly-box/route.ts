@@ -18,18 +18,27 @@ type WeeklyBoxRequest = {
   user_id?: string; // 행동 기반 개인화용
 };
 
-// 식사 카테고리 (실제 음식)
-const MEAL_CATEGORIES = new Set(["soup", "noodle", "rice", "grill", "stew", "side", "seafood", "salad"]);
-// 보조 카테고리 (음료, 보충제, 간식 등)
-const SUPPLEMENT_CATEGORIES = new Set(["beverage", "supplement", "powder", "snack"]);
+// ── 이름 기반 식사/재료 판별 ──
+// 실제 한 끼 식사가 되는 제품 키워드 (이름에 포함)
+const MEAL_KEYWORDS = /라면|짬뽕|우동|칼국수|냉면|비빔면|볶음면|국수|파스타|스파게티|볶음밥|비빔밥|컵밥|덮밥|주먹밥|도시락|김밥|카레|미역국|된장국|해장국|갈비탕|설렁탕|곰탕|삼계탕|감자탕|소고기국|육개장|찌개|순두부|불고기|돈까스|닭가슴살|제육|떡갈비|수제비|떡볶이|만두|피자|햄버거|샌드위치|리조또|그라탕|죽$/i;
+// 절대 식사가 아닌 제품 (재료, 과자, 조미료, 사탕류)
+const NOT_MEAL_KEYWORDS = /설탕|사탕|캔디|과자|스낵|뻥튀기|칩$|크래커|젤리|초콜릿|초콜렛|껌|양념|소스$|드레싱|기름$|식초|간장|고추장|된장$|케첩|마요네즈|잼$|시럽|가루$|분말|미숫가루|시즈닝|조미|후추|소금$|멸치|건새우|김$|볶음$|참깨|깨$|견과|아몬드|땅콩$|호두|캐슈넛|마카다미아|해씨|팝콘|누룽지|쿠키|비스킷|웨하스|파이$|케이크/i;
 
 // 1끼 식사 기준
 const MEAL_CRITERIA = {
-  minCalories: 250,   // 최소 250kcal (식사로 인정)
+  minCalories: 300,   // 최소 300kcal (식사로 인정)
   idealMin: 350,      // 이상적 최소
   idealMax: 700,      // 이상적 최대
   maxCalories: 900,   // 절대 최대
 };
+
+/** 이름 기반으로 실제 한 끼 식사인지 판별 */
+function isActualMeal(name: string, calories: number): boolean {
+  if (calories < MEAL_CRITERIA.minCalories) return false;
+  if (NOT_MEAL_KEYWORDS.test(name)) return false;
+  if (MEAL_KEYWORDS.test(name)) return true;
+  return false; // 키워드에 매칭 안 되면 식사로 안 봄
+}
 
 // 1일 영양 목표
 const DAILY_TARGETS = {
@@ -115,45 +124,52 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // ── 2. 구매 가능 제품 직접 로드 (is_purchasable 플래그 활용) ──
+    // ── 2. 식사 제품 + 보조 제품 분리 로드 ──
+    // 식사: is_meal=true + 구매 가능
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let allProducts: any[] = [];
-    const prodPageSize = 1000;
-    let prodOffset = 0;
-    let prodHasMore = true;
+    let mealProducts: any[] = [];
+    {
+      const { data, error } = await supabase
+        .from("products")
+        .select("id, name, manufacturer, calories, protein_g, fat_g, sugar_g, sodium_mg, fiber_g, functional_tags, dish_category")
+        .eq("is_active", true)
+        .eq("category_large", "상용제품")
+        .eq("is_purchasable", true)
+        .eq("is_meal", true)
+        .order("calories", { ascending: false })
+        .limit(500);
+      if (error) console.error("[weekly-box] meal load error:", error.message);
+      if (data) mealProducts = data;
+    }
 
-    while (prodHasMore) {
-      const { data: prodBatch, error: prodError } = await supabase
+    // 보조: 유산균/비타민/요거트/프로틴 등 실제 건강보조 제품
+    // 이름 키워드로 정확히 필터
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let supplementProducts: any[] = [];
+    {
+      const { data, error } = await supabase
         .from("products")
         .select("id, name, manufacturer, calories, protein_g, fat_g, sugar_g, sodium_mg, fiber_g, functional_tags, dish_category")
         .eq("is_active", true)
         .eq("category_large", "상용제품")
         .eq("is_purchasable", true)
         .gt("calories", 0)
-        .range(prodOffset, prodOffset + prodPageSize - 1);
-
-      if (prodError) {
-        console.error("[weekly-box] products load error:", prodError.message);
-        break;
-      }
-      if (!prodBatch || prodBatch.length === 0) {
-        if (prodOffset === 0) {
-          return NextResponse.json({ box: null, message: "구매 가능한 제품이 없습니다." });
-        }
-        break;
-      }
-      allProducts = allProducts.concat(prodBatch);
-      prodHasMore = prodBatch.length === prodPageSize;
-      prodOffset += prodPageSize;
+        .or("name.ilike.%유산균%,name.ilike.%프로바이오%,name.ilike.%요거트%,name.ilike.%요구르트%,name.ilike.%비타민%,name.ilike.%프로틴%,name.ilike.%단백질바%,name.ilike.%에너지바%,name.ilike.%뮤즐리%,name.ilike.%그래놀라%,name.ilike.%오트밀%,name.ilike.%시리얼%,name.ilike.%두유%,name.ilike.%스무디%")
+        .order("calories", { ascending: false })
+        .limit(200);
+      if (error) console.error("[weekly-box] supplement load error:", error.message);
+      if (data) supplementProducts = data;
     }
-    console.log("[weekly-box] loaded products:", allProducts.length);
 
-    // ── 3. 스코어링 (가격 제외 — 가격은 선택 후 조회) ──
-    const scored: ScoredProduct[] = allProducts
-      .map(p => {
-        const cat = p.dish_category || "other";
-        const isMeal = MEAL_CATEGORIES.has(cat) && p.calories >= MEAL_CRITERIA.minCalories;
-        const isSupplement = SUPPLEMENT_CATEGORIES.has(cat) || (p.calories < MEAL_CRITERIA.minCalories);
+    console.log("[weekly-box] meals:", mealProducts.length, "supplements:", supplementProducts.length);
+
+    if (mealProducts.length === 0) {
+      return NextResponse.json({ box: null, message: "구매 가능한 식사 제품이 없습니다." });
+    }
+
+    // ── 3. 스코어링 ──
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const scoreProduct = (p: any, isMeal: boolean, isSupplement: boolean): ScoredProduct => {
 
         let score = 40;
         const tags: string[] = p.functional_tags || [];
@@ -207,15 +223,15 @@ export async function POST(request: NextRequest) {
         }
 
         return { ...p, score: Math.min(score, 100), bestPrice: 0, prices: [], isMeal, isSupplement };
-      });
+    };
 
-    // ── 4. 식사/보조 풀 분리 → 상위 후보 선택 ──
-    const mealPool = scored.filter(p => p.isMeal).sort((a, b) => b.score - a.score);
-    const supplementPool = scored.filter(p => p.isSupplement).sort((a, b) => b.score - a.score);
+    // 식사/보조 각각 스코어링
+    const scoredMeals = mealProducts.map(p => scoreProduct(p, true, false)).sort((a, b) => b.score - a.score);
+    const scoredSupplements = supplementProducts.map(p => scoreProduct(p, false, true)).sort((a, b) => b.score - a.score);
 
-    // 상위 후보만 추려서 가격 조회 (상위 100개면 충분)
-    const topMealCandidates = mealPool.slice(0, 100);
-    const topSupplementCandidates = supplementPool.slice(0, 50);
+    // ── 4. 상위 후보 가격 조회 ──
+    const topMealCandidates = scoredMeals.slice(0, 100);
+    const topSupplementCandidates = scoredSupplements.slice(0, 50);
     const candidateIds = [...new Set([...topMealCandidates, ...topSupplementCandidates].map(p => p.id))];
 
     // ── 5. 후보 제품 가격 조회 ──
