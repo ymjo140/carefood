@@ -106,40 +106,119 @@ function Cell({ cell, onClear, onSetEatingOut, onAddClick }: {
   );
 }
 
-/* ───── 제품 검색 모달 ───── */
+/* ───── 제품 아이템 행 ───── */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function ProductRow({ p, onSelect }: { p: any; onSelect: (cell: CellData) => void }) {
+  const prices = p.product_prices?.filter((pp: { price: number }) => pp.price > 0) || [];
+  const best = prices[0];
+  return (
+    <button onClick={() => onSelect({
+      product_id: p.id, name: p.name,
+      calories: p.calories, protein_g: p.protein_g,
+      price: best?.price, platform: best?.platform, url: best?.url,
+      type: "product",
+    })}
+      className="w-full text-left p-2.5 rounded-xl hover:bg-surface transition-colors flex items-center gap-3">
+      <div className="w-9 h-9 rounded-lg bg-surface flex items-center justify-center text-base shrink-0"
+        style={{ minHeight: "unset", minWidth: "unset" }}>🍱</div>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium line-clamp-1">{p.name}</p>
+        <p className="text-[11px] text-muted">{p.calories || 0}kcal · 단백질 {Math.round(p.protein_g || 0)}g</p>
+      </div>
+      {best && <span className="text-sm font-bold shrink-0">{best.price.toLocaleString()}원</span>}
+    </button>
+  );
+}
+
+/* ───── 제품 검색/선택 모달 ───── */
 function ProductSearchModal({ onSelect, onClose, onEatingOut }: {
   onSelect: (product: CellData) => void;
   onClose: () => void;
   onEatingOut: () => void;
 }) {
+  const [tab, setTab] = useState<"recent" | "search">("recent");
   const [query, setQuery] = useState("");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [results, setResults] = useState<any[]>([]);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [recentProducts, setRecentProducts] = useState<any[]>([]);
   const [searching, setSearching] = useState(false);
+  const [loadingRecent, setLoadingRecent] = useState(true);
+
+  // 최근 본/클릭한 제품 로드
+  useEffect(() => {
+    const loadRecent = async () => {
+      const userId = getUserId();
+      if (!userId) { setLoadingRecent(false); return; }
+      try {
+        const res = await fetch(`/api/interactions?user_id=${userId}`);
+        const data = await res.json();
+        const allIds = [...new Set([
+          ...(data.clicked_product_ids || []),
+          ...(data.viewed_product_ids || []),
+        ])].slice(0, 20);
+
+        if (allIds.length === 0) { setLoadingRecent(false); return; }
+
+        // 제품 정보 + 가격 로드
+        const params = new URLSearchParams();
+        params.set("hasPrice", "1");
+        params.set("limit", "20");
+        // ID로 필터는 API에서 지원 안 하므로 검색 없이 전체에서 가져옴
+        // 간단하게 각 ID별로 요청하는 대신, 최근 본 ID를 localStorage에서 가져와 표시
+        const productRes = await fetch(`/api/products?limit=20&hasPrice=1`);
+        const productData = await productRes.json();
+
+        // 최근 본 제품 중 구매 가능한 것만 필터
+        const productMap = new Map((productData.products || []).map((p: { id: string }) => [p.id, p]));
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const recent: any[] = [];
+        for (const id of allIds) {
+          const p = productMap.get(id);
+          if (p) recent.push(p);
+        }
+
+        // 매칭 안 되면 그냥 전체 인기 제품 보여주기
+        if (recent.length < 5) {
+          setRecentProducts(productData.products?.slice(0, 10) || []);
+        } else {
+          setRecentProducts(recent);
+        }
+      } catch { /* */ }
+      finally { setLoadingRecent(false); }
+    };
+    loadRecent();
+  }, []);
 
   const search = async () => {
     if (!query.trim()) return;
     setSearching(true);
+    setTab("search");
     try {
-      const res = await fetch(`/api/products?q=${encodeURIComponent(query)}&hasPrice=1&limit=10`);
+      const res = await fetch(`/api/products?q=${encodeURIComponent(query)}&hasPrice=1&limit=15`);
       const data = await res.json();
       setResults(data.products || []);
     } catch { /* */ }
     finally { setSearching(false); }
   };
 
+  const displayProducts = tab === "search" ? results : recentProducts;
+  const isLoading = tab === "search" ? searching : loadingRecent;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
       <div className="relative bg-card rounded-2xl w-full max-w-md max-h-[80vh] overflow-hidden flex flex-col">
+        {/* 헤더 */}
         <div className="p-4 border-b border-border flex items-center justify-between">
           <h3 className="font-bold text-sm">제품 추가</h3>
           <button onClick={onClose} className="text-muted hover:text-foreground"
             style={{ minHeight: "32px", minWidth: "32px" }}>✕</button>
         </div>
 
-        <div className="p-4 border-b border-border">
-          <div className="flex gap-2 mb-2">
+        {/* 검색 바 */}
+        <div className="px-4 pt-3">
+          <div className="flex gap-2">
             <input type="text" value={query} onChange={e => setQuery(e.target.value)}
               onKeyDown={e => e.key === "Enter" && search()}
               placeholder="제품 검색..."
@@ -147,38 +226,43 @@ function ProductSearchModal({ onSelect, onClose, onEatingOut }: {
             <button onClick={search} className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-bold"
               style={{ minHeight: "36px" }}>검색</button>
           </div>
+        </div>
+
+        {/* 탭 + 외식 */}
+        <div className="px-4 pt-2 pb-1 flex items-center justify-between">
+          <div className="flex gap-1">
+            <button onClick={() => setTab("recent")}
+              className={`text-xs px-2.5 py-1 rounded-full ${tab === "recent" ? "bg-foreground text-card" : "text-muted hover:text-foreground"}`}
+              style={{ minHeight: "26px", minWidth: "unset" }}>
+              최근 본 제품
+            </button>
+            {results.length > 0 && (
+              <button onClick={() => setTab("search")}
+                className={`text-xs px-2.5 py-1 rounded-full ${tab === "search" ? "bg-foreground text-card" : "text-muted hover:text-foreground"}`}
+                style={{ minHeight: "26px", minWidth: "unset" }}>
+                검색 결과 ({results.length})
+              </button>
+            )}
+          </div>
           <button onClick={onEatingOut}
-            className="text-xs text-muted hover:text-foreground"
+            className="text-[11px] text-muted hover:text-foreground"
             style={{ minHeight: "unset", minWidth: "unset" }}>
-            🍴 외식으로 표시
+            🍴 외식
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-2">
-          {searching && <p className="text-sm text-muted text-center py-4">검색 중...</p>}
-          {results.map((p) => {
-            const prices = p.product_prices?.filter((pp: { price: number }) => pp.price > 0) || [];
-            const best = prices[0];
-            return (
-              <button key={p.id} onClick={() => onSelect({
-                product_id: p.id, name: p.name,
-                calories: p.calories, protein_g: p.protein_g,
-                price: best?.price, platform: best?.platform, url: best?.url,
-                type: "product",
-              })}
-                className="w-full text-left p-3 rounded-xl hover:bg-surface transition-colors flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-surface flex items-center justify-center text-lg shrink-0"
-                  style={{ minHeight: "unset", minWidth: "unset" }}>🍱</div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium line-clamp-1">{p.name}</p>
-                  <p className="text-[11px] text-muted">{p.calories}kcal · 단백질 {Math.round(p.protein_g || 0)}g</p>
-                </div>
-                {best && <span className="text-sm font-bold shrink-0">{best.price.toLocaleString()}원</span>}
-              </button>
-            );
-          })}
-          {!searching && results.length === 0 && query && (
-            <p className="text-sm text-muted text-center py-4">결과가 없습니다</p>
+        {/* 제품 목록 */}
+        <div className="flex-1 overflow-y-auto px-2 pb-2">
+          {isLoading ? (
+            <p className="text-sm text-muted text-center py-6">로딩 중...</p>
+          ) : displayProducts.length > 0 ? (
+            displayProducts.map((p) => (
+              <ProductRow key={p.id} p={p} onSelect={onSelect} />
+            ))
+          ) : tab === "recent" ? (
+            <p className="text-sm text-muted text-center py-6">최근 본 제품이 없습니다. 검색으로 추가하세요.</p>
+          ) : (
+            <p className="text-sm text-muted text-center py-6">결과가 없습니다</p>
           )}
         </div>
       </div>
@@ -241,8 +325,20 @@ export default function WeeklyBoxPage() {
         }),
       });
 
+      if (!res.ok) {
+        const errText = await res.text();
+        console.error("Weekly box API error:", res.status, errText);
+        alert(`식단 생성 실패 (${res.status})`);
+        return;
+      }
+
       const data = await res.json();
-      if (!data.box?.days) { alert("식단 생성에 실패했습니다."); return; }
+      console.log("Weekly box response:", data);
+
+      if (!data.box?.days || data.box.days.length === 0) {
+        alert(data.message || data.error || "식단을 생성할 수 없습니다. 구매 가능 제품이 부족합니다.");
+        return;
+      }
 
       // API 결과를 그리드로 변환
       const newGrid = emptyGrid();
