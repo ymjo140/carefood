@@ -22,7 +22,7 @@ type ApiResponse = {
   totalPages: number;
 };
 
-type SortOption = "name" | "recommend" | "price_asc" | "price_desc" | "protein_desc" | "calories_asc" | "health_desc";
+type SortOption = "recommend" | "price_asc" | "price_desc" | "protein_desc" | "calories_asc" | "name";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type UserProfile = Record<string, any> | null;
@@ -37,12 +37,10 @@ const TASTE_CONFIG = [
 
 const SORT_OPTIONS: { value: SortOption; label: string }[] = [
   { value: "recommend", label: "추천순" },
-  { value: "health_desc", label: "건강점수순" },
   { value: "price_asc", label: "낮은 가격순" },
   { value: "price_desc", label: "높은 가격순" },
   { value: "protein_desc", label: "고단백순" },
   { value: "calories_asc", label: "저칼로리순" },
-  { value: "name", label: "이름순" },
 ];
 
 const GOAL_LABELS: Record<string, string> = {
@@ -608,9 +606,6 @@ export default function ProductExplorer() {
       if (raw) {
         const p = JSON.parse(raw);
         setProfile(p);
-      } else {
-        // 프로필 없으면 건강점수순으로 폴백
-        setSortBy("health_desc");
       }
     } catch { /* */ }
   }, []);
