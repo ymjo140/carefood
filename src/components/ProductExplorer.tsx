@@ -109,6 +109,25 @@ const NUTRITION_PRESETS = {
   ],
 };
 
+const PER100G_PRESETS = {
+  per100g_sugar_max: [
+    { label: "저당 5g↓", value: 5 },
+    { label: "극저당 2g↓", value: 2 },
+  ],
+  per100g_sodium_max: [
+    { label: "저염 300mg↓", value: 300 },
+    { label: "극저염 150mg↓", value: 150 },
+  ],
+  per100g_protein_min: [
+    { label: "고단백 15g+", value: 15 },
+    { label: "초고단백 25g+", value: 25 },
+  ],
+  per100g_calories_max: [
+    { label: "저칼 150kcal↓", value: 150 },
+    { label: "극저칼 80kcal↓", value: 80 },
+  ],
+};
+
 /* ───── 칩 버튼 ───── */
 function Chip({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
   return (
@@ -133,10 +152,16 @@ type NutritionFilters = {
   sodium_max: number;
   sugar_max: number;
   fiber_min: number;
+  // 100g당 기준
+  per100g_sugar_max: number;
+  per100g_sodium_max: number;
+  per100g_protein_min: number;
+  per100g_calories_max: number;
 };
 
 const INITIAL_NUTRITION: NutritionFilters = {
   protein_min: 0, calories_max: 0, sodium_max: 0, sugar_max: 0, fiber_min: 0,
+  per100g_sugar_max: 0, per100g_sodium_max: 0, per100g_protein_min: 0, per100g_calories_max: 0,
 };
 
 /* ───── 사이드바 필터 패널 ───── */
@@ -256,6 +281,51 @@ function FilterPanel({
                   style={{ minHeight: "24px" }}
                 />
                 <span className="text-[11px] text-muted">{n.unit}</span>
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {n.presets.map(p => (
+                  <button key={p.label}
+                    onClick={() => updateNutrition(n.key, nutrition[n.key] === p.value ? 0 : p.value)}
+                    className={`text-[11px] px-2 py-0.5 rounded-full transition-colors ${
+                      nutrition[n.key] === p.value
+                        ? "bg-primary/15 text-primary font-medium"
+                        : "bg-surface text-muted hover:text-foreground/70"
+                    }`}
+                    style={{ minHeight: "22px", minWidth: "unset" }}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* 100g당 영양 기준 */}
+      <section>
+        <h3 className="text-[13px] font-bold text-foreground mb-2">100g당 기준</h3>
+        <p className="text-[10px] text-muted mb-2">제품 크기와 무관하게 영양 밀도로 비교</p>
+        <div className="space-y-3">
+          {([
+            { key: "per100g_sugar_max" as const, label: "당류", unit: "g", op: "≤", presets: PER100G_PRESETS.per100g_sugar_max },
+            { key: "per100g_sodium_max" as const, label: "나트륨", unit: "mg", op: "≤", presets: PER100G_PRESETS.per100g_sodium_max },
+            { key: "per100g_protein_min" as const, label: "단백질", unit: "g", op: "≥", presets: PER100G_PRESETS.per100g_protein_min },
+            { key: "per100g_calories_max" as const, label: "칼로리", unit: "kcal", op: "≤", presets: PER100G_PRESETS.per100g_calories_max },
+          ]).map(n => (
+            <div key={n.key}>
+              <div className="flex items-center gap-1.5 mb-1">
+                <span className="text-xs font-medium text-foreground/80">{n.label}</span>
+                <span className="text-[11px] text-muted">{n.op}</span>
+                <input
+                  type="number"
+                  value={nutrition[n.key] || ""}
+                  onChange={e => updateNutrition(n.key, Number(e.target.value) || 0)}
+                  placeholder="0"
+                  className="w-14 px-2 py-0.5 rounded border border-border bg-card text-xs text-center focus:outline-none focus:border-primary"
+                  style={{ minHeight: "24px" }}
+                />
+                <span className="text-[11px] text-muted">{n.unit}/100g</span>
               </div>
               <div className="flex flex-wrap gap-1">
                 {n.presets.map(p => (
@@ -442,6 +512,10 @@ export default function ProductExplorer() {
       if (nutrition.sodium_max > 0) params.set("sodium_max", String(nutrition.sodium_max));
       if (nutrition.sugar_max > 0) params.set("sugar_max", String(nutrition.sugar_max));
       if (nutrition.fiber_min > 0) params.set("fiber_min", String(nutrition.fiber_min));
+      if (nutrition.per100g_sugar_max > 0) params.set("per100g_sugar_max", String(nutrition.per100g_sugar_max));
+      if (nutrition.per100g_sodium_max > 0) params.set("per100g_sodium_max", String(nutrition.per100g_sodium_max));
+      if (nutrition.per100g_protein_min > 0) params.set("per100g_protein_min", String(nutrition.per100g_protein_min));
+      if (nutrition.per100g_calories_max > 0) params.set("per100g_calories_max", String(nutrition.per100g_calories_max));
       params.set("sort", sortBy);
       params.set("page", String(page));
       params.set("limit", "20");

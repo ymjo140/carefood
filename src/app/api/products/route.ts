@@ -55,6 +55,11 @@ export async function GET(request: NextRequest) {
   const sodiumMax = Number(searchParams.get("sodium_max") || 0);
   const sugarMax = Number(searchParams.get("sugar_max") || 0);
   const fiberMin = Number(searchParams.get("fiber_min") || 0);
+  // 100g당 기준 필터 (per_100g_ 접두사)
+  const per100gSugarMax = Number(searchParams.get("per100g_sugar_max") || 0);
+  const per100gSodiumMax = Number(searchParams.get("per100g_sodium_max") || 0);
+  const per100gProteinMin = Number(searchParams.get("per100g_protein_min") || 0);
+  const per100gCaloriesMax = Number(searchParams.get("per100g_calories_max") || 0);
   const sort = searchParams.get("sort") || "name";
   const page = Number(searchParams.get("page") || 1);
   const limit = Math.min(Number(searchParams.get("limit") || 20), 50);
@@ -197,13 +202,39 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // 가격 정보 합치기
-  let productsWithPrices = products.map((product: { id: string }) => ({
-    ...product,
-    product_prices: (priceMap[product.id] || []).sort(
-      (a: MallPrice, b: MallPrice) => a.price - b.price
-    ),
-  }));
+  // 가격 정보 합치기 + 100g당 환산값 추가
+  let productsWithPrices = products.map((product: { id: string; serving_size_g?: number; sugar_g?: number; sodium_mg?: number; protein_g?: number; calories?: number }) => {
+    const s = product.serving_size_g;
+    const per100 = (v: number | undefined | null) => (v != null && s && s > 0) ? Math.round((v / s) * 100 * 10) / 10 : null;
+    return {
+      ...product,
+      per100g_sugar: per100(product.sugar_g),
+      per100g_sodium: per100(product.sodium_mg),
+      per100g_protein: per100(product.protein_g),
+      per100g_calories: per100(product.calories),
+      product_prices: (priceMap[product.id] || []).sort(
+        (a: MallPrice, b: MallPrice) => a.price - b.price
+      ),
+    };
+  });
+
+  // 100g당 기준 필터 (후처리)
+  if (per100gSugarMax > 0) {
+    productsWithPrices = productsWithPrices.filter((p: { per100g_sugar: number | null }) =>
+      p.per100g_sugar != null && p.per100g_sugar <= per100gSugarMax);
+  }
+  if (per100gSodiumMax > 0) {
+    productsWithPrices = productsWithPrices.filter((p: { per100g_sodium: number | null }) =>
+      p.per100g_sodium != null && p.per100g_sodium <= per100gSodiumMax);
+  }
+  if (per100gProteinMin > 0) {
+    productsWithPrices = productsWithPrices.filter((p: { per100g_protein: number | null }) =>
+      p.per100g_protein != null && p.per100g_protein >= per100gProteinMin);
+  }
+  if (per100gCaloriesMax > 0) {
+    productsWithPrices = productsWithPrices.filter((p: { per100g_calories: number | null }) =>
+      p.per100g_calories != null && p.per100g_calories <= per100gCaloriesMax);
+  }
 
   // 가격 필터 (후처리)
   if (priceMin > 0 || priceMax > 0) {
@@ -227,12 +258,12 @@ export async function GET(request: NextRequest) {
     });
   }
 
-  const filtered = priceMin > 0 || priceMax > 0;
+  const postFiltered = priceMin > 0 || priceMax > 0 || per100gSugarMax > 0 || per100gSodiumMax > 0 || per100gProteinMin > 0 || per100gCaloriesMax > 0;
   return NextResponse.json({
     products: productsWithPrices,
-    total: filtered ? productsWithPrices.length : count,
+    total: postFiltered ? productsWithPrices.length : count,
     page,
     limit,
-    totalPages: Math.ceil((filtered ? productsWithPrices.length : (count || 0)) / limit),
+    totalPages: Math.ceil((postFiltered ? productsWithPrices.length : (count || 0)) / limit),
   });
 }
