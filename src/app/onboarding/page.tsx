@@ -287,7 +287,7 @@ function OnboardingContent() {
       /* DB 저장 실패해도 localStorage가 있으니 진행 */
     }
 
-    router.push("/recommend");
+    router.push("/products");
   };
 
   // 결과 단계의 CTA

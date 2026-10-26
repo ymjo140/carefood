@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
 import type { ProductWithPrices, TasteLevel, DishCategory } from "@/types/database";
 import { DISH_CATEGORY_LABELS } from "@/types/database";
@@ -22,7 +22,10 @@ type ApiResponse = {
   totalPages: number;
 };
 
-type SortOption = "name" | "price_asc" | "price_desc" | "protein_desc" | "calories_asc" | "health_desc";
+type SortOption = "name" | "recommend" | "price_asc" | "price_desc" | "protein_desc" | "calories_asc" | "health_desc";
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type UserProfile = Record<string, any> | null;
 
 /* ───── 상수 ───── */
 const TASTE_CONFIG = [
@@ -33,13 +36,20 @@ const TASTE_CONFIG = [
 ];
 
 const SORT_OPTIONS: { value: SortOption; label: string }[] = [
-  { value: "name", label: "이름순" },
+  { value: "recommend", label: "추천순" },
   { value: "health_desc", label: "건강점수순" },
   { value: "price_asc", label: "낮은 가격순" },
   { value: "price_desc", label: "높은 가격순" },
   { value: "protein_desc", label: "고단백순" },
   { value: "calories_asc", label: "저칼로리순" },
+  { value: "name", label: "이름순" },
 ];
+
+const GOAL_LABELS: Record<string, string> = {
+  balanced: "균형식단", weight_loss: "체중관리", muscle: "근력강화",
+  gut_health: "장건강", skin: "피부건강", energy: "활력충전",
+  diabetes: "당뇨관심", blood_pressure: "혈압관심", kidney: "신장관심",
+};
 
 function formatPrice(price: number): string {
   return price.toLocaleString("ko-KR") + "원";
@@ -493,9 +503,20 @@ function ProductCard({ product, isFavorite, onToggleFavorite }: {
           )}
         </div>
 
-        {/* 건강 점수 + 태그 */}
+        {/* 점수 + 태그 */}
         <div className="flex flex-wrap gap-1 mb-2">
-          {product.health_score != null && (
+          {/* 추천 점수 (추천순일 때) */}
+          {(product as ProductWithPrices & { match_score?: number }).match_score != null && (
+            <span className={`text-[11px] px-2 py-0.5 rounded font-bold ${
+              (product as ProductWithPrices & { match_score?: number }).match_score! >= 80 ? "bg-primary text-white"
+              : (product as ProductWithPrices & { match_score?: number }).match_score! >= 60 ? "bg-primary/70 text-white"
+              : "bg-primary/40 text-white"
+            }`} style={{ minHeight: "unset", minWidth: "unset" }}>
+              매칭 {(product as ProductWithPrices & { match_score?: number }).match_score}점
+            </span>
+          )}
+          {/* 건강 점수 (추천 점수 없을 때) */}
+          {(product as ProductWithPrices & { match_score?: number }).match_score == null && product.health_score != null && (
             <span className={`text-[11px] px-2 py-0.5 rounded font-bold ${
               product.health_score >= 70 ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
               : product.health_score >= 50 ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"
@@ -504,7 +525,15 @@ function ProductCard({ product, isFavorite, onToggleFavorite }: {
               건강 {product.health_score}
             </span>
           )}
-          {product.functional_tags?.slice(0, 3).map((t: string) => (
+          {/* 매칭 이유 (추천순) */}
+          {(product as ProductWithPrices & { match_reasons?: string[] }).match_reasons?.slice(0, 3).map((r: string) => (
+            <span key={r} className="text-[11px] px-2 py-0.5 rounded bg-primary/10 text-primary font-medium"
+              style={{ minHeight: "unset", minWidth: "unset" }}>
+              {r}
+            </span>
+          ))}
+          {/* 기능성 태그 (추천 이유 없을 때) */}
+          {!(product as ProductWithPrices & { match_reasons?: string[] }).match_reasons?.length && product.functional_tags?.slice(0, 3).map((t: string) => (
             <span key={t} className="text-[11px] px-2 py-0.5 rounded bg-primary/8 text-primary/80 font-medium"
               style={{ minHeight: "unset", minWidth: "unset" }}>
               {ALL_TAG_LABELS[t] || t}
@@ -565,11 +594,34 @@ export default function ProductExplorer() {
   const [priceMin, setPriceMin] = useState(0);
   const [priceMax, setPriceMax] = useState(0);
   const [nutrition, setNutrition] = useState<NutritionFilters>(INITIAL_NUTRITION);
-  const [sortBy, setSortBy] = useState<SortOption>("name");
+  const [sortBy, setSortBy] = useState<SortOption>("recommend"); // 기본: 추천순
   const [page, setPage] = useState(1);
   const [data, setData] = useState<ApiResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
+  const [profile, setProfile] = useState<UserProfile>(null);
+
+  // 프로필 로드
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("carefood_profile");
+      if (raw) {
+        const p = JSON.parse(raw);
+        setProfile(p);
+      } else {
+        // 프로필 없으면 건강점수순으로 폴백
+        setSortBy("health_desc");
+      }
+    } catch { /* */ }
+  }, []);
+
+  // 프로필 요약 (상단 칩 표시용)
+  const profileSummary = useMemo(() => {
+    if (!profile) return null;
+    const goals = (profile.goals || profile.concerns || []) as string[];
+    const labels = goals.map((g: string) => GOAL_LABELS[g] || g).filter(Boolean);
+    return labels.length > 0 ? labels.join(" · ") : null;
+  }, [profile]);
 
   const fetchProducts = useCallback(async () => {
     setLoading(true);
@@ -596,11 +648,28 @@ export default function ProductExplorer() {
       if (nutrition.per100g_protein_min > 0) params.set("per100g_protein_min", String(nutrition.per100g_protein_min));
       if (nutrition.per100g_calories_max > 0) params.set("per100g_calories_max", String(nutrition.per100g_calories_max));
       if (nutrition.health_min > 0) params.set("health_min", String(nutrition.health_min));
-      params.set("sort", sortBy);
+      params.set("sort", sortBy === "recommend" ? "recommend" : sortBy);
       params.set("page", String(page));
       params.set("limit", "20");
 
-      const res = await fetch(`/api/products?${params.toString()}`);
+      let res: Response;
+      if (sortBy === "recommend" && profile) {
+        // 추천순: POST로 프로필 데이터 전송 → match_score 계산
+        res = await fetch(`/api/products?${params.toString()}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            concerns: profile.concerns || [],
+            goals: profile.goals || [],
+            conditions: profile.conditions || [],
+            sensitivity: profile.sensitivity || { digestive: 2, additive: 2 },
+            tastes: profile.tastes || { salty: 5, sweet: 5, spicy: 5, fatty: 5 },
+            nutrition_goals: profile.nutrition_goals || undefined,
+          }),
+        });
+      } else {
+        res = await fetch(`/api/products?${params.toString()}`);
+      }
       if (!res.ok) throw new Error("Failed to fetch");
       const json: ApiResponse = await res.json();
       setData(json);
@@ -609,7 +678,7 @@ export default function ProductExplorer() {
     } finally {
       setLoading(false);
     }
-  }, [tastes, search, selectedCategories, selectedPurposes, selectedIngredients, hasPriceOnly, priceMin, priceMax, nutrition, sortBy, page]);
+  }, [tastes, search, selectedCategories, selectedPurposes, selectedIngredients, hasPriceOnly, priceMin, priceMax, nutrition, sortBy, page, profile]);
 
   useEffect(() => { fetchProducts(); }, [fetchProducts]);
 
@@ -638,6 +707,22 @@ export default function ProductExplorer() {
 
   return (
     <div>
+      {/* 프로필 요약 칩 */}
+      {profileSummary && (
+        <div className="flex items-center gap-2 mb-3">
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20">
+            <span className="text-xs font-medium text-primary">{profileSummary}</span>
+          </div>
+          <Link href="/onboarding" className="text-[11px] text-muted hover:text-primary transition-colors">수정</Link>
+        </div>
+      )}
+      {!profile && (
+        <div className="flex items-center gap-2 mb-3 px-3 py-2 rounded-lg bg-surface border border-border/50">
+          <span className="text-xs text-muted">프로필을 설정하면 맞춤 추천을 받을 수 있어요</span>
+          <Link href="/onboarding" className="text-xs text-primary font-medium hover:underline shrink-0">설정하기</Link>
+        </div>
+      )}
+
       {/* 검색 */}
       <form onSubmit={handleSearch} className="mb-4">
         <div className="flex gap-2">

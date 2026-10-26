@@ -14,7 +14,7 @@ const NAV_ITEMS = [
 ];
 
 const USER_MENU_ITEMS = [
-  { href: "/recommend", label: "맞춤 추천" },
+  { href: "/products", label: "제품 탐색" },
   { href: "/health", label: "건강검진 정보" },
   { href: "/health/report", label: "영양 리포트" },
   { href: "/meals", label: "식사 기록" },
