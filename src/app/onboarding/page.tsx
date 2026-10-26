@@ -1,66 +1,52 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, useMemo, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import type { TasteLevel, HealthConcern, SensitivityLevel } from "@/types/database";
+import type { HealthConcern, SensitivityLevel, TasteLevel } from "@/types/database";
 import { createClient } from "@/lib/supabase/client";
 import { saveProfile } from "@/app/auth/actions";
+import {
+  calculateNutritionGoals,
+  calculateBMI,
+  getBMICategory,
+  BMI_LABELS,
+  HEALTH_GOAL_LABELS,
+  type HealthGoal,
+  type Gender,
+  type DietType,
+  type BodyInfo,
+  type NutritionGoals,
+} from "@/lib/nutrition";
 
-// ── 타입 ─────────────────────────────────────────────
+/* ════════════════════════════════════════════
+   타입 & 상수
+   ════════════════════════════════════════════ */
+
 type OnboardingState = {
-  concerns: HealthConcern[];
-  // Phase 1-1: 인구통계 + 식습관
-  age_group: string;    // '20s','30s','40s','50s','60plus'
-  gender: string;       // 'male','female','other'
-  household: string;    // 'single','couple','family'
-  diet_type: string;    // 'normal','diet','exercise','vegetarian','pregnant'
-  sensitivity: {
-    digestive: SensitivityLevel;
-    additive: SensitivityLevel;
-  };
+  // Step 1: 건강 목표
+  goals: HealthGoal[];
+  showDiseaseGoals: boolean;
+  // Step 2: 신체 정보
+  gender: Gender;
+  birthYear: number;
+  heightCm: number;
+  weightKg: number;
+  // Step 3: 식사 패턴
+  mealsPerDay: number;
+  eatingOutFreq: string;
+  dietType: DietType;
+  // Step 4: 알레르기
   allergies: string[];
+  // Step 5: 맛 선호도 + 민감도
+  sensitivity: { digestive: SensitivityLevel; additive: SensitivityLevel };
   tastes: { salty: TasteLevel; sweet: TasteLevel; spicy: TasteLevel; fatty: TasteLevel };
 };
 
-// ── 상수 ─────────────────────────────────────────────
+const STEPS = ["goals", "body", "pattern", "allergies", "tastes", "result"] as const;
+type StepKey = (typeof STEPS)[number];
 
-/* SVG 아이콘 */
-function IconGut({ className = "" }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9v-2h2v2zm4 0h-2v-2h2v2zm1-4H8c-.55 0-1-.45-1-1V8c0-.55.45-1 1-1h8c.55 0 1 .45 1 1v3c0 .55-.45 1-1 1z" />
-    </svg>
-  );
-}
-function IconLeaf({ className = "" }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <path d="M17 8C8 10 5.9 16.17 3.82 21.34l1.89.66C7.72 17.14 9.23 12 17 10V8z" />
-      <path d="M20.08 3.47L18.5 5.06C14.83 8.72 12.05 12.21 10.29 16.13l1.83.79C13.77 13.35 16.38 10.05 19.87 6.58l1.59-1.59-1.38-1.52z" />
-    </svg>
-  );
-}
-function IconScale({ className = "" }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <path d="M12 3L1 9l4 2.18v6L12 21l7-3.82v-6l2-1.09V17h2V9L12 3zm6.82 6L12 12.72 5.18 9 12 5.28 18.82 9zM17 15.99l-5 2.73-5-2.73v-3.72L12 15l5-2.73v3.72z" />
-    </svg>
-  );
-}
-function IconBolt({ className = "" }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <path d="M11 21h-1l1-7H7.5c-.88 0-.33-.75-.31-.78C8.48 10.94 10.42 7.54 13.01 3h1l-1 7h3.51c.4 0 .62.19.4.66C12.97 17.55 11 21 11 21z" />
-    </svg>
-  );
-}
-
-const CONCERNS: { key: HealthConcern; icon: typeof IconGut; label: string; desc: string; iconBg: string }[] = [
-  { key: "gut_health", icon: IconGut, label: "장건강", desc: "소화가 예민하거나, 속이 편한 식품을 찾고 있어요", iconBg: "bg-emerald-500" },
-  { key: "skin", icon: IconLeaf, label: "피부건강", desc: "속부터 관리해서 피부 컨디션을 챙기고 싶어요", iconBg: "bg-pink-500" },
-  { key: "weight", icon: IconScale, label: "체중관리", desc: "가볍지만 든든한 식품을 찾고 있어요", iconBg: "bg-blue-500" },
-  { key: "energy", icon: IconBolt, label: "활력충전", desc: "하루에 필요한 영양을 골고루 채우고 싶어요", iconBg: "bg-amber-500" },
-];
+const MAIN_GOALS: HealthGoal[] = ["balanced", "weight_loss", "muscle", "gut_health", "skin", "energy"];
+const DISEASE_GOALS: HealthGoal[] = ["diabetes", "blood_pressure", "kidney"];
 
 const ALLERGIES = [
   { key: "egg", label: "계란" },
@@ -69,7 +55,7 @@ const ALLERGIES = [
   { key: "soybean", label: "대두" },
   { key: "peanut", label: "땅콩" },
   { key: "treenut", label: "견과류" },
-  { key: "shellfish", label: "갑각류(새우·게)" },
+  { key: "shellfish", label: "갑각류" },
   { key: "fish", label: "생선" },
   { key: "buckwheat", label: "메밀" },
   { key: "peach", label: "복숭아" },
@@ -83,49 +69,14 @@ const TASTE_CONFIG = [
   { key: "fatty" as const, label: "기름진맛" },
 ];
 
-const SENSITIVITY_LABELS: Record<number, string> = {
-  1: "둔감한 편",
-  2: "보통",
-  3: "예민한 편",
-};
-
-// ── 메인 컴포넌트 (Suspense 래퍼) ────────────────────
-export default function OnboardingPage() {
-  return (
-    <Suspense fallback={
-      <div className="min-h-[calc(100vh-3.5rem)] flex items-center justify-center">
-        <div className="inline-block w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-      </div>
-    }>
-      <OnboardingContent />
-    </Suspense>
-  );
-}
-
-const STEPS = ["concerns", "about_me", "sensitivity", "allergies", "tastes"] as const;
-type StepKey = typeof STEPS[number];
-
-const AGE_OPTIONS = [
-  { key: "20s", label: "20대" },
-  { key: "30s", label: "30대" },
-  { key: "40s", label: "40대" },
-  { key: "50s", label: "50대" },
-  { key: "60plus", label: "60대 이상" },
+const EATING_OUT_OPTIONS = [
+  { key: "daily", label: "거의 매일" },
+  { key: "3_4", label: "주 3~4회" },
+  { key: "1_2", label: "주 1~2회" },
+  { key: "rarely", label: "거의 안 함" },
 ];
 
-const GENDER_OPTIONS = [
-  { key: "male", label: "남성" },
-  { key: "female", label: "여성" },
-  { key: "other", label: "선택안함" },
-];
-
-const HOUSEHOLD_OPTIONS = [
-  { key: "single", label: "1인 가구" },
-  { key: "couple", label: "2인 가구" },
-  { key: "family", label: "가족 (3인+)" },
-];
-
-const DIET_OPTIONS = [
+const DIET_OPTIONS: { key: DietType; label: string; desc: string }[] = [
   { key: "normal", label: "일반 식사", desc: "특별한 식단 제한 없음" },
   { key: "diet", label: "다이어트 중", desc: "칼로리 조절 중이에요" },
   { key: "exercise", label: "운동 병행", desc: "근력 운동이나 유산소를 해요" },
@@ -133,45 +84,112 @@ const DIET_OPTIONS = [
   { key: "pregnant", label: "임산부·수유부", desc: "임신 중이거나 수유 중이에요" },
 ];
 
+const SENSITIVITY_LABELS: Record<number, string> = {
+  1: "둔감한 편",
+  2: "보통",
+  3: "예민한 편",
+};
+
+/* ════════════════════════════════════════════
+   메인 (Suspense 래퍼)
+   ════════════════════════════════════════════ */
+
+export default function OnboardingPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-[calc(100vh-3.5rem)] flex items-center justify-center">
+          <div className="inline-block w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+        </div>
+      }
+    >
+      <OnboardingContent />
+    </Suspense>
+  );
+}
+
+/* ════════════════════════════════════════════
+   콘텐츠
+   ════════════════════════════════════════════ */
+
 function OnboardingContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
   const [step, setStep] = useState(0);
   const [state, setState] = useState<OnboardingState>({
-    concerns: [],
-    age_group: "",
-    gender: "",
-    household: "",
-    diet_type: "",
-    sensitivity: { digestive: 2, additive: 2 },
+    goals: [],
+    showDiseaseGoals: false,
+    gender: "other",
+    birthYear: 1995,
+    heightCm: 170,
+    weightKg: 65,
+    mealsPerDay: 3,
+    eatingOutFreq: "1_2",
+    dietType: "normal",
     allergies: [],
+    sensitivity: { digestive: 2, additive: 2 },
     tastes: { salty: 5, sweet: 5, spicy: 5, fatty: 5 },
   });
 
   // URL 파라미터로 관심사 프리셋
   useEffect(() => {
-    const c = searchParams.get("concern") as HealthConcern | null;
-    if (c && CONCERNS.some((cc) => cc.key === c)) {
+    const c = searchParams.get("concern");
+    const goalMap: Record<string, HealthGoal> = {
+      gut_health: "gut_health",
+      skin: "skin",
+      weight: "weight_loss",
+      energy: "energy",
+    };
+    const mapped = goalMap[c || ""];
+    if (mapped) {
       setState((prev) => ({
         ...prev,
-        concerns: prev.concerns.includes(c) ? prev.concerns : [...prev.concerns, c],
+        goals: prev.goals.includes(mapped) ? prev.goals : [...prev.goals, mapped],
       }));
-      setStep(1); // 관심사 이미 선택됨 → 민감도 단계로
     }
   }, [searchParams]);
 
   const totalSteps = STEPS.length;
-  const currentStepKey: StepKey = STEPS[step] || "concerns";
+  const currentStepKey: StepKey = STEPS[step] || "goals";
+
+  // 신체 정보가 유효한지
+  const hasBodyInfo =
+    state.gender !== "other" &&
+    state.birthYear > 1920 &&
+    state.heightCm >= 100 &&
+    state.heightCm <= 250 &&
+    state.weightKg >= 20 &&
+    state.weightKg <= 300;
+
+  // 영양 분석 결과
+  const nutritionGoals = useMemo<NutritionGoals | null>(() => {
+    if (!hasBodyInfo) return null;
+    const body: BodyInfo = {
+      gender: state.gender as Gender,
+      birthYear: state.birthYear,
+      heightCm: state.heightCm,
+      weightKg: state.weightKg,
+    };
+    return calculateNutritionGoals(body, state.goals.length > 0 ? state.goals : ["balanced"], state.dietType);
+  }, [hasBodyInfo, state.gender, state.birthYear, state.heightCm, state.weightKg, state.goals, state.dietType]);
 
   const canProceed = (): boolean => {
     switch (currentStepKey) {
-      case "concerns": return state.concerns.length > 0;
-      case "about_me": return state.age_group !== "" && state.gender !== "";
-      case "sensitivity": return true;
-      case "allergies": return true;
-      case "tastes": return true;
-      default: return true;
+      case "goals":
+        return state.goals.length > 0;
+      case "body":
+        return true; // 건너뛰기 가능
+      case "pattern":
+        return true;
+      case "allergies":
+        return true;
+      case "tastes":
+        return true;
+      case "result":
+        return true;
+      default:
+        return true;
     }
   };
 
@@ -183,40 +201,81 @@ function OnboardingContent() {
     }
   };
 
+  const handleBack = () => {
+    if (step > 0) setStep((s) => s - 1);
+  };
+
   const handleComplete = async () => {
+    // 하위호환: goals → concerns 매핑
+    const concernMap: Record<string, HealthConcern> = {
+      gut_health: "gut_health",
+      skin: "skin",
+      weight_loss: "weight",
+      energy: "energy",
+    };
+    const concerns: HealthConcern[] = state.goals
+      .map((g) => concernMap[g])
+      .filter(Boolean) as HealthConcern[];
+    if (concerns.length === 0) concerns.push("energy"); // 최소 1개
+
+    // 영양 목표 캐시
+    const nutritionCache = nutritionGoals
+      ? {
+          bmi: nutritionGoals.bmi,
+          dailyCalories: nutritionGoals.dailyCalories,
+          dailyProteinG: nutritionGoals.dailyProteinG,
+          maxSodiumMg: nutritionGoals.maxSodiumMg,
+          maxSugarG: nutritionGoals.maxSugarG,
+          perMealCalMax: nutritionGoals.perMeal.caloriesMax,
+          perMealSodiumMax: nutritionGoals.perMeal.maxSodiumMg,
+          perMealSugarMax: nutritionGoals.perMeal.maxSugarG,
+          strategyTags: nutritionGoals.strategyTags,
+        }
+      : undefined;
+
     const profile = {
-      concerns: state.concerns,
-      age_group: state.age_group,
+      // v3 신규
+      goals: state.goals,
       gender: state.gender,
-      household: state.household,
-      diet_type: state.diet_type,
+      birthYear: state.birthYear,
+      heightCm: state.heightCm,
+      weightKg: state.weightKg,
+      diet_type: state.dietType,
+      meals_per_day: state.mealsPerDay,
+      eating_out_freq: state.eatingOutFreq,
+      nutrition_goals: nutritionCache,
+      // 하위호환 (v2)
+      concerns,
+      conditions: state.goals.filter((g) => DISEASE_GOALS.includes(g)),
       sensitivity: state.sensitivity,
       allergies: state.allergies,
       tastes: state.tastes,
     };
 
-    // 항상 localStorage에 저장 (빠른 복원 + 비로그인 체험용)
+    // localStorage 저장
     try {
       localStorage.setItem("carefood_profile", JSON.stringify(profile));
-    } catch { /* silent */ }
+    } catch {
+      /* silent */
+    }
 
-    // Supabase user_profiles에 저장 (로그인/비로그인 모두)
+    // Supabase 저장
     try {
       let userId: string | null = null;
       const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (user) {
         userId = user.id;
         await saveProfile(JSON.stringify(profile));
       } else {
-        // anonymous user
         userId = localStorage.getItem("carefood_anon_id");
         if (!userId) {
           userId = `anon_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
           localStorage.setItem("carefood_anon_id", userId);
         }
       }
-      // user_profiles upsert
       if (userId) {
         await fetch("/api/profile", {
           method: "POST",
@@ -225,59 +284,67 @@ function OnboardingContent() {
         });
       }
     } catch {
-      // DB 저장 실패해도 localStorage가 있으니 진행
+      /* DB 저장 실패해도 localStorage가 있으니 진행 */
     }
 
     router.push("/recommend");
   };
 
+  // 결과 단계의 CTA
+  const isResultStep = currentStepKey === "result";
+
   return (
     <div className="min-h-[calc(100vh-3.5rem)] flex items-center justify-center px-4 py-8">
       <div className="w-full max-w-lg">
-        {/* 진행 바 */}
-        <div className="flex gap-1.5 mb-8">
-          {STEPS.map((_, i) => (
-            <div
-              key={i}
-              className={`h-1 flex-1 rounded-full transition-colors duration-300 ${
-                i <= step ? "bg-primary" : "bg-border"
-              }`}
-            />
-          ))}
-        </div>
+        {/* ── 진행 바 ── */}
+        {!isResultStep && (
+          <div className="flex gap-1.5 mb-8">
+            {STEPS.slice(0, -1).map((_, i) => (
+              <div
+                key={i}
+                className={`h-1 flex-1 rounded-full transition-colors duration-300 ${
+                  i <= step ? "bg-primary" : "bg-border"
+                }`}
+              />
+            ))}
+          </div>
+        )}
 
-        {/* 스텝 콘텐츠 */}
-        <div className="min-h-[360px]">
-          {currentStepKey === "concerns" && (
-            <StepConcerns
-              selected={state.concerns}
-              onToggle={(c) =>
+        {/* ── 스텝 콘텐츠 ── */}
+        <div className={isResultStep ? "" : "min-h-[400px]"}>
+          {currentStepKey === "goals" && (
+            <StepGoals
+              selected={state.goals}
+              showDisease={state.showDiseaseGoals}
+              onToggle={(g) =>
                 setState((prev) => ({
                   ...prev,
-                  concerns: prev.concerns.includes(c)
-                    ? prev.concerns.filter((x) => x !== c)
-                    : [...prev.concerns, c],
+                  goals: prev.goals.includes(g) ? prev.goals.filter((x) => x !== g) : [...prev.goals, g],
                 }))
+              }
+              onToggleDisease={() =>
+                setState((prev) => ({ ...prev, showDiseaseGoals: !prev.showDiseaseGoals }))
               }
             />
           )}
-          {currentStepKey === "about_me" && (
-            <StepAboutMe
-              ageGroup={state.age_group}
+          {currentStepKey === "body" && (
+            <StepBody
               gender={state.gender}
-              household={state.household}
-              dietType={state.diet_type}
-              onChange={(key, val) => setState(prev => ({ ...prev, [key]: val }))}
+              birthYear={state.birthYear}
+              heightCm={state.heightCm}
+              weightKg={state.weightKg}
+              onChange={(key, val) =>
+                setState((prev) => ({ ...prev, [key]: val }))
+              }
             />
           )}
-          {currentStepKey === "sensitivity" && (
-            <StepSensitivity
-              sensitivity={state.sensitivity}
+          {currentStepKey === "pattern" && (
+            <StepPattern
+              mealsPerDay={state.mealsPerDay}
+              eatingOutFreq={state.eatingOutFreq}
+              dietType={state.dietType}
               onChange={(key, val) =>
-                setState((prev) => ({
-                  ...prev,
-                  sensitivity: { ...prev.sensitivity, [key]: val },
-                }))
+                setState((prev) => ({ ...prev, [key]: val }))
               }
             />
           )}
@@ -297,41 +364,67 @@ function OnboardingContent() {
           {currentStepKey === "tastes" && (
             <StepTastes
               tastes={state.tastes}
-              onChange={(key, val) =>
+              sensitivity={state.sensitivity}
+              onTasteChange={(key, val) =>
                 setState((prev) => ({
                   ...prev,
                   tastes: { ...prev.tastes, [key]: val },
                 }))
               }
+              onSensitivityChange={(key, val) =>
+                setState((prev) => ({
+                  ...prev,
+                  sensitivity: { ...prev.sensitivity, [key]: val },
+                }))
+              }
+            />
+          )}
+          {currentStepKey === "result" && (
+            <StepResult
+              goals={state.goals}
+              nutritionGoals={nutritionGoals}
+              hasBodyInfo={hasBodyInfo}
+              bodyInfo={{
+                gender: state.gender,
+                birthYear: state.birthYear,
+                heightCm: state.heightCm,
+                weightKg: state.weightKg,
+              }}
             />
           )}
         </div>
 
-        {/* 네비게이션 버튼 */}
+        {/* ── 네비게이션 ── */}
         <div className="flex gap-3 mt-8">
-          {step > 0 && (
+          {step > 0 && !isResultStep && (
             <button
-              onClick={() => setStep((s) => s - 1)}
+              onClick={handleBack}
               className="flex-1 border border-border py-3 rounded-full font-medium hover:bg-card transition-colors"
             >
               이전
             </button>
           )}
           <button
-            onClick={handleNext}
+            onClick={isResultStep ? handleComplete : handleNext}
             disabled={!canProceed()}
-            className="flex-1 bg-primary text-white py-3 rounded-full font-bold hover:bg-primary-dark transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="flex-1 bg-primary text-white py-3.5 rounded-full font-bold hover:bg-primary-dark transition-colors disabled:opacity-40 disabled:cursor-not-allowed text-base"
           >
-            {step === totalSteps - 1 ? "추천 받기" : "다음"}
+            {isResultStep
+              ? "이 전략으로 시작하기 →"
+              : step === totalSteps - 2
+                ? "영양 분석 보기"
+                : "다음"}
           </button>
         </div>
 
-        {/* 건너뛰기 */}
-        {(currentStepKey === "allergies" || currentStepKey === "about_me") && (
+        {/* ── 건너뛰기 ── */}
+        {(currentStepKey === "body" ||
+          currentStepKey === "allergies" ||
+          currentStepKey === "pattern") && (
           <button
             onClick={() => {
-              if (currentStepKey === "about_me") {
-                setState(prev => ({ ...prev, age_group: "other", gender: "other", household: "", diet_type: "normal" }));
+              if (currentStepKey === "body") {
+                setState((prev) => ({ ...prev, gender: "other" }));
               }
               handleNext();
             }}
@@ -345,123 +438,376 @@ function OnboardingContent() {
   );
 }
 
-// ── 서브 컴포넌트들 ──────────────────────────────────
+/* ════════════════════════════════════════════
+   Step 1: 건강 목표
+   ════════════════════════════════════════════ */
 
-function StepConcerns({
+function StepGoals({
   selected,
+  showDisease,
   onToggle,
+  onToggleDisease,
 }: {
-  selected: HealthConcern[];
-  onToggle: (c: HealthConcern) => void;
+  selected: HealthGoal[];
+  showDisease: boolean;
+  onToggle: (g: HealthGoal) => void;
+  onToggleDisease: () => void;
 }) {
+  const hasDiseaseGoal = selected.some((g) => DISEASE_GOALS.includes(g));
+
   return (
     <div>
-      <h1 className="text-2xl font-extrabold mb-2">
-        어떤 건강이 궁금하세요?
-      </h1>
+      <h1 className="text-2xl font-extrabold mb-1">어떤 건강 목표가 있으세요?</h1>
       <p className="text-muted text-sm mb-6">
-        관심 있는 건강 영역을 선택하면, 성분 기반으로 식품을 매칭해드려요.
-        <br />
-        <span className="text-xs">복수 선택 가능</span>
+        목표에 맞는 식품을 성분 기반으로 매칭해드려요
+        <span className="text-xs ml-1">(복수 선택)</span>
       </p>
-      <div className="space-y-3">
-        {CONCERNS.map((c) => {
-          const Icon = c.icon;
+
+      <div className="space-y-2.5">
+        {MAIN_GOALS.map((g) => {
+          const info = HEALTH_GOAL_LABELS[g];
+          const isSelected = selected.includes(g);
           return (
             <button
-              key={c.key}
-              onClick={() => onToggle(c.key)}
-              className={`w-full text-left p-4 rounded-2xl border-2 transition-all ${
-                selected.includes(c.key)
+              key={g}
+              onClick={() => onToggle(g)}
+              className={`w-full text-left px-4 py-3.5 rounded-2xl border-2 transition-all ${
+                isSelected
                   ? "border-primary bg-primary/5 scale-[1.01]"
                   : "border-border hover:border-primary/30"
               }`}
             >
               <div className="flex items-center gap-3">
-                <div className={`${c.iconBg} w-10 h-10 rounded-[12px] flex items-center justify-center shrink-0`}>
-                  <Icon className="w-5 h-5 text-white" />
+                <span className="text-xl shrink-0">{info.emoji}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="font-bold text-sm">{info.label}</div>
+                  <div className="text-xs text-muted">{info.desc}</div>
                 </div>
-                <div>
-                  <div className="font-bold">{c.label}</div>
-                  <div className="text-sm text-muted">{c.desc}</div>
-                </div>
+                {isSelected && (
+                  <svg className="w-5 h-5 text-primary shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                    <path
+                      fillRule="evenodd"
+                      d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                )}
               </div>
             </button>
           );
         })}
       </div>
+
+      {/* 질환 관심 섹션 */}
+      <div className="mt-4">
+        <button
+          onClick={onToggleDisease}
+          className={`w-full text-left px-4 py-3.5 rounded-2xl border-2 transition-all ${
+            hasDiseaseGoal
+              ? "border-accent/50 bg-accent/5"
+              : "border-border hover:border-accent/30"
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="text-xl">🏥</span>
+              <div>
+                <div className="font-bold text-sm">질환 관심</div>
+                <div className="text-xs text-muted">성분 정보 기반 참고용</div>
+              </div>
+            </div>
+            <svg
+              className={`w-5 h-5 text-muted transition-transform ${showDisease ? "rotate-180" : ""}`}
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </div>
+        </button>
+
+        {showDisease && (
+          <div className="mt-2 ml-2 space-y-2">
+            {DISEASE_GOALS.map((g) => {
+              const info = HEALTH_GOAL_LABELS[g];
+              const isSelected = selected.includes(g);
+              return (
+                <button
+                  key={g}
+                  onClick={() => onToggle(g)}
+                  className={`w-full text-left px-4 py-3 rounded-xl border-2 transition-all ${
+                    isSelected
+                      ? "border-accent/60 bg-accent/5"
+                      : "border-border hover:border-accent/30"
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="text-lg">{info.emoji}</span>
+                    <div className="flex-1">
+                      <span className="font-medium text-sm">{info.label}</span>
+                      <span className="text-xs text-muted ml-2">{info.desc}</span>
+                    </div>
+                    {isSelected && (
+                      <svg className="w-4 h-4 text-accent shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                        <path
+                          fillRule="evenodd"
+                          d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+            {hasDiseaseGoal && (
+              <p className="text-xs text-accent/80 px-2 pt-1">
+                ⚠ 의료 행위가 아닌, 성분 정보 기반 참고용입니다
+              </p>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
 
-function StepAboutMe({
-  ageGroup, gender, household, dietType, onChange,
+/* ════════════════════════════════════════════
+   Step 2: 신체 정보
+   ════════════════════════════════════════════ */
+
+function StepBody({
+  gender,
+  birthYear,
+  heightCm,
+  weightKg,
+  onChange,
 }: {
-  ageGroup: string; gender: string; household: string; dietType: string;
-  onChange: (key: string, val: string) => void;
+  gender: Gender;
+  birthYear: number;
+  heightCm: number;
+  weightKg: number;
+  onChange: (key: string, val: number | string) => void;
 }) {
+  const currentYear = new Date().getFullYear();
+  const age = currentYear - birthYear;
+
+  const hasFull =
+    gender !== "other" &&
+    birthYear > 1920 &&
+    heightCm >= 100 &&
+    heightCm <= 250 &&
+    weightKg >= 20 &&
+    weightKg <= 300;
+
+  const bmi = hasFull ? calculateBMI(heightCm, weightKg) : null;
+  const bmiCat = bmi ? getBMICategory(bmi) : null;
+
   return (
     <div>
-      <h1 className="text-2xl font-extrabold mb-2">나에 대해 알려주세요</h1>
-      <p className="text-muted text-sm mb-6">맞춤 추천 정확도를 높이는 데 사용돼요.</p>
+      <h1 className="text-2xl font-extrabold mb-1">신체 정보를 알려주세요</h1>
+      <p className="text-muted text-sm mb-6">맞춤 영양 분석에 활용해요</p>
 
       <div className="space-y-5">
-        {/* 연령대 */}
-        <div>
-          <h3 className="text-sm font-bold mb-2">연령대</h3>
-          <div className="flex flex-wrap gap-2">
-            {AGE_OPTIONS.map(opt => (
-              <button key={opt.key} onClick={() => onChange("age_group", opt.key)}
-                className={`px-4 py-2 rounded-full text-sm transition-colors ${
-                  ageGroup === opt.key ? "bg-foreground text-card font-medium" : "bg-surface text-foreground/70 hover:bg-border"
-                }`}>
-                {opt.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
         {/* 성별 */}
         <div>
           <h3 className="text-sm font-bold mb-2">성별</h3>
-          <div className="flex flex-wrap gap-2">
-            {GENDER_OPTIONS.map(opt => (
-              <button key={opt.key} onClick={() => onChange("gender", opt.key)}
-                className={`px-4 py-2 rounded-full text-sm transition-colors ${
-                  gender === opt.key ? "bg-foreground text-card font-medium" : "bg-surface text-foreground/70 hover:bg-border"
-                }`}>
+          <div className="flex gap-2">
+            {(
+              [
+                { key: "male" as const, label: "남성" },
+                { key: "female" as const, label: "여성" },
+                { key: "other" as const, label: "선택 안 함" },
+              ] as const
+            ).map((opt) => (
+              <button
+                key={opt.key}
+                onClick={() => onChange("gender", opt.key)}
+                className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                  gender === opt.key
+                    ? "bg-primary text-white"
+                    : "bg-surface text-foreground/70 hover:bg-border"
+                }`}
+              >
                 {opt.label}
               </button>
             ))}
           </div>
         </div>
 
-        {/* 가구 형태 */}
+        {/* 출생연도 */}
         <div>
-          <h3 className="text-sm font-bold mb-2">가구 형태</h3>
-          <div className="flex flex-wrap gap-2">
-            {HOUSEHOLD_OPTIONS.map(opt => (
-              <button key={opt.key} onClick={() => onChange("household", opt.key)}
-                className={`px-4 py-2 rounded-full text-sm transition-colors ${
-                  household === opt.key ? "bg-foreground text-card font-medium" : "bg-surface text-foreground/70 hover:bg-border"
-                }`}>
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-bold">출생연도</h3>
+            {birthYear > 1920 && (
+              <span className="text-xs text-primary font-medium">만 {age}세</span>
+            )}
+          </div>
+          <input
+            type="number"
+            min={1920}
+            max={currentYear - 10}
+            value={birthYear}
+            onChange={(e) => onChange("birthYear", parseInt(e.target.value) || 1995)}
+            className="w-full px-4 py-3 rounded-xl border border-border bg-card text-foreground text-center text-lg font-bold focus:border-primary focus:outline-none transition-colors"
+            placeholder="1995"
+          />
+        </div>
+
+        {/* 키 & 체중 */}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <h3 className="text-sm font-bold mb-2">키 (cm)</h3>
+            <input
+              type="number"
+              min={100}
+              max={250}
+              value={heightCm}
+              onChange={(e) => onChange("heightCm", parseInt(e.target.value) || 170)}
+              className="w-full px-4 py-3 rounded-xl border border-border bg-card text-foreground text-center text-lg font-bold focus:border-primary focus:outline-none transition-colors"
+              placeholder="170"
+            />
+          </div>
+          <div>
+            <h3 className="text-sm font-bold mb-2">체중 (kg)</h3>
+            <input
+              type="number"
+              min={20}
+              max={300}
+              value={weightKg}
+              onChange={(e) => onChange("weightKg", parseInt(e.target.value) || 65)}
+              className="w-full px-4 py-3 rounded-xl border border-border bg-card text-foreground text-center text-lg font-bold focus:border-primary focus:outline-none transition-colors"
+              placeholder="65"
+            />
+          </div>
+        </div>
+
+        {/* BMI 표시 */}
+        {bmi !== null && bmiCat !== null && (
+          <div className="bg-surface rounded-2xl p-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-bold">체질량 분석</span>
+              <span className="text-sm">
+                <span className="font-extrabold text-lg">{bmi}</span>
+                <span className="text-muted ml-1">kg/m²</span>
+                <span
+                  className={`ml-2 text-xs font-bold px-2 py-0.5 rounded-full ${
+                    bmiCat === "normal"
+                      ? "bg-emerald-100 text-emerald-700"
+                      : bmiCat === "underweight"
+                        ? "bg-blue-100 text-blue-700"
+                        : bmiCat === "overweight"
+                          ? "bg-amber-100 text-amber-700"
+                          : "bg-red-100 text-red-700"
+                  }`}
+                >
+                  {BMI_LABELS[bmiCat]}
+                </span>
+              </span>
+            </div>
+            <BMIBar bmi={bmi} />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function BMIBar({ bmi }: { bmi: number }) {
+  // 범위: 15~40 에 매핑
+  const pct = Math.max(0, Math.min(100, ((bmi - 15) / 25) * 100));
+  return (
+    <div className="relative h-3 rounded-full overflow-hidden flex">
+      <div className="flex-1 bg-blue-300" />    {/* 저체중 <18.5 → 14% */}
+      <div className="flex-[1.8] bg-emerald-400" /> {/* 정상 18.5~23 → 18% */}
+      <div className="flex-[0.8] bg-amber-400" />   {/* 과체중 23~25 → 8% */}
+      <div className="flex-[6] bg-red-400" />        {/* 비만 25~40 → 60% */}
+      <div
+        className="absolute top-0 h-full w-0.5 bg-foreground"
+        style={{ left: `${pct}%` }}
+      >
+        <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2.5 h-2.5 rounded-full bg-foreground border-2 border-card" />
+      </div>
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════
+   Step 3: 식사 패턴
+   ════════════════════════════════════════════ */
+
+function StepPattern({
+  mealsPerDay,
+  eatingOutFreq,
+  dietType,
+  onChange,
+}: {
+  mealsPerDay: number;
+  eatingOutFreq: string;
+  dietType: DietType;
+  onChange: (key: string, val: string | number) => void;
+}) {
+  return (
+    <div>
+      <h1 className="text-2xl font-extrabold mb-1">평소 식사 패턴은?</h1>
+      <p className="text-muted text-sm mb-6">식단 추천 개수와 구성을 조절해요</p>
+
+      <div className="space-y-6">
+        {/* 끼니 수 */}
+        <div>
+          <h3 className="text-sm font-bold mb-2">하루 몇 끼 드시나요?</h3>
+          <div className="flex gap-2">
+            {[1, 2, 3].map((n) => (
+              <button
+                key={n}
+                onClick={() => onChange("mealsPerDay", n)}
+                className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all ${
+                  mealsPerDay === n
+                    ? "bg-primary text-white"
+                    : "bg-surface text-foreground/70 hover:bg-border"
+                }`}
+              >
+                {n}끼
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* 외식 빈도 */}
+        <div>
+          <h3 className="text-sm font-bold mb-2">외식 빈도</h3>
+          <div className="grid grid-cols-2 gap-2">
+            {EATING_OUT_OPTIONS.map((opt) => (
+              <button
+                key={opt.key}
+                onClick={() => onChange("eatingOutFreq", opt.key)}
+                className={`py-2.5 rounded-xl text-sm transition-all ${
+                  eatingOutFreq === opt.key
+                    ? "bg-foreground text-card font-medium"
+                    : "bg-surface text-foreground/70 hover:bg-border"
+                }`}
+              >
                 {opt.label}
               </button>
             ))}
           </div>
         </div>
 
-        {/* 식습관 */}
+        {/* 식단 유형 */}
         <div>
-          <h3 className="text-sm font-bold mb-2">식습관</h3>
+          <h3 className="text-sm font-bold mb-2">식단 유형</h3>
           <div className="space-y-2">
-            {DIET_OPTIONS.map(opt => (
-              <button key={opt.key} onClick={() => onChange("diet_type", opt.key)}
-                className={`w-full text-left px-4 py-3 rounded-xl border transition-colors ${
+            {DIET_OPTIONS.map((opt) => (
+              <button
+                key={opt.key}
+                onClick={() => onChange("dietType", opt.key)}
+                className={`w-full text-left px-4 py-3 rounded-xl border-2 transition-all ${
                   dietType === opt.key
                     ? "border-primary bg-primary/5"
                     : "border-border hover:border-primary/30"
-                }`}>
+                }`}
+              >
                 <span className="text-sm font-medium">{opt.label}</span>
                 <span className="text-xs text-muted ml-2">{opt.desc}</span>
               </button>
@@ -473,84 +819,9 @@ function StepAboutMe({
   );
 }
 
-function StepSensitivity({
-  sensitivity,
-  onChange,
-}: {
-  sensitivity: { digestive: SensitivityLevel; additive: SensitivityLevel };
-  onChange: (key: "digestive" | "additive", val: SensitivityLevel) => void;
-}) {
-  return (
-    <div>
-      <h1 className="text-2xl font-extrabold mb-2">
-        민감도를 알려주세요
-      </h1>
-      <p className="text-muted text-sm mb-8">
-        평소 체질에 맞게 식품을 걸러드려요. 의학적 진단이 아닌, 체감 기준으로 편하게 선택하세요.
-      </p>
-
-      <div className="space-y-8">
-        {/* 소화 민감도 */}
-        <div>
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
-              <IconGut className="w-4 h-4 text-emerald-600" />
-            </div>
-            <div>
-              <h3 className="font-bold text-sm">소화 민감도</h3>
-              <p className="text-xs text-muted">평소 배가 예민한 편인가요?</p>
-            </div>
-          </div>
-          <div className="grid grid-cols-3 gap-2">
-            {([1, 2, 3] as SensitivityLevel[]).map((level) => (
-              <button
-                key={level}
-                onClick={() => onChange("digestive", level)}
-                className={`py-3 rounded-xl border-2 text-sm font-medium transition-all ${
-                  sensitivity.digestive === level
-                    ? "border-primary bg-primary/5 text-primary"
-                    : "border-border hover:border-primary/30"
-                }`}
-              >
-                {SENSITIVITY_LABELS[level]}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* 첨가물 민감도 */}
-        <div>
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center">
-              <svg className="w-4 h-4 text-amber-600" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                <path d="M7 2v11h3v9l7-12h-4l4-8z" />
-              </svg>
-            </div>
-            <div>
-              <h3 className="font-bold text-sm">첨가물 민감도</h3>
-              <p className="text-xs text-muted">식품첨가물에 신경 쓰는 편인가요?</p>
-            </div>
-          </div>
-          <div className="grid grid-cols-3 gap-2">
-            {([1, 2, 3] as SensitivityLevel[]).map((level) => (
-              <button
-                key={level}
-                onClick={() => onChange("additive", level)}
-                className={`py-3 rounded-xl border-2 text-sm font-medium transition-all ${
-                  sensitivity.additive === level
-                    ? "border-primary bg-primary/5 text-primary"
-                    : "border-border hover:border-primary/30"
-                }`}
-              >
-                {SENSITIVITY_LABELS[level]}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
+/* ════════════════════════════════════════════
+   Step 4: 알레르기
+   ════════════════════════════════════════════ */
 
 function StepAllergies({
   selected,
@@ -561,18 +832,17 @@ function StepAllergies({
 }) {
   return (
     <div>
-      <h1 className="text-2xl font-extrabold mb-2">알레르기가 있으신가요?</h1>
+      <h1 className="text-2xl font-extrabold mb-1">알레르기가 있으신가요?</h1>
       <p className="text-muted text-sm mb-6">
-        해당 원재료가 포함된 식품을 제외합니다.
-        <br />
-        <span className="text-xs">복수 선택 가능 · 없으면 건너뛰기</span>
+        해당 원재료가 포함된 식품을 제외합니다
+        <span className="text-xs ml-1">(복수 선택 · 없으면 건너뛰기)</span>
       </p>
       <div className="flex flex-wrap gap-2">
         {ALLERGIES.map((a) => (
           <button
             key={a.key}
             onClick={() => onToggle(a.key)}
-            className={`px-3 py-2 rounded-full border-2 text-sm transition-all ${
+            className={`px-4 py-2.5 rounded-full border-2 text-sm transition-all ${
               selected.includes(a.key)
                 ? "border-primary bg-primary/10 text-primary font-medium"
                 : "border-border hover:border-primary/30"
@@ -586,29 +856,32 @@ function StepAllergies({
   );
 }
 
+/* ════════════════════════════════════════════
+   Step 5: 맛 선호도 + 민감도
+   ════════════════════════════════════════════ */
+
 function StepTastes({
   tastes,
-  onChange,
+  sensitivity,
+  onTasteChange,
+  onSensitivityChange,
 }: {
   tastes: Record<string, TasteLevel>;
-  onChange: (key: string, val: TasteLevel) => void;
+  sensitivity: { digestive: SensitivityLevel; additive: SensitivityLevel };
+  onTasteChange: (key: string, val: TasteLevel) => void;
+  onSensitivityChange: (key: "digestive" | "additive", val: SensitivityLevel) => void;
 }) {
   return (
     <div>
-      <h1 className="text-2xl font-extrabold mb-2">맛 선호도를 알려주세요</h1>
-      <p className="text-muted text-sm mb-6">
-        영양성분 데이터 기반으로 입맛에 맞는 식품을 찾습니다.
-      </p>
-      <div className="space-y-6">
+      <h1 className="text-2xl font-extrabold mb-1">맛 선호도를 알려주세요</h1>
+      <p className="text-muted text-sm mb-6">영양성분 데이터 기반으로 입맛에 맞는 식품을 찾아요</p>
+
+      <div className="space-y-5">
         {TASTE_CONFIG.map((t) => (
           <div key={t.key}>
-            <div className="flex items-center justify-between mb-2">
-              <span className="font-medium">
-                {t.label}
-              </span>
-              <span className="text-sm text-primary font-bold">
-                {tastes[t.key]}단계
-              </span>
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="font-medium text-sm">{t.label}</span>
+              <span className="text-sm text-primary font-bold">{tastes[t.key]}단계</span>
             </div>
             <input
               type="range"
@@ -616,20 +889,276 @@ function StepTastes({
               max={10}
               step={1}
               value={tastes[t.key]}
-              onChange={(e) =>
-                onChange(t.key, Number(e.target.value) as TasteLevel)
-              }
+              onChange={(e) => onTasteChange(t.key, Number(e.target.value) as TasteLevel)}
               className="w-full accent-primary"
             />
             <div className="flex justify-between text-[10px] text-muted mt-0.5">
               <span>약하게</span>
-              <span>3</span>
               <span>보통</span>
-              <span>7</span>
               <span>강하게</span>
             </div>
           </div>
         ))}
+      </div>
+
+      {/* 민감도 (접힌 상태로) */}
+      <div className="mt-8 pt-6 border-t border-border">
+        <h2 className="text-sm font-bold mb-4">민감도</h2>
+        <div className="space-y-4">
+          <div>
+            <p className="text-xs text-muted mb-2">소화 민감도 — 배가 예민한 편인가요?</p>
+            <div className="grid grid-cols-3 gap-2">
+              {([1, 2, 3] as SensitivityLevel[]).map((level) => (
+                <button
+                  key={level}
+                  onClick={() => onSensitivityChange("digestive", level)}
+                  className={`py-2.5 rounded-xl border-2 text-sm font-medium transition-all ${
+                    sensitivity.digestive === level
+                      ? "border-primary bg-primary/5 text-primary"
+                      : "border-border hover:border-primary/30"
+                  }`}
+                >
+                  {SENSITIVITY_LABELS[level]}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <p className="text-xs text-muted mb-2">첨가물 민감도 — 식품첨가물에 신경 쓰는 편인가요?</p>
+            <div className="grid grid-cols-3 gap-2">
+              {([1, 2, 3] as SensitivityLevel[]).map((level) => (
+                <button
+                  key={level}
+                  onClick={() => onSensitivityChange("additive", level)}
+                  className={`py-2.5 rounded-xl border-2 text-sm font-medium transition-all ${
+                    sensitivity.additive === level
+                      ? "border-primary bg-primary/5 text-primary"
+                      : "border-border hover:border-primary/30"
+                  }`}
+                >
+                  {SENSITIVITY_LABELS[level]}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════
+   Step 6: 영양 분석 결과
+   ════════════════════════════════════════════ */
+
+function StepResult({
+  goals,
+  nutritionGoals,
+  hasBodyInfo,
+  bodyInfo,
+}: {
+  goals: HealthGoal[];
+  nutritionGoals: NutritionGoals | null;
+  hasBodyInfo: boolean;
+  bodyInfo: BodyInfo;
+}) {
+  const currentYear = new Date().getFullYear();
+  const age = currentYear - bodyInfo.birthYear;
+
+  const genderLabel = bodyInfo.gender === "male" ? "남성" : bodyInfo.gender === "female" ? "여성" : "";
+  const effectiveGoals = goals.length > 0 ? goals : (["balanced"] as HealthGoal[]);
+
+  return (
+    <div>
+      {/* 헤더 */}
+      <div className="text-center mb-6">
+        <p className="text-xs font-medium text-primary mb-1 tracking-wider">CAREFOOD 맞춤 영양 분석</p>
+        <h1 className="text-2xl font-extrabold">나의 영양 분석 결과</h1>
+        {hasBodyInfo && (
+          <p className="text-sm text-muted mt-2">
+            {genderLabel} · 만 {age}세 · {bodyInfo.heightCm}cm · {bodyInfo.weightKg}kg 기준
+          </p>
+        )}
+      </div>
+
+      {hasBodyInfo && nutritionGoals ? (
+        <div className="space-y-4">
+          {/* BMI 카드 */}
+          <div className="bg-card border border-border rounded-2xl p-4">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-sm font-bold">체질량 분석 (BMI)</span>
+              <div className="flex items-center gap-2">
+                <span className="text-2xl font-extrabold">{nutritionGoals.bmi}</span>
+                <span className="text-xs text-muted">kg/m²</span>
+                <span
+                  className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                    nutritionGoals.bmiCategory === "normal"
+                      ? "bg-emerald-100 text-emerald-700"
+                      : nutritionGoals.bmiCategory === "underweight"
+                        ? "bg-blue-100 text-blue-700"
+                        : nutritionGoals.bmiCategory === "overweight"
+                          ? "bg-amber-100 text-amber-700"
+                          : "bg-red-100 text-red-700"
+                  }`}
+                >
+                  {BMI_LABELS[nutritionGoals.bmiCategory]}
+                </span>
+              </div>
+            </div>
+            <BMIBar bmi={nutritionGoals.bmi} />
+            <div className="flex justify-between text-[10px] text-muted mt-1">
+              <span>저체중</span>
+              <span>정상</span>
+              <span>과체중</span>
+              <span>비만</span>
+            </div>
+          </div>
+
+          {/* 하루 필요 영양 카드 */}
+          <div className="bg-card border border-border rounded-2xl p-4">
+            <h3 className="text-sm font-bold mb-3">하루 필요 영양소</h3>
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <div className="text-center bg-surface rounded-xl py-3">
+                <div className="text-2xl font-extrabold text-primary">
+                  {nutritionGoals.dailyCalories.toLocaleString()}
+                </div>
+                <div className="text-xs text-muted">kcal / 일</div>
+              </div>
+              <div className="text-center bg-surface rounded-xl py-3">
+                <div className="text-2xl font-extrabold text-primary">{nutritionGoals.dailyProteinG}</div>
+                <div className="text-xs text-muted">g 단백질 / 일</div>
+              </div>
+            </div>
+
+            {/* 매크로 비율 바 */}
+            <div className="mb-2">
+              <div className="text-xs font-medium text-muted mb-1">3대 영양소 비율</div>
+              <div className="flex h-6 rounded-full overflow-hidden text-[10px] font-bold text-white">
+                <div
+                  className="flex items-center justify-center bg-amber-500"
+                  style={{ width: `${nutritionGoals.carbRatio}%` }}
+                >
+                  {nutritionGoals.carbRatio}%
+                </div>
+                <div
+                  className="flex items-center justify-center bg-red-400"
+                  style={{ width: `${nutritionGoals.proteinRatio}%` }}
+                >
+                  {nutritionGoals.proteinRatio}%
+                </div>
+                <div
+                  className="flex items-center justify-center bg-blue-400"
+                  style={{ width: `${nutritionGoals.fatRatio}%` }}
+                >
+                  {nutritionGoals.fatRatio}%
+                </div>
+              </div>
+              <div className="flex justify-between text-[10px] text-muted mt-1">
+                <span>탄수화물</span>
+                <span>단백질</span>
+                <span>지방</span>
+              </div>
+            </div>
+
+            {/* 주요 기준 */}
+            <div className="mt-3 pt-3 border-t border-border space-y-1.5">
+              <div className="flex justify-between text-xs">
+                <span className="text-muted">나트륨 상한</span>
+                <span className="font-bold">{nutritionGoals.maxSodiumMg.toLocaleString()}mg 이하/일</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-muted">당류 상한</span>
+                <span className="font-bold">{nutritionGoals.maxSugarG}g 이하/일</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-muted">식이섬유 권장</span>
+                <span className="font-bold">{nutritionGoals.minFiberG}g 이상/일</span>
+              </div>
+            </div>
+          </div>
+
+          {/* 맞춤 전략 카드 */}
+          <div className="bg-card border border-border rounded-2xl p-4">
+            <h3 className="text-sm font-bold mb-3">맞춤 케어 전략</h3>
+            <p className="text-sm text-muted mb-3">{nutritionGoals.strategySummary}</p>
+            <div className="flex flex-wrap gap-1.5">
+              {nutritionGoals.strategyTags.map((tag) => (
+                <span
+                  key={tag}
+                  className="px-2.5 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium"
+                >
+                  #{tag}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {/* 끼니당 기준 요약 */}
+          <div className="bg-primary/5 border border-primary/20 rounded-2xl p-4">
+            <h3 className="text-sm font-bold mb-2 text-primary">끼니당 추천 기준</h3>
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div>
+                <div className="text-lg font-extrabold">{nutritionGoals.perMeal.caloriesMax}</div>
+                <div className="text-[10px] text-muted">kcal 이하</div>
+              </div>
+              <div>
+                <div className="text-lg font-extrabold">{nutritionGoals.perMeal.maxSodiumMg}</div>
+                <div className="text-[10px] text-muted">mg 나트륨</div>
+              </div>
+              <div>
+                <div className="text-lg font-extrabold">{nutritionGoals.perMeal.minProteinG}g+</div>
+                <div className="text-[10px] text-muted">단백질</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : (
+        /* 신체 정보 없을 때 간소화 버전 */
+        <div className="space-y-4">
+          <div className="bg-card border border-border rounded-2xl p-5 text-center">
+            <div className="text-4xl mb-3">🎯</div>
+            <h3 className="font-bold mb-2">선택한 건강 목표</h3>
+            <div className="flex flex-wrap gap-2 justify-center mb-4">
+              {effectiveGoals.map((g) => (
+                <span key={g} className="px-3 py-1.5 rounded-full bg-primary/10 text-primary text-sm font-medium">
+                  {HEALTH_GOAL_LABELS[g].emoji} {HEALTH_GOAL_LABELS[g].label}
+                </span>
+              ))}
+            </div>
+            <p className="text-xs text-muted">
+              신체 정보를 입력하면 더 정확한 영양 분석을 받을 수 있어요
+            </p>
+          </div>
+
+          {/* 전략 태그 */}
+          <div className="bg-card border border-border rounded-2xl p-4">
+            <h3 className="text-sm font-bold mb-3">맞춤 케어 전략</h3>
+            <div className="flex flex-wrap gap-1.5">
+              {effectiveGoals
+                .flatMap((g) => {
+                  const labels = HEALTH_GOAL_LABELS[g];
+                  return [labels.label];
+                })
+                .map((tag) => (
+                  <span
+                    key={tag}
+                    className="px-2.5 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium"
+                  >
+                    #{tag}
+                  </span>
+                ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 하단 문구 */}
+      <div className="text-center mt-6">
+        <p className="text-xs text-muted leading-relaxed">
+          이 분석은 성분 정보와 통계 데이터에 기반한 참고용이며,
+          <br />
+          의학적 진단이나 처방을 대체하지 않습니다.
+        </p>
       </div>
     </div>
   );

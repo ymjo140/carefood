@@ -48,6 +48,8 @@ const MEALS = [
 
 const CONCERN_LABELS: Record<string, string> = {
   gut_health: "장건강", skin: "피부건강", weight: "체중관리", energy: "활력충전",
+  balanced: "균형식단", weight_loss: "체중관리", muscle: "근력강화",
+  diabetes: "당뇨관심", blood_pressure: "혈압관심", kidney: "신장관심",
 };
 
 function getUserId(): string | null {
@@ -354,9 +356,11 @@ export default function WeeklyBoxPage() {
         sensitivity: profile.sensitivity || { digestive: 2, additive: 2 },
         tastes: profile.tastes || { salty: 5, sweet: 5, spicy: 5, fatty: 5 },
         budget: 100000,
-        mealsPerDay: 3,
+        mealsPerDay: profile.meals_per_day || 3,
         supplementsPerDay: 1,
         user_id: getUserId() || undefined,
+        // v3: 온보딩에서 계산된 영양 목표
+        nutrition_goals: profile.nutrition_goals || undefined,
       }),
     });
 
@@ -402,7 +406,8 @@ export default function WeeklyBoxPage() {
       }
     }
 
-    const title = (profile.concerns || []).map((c: string) => CONCERN_LABELS[c] || c).join(" · ") + " 식단";
+    const goalLabels = (profile.goals || profile.concerns || []).map((c: string) => CONCERN_LABELS[c] || c);
+    const title = (goalLabels.length > 0 ? goalLabels.join(" · ") : "맞춤") + " 식단";
     return { grid: newGrid, title };
   };
 

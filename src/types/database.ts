@@ -171,13 +171,21 @@ export type OrdererRelation = "self" | "child" | "spouse" | "caregiver" | "other
 export type HealthConcern = "gut_health" | "skin" | "weight" | "energy";
 export type SensitivityLevel = 1 | 2 | 3; // 1: 둔감, 2: 보통, 3: 예민
 
-// 온보딩 프로필 (localStorage 저장용) — 이너케어 버전
+// 온보딩 프로필 (localStorage 저장용) — v3 이너케어 + 신체 정보
 export type OnboardingProfile = {
-  // v2: 이너케어 방식
+  // v3: 건강 목표 + 신체 정보
   concerns: HealthConcern[];
+  goals?: string[];           // HealthGoal[] from lib/nutrition.ts
+  gender?: string;
+  birthYear?: number;
+  heightCm?: number;
+  weightKg?: number;
+  diet_type?: string;
+  meals_per_day?: number;
+  eating_out_freq?: string;
   sensitivity: {
-    digestive: SensitivityLevel;  // 소화 민감도
-    additive: SensitivityLevel;   // 첨가물 민감도
+    digestive: SensitivityLevel;
+    additive: SensitivityLevel;
   };
   allergies: string[];
   tastes: {
@@ -186,10 +194,25 @@ export type OnboardingProfile = {
     spicy: number;
     fatty: number;
   };
+  // 계산된 영양 목표 (캐시)
+  nutrition_goals?: {
+    bmi: number;
+    dailyCalories: number;
+    dailyProteinG: number;
+    maxSodiumMg: number;
+    maxSugarG: number;
+    perMealCalMax: number;
+    perMealSodiumMax: number;
+    perMealSugarMax: number;
+    strategyTags: string[];
+  };
   // v1 레거시 (하위호환)
   persona?: Persona;
   ordererRelation?: OrdererRelation;
   conditions?: string[];
+  // v2 레거시
+  age_group?: string;
+  household?: string;
   pregnancyStage?: string;
   healthGoal?: string;
 };

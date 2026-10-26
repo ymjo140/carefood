@@ -22,6 +22,16 @@ type WeeklyBoxRequest = {
   mealsPerDay?: number;
   supplementsPerDay?: number;
   user_id?: string;
+  // v3: 온보딩에서 계산된 영양 목표 (있으면 concerns 기반 제외보다 우선)
+  nutrition_goals?: {
+    dailyCalories: number;
+    dailyProteinG: number;
+    maxSodiumMg: number;
+    maxSugarG: number;
+    perMealCalMax: number;
+    perMealSodiumMax: number;
+    perMealSugarMax: number;
+  };
 };
 
 /* ════════════════════════════════════════════
@@ -180,6 +190,14 @@ export async function POST(request: NextRequest) {
     }
     if (conditions.includes("hypertension")) {
       nutritionExclusions.sodium_max = Math.min(nutritionExclusions.sodium_max ?? 9999, 800);
+    }
+
+    // v3: 온보딩에서 계산된 영양 목표가 있으면 우선 적용
+    const ng = body.nutrition_goals;
+    if (ng) {
+      if (ng.perMealCalMax) nutritionExclusions.calories_max = Math.min(nutritionExclusions.calories_max ?? 9999, ng.perMealCalMax);
+      if (ng.perMealSodiumMax) nutritionExclusions.sodium_max = Math.min(nutritionExclusions.sodium_max ?? 9999, ng.perMealSodiumMax);
+      if (ng.perMealSugarMax) nutritionExclusions.sugar_max = Math.min(nutritionExclusions.sugar_max ?? 9999, ng.perMealSugarMax);
     }
 
     // ── 3. 제품 로드 (health_score 포함) ──
