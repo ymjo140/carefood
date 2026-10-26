@@ -136,14 +136,38 @@ function ProductSearchModal({ onSelect, onClose, onEatingOut }: {
   onClose: () => void;
   onEatingOut: () => void;
 }) {
-  const [tab, setTab] = useState<"recent" | "search">("recent");
+  const [tab, setTab] = useState<"favorites" | "recent" | "search">("favorites");
   const [query, setQuery] = useState("");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [results, setResults] = useState<any[]>([]);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [recentProducts, setRecentProducts] = useState<any[]>([]);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [favoriteProducts, setFavoriteProducts] = useState<any[]>([]);
   const [searching, setSearching] = useState(false);
   const [loadingRecent, setLoadingRecent] = useState(true);
+  const [loadingFavorites, setLoadingFavorites] = useState(true);
+
+  // 즐겨찾기 로드
+  useEffect(() => {
+    const loadFavs = async () => {
+      const userId = getUserId();
+      if (!userId) { setLoadingFavorites(false); return; }
+      try {
+        const res = await fetch(`/api/favorites?user_id=${userId}`);
+        const data = await res.json();
+        setFavoriteProducts((data.favorites || []).map((f: { product_id: string; name: string; calories?: number; protein_g?: number; best_price?: number; image_url?: string }) => ({
+          id: f.product_id,
+          name: f.name,
+          calories: f.calories,
+          protein_g: f.protein_g,
+          product_prices: f.best_price ? [{ price: f.best_price, platform: "", url: "", image_url: f.image_url }] : [],
+        })));
+      } catch { /* */ }
+      finally { setLoadingFavorites(false); }
+    };
+    loadFavs();
+  }, []);
 
   // 최근 본/클릭한 제품 로드
   useEffect(() => {
@@ -202,8 +226,8 @@ function ProductSearchModal({ onSelect, onClose, onEatingOut }: {
     finally { setSearching(false); }
   };
 
-  const displayProducts = tab === "search" ? results : recentProducts;
-  const isLoading = tab === "search" ? searching : loadingRecent;
+  const displayProducts = tab === "search" ? results : tab === "favorites" ? favoriteProducts : recentProducts;
+  const isLoading = tab === "search" ? searching : tab === "favorites" ? loadingFavorites : loadingRecent;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -231,16 +255,21 @@ function ProductSearchModal({ onSelect, onClose, onEatingOut }: {
         {/* 탭 + 외식 */}
         <div className="px-4 pt-2 pb-1 flex items-center justify-between">
           <div className="flex gap-1">
+            <button onClick={() => setTab("favorites")}
+              className={`text-xs px-2.5 py-1 rounded-full ${tab === "favorites" ? "bg-foreground text-card" : "text-muted hover:text-foreground"}`}
+              style={{ minHeight: "26px", minWidth: "unset" }}>
+              ♥ 즐겨찾기
+            </button>
             <button onClick={() => setTab("recent")}
               className={`text-xs px-2.5 py-1 rounded-full ${tab === "recent" ? "bg-foreground text-card" : "text-muted hover:text-foreground"}`}
               style={{ minHeight: "26px", minWidth: "unset" }}>
-              최근 본 제품
+              최근 본
             </button>
             {results.length > 0 && (
               <button onClick={() => setTab("search")}
                 className={`text-xs px-2.5 py-1 rounded-full ${tab === "search" ? "bg-foreground text-card" : "text-muted hover:text-foreground"}`}
                 style={{ minHeight: "26px", minWidth: "unset" }}>
-                검색 결과 ({results.length})
+                검색 ({results.length})
               </button>
             )}
           </div>
@@ -259,6 +288,8 @@ function ProductSearchModal({ onSelect, onClose, onEatingOut }: {
             displayProducts.map((p) => (
               <ProductRow key={p.id} p={p} onSelect={onSelect} />
             ))
+          ) : tab === "favorites" ? (
+            <p className="text-sm text-muted text-center py-6">즐겨찾기한 제품이 없습니다.<br />제품 탐색에서 ♥를 눌러 추가하세요.</p>
           ) : tab === "recent" ? (
             <p className="text-sm text-muted text-center py-6">최근 본 제품이 없습니다. 검색으로 추가하세요.</p>
           ) : (

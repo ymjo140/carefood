@@ -5,6 +5,7 @@ import TasteReview from "@/components/TasteReview";
 import MealLogButton from "@/components/MealLogButton";
 import ProductViewTracker from "@/components/ProductViewTracker";
 import ProductReviews from "@/components/ProductReviews";
+import FavoriteButton from "@/components/FavoriteButton";
 
 // 동적 라우트 — DB 조회 필요
 export const instant = false;
@@ -190,7 +191,10 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
             <h1 className="text-xl sm:text-2xl font-extrabold leading-tight">{product.name}</h1>
-            <MealLogButton productId={product.id} />
+            <div className="flex items-center gap-1 shrink-0">
+              <FavoriteButton productId={product.id} />
+              <MealLogButton productId={product.id} />
+            </div>
           </div>
           {product.manufacturer && (
             <p className="text-sm text-muted mt-1">{product.manufacturer}</p>

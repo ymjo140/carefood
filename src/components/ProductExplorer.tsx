@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import type { ProductWithPrices, TasteLevel, DishCategory } from "@/types/database";
 import { DISH_CATEGORY_LABELS } from "@/types/database";
+import { useFavorites } from "@/hooks/useFavorites";
 
 /* ───── 타입 ───── */
 type TasteFilters = {
@@ -413,13 +414,17 @@ function FilterPanel({
 }
 
 /* ───── 제품 카드 (이미지 + 정보) ───── */
-function ProductCard({ product }: { product: ProductWithPrices }) {
+function ProductCard({ product, isFavorite, onToggleFavorite }: {
+  product: ProductWithPrices;
+  isFavorite: boolean;
+  onToggleFavorite: (id: string) => void;
+}) {
   const prices = product.product_prices?.filter(p => p.price && p.price > 0) || [];
   const bestPrice = prices.length > 0 ? Math.min(...prices.map(p => p.price!)) : null;
   const imageUrl = prices.find(p => p.image_url)?.image_url;
 
   return (
-    <article className="border border-border rounded-xl p-4 hover:shadow-sm transition-all flex gap-4">
+    <article className="border border-border rounded-xl p-4 hover:shadow-sm transition-all flex gap-4 relative">
       {/* 이미지 */}
       {imageUrl ? (
         <div className="w-[100px] h-[100px] sm:w-[120px] sm:h-[120px] rounded-lg overflow-hidden shrink-0 bg-surface">
@@ -434,9 +439,23 @@ function ProductCard({ product }: { product: ProductWithPrices }) {
         </div>
       )}
 
+      {/* 즐겨찾기 버튼 */}
+      <button
+        onClick={(e) => { e.preventDefault(); onToggleFavorite(product.id); }}
+        className="absolute top-3 right-3 p-1.5 rounded-full hover:bg-surface transition-colors z-10"
+        style={{ minHeight: "28px", minWidth: "28px" }}
+        title={isFavorite ? "즐겨찾기 해제" : "즐겨찾기 추가"}
+      >
+        <svg className={`w-4 h-4 ${isFavorite ? "text-red-500 fill-red-500" : "text-muted"}`}
+          viewBox="0 0 24 24" fill={isFavorite ? "currentColor" : "none"} stroke="currentColor" strokeWidth={2}
+          style={{ minHeight: "unset", minWidth: "unset" }}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+        </svg>
+      </button>
+
       {/* 정보 */}
       <div className="flex-1 min-w-0 flex flex-col">
-        <div className="mb-1">
+        <div className="mb-1 pr-6">
           <Link href={`/products/${product.id}`}
             className="text-[15px] font-bold leading-snug hover:text-primary transition-colors line-clamp-2">
             {product.name}
@@ -500,6 +519,7 @@ function ProductCard({ product }: { product: ProductWithPrices }) {
 
 /* ───── 메인 컴포넌트 ───── */
 export default function ProductExplorer() {
+  const { isFavorite, toggleFavorite } = useFavorites();
   const [tastes, setTastes] = useState<TasteFilters>({ salty: 0, sweet: 0, spicy: 0, fatty: 0 });
   const [search, setSearch] = useState("");
   const [searchInput, setSearchInput] = useState("");
@@ -686,7 +706,9 @@ export default function ProductExplorer() {
             <>
               <div className="flex flex-col gap-3">
                 {data.products.map(product => (
-                  <ProductCard key={product.id} product={product} />
+                  <ProductCard key={product.id} product={product}
+                    isFavorite={isFavorite(product.id)}
+                    onToggleFavorite={toggleFavorite} />
                 ))}
               </div>
 

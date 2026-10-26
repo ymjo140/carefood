@@ -115,45 +115,41 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // ── 2. 구매 가능 제품 + 가격 로드 ──
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: priceProducts } = await supabase
-      .from("v_all_prices" as any)
-      .select("product_id, platform, price, url, image_url")
-      .gt("price", 0) as { data: any[] | null };
-
-    if (!priceProducts || priceProducts.length === 0) {
-      return NextResponse.json({ box: null, message: "구매 가능한 제품이 없습니다." });
-    }
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const priceMap: Record<string, any[]> = {};
-    const purchasableIds = new Set<string>();
-    for (const p of priceProducts) {
-      if (!priceMap[p.product_id]) priceMap[p.product_id] = [];
-      priceMap[p.product_id].push(p);
-      purchasableIds.add(p.product_id);
-    }
-
-    // ── 3. 제품 영양 정보 로드 ──
-    const uniqueIds = [...purchasableIds];
-    const batchSize = 500;
+    // ── 2. 구매 가능 제품 직접 로드 (is_purchasable 플래그 활용) ──
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let allProducts: any[] = [];
-    for (let i = 0; i < uniqueIds.length; i += batchSize) {
-      const batch = uniqueIds.slice(i, i + batchSize);
-      const { data } = await supabase
+    const prodPageSize = 1000;
+    let prodOffset = 0;
+    let prodHasMore = true;
+
+    while (prodHasMore) {
+      const { data: prodBatch, error: prodError } = await supabase
         .from("products")
-        .select("id, name, manufacturer, calories, protein_g, fat_g, sugar_g, sodium_mg, fiber_g, functional_tags, dish_category, dish_keyword")
+        .select("id, name, manufacturer, calories, protein_g, fat_g, sugar_g, sodium_mg, fiber_g, functional_tags, dish_category")
         .eq("is_active", true)
         .eq("category_large", "상용제품")
-        .in("id", batch);
-      if (data) allProducts = allProducts.concat(data);
-    }
+        .eq("is_purchasable", true)
+        .gt("calories", 0)
+        .range(prodOffset, prodOffset + prodPageSize - 1);
 
-    // ── 4. 식사/보조 분류 + 스코어링 ──
+      if (prodError) {
+        console.error("[weekly-box] products load error:", prodError.message);
+        break;
+      }
+      if (!prodBatch || prodBatch.length === 0) {
+        if (prodOffset === 0) {
+          return NextResponse.json({ box: null, message: "구매 가능한 제품이 없습니다." });
+        }
+        break;
+      }
+      allProducts = allProducts.concat(prodBatch);
+      prodHasMore = prodBatch.length === prodPageSize;
+      prodOffset += prodPageSize;
+    }
+    console.log("[weekly-box] loaded products:", allProducts.length);
+
+    // ── 3. 스코어링 (가격 제외 — 가격은 선택 후 조회) ──
     const scored: ScoredProduct[] = allProducts
-      .filter(p => p.calories != null && p.calories > 0)
       .map(p => {
         const cat = p.dish_category || "other";
         const isMeal = MEAL_CATEGORIES.has(cat) && p.calories >= MEAL_CRITERIA.minCalories;
@@ -181,11 +177,10 @@ export async function POST(request: NextRequest) {
         // ▸ 식사 칼로리 적정성 보너스 (식사 제품만)
         if (isMeal) {
           if (p.calories >= MEAL_CRITERIA.idealMin && p.calories <= MEAL_CRITERIA.idealMax) {
-            score += 15; // 이상적 칼로리 범위
+            score += 15;
           } else if (p.calories >= MEAL_CRITERIA.minCalories) {
             score += 5;
           }
-          // 단백질 보너스
           if (p.protein_g && p.protein_g >= 15) score += 10;
           if (p.protein_g && p.protein_g >= 25) score += 5;
         }
@@ -193,10 +188,8 @@ export async function POST(request: NextRequest) {
         // ▸ 맛 선호 매칭 (+5 each)
         if (tastes) {
           if (tastes.salty > 0 && p.sodium_mg != null) {
-            const level = tastes.salty;
-            // 짠맛 선호도에 맞으면 보너스
-            if (level >= 7 && p.sodium_mg >= 800) score += 5;
-            else if (level <= 3 && p.sodium_mg <= 300) score += 5;
+            if (tastes.salty >= 7 && p.sodium_mg >= 800) score += 5;
+            else if (tastes.salty <= 3 && p.sodium_mg <= 300) score += 5;
           }
           if (tastes.sweet > 0 && p.sugar_g != null) {
             if (tastes.sweet <= 3 && p.sugar_g <= 3) score += 5;
@@ -205,7 +198,7 @@ export async function POST(request: NextRequest) {
         }
 
         // ▸ 행동 기반 개인화 (최대 +15)
-        if (userPrefs.clicked_ids.has(p.id)) score += 10; // 이전에 클릭한 제품
+        if (userPrefs.clicked_ids.has(p.id)) score += 10;
         if (p.dish_category && userPrefs.category_counts[p.dish_category]) {
           score += Math.min(userPrefs.category_counts[p.dish_category] * 2, 10);
         }
@@ -213,38 +206,68 @@ export async function POST(request: NextRequest) {
           if (userPrefs.tag_counts[tag]) score += Math.min(userPrefs.tag_counts[tag], 5);
         }
 
-        const prices = (priceMap[p.id] || []).sort((a: { price: number }, b: { price: number }) => a.price - b.price);
-        const bestPrice = prices[0]?.price || 99999;
-
-        return { ...p, score: Math.min(score, 100), bestPrice, prices, isMeal, isSupplement };
+        return { ...p, score: Math.min(score, 100), bestPrice: 0, prices: [], isMeal, isSupplement };
       });
 
-    // ── 5. 식사/보조 풀 분리 ──
+    // ── 4. 식사/보조 풀 분리 → 상위 후보 선택 ──
     const mealPool = scored.filter(p => p.isMeal).sort((a, b) => b.score - a.score);
     const supplementPool = scored.filter(p => p.isSupplement).sort((a, b) => b.score - a.score);
+
+    // 상위 후보만 추려서 가격 조회 (상위 100개면 충분)
+    const topMealCandidates = mealPool.slice(0, 100);
+    const topSupplementCandidates = supplementPool.slice(0, 50);
+    const candidateIds = [...new Set([...topMealCandidates, ...topSupplementCandidates].map(p => p.id))];
+
+    // ── 5. 후보 제품 가격 조회 ──
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const priceMap: Record<string, any[]> = {};
+    const priceBatchSize = 50;
+    for (let i = 0; i < candidateIds.length; i += priceBatchSize) {
+      const batch = candidateIds.slice(i, i + priceBatchSize);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: priceBatch } = await (supabase as any)
+        .from("v_all_prices")
+        .select("product_id, platform, price, url, image_url")
+        .in("product_id", batch)
+        .gt("price", 0);
+      if (priceBatch) {
+        for (const p of priceBatch) {
+          if (!priceMap[p.product_id]) priceMap[p.product_id] = [];
+          priceMap[p.product_id].push(p);
+        }
+      }
+    }
+
+    // 가격 정보 붙이기
+    const withPrices = (items: ScoredProduct[]) =>
+      items.map(p => {
+        const prices = (priceMap[p.id] || []).sort((a: { price: number }, b: { price: number }) => a.price - b.price);
+        return { ...p, bestPrice: prices[0]?.price || 99999, prices };
+      });
+
+    const mealCandidatesWithPrice = withPrices(topMealCandidates);
+    const supplementCandidatesWithPrice = withPrices(topSupplementCandidates);
 
     // ── 6. 7일 식단 구성 ──
     const totalMealSlots = 7 * mealsPerDay;
     const totalSupplementSlots = 7 * supplementsPerDay;
-    const mealBudget = budget * 0.75; // 식사에 75% 배정
-    const supplementBudget = budget * 0.25; // 보조에 25% 배정
+    const mealBudget = budget * 0.75;
+    const supplementBudget = budget * 0.25;
     const perMealBudget = mealBudget / totalMealSlots;
     const perSupplementBudget = supplementBudget / totalSupplementSlots;
 
     // 식사 선택 (다양성: dish_keyword 중복 방지, 카테고리 분산)
     const selectedMeals: ScoredProduct[] = [];
-    const usedKeywords = new Map<string, number>(); // keyword → 사용 횟수
+    const usedKeywords = new Map<string, number>();
     const usedCategories = new Map<string, number>();
 
-    for (const product of mealPool) {
+    for (const product of mealCandidatesWithPrice) {
       if (selectedMeals.length >= totalMealSlots) break;
       if (product.bestPrice > perMealBudget * 1.8) continue;
 
-      // 같은 요리 키워드 최대 2번
-      const kw = product.dish_keyword || product.name;
+      const kw = product.name;
       if ((usedKeywords.get(kw) || 0) >= 2) continue;
 
-      // 같은 카테고리 최대 5개 (7일 중)
       const cat = product.dish_category || "other";
       if ((usedCategories.get(cat) || 0) >= 5) continue;
 
@@ -257,7 +280,7 @@ export async function POST(request: NextRequest) {
     const selectedSupplements: ScoredProduct[] = [];
     const usedSupIds = new Set<string>();
 
-    for (const product of supplementPool) {
+    for (const product of supplementCandidatesWithPrice) {
       if (selectedSupplements.length >= totalSupplementSlots) break;
       if (usedSupIds.has(product.id)) continue;
       if (product.bestPrice > perSupplementBudget * 2) continue;
