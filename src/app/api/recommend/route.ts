@@ -180,9 +180,17 @@ function scoreProducts(products: Record<string, unknown>[], params: ScoreParams)
   const { concerns, sensitivity, conditions, purchasableSet, tastes } = params;
 
   return products.map((p) => {
-    let score = 40;
+    // 건강 점수를 기본 점수에 반영 (0~100 → 0~20으로 스케일)
+    const healthScore = (p.health_score as number) || 50;
+    let score = 20 + Math.round(healthScore * 0.2); // health_score 70 → 34점 시작
     const reasons: string[] = [];
     const reasonDetails: string[] = [];
+
+    // 건강 점수 높으면 reason 추가
+    if (healthScore >= 70) {
+      reasons.push("건강 지표 우수");
+      reasonDetails.push(`건강 점수 ${healthScore}점 — 영양 균형이 좋아요`);
+    }
 
     // 기능성 태그 매칭
     const productTags: string[] = (p.functional_tags as string[]) || [];
@@ -453,8 +461,8 @@ export async function GET(request: NextRequest) {
         }
       }
     } else {
-      // 기본: sauce 제외
-      excludedCategories.push("sauce");
+      // 기본: sauce, ingredient 제외
+      excludedCategories.push("sauce", "ingredient");
     }
     if (includedCategories.length > 0) {
       query = query.in("dish_category", includedCategories);
@@ -526,14 +534,16 @@ export async function GET(request: NextRequest) {
     switch (sortBy) {
       case "price_asc":
       case "price_desc":
-        // 가격 정렬은 나중에 가격 로드 후 처리
-        filtered.sort((a, b) => b.match_score - a.match_score); // 일단 점수순
+        filtered.sort((a, b) => b.match_score - a.match_score);
         break;
       case "protein_desc":
         filtered.sort((a, b) => ((b.protein_g as number) || 0) - ((a.protein_g as number) || 0));
         break;
       case "calories_asc":
         filtered.sort((a, b) => ((a.calories as number) || 9999) - ((b.calories as number) || 9999));
+        break;
+      case "health_desc":
+        filtered.sort((a, b) => ((b.health_score as number) || 0) - ((a.health_score as number) || 0));
         break;
       default: // score
         filtered.sort((a, b) => b.match_score - a.match_score);

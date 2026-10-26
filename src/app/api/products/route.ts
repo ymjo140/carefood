@@ -61,6 +61,7 @@ export async function GET(request: NextRequest) {
   const per100gSodiumMax = Number(searchParams.get("per100g_sodium_max") || 0);
   const per100gProteinMin = Number(searchParams.get("per100g_protein_min") || 0);
   const per100gCaloriesMax = Number(searchParams.get("per100g_calories_max") || 0);
+  const healthScoreMin = Number(searchParams.get("health_min") || 0);
   const sort = searchParams.get("sort") || "name";
   const page = Number(searchParams.get("page") || 1);
   const limit = Math.min(Number(searchParams.get("limit") || 20), 50);
@@ -69,13 +70,14 @@ export async function GET(request: NextRequest) {
   const supabase = createServiceRoleClient();
 
   // 정렬 매핑
-  type OrderCol = "name" | "protein_g" | "calories";
+  type OrderCol = "name" | "protein_g" | "calories" | "health_score";
   const sortMap: Record<string, { column: OrderCol; ascending: boolean }> = {
     name: { column: "name", ascending: true },
     price_asc: { column: "name", ascending: true }, // 가격정렬은 후처리
     price_desc: { column: "name", ascending: true },
     protein_desc: { column: "protein_g", ascending: false },
     calories_asc: { column: "calories", ascending: true },
+    health_desc: { column: "health_score", ascending: false },
   };
   const orderBy = sortMap[sort] || sortMap.name;
 
@@ -156,6 +158,7 @@ export async function GET(request: NextRequest) {
   if (sodiumMax > 0) query = query.lte("sodium_mg", sodiumMax);
   if (sugarMax > 0) query = query.lte("sugar_g", sugarMax);
   if (fiberMin > 0) query = query.gte("fiber_g", fiberMin);
+  if (healthScoreMin > 0) query = query.gte("health_score", healthScoreMin);
 
   // 검색
   if (search) {

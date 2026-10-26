@@ -22,7 +22,7 @@ type ApiResponse = {
   totalPages: number;
 };
 
-type SortOption = "name" | "price_asc" | "price_desc" | "protein_desc" | "calories_asc";
+type SortOption = "name" | "price_asc" | "price_desc" | "protein_desc" | "calories_asc" | "health_desc";
 
 /* ───── 상수 ───── */
 const TASTE_CONFIG = [
@@ -34,6 +34,7 @@ const TASTE_CONFIG = [
 
 const SORT_OPTIONS: { value: SortOption; label: string }[] = [
   { value: "name", label: "이름순" },
+  { value: "health_desc", label: "건강점수순" },
   { value: "price_asc", label: "낮은 가격순" },
   { value: "price_desc", label: "높은 가격순" },
   { value: "protein_desc", label: "고단백순" },
@@ -165,11 +166,14 @@ type NutritionFilters = {
   per100g_sodium_max: number;
   per100g_protein_min: number;
   per100g_calories_max: number;
+  // 건강 점수
+  health_min: number;
 };
 
 const INITIAL_NUTRITION: NutritionFilters = {
   protein_min: 0, calories_max: 0, sodium_max: 0, sugar_max: 0, fiber_min: 0,
   per100g_sugar_max: 0, per100g_sodium_max: 0, per100g_protein_min: 0, per100g_calories_max: 0,
+  health_min: 0,
 };
 
 /* ───── 사이드바 필터 패널 ───── */
@@ -370,6 +374,30 @@ function FilterPanel({
         </div>
       </section>
 
+      {/* 건강 점수 */}
+      <section>
+        <h3 className="text-[13px] font-bold text-foreground mb-2">건강 점수</h3>
+        <div className="flex flex-wrap gap-1">
+          {[
+            { label: "60점+", value: 60 },
+            { label: "70점+ (우수)", value: 70 },
+            { label: "80점+ (최상)", value: 80 },
+          ].map(p => (
+            <button key={p.value}
+              onClick={() => updateNutrition("health_min", nutrition.health_min === p.value ? 0 : p.value)}
+              className={`text-[11px] px-2 py-0.5 rounded-full transition-colors ${
+                nutrition.health_min === p.value
+                  ? "bg-green-600/15 text-green-700 dark:text-green-400 font-medium"
+                  : "bg-surface text-muted hover:text-foreground/70"
+              }`}
+              style={{ minHeight: "22px", minWidth: "unset" }}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+      </section>
+
       {/* 맛 */}
       <section>
         <h3 className="text-[13px] font-bold text-foreground mb-2">맛</h3>
@@ -465,17 +493,24 @@ function ProductCard({ product, isFavorite, onToggleFavorite }: {
           )}
         </div>
 
-        {/* 태그 */}
-        {product.functional_tags && product.functional_tags.length > 0 && (
-          <div className="flex flex-wrap gap-1 mb-2">
-            {product.functional_tags.slice(0, 4).map((t: string) => (
-              <span key={t} className="text-[11px] px-2 py-0.5 rounded bg-primary/8 text-primary/80 font-medium"
-                style={{ minHeight: "unset", minWidth: "unset" }}>
-                {ALL_TAG_LABELS[t] || t}
-              </span>
-            ))}
-          </div>
-        )}
+        {/* 건강 점수 + 태그 */}
+        <div className="flex flex-wrap gap-1 mb-2">
+          {product.health_score != null && (
+            <span className={`text-[11px] px-2 py-0.5 rounded font-bold ${
+              product.health_score >= 70 ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+              : product.health_score >= 50 ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"
+              : "bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400"
+            }`} style={{ minHeight: "unset", minWidth: "unset" }}>
+              건강 {product.health_score}
+            </span>
+          )}
+          {product.functional_tags?.slice(0, 3).map((t: string) => (
+            <span key={t} className="text-[11px] px-2 py-0.5 rounded bg-primary/8 text-primary/80 font-medium"
+              style={{ minHeight: "unset", minWidth: "unset" }}>
+              {ALL_TAG_LABELS[t] || t}
+            </span>
+          ))}
+        </div>
 
         {/* 영양 인라인 */}
         <div className="flex flex-wrap gap-x-3 gap-y-1 mb-auto">
@@ -560,6 +595,7 @@ export default function ProductExplorer() {
       if (nutrition.per100g_sodium_max > 0) params.set("per100g_sodium_max", String(nutrition.per100g_sodium_max));
       if (nutrition.per100g_protein_min > 0) params.set("per100g_protein_min", String(nutrition.per100g_protein_min));
       if (nutrition.per100g_calories_max > 0) params.set("per100g_calories_max", String(nutrition.per100g_calories_max));
+      if (nutrition.health_min > 0) params.set("health_min", String(nutrition.health_min));
       params.set("sort", sortBy);
       params.set("page", String(page));
       params.set("limit", "20");

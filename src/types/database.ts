@@ -28,6 +28,7 @@ export type Database = {
           ingredients_raw: string | null;
           spicy_score: number;
           is_active: boolean;
+          health_score: number | null;
           created_at: string;
           updated_at: string;
         };

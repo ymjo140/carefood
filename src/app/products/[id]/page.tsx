@@ -119,6 +119,7 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
     fiber_g: number | null; sodium_mg: number | null;
     cholesterol_mg: number | null; ingredients_raw: string | null;
     spicy_score: number; is_active: boolean;
+    health_score: number | null;
   };
 
   const { data: product, error } = await supabase
@@ -201,6 +202,20 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
           )}
           {product.food_type && (
             <p className="text-xs text-muted mt-0.5">{product.food_type}</p>
+          )}
+          {product.health_score != null && (
+            <div className="mt-2 flex items-center gap-2">
+              <span className={`text-sm px-2.5 py-1 rounded-lg font-bold ${
+                product.health_score >= 70 ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                : product.health_score >= 50 ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"
+                : "bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400"
+              }`}>
+                건강 점수 {product.health_score}
+              </span>
+              <span className="text-xs text-muted">
+                {product.health_score >= 70 ? "영양 균형 우수" : product.health_score >= 50 ? "보통" : "주의 필요"}
+              </span>
+            </div>
           )}
           {bestPrice && (
             <p className="text-2xl font-bold text-primary mt-3">
