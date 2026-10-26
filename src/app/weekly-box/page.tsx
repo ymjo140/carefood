@@ -371,11 +371,10 @@ export default function WeeklyBoxPage() {
       const dayData = data.box.days[i];
       const dayKey = dayKeys[i];
 
-      const mealKeys = ["breakfast", "lunch", "dinner"];
       const meals = dayData.meals || [];
-      for (let j = 0; j < meals.length && j < 3; j++) {
-        const m = meals[j];
-        newGrid[dayKey][mealKeys[j]] = {
+      for (const m of meals) {
+        const slot = m.slot_type || "lunch"; // slot_type: breakfast/lunch/dinner
+        newGrid[dayKey][slot] = {
           product_id: m.product_id,
           name: m.name,
           calories: m.calories,
