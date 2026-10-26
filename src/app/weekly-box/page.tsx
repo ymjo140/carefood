@@ -312,6 +312,11 @@ export default function WeeklyBoxPage() {
   const [searchModal, setSearchModal] = useState<{ day: string; meal: string } | null>(null);
   const [saving, setSaving] = useState(false);
 
+  // 백그라운드 프리로드
+  const [precomputed, setPrecomputed] = useState<{ grid: GridData; title: string } | null>(null);
+  const [preloading, setPreloading] = useState(false);
+  const [preloadError, setPreloadError] = useState<string | null>(null);
+
   // 저장된 식단 목록 로드
   const loadPlans = useCallback(async () => {
     const userId = getUserId();
@@ -327,97 +332,135 @@ export default function WeeklyBoxPage() {
     loadPlans().finally(() => setLoading(false));
   }, [loadPlans]);
 
-  // AI 자동 생성
+  // ── API 호출 → 그리드 변환 공통 함수 ──
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const fetchAndBuildGrid = async (): Promise<{ grid: GridData; title: string } | null> => {
+    const profileRaw = localStorage.getItem("carefood_profile");
+    if (!profileRaw) return null;
+    const profile = JSON.parse(profileRaw);
+
+    let healthConditions: string[] = [];
+    try {
+      const h = localStorage.getItem("carefood_health");
+      if (h) healthConditions = JSON.parse(h).conditions || [];
+    } catch { /* */ }
+
+    const res = await fetch("/api/weekly-box", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        concerns: profile.concerns || [],
+        conditions: [...new Set([...(profile.conditions || []), ...healthConditions])],
+        allergies: profile.allergies || [],
+        sensitivity: profile.sensitivity || { digestive: 2, additive: 2 },
+        tastes: profile.tastes || { salty: 5, sweet: 5, spicy: 5, fatty: 5 },
+        budget: 100000,
+        mealsPerDay: 3,
+        supplementsPerDay: 1,
+        user_id: getUserId() || undefined,
+      }),
+    });
+
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data.box?.days || data.box.days.length === 0) return null;
+
+    const newGrid = emptyGrid();
+    const dayKeys = DAYS.map(d => d.key);
+
+    for (let i = 0; i < data.box.days.length && i < 7; i++) {
+      const dayData = data.box.days[i];
+      const dayKey = dayKeys[i];
+
+      const mealKeys = ["breakfast", "lunch", "dinner"];
+      const meals = dayData.meals || [];
+      for (let j = 0; j < meals.length && j < 3; j++) {
+        const m = meals[j];
+        newGrid[dayKey][mealKeys[j]] = {
+          product_id: m.product_id,
+          name: m.name,
+          calories: m.calories,
+          protein_g: m.protein_g,
+          price: m.best_price,
+          platform: m.prices?.[0]?.platform,
+          url: m.prices?.[0]?.url,
+          type: "product",
+        };
+      }
+
+      const supplements = dayData.supplements || [];
+      if (supplements.length > 0) {
+        const s = supplements[0];
+        newGrid[dayKey].supplement = {
+          product_id: s.product_id,
+          name: s.name,
+          calories: s.calories,
+          protein_g: s.protein_g,
+          price: s.best_price,
+          platform: s.prices?.[0]?.platform,
+          url: s.prices?.[0]?.url,
+          type: "product",
+        };
+      }
+    }
+
+    const title = (profile.concerns || []).map((c: string) => CONCERN_LABELS[c] || c).join(" · ") + " 식단";
+    return { grid: newGrid, title };
+  };
+
+  // ── 백그라운드 프리로드 (페이지 열자마자 시작) ──
+  useEffect(() => {
+    const preload = async () => {
+      const profileRaw = localStorage.getItem("carefood_profile");
+      if (!profileRaw) {
+        setPreloadError("프로필 없음");
+        return;
+      }
+      setPreloading(true);
+      try {
+        const result = await fetchAndBuildGrid();
+        if (result) {
+          setPrecomputed(result);
+        } else {
+          setPreloadError("추천 생성 실패");
+        }
+      } catch {
+        setPreloadError("추천 로드 실패");
+      } finally {
+        setPreloading(false);
+      }
+    };
+    preload();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // AI 채우기 — 프리로드된 결과가 있으면 즉시 적용
   const generatePlan = async () => {
+    if (precomputed) {
+      setGrid(precomputed.grid);
+      setPlanTitle(precomputed.title);
+      setPlanId(null);
+      // 다음 클릭을 위해 백그라운드에서 새 추천 미리 준비
+      setPrecomputed(null);
+      setPreloading(true);
+      fetchAndBuildGrid().then(result => {
+        if (result) setPrecomputed(result);
+        setPreloading(false);
+      }).catch(() => setPreloading(false));
+      return;
+    }
+
+    // 프리로드 없으면 직접 호출
     setGenerating(true);
     try {
-      const profileRaw = localStorage.getItem("carefood_profile");
-      if (!profileRaw) { alert("프로필이 없습니다. 온보딩을 먼저 완료해주세요."); return; }
-      const profile = JSON.parse(profileRaw);
-
-      let healthConditions: string[] = [];
-      try {
-        const h = localStorage.getItem("carefood_health");
-        if (h) healthConditions = JSON.parse(h).conditions || [];
-      } catch { /* */ }
-
-      const res = await fetch("/api/weekly-box", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          concerns: profile.concerns || [],
-          conditions: [...new Set([...(profile.conditions || []), ...healthConditions])],
-          allergies: profile.allergies || [],
-          sensitivity: profile.sensitivity || { digestive: 2, additive: 2 },
-          tastes: profile.tastes || { salty: 5, sweet: 5, spicy: 5, fatty: 5 },
-          budget: 100000,
-          mealsPerDay: 3,
-          supplementsPerDay: 1,
-        }),
-      });
-
-      if (!res.ok) {
-        const errText = await res.text();
-        console.error("Weekly box API error:", res.status, errText);
-        alert(`식단 생성 실패 (${res.status})`);
+      const result = await fetchAndBuildGrid();
+      if (!result) {
+        alert("식단을 생성할 수 없습니다. 프로필을 확인하세요.");
         return;
       }
-
-      const data = await res.json();
-      console.log("Weekly box response:", data);
-
-      if (!data.box?.days || data.box.days.length === 0) {
-        alert(data.message || data.error || "식단을 생성할 수 없습니다. 구매 가능 제품이 부족합니다.");
-        return;
-      }
-
-      // API 결과를 그리드로 변환
-      const newGrid = emptyGrid();
-      const dayKeys = DAYS.map(d => d.key);
-
-      for (let i = 0; i < data.box.days.length && i < 7; i++) {
-        const dayData = data.box.days[i];
-        const dayKey = dayKeys[i];
-
-        // 식사
-        const mealKeys = ["breakfast", "lunch", "dinner"];
-        const meals = dayData.meals || [];
-        for (let j = 0; j < meals.length && j < 3; j++) {
-          const m = meals[j];
-          newGrid[dayKey][mealKeys[j]] = {
-            product_id: m.product_id,
-            name: m.name,
-            calories: m.calories,
-            protein_g: m.protein_g,
-            price: m.best_price,
-            platform: m.prices?.[0]?.platform,
-            url: m.prices?.[0]?.url,
-            type: "product",
-          };
-        }
-
-        // 보조
-        const supplements = dayData.supplements || [];
-        if (supplements.length > 0) {
-          const s = supplements[0];
-          newGrid[dayKey].supplement = {
-            product_id: s.product_id,
-            name: s.name,
-            calories: s.calories,
-            protein_g: s.protein_g,
-            price: s.best_price,
-            platform: s.prices?.[0]?.platform,
-            url: s.prices?.[0]?.url,
-            type: "product",
-          };
-        }
-      }
-
-      setGrid(newGrid);
-      setPlanTitle(
-        (profile.concerns || []).map((c: string) => CONCERN_LABELS[c] || c).join(" · ") + " 식단"
-      );
-      setPlanId(null); // 새 식단
+      setGrid(result.grid);
+      setPlanTitle(result.title);
+      setPlanId(null);
     } catch (e) {
       console.error(e);
       alert("식단 생성 중 오류가 발생했습니다.");
@@ -516,9 +559,13 @@ export default function WeeklyBoxPage() {
         </div>
         <div className="flex gap-2 shrink-0">
           <button onClick={generatePlan} disabled={generating}
-            className="px-3 py-2 bg-surface text-foreground/80 rounded-lg text-xs font-medium hover:bg-border transition-colors disabled:opacity-50"
+            className={`px-3 py-2 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 ${
+              precomputed
+                ? "bg-primary text-white hover:bg-primary-dark"
+                : "bg-surface text-foreground/80 hover:bg-border"
+            }`}
             style={{ minHeight: "36px" }}>
-            {generating ? "생성 중..." : "✨ AI 채우기"}
+            {generating ? "생성 중..." : precomputed ? "✨ AI 채우기" : preloading ? "⏳ 준비 중..." : preloadError ? "✨ AI 채우기" : "✨ AI 채우기"}
           </button>
           <button onClick={savePlan} disabled={saving || stats.products === 0}
             className="px-3 py-2 bg-primary text-white rounded-lg text-xs font-bold hover:bg-primary-dark transition-colors disabled:opacity-40"
