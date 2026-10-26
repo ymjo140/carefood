@@ -10,6 +10,7 @@ const NAV_ITEMS = [
   { href: "/", label: "홈" },
   { href: "/products", label: "제품 탐색" },
   { href: "/weekly-box", label: "주간 박스" },
+  { href: "/community", label: "커뮤니티" },
 ];
 
 const USER_MENU_ITEMS = [
