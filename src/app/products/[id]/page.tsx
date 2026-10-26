@@ -43,12 +43,14 @@ function NutritionRow({
   unit,
   dailyMax,
   highlight,
+  per100g,
 }: {
   label: string;
   value: number | null;
   unit: string;
   dailyMax?: number;
   highlight?: "good" | "warn" | "danger";
+  per100g?: number | null;
 }) {
   if (value === null || value === undefined) return null;
   const pct = dailyMax ? Math.min((value / dailyMax) * 100, 100) : 0;
@@ -63,13 +65,18 @@ function NutritionRow({
 
   return (
     <tr className="border-b border-border last:border-0">
-      <td className="py-2.5 text-sm font-medium">{label}</td>
-      <td className={`py-2.5 text-sm text-right tabular-nums ${colorClass}`}>
+      <td className="py-2.5 px-4 text-sm font-medium">{label}</td>
+      <td className={`py-2.5 px-2 text-sm text-right tabular-nums ${colorClass}`}>
         {value % 1 === 0 ? value : value.toFixed(1)}
         {unit}
       </td>
+      <td className="py-2.5 px-2 text-xs text-right tabular-nums text-muted">
+        {per100g != null ? (
+          <>{per100g % 1 === 0 ? per100g : per100g.toFixed(1)}</>
+        ) : "—"}
+      </td>
       {dailyMax ? (
-        <td className="py-2.5 pl-3 w-28">
+        <td className="py-2.5 pl-2 pr-4 w-24">
           <div className="h-1.5 bg-border rounded-full overflow-hidden">
             <div
               className={`h-full rounded-full ${
@@ -82,10 +89,10 @@ function NutritionRow({
               style={{ width: `${pct}%` }}
             />
           </div>
-          <span className="text-[10px] text-muted">{Math.round(pct)}% 일일기준</span>
+          <span className="text-[10px] text-muted">{Math.round(pct)}%</span>
         </td>
       ) : (
-        <td className="py-2.5 pl-3 w-28" />
+        <td className="py-2.5 pl-2 pr-4 w-24" />
       )}
     </tr>
   );
@@ -272,34 +279,45 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
             <span className="text-xs text-muted">1회 제공량 {product.serving_size_g}g 기준</span>
           )}
         </div>
-        <div className="bg-card rounded-2xl border border-border overflow-hidden shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-border bg-background/50">
-                <th className="text-left py-2 px-4 text-xs text-muted font-medium">항목</th>
-                <th className="text-right py-2 px-4 text-xs text-muted font-medium">함량</th>
-                <th className="text-left py-2 pl-7 pr-4 text-xs text-muted font-medium w-28">일일 기준</th>
-              </tr>
-            </thead>
-            <tbody>
-              <NutritionRow label="칼로리" value={product.calories} unit="kcal" dailyMax={2000} />
-              <NutritionRow label="탄수화물" value={product.carbs_g} unit="g" dailyMax={324} />
-              <NutritionRow label="당류" value={product.sugar_g} unit="g" dailyMax={50}
-                highlight={product.sugar_g !== null && product.sugar_g > 15 ? "warn" : product.sugar_g !== null && product.sugar_g < 5 ? "good" : undefined} />
-              <NutritionRow label="단백질" value={product.protein_g} unit="g" dailyMax={55}
-                highlight={product.protein_g !== null && product.protein_g >= 15 ? "good" : undefined} />
-              <NutritionRow label="지방" value={product.fat_g} unit="g" dailyMax={54} />
-              <NutritionRow label="포화지방" value={product.saturated_fat_g} unit="g" dailyMax={15}
-                highlight={product.saturated_fat_g !== null && product.saturated_fat_g > 10 ? "warn" : undefined} />
-              <NutritionRow label="나트륨" value={product.sodium_mg} unit="mg" dailyMax={2000}
-                highlight={product.sodium_mg !== null && product.sodium_mg > 1000 ? "danger" : product.sodium_mg !== null && product.sodium_mg < 400 ? "good" : undefined} />
-              <NutritionRow label="콜레스테롤" value={product.cholesterol_mg} unit="mg" dailyMax={300} />
-              <NutritionRow label="식이섬유" value={product.fiber_g} unit="g" dailyMax={25} />
-            </tbody>
-          </table>
-        </div>
+        {(() => {
+          // 100g당 환산 계산
+          const s = product.serving_size_g;
+          const per100 = (v: number | null) => (v != null && s && s > 0) ? Math.round((v / s) * 100 * 10) / 10 : null;
+
+          return (
+            <div className="border border-border rounded-xl overflow-hidden">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-border bg-surface/50">
+                    <th className="text-left py-2 px-4 text-xs text-muted font-medium">항목</th>
+                    <th className="text-right py-2 px-2 text-xs text-muted font-medium">
+                      {s ? `${s}g당` : "함량"}
+                    </th>
+                    <th className="text-right py-2 px-2 text-xs text-muted font-medium">100g당</th>
+                    <th className="text-left py-2 pl-2 pr-4 text-xs text-muted font-medium w-24">일일</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <NutritionRow label="칼로리" value={product.calories} unit="kcal" dailyMax={2000} per100g={per100(product.calories)} />
+                  <NutritionRow label="탄수화물" value={product.carbs_g} unit="g" dailyMax={324} per100g={per100(product.carbs_g)} />
+                  <NutritionRow label="당류" value={product.sugar_g} unit="g" dailyMax={50} per100g={per100(product.sugar_g)}
+                    highlight={product.sugar_g !== null && product.sugar_g > 15 ? "warn" : product.sugar_g !== null && product.sugar_g < 5 ? "good" : undefined} />
+                  <NutritionRow label="단백질" value={product.protein_g} unit="g" dailyMax={55} per100g={per100(product.protein_g)}
+                    highlight={product.protein_g !== null && product.protein_g >= 15 ? "good" : undefined} />
+                  <NutritionRow label="지방" value={product.fat_g} unit="g" dailyMax={54} per100g={per100(product.fat_g)} />
+                  <NutritionRow label="포화지방" value={product.saturated_fat_g} unit="g" dailyMax={15} per100g={per100(product.saturated_fat_g)}
+                    highlight={product.saturated_fat_g !== null && product.saturated_fat_g > 10 ? "warn" : undefined} />
+                  <NutritionRow label="나트륨" value={product.sodium_mg} unit="mg" dailyMax={2000} per100g={per100(product.sodium_mg)}
+                    highlight={product.sodium_mg !== null && product.sodium_mg > 1000 ? "danger" : product.sodium_mg !== null && product.sodium_mg < 400 ? "good" : undefined} />
+                  <NutritionRow label="콜레스테롤" value={product.cholesterol_mg} unit="mg" dailyMax={300} per100g={per100(product.cholesterol_mg)} />
+                  <NutritionRow label="식이섬유" value={product.fiber_g} unit="g" dailyMax={25} per100g={per100(product.fiber_g)} />
+                </tbody>
+              </table>
+            </div>
+          );
+        })()}
         <p className="text-[10px] text-muted mt-2">
-          * 일일기준치는 성인 2,000kcal 기준. 식약처 영양성분 DB 기반.
+          * 일일기준치: 성인 2,000kcal 기준 · 100g당 수치로 제품 간 비교 가능
         </p>
       </section>
 
