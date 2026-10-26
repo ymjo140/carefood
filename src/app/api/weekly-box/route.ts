@@ -69,8 +69,8 @@ function classifyMeal(p: any): MealType {
 // 끼니별 적합한 카테고리 (우선순위 순)
 const SLOT_PREFERENCES: Record<string, MealType[]> = {
   breakfast: ["health_meal", "light", "rice", "soup", "street", "noodle"],          // 아침: 건강식단 > 가벼운 것
-  lunch:     ["health_meal", "rice", "main", "stew", "noodle", "street", "soup"],   // 점심: 건강식단 > 밥/주요리
-  dinner:    ["health_meal", "soup", "stew", "main", "rice", "noodle", "street"],   // 저녁: 건강식단 > 국/찌개
+  lunch:     ["health_meal", "rice", "main", "stew", "noodle", "street", "soup", "light"],   // 점심: 건강식단 > 밥/주요리 (샐러드OK)
+  dinner:    ["health_meal", "soup", "stew", "main", "rice", "noodle", "street"],   // 저녁: 국/찌개/주요리 (샐러드 제외)
 };
 
 // 주간 카테고리 제한 (7일 전체)
@@ -465,7 +465,7 @@ export async function POST(request: NextRequest) {
     };
 
     // 카테고리에서 최적 제품 선택 (v4: 영양 기준 필터 강화)
-    const pickFromCategory = (type: MealType, targetCal: number, maxPrice: number): ScoredProduct | null => {
+    const pickFromCategory = (type: MealType, targetCal: number, maxPrice: number, slot?: string): ScoredProduct | null => {
       const pool = poolByType[type];
       for (const p of pool) {
         if (usedProductIds.has(p.id)) continue;
@@ -477,6 +477,14 @@ export async function POST(request: NextRequest) {
         if (nutritionExclusions.sodium_max && p.sodium_mg > nutritionExclusions.sodium_max) continue;
         if (nutritionExclusions.sugar_max && p.sugar_g != null && p.sugar_g > nutritionExclusions.sugar_max) continue;
         if (nutritionExclusions.calories_max && p.calories > nutritionExclusions.calories_max) continue;
+        // 저녁에 샐러드/light 제외: 이름에 샐러드 포함이거나 dish_type이 salad이면 skip
+        if (slot === "dinner") {
+          const name = (p.name as string) || "";
+          const dishType = p._health_meal ? (p.dish_type || "") : "";
+          if (/샐러드|salad/i.test(name) || dishType === "salad") continue;
+          // light 카테고리(죽/토스트/시리얼 등)도 저녁에는 skip
+          if (p.mealType === "light") continue;
+        }
         // 같은 이름 반복 방지
         const base = getBaseName(p.name);
         if (usedBaseNames.has(base)) continue;
@@ -499,9 +507,8 @@ export async function POST(request: NextRequest) {
         for (const [cat, limits] of Object.entries(WEEKLY_CATEGORY_LIMITS)) {
           const mType = cat as MealType;
           if (weekCategoryCounts[mType] < limits.min) {
-            // 이 카테고리가 끼니 선호에 포함되면 시도
             if (prefs.includes(mType)) {
-              picked = pickFromCategory(mType, targetCal, perMealBudget * 2);
+              picked = pickFromCategory(mType, targetCal, perMealBudget * 2, slot);
               if (picked) break;
             }
           }
@@ -510,11 +517,9 @@ export async function POST(request: NextRequest) {
         // 2차: 끼니 선호 카테고리 순서대로
         if (!picked) {
           for (const pref of prefs) {
-            // 주간 max 초과 방지
             const limits = WEEKLY_CATEGORY_LIMITS[pref];
             if (limits && weekCategoryCounts[pref] >= limits.max) continue;
-
-            picked = pickFromCategory(pref, targetCal, perMealBudget * 2);
+            picked = pickFromCategory(pref, targetCal, perMealBudget * 2, slot);
             if (picked) break;
           }
         }
@@ -522,7 +527,7 @@ export async function POST(request: NextRequest) {
         // 3차: 아무 카테고리에서라도
         if (!picked) {
           for (const type of Object.keys(poolByType) as MealType[]) {
-            picked = pickFromCategory(type, targetCal, perMealBudget * 3);
+            picked = pickFromCategory(type, targetCal, perMealBudget * 3, slot);
             if (picked) break;
           }
         }

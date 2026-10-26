@@ -93,13 +93,31 @@ function Cell({ cell, onClear, onSetEatingOut, onAddClick }: {
     );
   }
 
+  // 제품 클릭 → 제품 상세 페이지 or 구매 링크로 이동
+  const handleProductClick = () => {
+    if (cell.product_id) {
+      // 건강식단 서비스 제품은 외부 URL로, 일반 제품은 상세 페이지로
+      if (cell.url && (cell.platform === "greating" || cell.platform === "sixmeal" || cell.platform === "designmeal")) {
+        window.open(cell.url, "_blank", "noopener");
+      } else {
+        window.location.href = `/products/${cell.product_id}`;
+      }
+    }
+  };
+
   return (
-    <div className="h-full flex flex-col px-1 py-1 relative group cursor-pointer" onClick={onAddClick}>
-      <p className="text-[9px] font-medium leading-tight line-clamp-2">{cell.name}</p>
+    <div className="h-full flex flex-col px-1 py-1 relative group cursor-pointer" onClick={handleProductClick}>
+      <p className="text-[9px] font-medium leading-tight line-clamp-2 hover:text-primary transition-colors">{cell.name}</p>
       <div className="flex items-center gap-1 mt-auto">
         <span className="text-[8px] text-muted">{cell.calories}kcal</span>
         {cell.price && <span className="text-[8px] text-primary font-medium">{cell.price.toLocaleString()}원</span>}
       </div>
+      {/* 교체 버튼 (+ 아이콘으로 검색 모달) */}
+      <button onClick={(e) => { e.stopPropagation(); onAddClick(); }}
+        className="absolute top-0 left-0 w-3.5 h-3.5 rounded-full bg-primary/80 text-white text-[7px] items-center justify-center hidden group-hover:flex"
+        title="교체"
+        style={{ minHeight: "unset", minWidth: "unset" }}>↻</button>
+      {/* 삭제 버튼 */}
       <button onClick={(e) => { e.stopPropagation(); onClear(); }}
         className="absolute top-0 right-0 w-3.5 h-3.5 rounded-full bg-black/40 text-white text-[7px] items-center justify-center hidden group-hover:flex"
         style={{ minHeight: "unset", minWidth: "unset" }}>×</button>
@@ -384,7 +402,7 @@ export default function WeeklyBoxPage() {
           calories: m.calories,
           protein_g: m.protein_g,
           price: m.best_price,
-          platform: m.prices?.[0]?.platform,
+          platform: m.health_source || m.prices?.[0]?.platform,
           url: m.prices?.[0]?.url,
           type: "product",
         };
