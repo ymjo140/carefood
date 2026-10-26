@@ -10,11 +10,15 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { user_id, product_id, action, metadata } = body;
 
-    if (!user_id || !product_id || !action) {
-      return NextResponse.json({ error: "user_id, product_id, action 필수" }, { status: 400 });
+    if (!user_id || !action) {
+      return NextResponse.json({ error: "user_id, action 필수" }, { status: 400 });
+    }
+    // product_id는 view/click_price에만 필수
+    if (["view", "click_price", "add_box", "remove_box"].includes(action) && !product_id) {
+      return NextResponse.json({ error: "이 action에는 product_id 필수" }, { status: 400 });
     }
 
-    const validActions = ["view", "click_price", "add_box", "remove_box"];
+    const validActions = ["view", "click_price", "add_box", "remove_box", "filter_use", "search"];
     if (!validActions.includes(action)) {
       return NextResponse.json({ error: `유효한 action: ${validActions.join(", ")}` }, { status: 400 });
     }
