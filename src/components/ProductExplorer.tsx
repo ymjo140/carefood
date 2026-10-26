@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import type { ProductWithPrices, TasteLevel } from "@/types/database";
+import type { ProductWithPrices, TasteLevel, DishCategory } from "@/types/database";
+import { DISH_CATEGORY_LABELS } from "@/types/database";
 
 /* ───── 타입 ───── */
 type TasteFilters = {
@@ -49,6 +50,12 @@ const PLATFORM_COLORS: Record<string, string> = {
   kurly: "text-purple-600", oasis: "text-green-600",
   homeplus: "text-orange-600", "11st": "text-red-500", danawa: "text-blue-600",
 };
+
+/* ───── 음식 종류 ───── */
+const CATEGORY_FILTERS: DishCategory[] = [
+  "soup", "noodle", "rice", "grill", "stew", "side",
+  "seafood", "snack", "salad", "beverage", "supplement", "powder",
+];
 
 const PURPOSE_OPTIONS = [
   { key: "gut_health", label: "장건강" },
@@ -166,6 +173,7 @@ const INITIAL_NUTRITION: NutritionFilters = {
 
 /* ───── 사이드바 필터 패널 ───── */
 function FilterPanel({
+  categories, onCategoryToggle,
   purposes, onPurposeToggle,
   ingredients, onIngredientToggle,
   priceMin, priceMax, onPriceChange,
@@ -174,6 +182,8 @@ function FilterPanel({
   hasPriceOnly, onHasPriceOnlyChange,
   onReset,
 }: {
+  categories: DishCategory[];
+  onCategoryToggle: (key: DishCategory) => void;
   purposes: string[];
   onPurposeToggle: (key: string) => void;
   ingredients: string[];
@@ -198,6 +208,18 @@ function FilterPanel({
 
   return (
     <div className="space-y-5">
+      {/* 음식 종류 */}
+      <section>
+        <h3 className="text-[13px] font-bold text-foreground mb-2">음식 종류</h3>
+        <div className="flex flex-wrap gap-1.5">
+          {CATEGORY_FILTERS.map(cat => (
+            <Chip key={cat} label={DISH_CATEGORY_LABELS[cat]}
+              active={categories.includes(cat)}
+              onClick={() => onCategoryToggle(cat)} />
+          ))}
+        </div>
+      </section>
+
       {/* 목적 */}
       <section>
         <h3 className="text-[13px] font-bold text-foreground mb-2">목적</h3>
@@ -481,6 +503,7 @@ export default function ProductExplorer() {
   const [tastes, setTastes] = useState<TasteFilters>({ salty: 0, sweet: 0, spicy: 0, fatty: 0 });
   const [search, setSearch] = useState("");
   const [searchInput, setSearchInput] = useState("");
+  const [selectedCategories, setSelectedCategories] = useState<DishCategory[]>([]);
   const [selectedPurposes, setSelectedPurposes] = useState<string[]>([]);
   const [selectedIngredients, setSelectedIngredients] = useState<string[]>([]);
   const [hasPriceOnly, setHasPriceOnly] = useState(true);
@@ -502,6 +525,7 @@ export default function ProductExplorer() {
       if (tastes.spicy) params.set("spicy", String(tastes.spicy));
       if (tastes.fatty) params.set("fatty", String(tastes.fatty));
       if (search) params.set("q", search);
+      if (selectedCategories.length > 0) params.set("dish_category", selectedCategories.join(","));
       if (selectedPurposes.length > 0) params.set("purpose", selectedPurposes.join(","));
       if (selectedIngredients.length > 0) params.set("tags", selectedIngredients.join(","));
       if (hasPriceOnly) params.set("hasPrice", "1");
@@ -529,7 +553,7 @@ export default function ProductExplorer() {
     } finally {
       setLoading(false);
     }
-  }, [tastes, search, selectedPurposes, selectedIngredients, hasPriceOnly, priceMin, priceMax, nutrition, sortBy, page]);
+  }, [tastes, search, selectedCategories, selectedPurposes, selectedIngredients, hasPriceOnly, priceMin, priceMax, nutrition, sortBy, page]);
 
   useEffect(() => { fetchProducts(); }, [fetchProducts]);
 
@@ -545,12 +569,12 @@ export default function ProductExplorer() {
   const resetAll = () => {
     setTastes({ salty: 0, sweet: 0, spicy: 0, fatty: 0 });
     setSearch(""); setSearchInput("");
-    setSelectedPurposes([]); setSelectedIngredients([]);
+    setSelectedCategories([]); setSelectedPurposes([]); setSelectedIngredients([]);
     setHasPriceOnly(false); setPriceMin(0); setPriceMax(0);
     setNutrition(INITIAL_NUTRITION); setPage(1);
   };
 
-  const activeFilterCount = selectedPurposes.length + selectedIngredients.length
+  const activeFilterCount = selectedCategories.length + selectedPurposes.length + selectedIngredients.length
     + (priceMin > 0 || priceMax > 0 ? 1 : 0)
     + Object.values(nutrition).filter(v => v > 0).length
     + Object.values(tastes).filter(v => v > 0).length
@@ -615,6 +639,7 @@ export default function ProductExplorer() {
             </div>
             <div className="p-5">
               <FilterPanel
+                categories={selectedCategories} onCategoryToggle={k => { setSelectedCategories(prev => prev.includes(k) ? prev.filter(c => c !== k) : [...prev, k]); setPage(1); }}
                 purposes={selectedPurposes} onPurposeToggle={k => { setSelectedPurposes(toggleList(selectedPurposes, k)); setPage(1); }}
                 ingredients={selectedIngredients} onIngredientToggle={k => { setSelectedIngredients(toggleList(selectedIngredients, k)); setPage(1); }}
                 priceMin={priceMin} priceMax={priceMax} onPriceChange={(min, max) => { setPriceMin(min); setPriceMax(max); setPage(1); }}
@@ -634,6 +659,7 @@ export default function ProductExplorer() {
         <aside className="hidden lg:block w-56 shrink-0">
           <div className="sticky top-14 pt-2">
             <FilterPanel
+              categories={selectedCategories} onCategoryToggle={k => { setSelectedCategories(prev => prev.includes(k) ? prev.filter(c => c !== k) : [...prev, k]); setPage(1); }}
               purposes={selectedPurposes} onPurposeToggle={k => { setSelectedPurposes(toggleList(selectedPurposes, k)); setPage(1); }}
               ingredients={selectedIngredients} onIngredientToggle={k => { setSelectedIngredients(toggleList(selectedIngredients, k)); setPage(1); }}
               priceMin={priceMin} priceMax={priceMax} onPriceChange={(min, max) => { setPriceMin(min); setPriceMax(max); setPage(1); }}

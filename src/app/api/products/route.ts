@@ -47,6 +47,7 @@ export async function GET(request: NextRequest) {
   const tag = searchParams.get("tag") || null; // 단일 태그 (하위 호환)
   const tags = searchParams.get("tags") || null; // 다중 성분 태그 (OR)
   const purpose = searchParams.get("purpose") || null; // 목적 필터 (OR)
+  const dishCategory = searchParams.get("dish_category") || null; // 음식 종류 (쉼표 구분)
   const hasPriceOnly = searchParams.get("hasPrice") === "1";
   const priceMin = Number(searchParams.get("price_min") || 0);
   const priceMax = Number(searchParams.get("price_max") || 0);
@@ -136,6 +137,16 @@ export async function GET(request: NextRequest) {
       query = query.contains("functional_tags", [[...allTags][0]]);
     } else if (allTags.size > 1) {
       query = query.or([...allTags].map(t => `functional_tags.cs.{${t}}`).join(","));
+    }
+  }
+
+  // 음식 종류 필터
+  if (dishCategory) {
+    const cats = dishCategory.split(",").filter(Boolean);
+    if (cats.length === 1) {
+      query = query.eq("dish_category", cats[0]);
+    } else if (cats.length > 1) {
+      query = query.in("dish_category", cats);
     }
   }
 
