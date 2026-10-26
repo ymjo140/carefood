@@ -29,10 +29,12 @@ type WeeklyBoxRequest = {
    ════════════════════════════════════════════ */
 
 // 이름 기반 세부 분류 (DB의 dish_category보다 정확)
-type MealType = "noodle" | "rice" | "soup" | "stew" | "main" | "street" | "light" | "other_meal";
+type MealType = "health_meal" | "noodle" | "rice" | "soup" | "stew" | "main" | "street" | "light" | "other_meal";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function classifyMeal(p: any): MealType {
+  // 건강 식단 서비스 제품은 별도 타입
+  if (p._is_health_meal) return "health_meal";
   const n = p.name as string;
   // 국/탕/찌개를 먼저 체크 (육개장라면 → soup으로, 설렁탕면 → soup으로)
   if (/미역국|된장국|해장국|갈비탕|곰탕|설렁탕|삼계탕|감자탕|육개장|뼈해장|소고기국|북엇국|사골|우거지/.test(n)) return "soup";
@@ -52,20 +54,21 @@ function classifyMeal(p: any): MealType {
 
 // 끼니별 적합한 카테고리 (우선순위 순)
 const SLOT_PREFERENCES: Record<string, MealType[]> = {
-  breakfast: ["light", "rice", "soup", "street", "noodle"],      // 아침: 가벼운 것 우선
-  lunch:     ["noodle", "rice", "stew", "main", "street", "soup"], // 점심: 면/밥 우선
-  dinner:    ["soup", "stew", "main", "rice", "noodle", "street"], // 저녁: 국/찌개/주요리 우선
+  breakfast: ["health_meal", "light", "rice", "soup", "street", "noodle"],          // 아침: 건강식단 > 가벼운 것
+  lunch:     ["health_meal", "rice", "main", "stew", "noodle", "street", "soup"],   // 점심: 건강식단 > 밥/주요리
+  dinner:    ["health_meal", "soup", "stew", "main", "rice", "noodle", "street"],   // 저녁: 건강식단 > 국/찌개
 };
 
 // 주간 카테고리 제한 (7일 전체)
 const WEEKLY_CATEGORY_LIMITS: Partial<Record<MealType, { min: number; max: number }>> = {
-  noodle: { min: 0, max: 4 },   // 면류: 주 4회 이하
-  rice:   { min: 2, max: 8 },   // 밥류: 주 2회 이상
-  soup:   { min: 2, max: 7 },   // 국/탕: 주 2회 이상
-  stew:   { min: 0, max: 4 },   // 찌개: 주 4회 이하
-  main:   { min: 2, max: 7 },   // 주요리: 주 2회 이상
-  street: { min: 0, max: 5 },   // 간편식: 주 5회 이하
-  light:  { min: 0, max: 4 },   // 가벼운: 주 4회 이하
+  health_meal: { min: 3, max: 14 }, // 건강식단: 최소 3회 (있으면 우선 배치)
+  noodle: { min: 0, max: 4 },
+  rice:   { min: 2, max: 8 },
+  soup:   { min: 2, max: 7 },
+  stew:   { min: 0, max: 4 },
+  main:   { min: 2, max: 7 },
+  street: { min: 0, max: 5 },
+  light:  { min: 0, max: 4 },
 };
 
 /* ════════════════════════════════════════════
@@ -200,6 +203,42 @@ export async function POST(request: NextRequest) {
       if (data) mealProducts = data;
     }
 
+    // 건강 식단 서비스 제품 (식스밀, 그리팅 등) — 높은 우선순위로 추가
+    {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: healthMeals } = await (supabase as any)
+        .from("health_meal_products")
+        .select("id, name, category, price, image_url, product_url, calories, protein_g, fat_g, sugar_g, sodium_mg, fiber_g, health_tags, dish_type, source")
+        .eq("is_available", true)
+        .eq("dish_type", "meal");
+
+      if (healthMeals && healthMeals.length > 0) {
+        // health_meal_products → mealProducts 형태로 변환
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const converted = healthMeals.map((h: any) => ({
+          id: h.id,
+          name: h.name,
+          manufacturer: h.source,
+          calories: h.calories || 400, // 영양 정보 없으면 기본값 (건강도시락 평균)
+          protein_g: h.protein_g || 25,
+          fat_g: h.fat_g,
+          sugar_g: h.sugar_g || 3,
+          sodium_mg: h.sodium_mg || 500,
+          fiber_g: h.fiber_g,
+          functional_tags: h.health_tags || [],
+          dish_category: "meal",
+          health_score: 80, // 건강 식단 서비스 제품은 기본 80점
+          _is_health_meal: true, // 마킹
+          _health_price: h.price,
+          _health_url: h.product_url,
+          _health_image: h.image_url,
+          _health_source: h.source,
+        }));
+        mealProducts = [...converted, ...mealProducts]; // 건강식단 우선
+        console.log("[weekly-box] 건강식단 제품 추가:", converted.length, "개");
+      }
+    }
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let supplementProducts: any[] = [];
     {
@@ -260,7 +299,7 @@ export async function POST(request: NextRequest) {
 
     // 카테고리별 풀 구성
     const poolByType: Record<MealType, ScoredProduct[]> = {
-      noodle: [], rice: [], soup: [], stew: [], main: [], street: [], light: [], other_meal: [],
+      health_meal: [], noodle: [], rice: [], soup: [], stew: [], main: [], street: [], light: [], other_meal: [],
     };
     for (const p of scored) {
       poolByType[p.mealType as MealType].push(p);
@@ -289,9 +328,15 @@ export async function POST(request: NextRequest) {
     }
     // 가격 붙이기
     for (const p of scored) {
-      const prices = (priceMap[p.id] || []).sort((a: { price: number }, b: { price: number }) => a.price - b.price);
-      p.bestPrice = prices[0]?.price || 99999;
-      p.prices = prices;
+      if (p._is_health_meal) {
+        // 건강식단 서비스 제품은 이미 가격이 있음
+        p.bestPrice = p._health_price || 10000;
+        p.prices = [];
+      } else {
+        const prices = (priceMap[p.id] || []).sort((a: { price: number }, b: { price: number }) => a.price - b.price);
+        p.bestPrice = prices[0]?.price || 99999;
+        p.prices = prices;
+      }
     }
     const scoredSupplements = supplementProducts.map((p: { id: string }) => {
       const prices = (priceMap[p.id] || []).sort((a: { price: number }, b: { price: number }) => a.price - b.price);
@@ -305,7 +350,7 @@ export async function POST(request: NextRequest) {
 
     const usedProductIds = new Set<string>();
     const weekCategoryCounts: Record<MealType, number> = {
-      noodle: 0, rice: 0, soup: 0, stew: 0, main: 0, street: 0, light: 0, other_meal: 0,
+      health_meal: 0, noodle: 0, rice: 0, soup: 0, stew: 0, main: 0, street: 0, light: 0, other_meal: 0,
     };
 
     // 일별 영양 추적
@@ -433,12 +478,16 @@ export async function POST(request: NextRequest) {
       sugar_g: item.sugar_g,
       sodium_mg: item.sodium_mg,
       match_score: item.score,
-      best_price: item.bestPrice,
-      prices: (item.prices || []).slice(0, 3),
+      best_price: item._is_health_meal ? item._health_price : item.bestPrice,
+      prices: item._is_health_meal
+        ? [{ platform: item._health_source, price: item._health_price, url: item._health_url, image_url: item._health_image }]
+        : (item.prices || []).slice(0, 3),
       functional_tags: item.functional_tags || [],
       dish_category: item.dish_category,
       meal_type: item.mealType || null,
       slot_type: slotType,
+      is_health_meal: item._is_health_meal || false,
+      health_source: item._health_source || null,
     });
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
