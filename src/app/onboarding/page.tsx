@@ -9,6 +9,11 @@ import { saveProfile } from "@/app/auth/actions";
 // ── 타입 ─────────────────────────────────────────────
 type OnboardingState = {
   concerns: HealthConcern[];
+  // Phase 1-1: 인구통계 + 식습관
+  age_group: string;    // '20s','30s','40s','50s','60plus'
+  gender: string;       // 'male','female','other'
+  household: string;    // 'single','couple','family'
+  diet_type: string;    // 'normal','diet','exercise','vegetarian','pregnant'
   sensitivity: {
     digestive: SensitivityLevel;
     additive: SensitivityLevel;
@@ -97,8 +102,36 @@ export default function OnboardingPage() {
   );
 }
 
-const STEPS = ["concerns", "sensitivity", "allergies", "tastes"] as const;
+const STEPS = ["concerns", "about_me", "sensitivity", "allergies", "tastes"] as const;
 type StepKey = typeof STEPS[number];
+
+const AGE_OPTIONS = [
+  { key: "20s", label: "20대" },
+  { key: "30s", label: "30대" },
+  { key: "40s", label: "40대" },
+  { key: "50s", label: "50대" },
+  { key: "60plus", label: "60대 이상" },
+];
+
+const GENDER_OPTIONS = [
+  { key: "male", label: "남성" },
+  { key: "female", label: "여성" },
+  { key: "other", label: "선택안함" },
+];
+
+const HOUSEHOLD_OPTIONS = [
+  { key: "single", label: "1인 가구" },
+  { key: "couple", label: "2인 가구" },
+  { key: "family", label: "가족 (3인+)" },
+];
+
+const DIET_OPTIONS = [
+  { key: "normal", label: "일반 식사", desc: "특별한 식단 제한 없음" },
+  { key: "diet", label: "다이어트 중", desc: "칼로리 조절 중이에요" },
+  { key: "exercise", label: "운동 병행", desc: "근력 운동이나 유산소를 해요" },
+  { key: "vegetarian", label: "채식 위주", desc: "채식 또는 반채식 식단" },
+  { key: "pregnant", label: "임산부·수유부", desc: "임신 중이거나 수유 중이에요" },
+];
 
 function OnboardingContent() {
   const router = useRouter();
@@ -107,6 +140,10 @@ function OnboardingContent() {
   const [step, setStep] = useState(0);
   const [state, setState] = useState<OnboardingState>({
     concerns: [],
+    age_group: "",
+    gender: "",
+    household: "",
+    diet_type: "",
     sensitivity: { digestive: 2, additive: 2 },
     allergies: [],
     tastes: { salty: 5, sweet: 5, spicy: 5, fatty: 5 },
@@ -130,6 +167,7 @@ function OnboardingContent() {
   const canProceed = (): boolean => {
     switch (currentStepKey) {
       case "concerns": return state.concerns.length > 0;
+      case "about_me": return state.age_group !== "" && state.gender !== "";
       case "sensitivity": return true;
       case "allergies": return true;
       case "tastes": return true;
@@ -148,6 +186,10 @@ function OnboardingContent() {
   const handleComplete = async () => {
     const profile = {
       concerns: state.concerns,
+      age_group: state.age_group,
+      gender: state.gender,
+      household: state.household,
+      diet_type: state.diet_type,
       sensitivity: state.sensitivity,
       allergies: state.allergies,
       tastes: state.tastes,
@@ -158,12 +200,29 @@ function OnboardingContent() {
       localStorage.setItem("carefood_profile", JSON.stringify(profile));
     } catch { /* silent */ }
 
-    // 로그인 상태면 Supabase에도 저장
+    // Supabase user_profiles에 저장 (로그인/비로그인 모두)
     try {
+      let userId: string | null = null;
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
+        userId = user.id;
         await saveProfile(JSON.stringify(profile));
+      } else {
+        // anonymous user
+        userId = localStorage.getItem("carefood_anon_id");
+        if (!userId) {
+          userId = `anon_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+          localStorage.setItem("carefood_anon_id", userId);
+        }
+      }
+      // user_profiles upsert
+      if (userId) {
+        await fetch("/api/profile", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ user_id: userId, ...profile }),
+        });
       }
     } catch {
       // DB 저장 실패해도 localStorage가 있으니 진행
@@ -200,6 +259,15 @@ function OnboardingContent() {
                     : [...prev.concerns, c],
                 }))
               }
+            />
+          )}
+          {currentStepKey === "about_me" && (
+            <StepAboutMe
+              ageGroup={state.age_group}
+              gender={state.gender}
+              household={state.household}
+              dietType={state.diet_type}
+              onChange={(key, val) => setState(prev => ({ ...prev, [key]: val }))}
             />
           )}
           {currentStepKey === "sensitivity" && (
@@ -259,9 +327,14 @@ function OnboardingContent() {
         </div>
 
         {/* 건너뛰기 */}
-        {currentStepKey === "allergies" && (
+        {(currentStepKey === "allergies" || currentStepKey === "about_me") && (
           <button
-            onClick={handleNext}
+            onClick={() => {
+              if (currentStepKey === "about_me") {
+                setState(prev => ({ ...prev, age_group: "other", gender: "other", household: "", diet_type: "normal" }));
+              }
+              handleNext();
+            }}
             className="w-full mt-3 text-sm text-muted hover:text-foreground transition-colors"
           >
             건너뛰기
@@ -316,6 +389,85 @@ function StepConcerns({
             </button>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+function StepAboutMe({
+  ageGroup, gender, household, dietType, onChange,
+}: {
+  ageGroup: string; gender: string; household: string; dietType: string;
+  onChange: (key: string, val: string) => void;
+}) {
+  return (
+    <div>
+      <h1 className="text-2xl font-extrabold mb-2">나에 대해 알려주세요</h1>
+      <p className="text-muted text-sm mb-6">맞춤 추천 정확도를 높이는 데 사용돼요.</p>
+
+      <div className="space-y-5">
+        {/* 연령대 */}
+        <div>
+          <h3 className="text-sm font-bold mb-2">연령대</h3>
+          <div className="flex flex-wrap gap-2">
+            {AGE_OPTIONS.map(opt => (
+              <button key={opt.key} onClick={() => onChange("age_group", opt.key)}
+                className={`px-4 py-2 rounded-full text-sm transition-colors ${
+                  ageGroup === opt.key ? "bg-foreground text-card font-medium" : "bg-surface text-foreground/70 hover:bg-border"
+                }`}>
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* 성별 */}
+        <div>
+          <h3 className="text-sm font-bold mb-2">성별</h3>
+          <div className="flex flex-wrap gap-2">
+            {GENDER_OPTIONS.map(opt => (
+              <button key={opt.key} onClick={() => onChange("gender", opt.key)}
+                className={`px-4 py-2 rounded-full text-sm transition-colors ${
+                  gender === opt.key ? "bg-foreground text-card font-medium" : "bg-surface text-foreground/70 hover:bg-border"
+                }`}>
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* 가구 형태 */}
+        <div>
+          <h3 className="text-sm font-bold mb-2">가구 형태</h3>
+          <div className="flex flex-wrap gap-2">
+            {HOUSEHOLD_OPTIONS.map(opt => (
+              <button key={opt.key} onClick={() => onChange("household", opt.key)}
+                className={`px-4 py-2 rounded-full text-sm transition-colors ${
+                  household === opt.key ? "bg-foreground text-card font-medium" : "bg-surface text-foreground/70 hover:bg-border"
+                }`}>
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* 식습관 */}
+        <div>
+          <h3 className="text-sm font-bold mb-2">식습관</h3>
+          <div className="space-y-2">
+            {DIET_OPTIONS.map(opt => (
+              <button key={opt.key} onClick={() => onChange("diet_type", opt.key)}
+                className={`w-full text-left px-4 py-3 rounded-xl border transition-colors ${
+                  dietType === opt.key
+                    ? "border-primary bg-primary/5"
+                    : "border-border hover:border-primary/30"
+                }`}>
+                <span className="text-sm font-medium">{opt.label}</span>
+                <span className="text-xs text-muted ml-2">{opt.desc}</span>
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );
