@@ -208,9 +208,9 @@ export async function POST(request: NextRequest) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: healthMeals } = await (supabase as any)
         .from("health_meal_products")
-        .select("id, name, category, price, image_url, product_url, calories, protein_g, fat_g, sugar_g, sodium_mg, fiber_g, health_tags, dish_type, source")
+        .select("id, name, category, price, image_url, product_url, calories, protein_g, fat_g, sugar_g, sodium_mg, fiber_g, health_tags, dish_type, source, health_score")
         .eq("is_available", true)
-        .eq("dish_type", "meal");
+        .in("dish_type", ["meal", "salad"]);
 
       if (healthMeals && healthMeals.length > 0) {
         // health_meal_products → mealProducts 형태로 변환
@@ -227,7 +227,7 @@ export async function POST(request: NextRequest) {
           fiber_g: h.fiber_g,
           functional_tags: h.health_tags || [],
           dish_category: "meal",
-          health_score: 80, // 건강 식단 서비스 제품은 기본 80점
+          health_score: h.health_score || 80, // DB 값 우선, 없으면 기본 80점
           _is_health_meal: true, // 마킹
           _health_price: h.price,
           _health_url: h.product_url,
