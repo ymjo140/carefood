@@ -1,5 +1,6 @@
 import Link from "next/link";
 import HomePersonalized from "@/components/HomePersonalized";
+import HomeSimilarUsers from "@/components/HomeSimilarUsers";
 
 /* ── SVG 아이콘 컴포넌트 ── */
 function IconGut({ className = "" }: { className?: string }) {
@@ -113,7 +114,7 @@ export default function HomePage() {
     <>
       {/* 히어로 */}
       <section className="py-12 sm:py-20 px-4">
-        <div className="max-w-2xl mx-auto">
+        <div className="max-w-6xl mx-auto">
           <div className="inline-block px-3 py-1 rounded-full bg-primary-light text-primary text-xs font-bold mb-5">
             가입 없이 체험 가능
           </div>
@@ -131,9 +132,12 @@ export default function HomePage() {
       {/* 재방문 사용자 개인화 추천 (클라이언트) */}
       <HomePersonalized />
 
+      {/* 비슷한 프로필 사용자 추천 */}
+      <HomeSimilarUsers />
+
       {/* 건강 관심사 선택 — 4열 그리드 */}
       <section className="px-4 pb-12">
-        <div className="max-w-2xl mx-auto">
+        <div className="max-w-6xl mx-auto">
           <h2 className="text-lg font-extrabold mb-4">
             어떤 건강이 궁금하세요?
           </h2>
@@ -163,7 +167,7 @@ export default function HomePage() {
 
       {/* 신뢰 배지 */}
       <section className="py-12 px-4">
-        <div className="max-w-2xl mx-auto">
+        <div className="max-w-6xl mx-auto">
           <h2 className="text-lg font-extrabold mb-6">
             데이터로 분석하는 식품 성분
           </h2>
@@ -189,7 +193,7 @@ export default function HomePage() {
 
       {/* 작동 방식 */}
       <section className="py-12 px-4">
-        <div className="max-w-2xl mx-auto">
+        <div className="max-w-6xl mx-auto">
           <h2 className="text-lg font-extrabold mb-8">
             3단계로 시작하세요
           </h2>
@@ -227,7 +231,7 @@ export default function HomePage() {
 
       {/* 더 많은 기능 */}
       <section className="px-4 pb-12">
-        <div className="max-w-2xl mx-auto">
+        <div className="max-w-6xl mx-auto">
           <h2 className="text-lg font-extrabold mb-4">
             더 알아보기
           </h2>
@@ -262,7 +266,7 @@ export default function HomePage() {
 
       {/* CTA */}
       <section className="py-12 px-4">
-        <div className="max-w-2xl mx-auto bg-card rounded-2xl p-8 text-center shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+        <div className="max-w-6xl mx-auto bg-card rounded-2xl p-8 text-center shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
           <h2 className="text-lg font-extrabold mb-2">
             내 몸에 맞는 식품, 지금 찾아보세요
           </h2>
