@@ -334,8 +334,8 @@ function buildProductQuery(supabase: any, params: ReturnType<typeof parseSearchP
     query = query.gte("spicy_score", Math.ceil(spicy / 2));
   }
 
-  // 상용제품만
-  query = query.eq("category_large", "상용제품");
+  // 상용제품 + 건강식단서비스
+  query = query.in("category_large", ["상용제품", "건강식단서비스"]);
 
   // 구매 가능 제품만
   if (hasPriceOnly) {
