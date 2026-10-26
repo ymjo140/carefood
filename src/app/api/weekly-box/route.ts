@@ -47,8 +47,12 @@ type MealType = "health_meal" | "noodle" | "rice" | "soup" | "stew" | "main" | "
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function classifyMeal(p: any): MealType {
-  // 건강 식단 서비스 제품은 별도 타입
-  if (p._is_health_meal) return "health_meal";
+  // 건강 식단 서비스 제품 — 샐러드 타입이면 light로 분류 (아침/점심만 배정)
+  if (p._is_health_meal) {
+    const dt = p.dish_type || "";
+    if (dt === "salad" || /샐러드/.test(p.name || "")) return "light";
+    return "health_meal";
+  }
   const n = p.name as string;
   // 국/탕/찌개를 먼저 체크 (육개장라면 → soup으로, 설렁탕면 → soup으로)
   if (/미역국|된장국|해장국|갈비탕|곰탕|설렁탕|삼계탕|감자탕|육개장|뼈해장|소고기국|북엇국|사골|우거지/.test(n)) return "soup";
@@ -66,11 +70,25 @@ function classifyMeal(p: any): MealType {
   return "other_meal";
 }
 
-// 끼니별 적합한 카테고리 (우선순위 순)
+// ── 카테고리별 가능한 끼니 슬롯 ──
+// "이 음식 종류는 어떤 끼니에 적합한가?"
+const MEAL_TYPE_SLOTS: Record<MealType, ("breakfast" | "lunch" | "dinner")[]> = {
+  health_meal: ["breakfast", "lunch", "dinner"], // 건강식단: 모든 끼니
+  light:       ["breakfast", "lunch"],            // 샐러드/죽/시리얼: 아침·점심만
+  noodle:      ["lunch", "dinner"],               // 라면/면류: 점심·저녁
+  rice:        ["breakfast", "lunch", "dinner"],   // 밥류: 모든 끼니
+  soup:        ["breakfast", "lunch", "dinner"],   // 국/탕: 모든 끼니
+  stew:        ["lunch", "dinner"],               // 찌개/전골: 점심·저녁
+  main:        ["lunch", "dinner"],               // 불고기/스테이크: 점심·저녁
+  street:      ["lunch", "dinner"],               // 떡볶이/만두/피자: 점심·저녁
+  other_meal:  ["lunch", "dinner"],               // 기타: 점심·저녁
+};
+
+// ── 끼니별 카테고리 우선순위 (MEAL_TYPE_SLOTS 기반 + 끼니 특성 반영) ──
 const SLOT_PREFERENCES: Record<string, MealType[]> = {
-  breakfast: ["health_meal", "light", "rice", "soup", "street", "noodle"],          // 아침: 건강식단 > 가벼운 것
-  lunch:     ["health_meal", "rice", "main", "stew", "noodle", "street", "soup", "light"],   // 점심: 건강식단 > 밥/주요리 (샐러드OK)
-  dinner:    ["health_meal", "soup", "stew", "main", "rice", "noodle", "street"],   // 저녁: 국/찌개/주요리 (샐러드 제외)
+  breakfast: ["health_meal", "light", "rice", "soup"],                          // 아침: 가벼운 것 우선
+  lunch:     ["health_meal", "rice", "main", "stew", "noodle", "street", "soup", "light", "other_meal"],  // 점심: 다양하게
+  dinner:    ["health_meal", "soup", "stew", "main", "rice", "noodle", "street", "other_meal"],            // 저녁: 든든하게
 };
 
 // 주간 카테고리 제한 (7일 전체)
@@ -464,8 +482,13 @@ export async function POST(request: NextRequest) {
         .slice(0, 4); // 앞 4글자만 비교
     };
 
-    // 카테고리에서 최적 제품 선택 (v4: 영양 기준 필터 강화)
+    // 카테고리에서 최적 제품 선택 (v5: 슬롯 호환성 기반)
     const pickFromCategory = (type: MealType, targetCal: number, maxPrice: number, slot?: string): ScoredProduct | null => {
+      // 이 카테고리가 해당 슬롯에 적합한지 먼저 확인
+      if (slot && !MEAL_TYPE_SLOTS[type].includes(slot as "breakfast" | "lunch" | "dinner")) {
+        return null; // 예: light(샐러드)는 dinner 슬롯 불가
+      }
+
       const pool = poolByType[type];
       for (const p of pool) {
         if (usedProductIds.has(p.id)) continue;
@@ -477,14 +500,6 @@ export async function POST(request: NextRequest) {
         if (nutritionExclusions.sodium_max && p.sodium_mg > nutritionExclusions.sodium_max) continue;
         if (nutritionExclusions.sugar_max && p.sugar_g != null && p.sugar_g > nutritionExclusions.sugar_max) continue;
         if (nutritionExclusions.calories_max && p.calories > nutritionExclusions.calories_max) continue;
-        // 저녁에 샐러드/light 제외: 이름에 샐러드 포함이거나 dish_type이 salad이면 skip
-        if (slot === "dinner") {
-          const name = (p.name as string) || "";
-          const dishType = p._health_meal ? (p.dish_type || "") : "";
-          if (/샐러드|salad/i.test(name) || dishType === "salad") continue;
-          // light 카테고리(죽/토스트/시리얼 등)도 저녁에는 skip
-          if (p.mealType === "light") continue;
-        }
         // 같은 이름 반복 방지
         const base = getBaseName(p.name);
         if (usedBaseNames.has(base)) continue;
