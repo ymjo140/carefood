@@ -15,6 +15,7 @@ import { createServiceRoleClient } from "@/lib/supabase/server";
 type WeeklyBoxRequest = {
   concerns: string[];
   conditions: string[];
+  goals?: string[];       // v3: HealthGoal[] (온보딩에서 선택한 건강 목표)
   allergies: string[];
   sensitivity?: { digestive: number; additive: number };
   tastes: { salty: number; sweet: number; spicy: number; fatty: number };
@@ -22,15 +23,18 @@ type WeeklyBoxRequest = {
   mealsPerDay?: number;
   supplementsPerDay?: number;
   user_id?: string;
-  // v3: 온보딩에서 계산된 영양 목표 (있으면 concerns 기반 제외보다 우선)
+  // v3: 온보딩에서 계산된 영양 목표
   nutrition_goals?: {
     dailyCalories: number;
     dailyProteinG: number;
     maxSodiumMg: number;
     maxSugarG: number;
     perMealCalMax: number;
+    perMealCalMin?: number;
     perMealSodiumMax: number;
     perMealSugarMax: number;
+    perMealProteinMin?: number;
+    strategyTags?: string[];
   };
 };
 
@@ -136,7 +140,6 @@ export async function POST(request: NextRequest) {
     } = body;
 
     const supabase = createServiceRoleClient();
-    const targetDailyCal = DAILY_TARGETS.calories.ideal;
 
     // ── 1. 행동 이력 로드 ──
     let userPrefs = { category_counts: {} as Record<string, number>, tag_counts: {} as Record<string, number>, clicked_ids: new Set<string>() };
@@ -273,42 +276,111 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ box: null, message: "구매 가능한 식사 제품이 없습니다." });
     }
 
-    // ── 3. 스코어링 + 분류 ──
+    // ── 3. 스코어링 + 분류 (v4: 영양 목표 기반 정밀 스코어링) ──
+
+    // 개인별 타겟 설정 (nutrition_goals 우선, 없으면 기본값)
+    const personalDailyCal = ng?.dailyCalories || DAILY_TARGETS.calories.ideal;
+    const personalDailyProtein = ng?.dailyProteinG || DAILY_TARGETS.protein_g.ideal;
+    const personalMealCalMax = ng?.perMealCalMax || Math.round(personalDailyCal / mealsPerDay * 1.2);
+    const personalMealCalMin = ng?.perMealCalMin || Math.round(personalDailyCal / mealsPerDay * 0.6);
+    const personalMealSodiumMax = ng?.perMealSodiumMax || 800;
+    const personalMealSugarMax = ng?.perMealSugarMax || 15;
+    const personalMealProteinMin = ng?.perMealProteinMin || Math.round(personalDailyProtein / mealsPerDay);
+    const activeGoals = body.goals || [];
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const scoreProduct = (p: any): ScoredProduct => {
-      // ★ 건강 점수를 기본 점수로 사용 (0~100 → 0~40으로 스케일)
-      const healthBase = Math.round((p.health_score || 50) * 0.4); // health_score 60 → 24점
-      let score = healthBase;
+      let score = 0;
       const tags: string[] = p.functional_tags || [];
+      const cal = p.calories || 0;
+      const sodium = p.sodium_mg || 0;
+      const sugar = p.sugar_g ?? 999;
+      const protein = p.protein_g || 0;
+      const fiber = p.fiber_g || 0;
 
-      // 관심사 매칭 (+최대 30)
-      for (const concern of concerns) {
+      /* ── A. 건강 점수 기반 (0~30점) ── */
+      score += Math.round((p.health_score || 50) * 0.3);
+
+      /* ── B. 영양 적합성 점수 (0~25점) ── */
+      // 칼로리: 타겟 범위(±30%) 안에 있으면 만점, 벗어나면 감점
+      if (cal > 0) {
+        const calTarget = Math.round(personalDailyCal / mealsPerDay);
+        const calDiff = Math.abs(cal - calTarget) / calTarget;
+        if (calDiff <= 0.15) score += 10;       // ±15% 이내: 10점
+        else if (calDiff <= 0.3) score += 6;    // ±30% 이내: 6점
+        else if (calDiff <= 0.5) score += 2;    // ±50% 이내: 2점
+      }
+      // 나트륨: 낮을수록 좋음 (상한 기준)
+      if (sodium <= personalMealSodiumMax * 0.5) score += 8;
+      else if (sodium <= personalMealSodiumMax * 0.75) score += 5;
+      else if (sodium <= personalMealSodiumMax) score += 2;
+      // 단백질: 높을수록 좋음 (최소 기준)
+      if (protein >= personalMealProteinMin * 1.5) score += 7;
+      else if (protein >= personalMealProteinMin) score += 5;
+      else if (protein >= personalMealProteinMin * 0.7) score += 2;
+
+      /* ── C. 건강 목표 매칭 (0~20점) ── */
+      // 관심사 기반 (기존 concerns + 새 goals)
+      const allConcerns = [...concerns, ...activeGoals];
+      for (const concern of allConcerns) {
         const weights = CONCERN_WEIGHTS[concern];
         if (weights) for (const [tag, w] of Object.entries(weights)) {
-          if (tag === "fiber" && p.fiber_g && p.fiber_g >= 3) score += w;
-          else if (tags.includes(tag)) score += w;
+          if (tag === "fiber" && fiber >= 3) score += Math.min(w, 8);
+          else if (tags.includes(tag)) score += Math.min(w, 8);
         }
       }
-      // 질환 안전성
-      if (conditions.includes("diabetes") && p.sugar_g != null && p.sugar_g < 5) score += 10;
-      if (conditions.includes("hypertension") && p.sodium_mg != null && p.sodium_mg < 400) score += 10;
-      // 단백질 보너스
-      if (p.protein_g && p.protein_g >= 15) score += 6;
-      if (p.protein_g && p.protein_g >= 25) score += 4;
-      // 맛 선호
-      if (tastes) {
-        if (tastes.salty >= 7 && p.sodium_mg >= 800) score += 3;
-        else if (tastes.salty <= 3 && p.sodium_mg <= 300) score += 3;
-        if (tastes.sweet <= 3 && p.sugar_g <= 3) score += 3;
-        else if (tastes.sweet >= 7 && p.sugar_g >= 10) score += 3;
+      // 건강 목표별 세밀한 영양 가산
+      if (activeGoals.includes("weight_loss") || allConcerns.includes("weight")) {
+        if (cal > 0 && cal <= 400) score += 5;     // 저칼로리 보너스
+        if (sugar <= 5) score += 3;                  // 저당
       }
-      // 행동 개인화
-      if (userPrefs.clicked_ids.has(p.id)) score += 8;
-      if (p.dish_category && userPrefs.category_counts[p.dish_category])
-        score += Math.min(userPrefs.category_counts[p.dish_category] * 2, 6);
+      if (activeGoals.includes("muscle")) {
+        if (protein >= 25) score += 6;               // 고단백 보너스
+        if (protein >= 20) score += 3;
+      }
+      if (activeGoals.includes("diabetes") || conditions.includes("diabetes")) {
+        if (sugar <= 3) score += 8;                  // 극저당
+        else if (sugar <= 5) score += 5;
+        else if (sugar <= 8) score += 2;
+      }
+      if (activeGoals.includes("blood_pressure") || conditions.includes("hypertension")) {
+        if (sodium <= 300) score += 8;               // 극저나트륨
+        else if (sodium <= 500) score += 5;
+        else if (sodium <= 700) score += 2;
+      }
+      if (activeGoals.includes("kidney")) {
+        if (protein <= 15 && sodium <= 400) score += 6; // 저단백+저나트륨
+      }
+      if (activeGoals.includes("gut_health") || allConcerns.includes("gut_health")) {
+        if (fiber >= 5) score += 5;                  // 고식이섬유
+        if (sodium <= 500) score += 3;
+      }
+      // 건강식단 서비스 제품 카테고리 매칭
+      if (p._is_health_meal && p.functional_tags) {
+        const htags = p.functional_tags as string[];
+        if (activeGoals.includes("diabetes") && htags.some((t: string) => /저당|혈당/.test(t))) score += 8;
+        if (activeGoals.includes("weight_loss") && htags.some((t: string) => /저칼로리|다이어트/.test(t))) score += 8;
+        if (activeGoals.includes("muscle") && htags.some((t: string) => /고단백|단백질/.test(t))) score += 8;
+        if (activeGoals.includes("blood_pressure") && htags.some((t: string) => /저나트륨|나트륨/.test(t))) score += 8;
+      }
 
-      // 랜덤 요소 (+0~6) — 매번 다른 식단을 위해
-      score += Math.floor(Math.random() * 7);
+      /* ── D. 맛 선호 (0~8점) ── */
+      if (tastes) {
+        if (tastes.salty >= 7 && sodium >= 800) score += 2;
+        else if (tastes.salty <= 3 && sodium <= 400) score += 4;   // 저염 선호 = 건강 시너지
+        if (tastes.sweet <= 3 && sugar <= 3) score += 2;
+        else if (tastes.sweet >= 7 && sugar >= 8) score += 2;
+        if (tastes.spicy >= 7 && (p.spicy_score || 0) >= 6) score += 2;
+        else if (tastes.spicy <= 3 && (p.spicy_score || 0) <= 2) score += 2;
+      }
+
+      /* ── E. 행동 개인화 (0~10점) ── */
+      if (userPrefs.clicked_ids.has(p.id)) score += 6;
+      if (p.dish_category && userPrefs.category_counts[p.dish_category])
+        score += Math.min(userPrefs.category_counts[p.dish_category], 4);
+
+      /* ── F. 랜덤 다양성 (+0~5) ── */
+      score += Math.floor(Math.random() * 6);
 
       return { ...p, score: Math.min(score, 100), bestPrice: 0, prices: [], mealType: classifyMeal(p) };
     };
@@ -377,8 +449,8 @@ export async function POST(request: NextRequest) {
       meals: [], slots: [], calories: 0, protein: 0, sodium: 0,
     }));
 
-    // 끼니별 목표 칼로리
-    const slotTargetCal = (slot: string) => targetDailyCal * (MEAL_CAL_RATIO[slot] || 0.3);
+    // 끼니별 목표 칼로리 (개인화)
+    const slotTargetCal = (slot: string) => personalDailyCal * (MEAL_CAL_RATIO[slot] || 0.3);
 
     // 이름 유사도 체크 (같은 종류 반복 방지)
     const usedBaseNames = new Set<string>();
@@ -392,14 +464,19 @@ export async function POST(request: NextRequest) {
         .slice(0, 4); // 앞 4글자만 비교
     };
 
-    // 카테고리에서 최적 제품 선택
+    // 카테고리에서 최적 제품 선택 (v4: 영양 기준 필터 강화)
     const pickFromCategory = (type: MealType, targetCal: number, maxPrice: number): ScoredProduct | null => {
       const pool = poolByType[type];
       for (const p of pool) {
         if (usedProductIds.has(p.id)) continue;
         if (p.bestPrice > maxPrice) continue;
-        // 칼로리 적합성: 200kcal 이상이면 OK (너무 빡빡하게 안 자름)
-        if (p.calories < 200) continue;
+        // 칼로리 적합성: 최소 150kcal, 최대 개인 상한의 1.3배
+        if (p.calories < 150) continue;
+        if (p.calories > personalMealCalMax * 1.3) continue;
+        // 영양 제외 기준 적용 (hard filter)
+        if (nutritionExclusions.sodium_max && p.sodium_mg > nutritionExclusions.sodium_max) continue;
+        if (nutritionExclusions.sugar_max && p.sugar_g != null && p.sugar_g > nutritionExclusions.sugar_max) continue;
+        if (nutritionExclusions.calories_max && p.calories > nutritionExclusions.calories_max) continue;
         // 같은 이름 반복 방지
         const base = getBaseName(p.name);
         if (usedBaseNames.has(base)) continue;

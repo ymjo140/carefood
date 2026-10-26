@@ -352,6 +352,7 @@ export default function WeeklyBoxPage() {
       body: JSON.stringify({
         concerns: profile.concerns || [],
         conditions: [...new Set([...(profile.conditions || []), ...healthConditions])],
+        goals: profile.goals || [],
         allergies: profile.allergies || [],
         sensitivity: profile.sensitivity || { digestive: 2, additive: 2 },
         tastes: profile.tastes || { salty: 5, sweet: 5, spicy: 5, fatty: 5 },
@@ -359,7 +360,6 @@ export default function WeeklyBoxPage() {
         mealsPerDay: profile.meals_per_day || 3,
         supplementsPerDay: 1,
         user_id: getUserId() || undefined,
-        // v3: 온보딩에서 계산된 영양 목표
         nutrition_goals: profile.nutrition_goals || undefined,
       }),
     });
