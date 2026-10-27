@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 
 type ReviewStats = {
@@ -461,9 +462,9 @@ export default function TasteReview({ productId }: { productId: string }) {
       {/* 비로그인 안내 */}
       {!isLoggedIn && (
         <p className="text-xs text-muted mt-3">
-          <a href="/login" className="text-primary hover:underline">
+          <Link href="/login" className="text-primary hover:underline">
             로그인
-          </a>
+          </Link>
           하시면 맛평가를 남길 수 있습니다.
         </p>
       )}

@@ -800,7 +800,7 @@ export default function WeeklyBoxPage() {
 
       {/* CTA */}
       <div className="flex gap-3 mt-6">
-        <Link href="/recommend"
+        <Link href="/products"
           className="flex-1 border border-border py-3 rounded-full font-medium text-center text-sm hover:bg-surface transition-colors">
           제품 추천 보기
         </Link>

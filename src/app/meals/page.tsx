@@ -122,7 +122,7 @@ export default function MealsPage() {
             <p className="text-sm text-muted">최근 7일 영양 섭취 트래킹</p>
           </div>
           <Link
-            href="/recommend"
+            href="/products"
             className="text-xs bg-primary text-white px-3 py-2 rounded-xl font-bold"
           >
             + 기록하기
@@ -204,10 +204,10 @@ export default function MealsPage() {
               추천 페이지에서 먹은 제품을 기록해보세요
             </p>
             <Link
-              href="/recommend"
+              href="/products"
               className="inline-block bg-primary text-white px-5 py-2.5 rounded-full text-sm font-bold"
             >
-              추천 보기
+              제품 보기
             </Link>
           </div>
         ) : (

@@ -111,7 +111,7 @@ export default function HomePersonalized() {
           </h2>
           <div className="flex gap-2">
             <Link
-              href="/recommend"
+              href="/products"
               className="text-xs text-primary font-bold hover:underline"
             >
               전체 보기

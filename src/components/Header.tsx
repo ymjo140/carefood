@@ -18,7 +18,7 @@ const USER_MENU_ITEMS = [
   { href: "/products", label: "제품 탐색" },
   { href: "/health", label: "건강검진 정보" },
   { href: "/health/report", label: "영양 리포트" },
-  { href: "/meals", label: "식사 기록" },
+  { href: "/diary", label: "식단 기록" },
   { href: "/family", label: "가족 건강 관리" },
   { href: "/onboarding", label: "프로필 수정" },
 ];

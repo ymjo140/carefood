@@ -548,7 +548,7 @@ export default function DiaryPage() {
                           <div className="text-center py-6">
                             <p className="text-2xl mb-2">📦</p>
                             <p className="text-xs text-muted">주간 식단 박스를 먼저 만들어보세요</p>
-                            <a href="/weekly-box" className="text-[10px] text-primary mt-1 inline-block">주간 박스 만들기 →</a>
+                            <Link href="/weekly-box" className="text-[10px] text-primary mt-1 inline-block">주간 박스 만들기 →</Link>
                           </div>
                         )
                       )}

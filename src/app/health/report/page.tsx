@@ -390,7 +390,7 @@ export default function HealthReportPage() {
         {/* CTA 버튼 */}
         <div className="space-y-3">
           <Link
-            href="/recommend"
+            href="/products"
             className="block w-full bg-primary text-white py-3.5 rounded-full font-bold text-center hover:bg-primary-dark transition-colors"
           >
             맞춤 추천 받기
