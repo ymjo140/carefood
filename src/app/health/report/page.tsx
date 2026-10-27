@@ -337,12 +337,12 @@ export default function HealthReportPage() {
           </div>
         )}
 
-        {/* 자동 감지 질환 알림 */}
+        {/* 입력 수치 기반 영양 필터 */}
         {report.autoConditions.length > 0 && (
           <div className="bg-primary/5 border border-primary/20 rounded-2xl p-4 mb-6">
-            <p className="text-sm font-medium text-primary mb-2">자동 설정된 안전 규칙</p>
+            <p className="text-sm font-medium text-primary mb-2">입력 수치 기반 영양 필터</p>
             <p className="text-xs text-muted leading-relaxed">
-              검진 수치를 기반으로 아래 항목에 해당하는 식품을 필터링합니다:
+              입력하신 수치를 기반으로 아래 성분 기준을 적용합니다:
             </p>
             <div className="flex flex-wrap gap-2 mt-2">
               {report.autoConditions.map((c) => (

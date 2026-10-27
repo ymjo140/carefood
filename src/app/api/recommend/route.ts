@@ -49,25 +49,25 @@ type NutrientRule = {
 
 const CONCERN_RULES: Record<HealthConcern, NutrientRule[]> = {
   gut_health: [
-    { field: "fiber_g", op: "gte", value: 3, score: 15, reason: "식이섬유 풍부", detail: (v) => `식이섬유 ${v}g — 장 환경에 도움이 되는 수준이에요` },
-    { field: "sugar_g", op: "lt", value: 8, score: 8, reason: "당류 적정", detail: (v) => `당류 ${v}g — 장에 부담이 적어요` },
-    { field: "fat_g", op: "lt", value: 10, score: 5, reason: "저지방", detail: (v) => `지방 ${v}g — 소화 부담이 적어요` },
+    { field: "fiber_g", op: "gte", value: 3, score: 15, reason: "식이섬유 풍부", detail: (v) => `식이섬유 ${v}g — 고식이섬유 식품` },
+    { field: "sugar_g", op: "lt", value: 8, score: 8, reason: "당류 적정", detail: (v) => `당류 ${v}g — 저당 식품` },
+    { field: "fat_g", op: "lt", value: 10, score: 5, reason: "저지방", detail: (v) => `지방 ${v}g — 저지방 식품` },
   ],
   skin: [
-    { field: "protein_g", op: "gte", value: 10, score: 12, reason: "단백질 풍부", detail: (v) => `단백질 ${v}g — 피부 구성에 필요한 영양소예요` },
-    { field: "fat_g", op: "between", value: [3, 15], score: 8, reason: "건강한 지방", detail: (v) => `지방 ${v}g — 피부 보습에 적정한 수준이에요` },
-    { field: "sugar_g", op: "lt", value: 5, score: 10, reason: "저당", detail: (v) => `당류 ${v}g — 당류가 적어요` },
+    { field: "protein_g", op: "gte", value: 10, score: 12, reason: "단백질 풍부", detail: (v) => `단백질 ${v}g — 고단백 식품` },
+    { field: "fat_g", op: "between", value: [3, 15], score: 8, reason: "건강한 지방", detail: (v) => `지방 ${v}g — 적정 지방 함유` },
+    { field: "sugar_g", op: "lt", value: 5, score: 10, reason: "저당", detail: (v) => `당류 ${v}g — 저당 식품` },
   ],
   weight: [
-    { field: "calories", op: "lt", value: 300, score: 15, reason: "저칼로리", detail: (v) => `${v}kcal로 가벼워요` },
-    { field: "protein_g", op: "gte", value: 15, score: 12, reason: "고단백", detail: (v) => `단백질 ${v}g — 포만감을 오래 유지해요` },
-    { field: "fat_g", op: "lt", value: 8, score: 8, reason: "저지방", detail: (v) => `지방 ${v}g으로 가벼워요` },
-    { field: "sugar_g", op: "lt", value: 5, score: 8, reason: "저당", detail: (v) => `당류 ${v}g — 당류 걱정 없어요` },
+    { field: "calories", op: "lt", value: 300, score: 15, reason: "저칼로리", detail: (v) => `${v}kcal — 저칼로리 식품` },
+    { field: "protein_g", op: "gte", value: 15, score: 12, reason: "고단백", detail: (v) => `단백질 ${v}g — 고단백 식품` },
+    { field: "fat_g", op: "lt", value: 8, score: 8, reason: "저지방", detail: (v) => `지방 ${v}g — 저지방 식품` },
+    { field: "sugar_g", op: "lt", value: 5, score: 8, reason: "저당", detail: (v) => `당류 ${v}g — 저당 식품` },
   ],
   energy: [
-    { field: "calories", op: "between", value: [200, 500], score: 10, reason: "적정 열량", detail: (v) => `${v}kcal — 든든한 에너지를 채워줘요` },
-    { field: "protein_g", op: "gte", value: 12, score: 12, reason: "단백질 풍부", detail: (v) => `단백질 ${v}g — 활력 유지에 도움이 돼요` },
-    { field: "carbs_g", op: "gte", value: 20, score: 8, reason: "탄수화물 충분", detail: (v) => `탄수화물 ${v}g — 빠른 에너지원이에요` },
+    { field: "calories", op: "between", value: [200, 500], score: 10, reason: "적정 열량", detail: (v) => `${v}kcal — 적정 열량 식품` },
+    { field: "protein_g", op: "gte", value: 12, score: 12, reason: "단백질 풍부", detail: (v) => `단백질 ${v}g — 고단백 식품` },
+    { field: "carbs_g", op: "gte", value: 20, score: 8, reason: "탄수화물 충분", detail: (v) => `탄수화물 ${v}g — 탄수화물 충분` },
   ],
 };
 
