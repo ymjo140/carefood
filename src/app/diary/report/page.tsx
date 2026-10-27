@@ -2,6 +2,7 @@
 
 import { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
+import ShareButton from "@/components/ShareButton";
 
 /* ───── 타입 ───── */
 type NutrientGrade = {
@@ -280,7 +281,7 @@ function ReportContent() {
       )}
 
       {/* ── CTA ── */}
-      <div className="flex gap-3">
+      <div className="flex gap-3 mb-3">
         <Link href="/diary"
           className="flex-1 border border-border py-3 rounded-xl font-medium text-center text-sm hover:bg-surface transition-colors">
           식단 기록하기
@@ -290,6 +291,17 @@ function ReportContent() {
           맞춤 제품 보기
         </Link>
       </div>
+
+      {/* ── 공유 ── */}
+      <ShareButton
+        title={`이번 주 영양 점수: ${overallScore}점`}
+        text={`케어푸드 주간 리포트\n${grades.filter(g => g.grade === "excellent").map(g => `✅ ${g.label}`).join(" ")}${gapNutrients.length > 0 ? `\n${gapNutrients.map(g => `⚠️ ${g.label} ${Math.round(g.ratio * 100)}%`).join(" ")}` : ""}\n나도 무료로 확인해보기 👇`}
+        url="https://carefood-iota.vercel.app/diary/report"
+        className="w-full border border-border py-3 rounded-xl text-sm font-medium text-center hover:bg-surface transition-colors flex items-center justify-center gap-2"
+        style={{ minHeight: "44px" }}
+      >
+        📤 리포트 공유하기
+      </ShareButton>
     </>
   );
 }

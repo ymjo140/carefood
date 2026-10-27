@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import ShareButton from "@/components/ShareButton";
 
 type Comment = {
   id: string;
@@ -136,6 +137,16 @@ export default function MealPlanActions({
           </button>
         )}
       </div>
+
+      {/* ── 공유 ── */}
+      <ShareButton
+        title={`${authorName}의 식단`}
+        text="케어푸드에서 건강식단을 확인해보세요!"
+        className="w-full border border-border py-2.5 rounded-xl text-xs font-medium text-center hover:bg-surface transition-colors mb-4 flex items-center justify-center gap-1.5"
+        style={{ minHeight: "40px" }}
+      >
+        📤 이 식단 공유하기
+      </ShareButton>
 
       {/* ── 댓글 섹션 ── */}
       <div className="border border-border rounded-xl overflow-hidden">
