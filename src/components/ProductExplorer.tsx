@@ -457,7 +457,7 @@ function ProductCard({ product, isFavorite, onToggleFavorite }: {
 }) {
   const prices = product.product_prices?.filter(p => p.price && p.price > 0) || [];
   const bestPrice = prices.length > 0 ? Math.min(...prices.map(p => p.price!)) : null;
-  const imageUrl = prices.find(p => p.image_url)?.image_url;
+  const imageUrl = (product as ProductWithPrices & { image_url?: string }).image_url || prices.find(p => p.image_url)?.image_url;
 
   return (
     <article className="border border-border rounded-xl p-4 hover:shadow-sm transition-all flex gap-4 relative">
