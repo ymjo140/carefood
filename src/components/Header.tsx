@@ -193,6 +193,13 @@ export default function Header() {
               </Link>
             ))}
 
+            <Link
+              href="/vendor/apply"
+              className="block px-3 py-2.5 rounded-xl text-sm text-muted hover:text-foreground hover:bg-card transition-colors"
+            >
+              🤝 입점 문의
+            </Link>
+
             <div className="border-t border-border pt-2 mt-2">
               {user ? (
                 <>
