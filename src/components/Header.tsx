@@ -9,6 +9,7 @@ import { logout } from "@/app/auth/actions";
 const NAV_ITEMS = [
   { href: "/", label: "홈" },
   { href: "/products", label: "제품 탐색" },
+  { href: "/diary", label: "식단 기록" },
   { href: "/weekly-box", label: "주간 박스" },
   { href: "/community", label: "커뮤니티" },
 ];
