@@ -198,14 +198,14 @@ export default function HomePage() {
       <section className="px-4 pb-12">
         <div className="max-w-6xl mx-auto">
           <h2 className="text-lg font-extrabold mb-4">더 알아보기</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <Link
               href="/weekly-box"
               className="bg-card rounded-2xl p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)] hover:-translate-y-0.5 transition-transform"
             >
               <p className="text-2xl mb-2">📦</p>
               <h3 className="font-bold text-sm mb-1">주간 식단 박스</h3>
-              <p className="text-xs text-muted">AI가 7일 식단을 자동으로 구성해드려요</p>
+              <p className="text-xs text-muted">AI가 7일 식단을 자동 구성</p>
             </Link>
             <Link
               href="/products"
@@ -213,7 +213,7 @@ export default function HomePage() {
             >
               <p className="text-2xl mb-2">🏷️</p>
               <h3 className="font-bold text-sm mb-1">건강식단 비교</h3>
-              <p className="text-xs text-muted">그리팅·윤식단·식스밀 한눈에 비교</p>
+              <p className="text-xs text-muted">5곳 서비스 한눈에 비교</p>
             </Link>
             <Link
               href="/community"
@@ -222,6 +222,14 @@ export default function HomePage() {
               <p className="text-2xl mb-2">💬</p>
               <h3 className="font-bold text-sm mb-1">커뮤니티</h3>
               <p className="text-xs text-muted">식단 공유 & 공구</p>
+            </Link>
+            <Link
+              href="/vendor/apply"
+              className="bg-card rounded-2xl p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)] hover:-translate-y-0.5 transition-transform"
+            >
+              <p className="text-2xl mb-2">🤝</p>
+              <h3 className="font-bold text-sm mb-1">업체 입점</h3>
+              <p className="text-xs text-muted">34만 DB에 제품 등록</p>
             </Link>
           </div>
         </div>
