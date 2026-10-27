@@ -9,7 +9,7 @@ type MealPlan = {
   title: string;
   description: string | null;
   days: unknown;
-  summary: { totalItems?: number; avgDailyCalories?: number; avgDailyProtein?: number } | null;
+  summary: { totalItems?: number; avgDailyCalories?: number; avgDailyProtein?: number; product_count?: number; avg_daily_calories?: number; avg_daily_protein?: number; total_price?: number; service_mix?: Record<string, number> } | null;
   author_display_name: string;
   author_age_group: string | null;
   author_gender: string | null;
@@ -63,7 +63,7 @@ function getUserId(): string {
 }
 
 /* ───── 식단 카드 ───── */
-function PlanCard({ plan, onLike, onCopy }: { plan: MealPlan; onLike: () => void; onCopy: () => void }) {
+function PlanCard({ plan, onLike }: { plan: MealPlan; onLike: () => void }) {
   const profileTags = [
     plan.author_age_group ? AGE_LABELS[plan.author_age_group] : null,
     plan.author_diet_type ? DIET_LABELS[plan.author_diet_type] : null,
@@ -71,55 +71,80 @@ function PlanCard({ plan, onLike, onCopy }: { plan: MealPlan; onLike: () => void
   ].filter(Boolean);
 
   return (
-    <div className="border border-border rounded-xl p-4 hover:shadow-sm transition-all">
-      {/* 헤더 */}
-      <div className="flex items-start justify-between gap-2 mb-2">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-bold">{plan.author_display_name}</span>
-            {plan.is_verified && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium"
-                style={{ minHeight: "unset", minWidth: "unset" }}>인증</span>
+    <div className="border border-border rounded-xl overflow-hidden hover:border-primary/30 transition-all">
+      {/* 클릭 가능 영역 → 상세 페이지 */}
+      <Link href={`/community/${plan.id}`} className="block p-4">
+        {/* 헤더 */}
+        <div className="flex items-start justify-between gap-2 mb-2">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-bold">{plan.author_display_name}</span>
+              {plan.is_verified && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium"
+                  style={{ minHeight: "unset", minWidth: "unset" }}>인증</span>
+              )}
+            </div>
+            <div className="flex gap-1 flex-wrap mt-0.5">
+              {profileTags.map(tag => (
+                <span key={tag} className="text-[10px] px-1.5 py-0.5 rounded bg-surface text-muted"
+                  style={{ minHeight: "unset", minWidth: "unset" }}>{tag}</span>
+              ))}
+            </div>
+          </div>
+          <span className="text-[10px] text-muted shrink-0">
+            {new Date(plan.created_at).toLocaleDateString("ko-KR")}
+          </span>
+        </div>
+
+        {/* 내용 */}
+        <h3 className="text-sm font-bold mb-1">{plan.title}</h3>
+        {plan.description && <p className="text-xs text-muted mb-2 line-clamp-2">{plan.description}</p>}
+
+        {/* 미리보기: 첫째 날 식단 */}
+        {Array.isArray(plan.days) && plan.days.length > 0 && (
+          <div className="bg-surface/50 rounded-lg p-2.5 mb-2 text-xs">
+            {(() => {
+              const firstDay = plan.days[0] as { day?: string; slots?: Record<string, string> };
+              if (!firstDay?.slots) return null;
+              const entries = Object.entries(firstDay.slots).slice(0, 3);
+              return entries.map(([slot, meal]) => (
+                <div key={slot} className="flex gap-2 py-0.5">
+                  <span className="text-muted w-8 shrink-0">{slot === "breakfast" ? "아침" : slot === "lunch" ? "점심" : slot === "dinner" ? "저녁" : "간식"}</span>
+                  <span className="text-foreground/80 truncate">{meal as string}</span>
+                </div>
+              ));
+            })()}
+            {plan.days.length > 1 && (
+              <p className="text-muted text-[10px] mt-1">+{plan.days.length - 1}일 더 보기 →</p>
             )}
           </div>
-          <div className="flex gap-1 flex-wrap mt-0.5">
-            {profileTags.map(tag => (
-              <span key={tag} className="text-[10px] px-1.5 py-0.5 rounded bg-surface text-muted"
-                style={{ minHeight: "unset", minWidth: "unset" }}>{tag}</span>
-            ))}
+        )}
+
+        {/* 요약 */}
+        {plan.summary && (
+          <div className="flex gap-3 text-xs text-muted">
+            {(plan.summary.product_count || plan.summary.totalItems) && <span>{plan.summary.product_count || plan.summary.totalItems}개 제품</span>}
+            {(plan.summary.avg_daily_calories || plan.summary.avgDailyCalories) && <span>일 {plan.summary.avg_daily_calories || plan.summary.avgDailyCalories}kcal</span>}
+            {(plan.summary.avg_daily_protein || plan.summary.avgDailyProtein) && <span>단백질 {plan.summary.avg_daily_protein || plan.summary.avgDailyProtein}g</span>}
           </div>
-        </div>
-        <span className="text-[10px] text-muted shrink-0">
-          {new Date(plan.created_at).toLocaleDateString("ko-KR")}
-        </span>
-      </div>
+        )}
+      </Link>
 
-      {/* 내용 */}
-      <h3 className="text-sm font-bold mb-1">{plan.title}</h3>
-      {plan.description && <p className="text-xs text-muted mb-2 line-clamp-2">{plan.description}</p>}
-
-      {/* 요약 */}
-      {plan.summary && (
-        <div className="flex gap-3 text-xs text-muted mb-3">
-          {plan.summary.totalItems && <span>{plan.summary.totalItems}개 제품</span>}
-          {plan.summary.avgDailyCalories && <span>일 {plan.summary.avgDailyCalories}kcal</span>}
-          {plan.summary.avgDailyProtein && <span>단백질 {plan.summary.avgDailyProtein}g</span>}
-        </div>
-      )}
-
-      {/* 액션 */}
-      <div className="flex items-center gap-4 pt-2 border-t border-border/50">
-        <button onClick={onLike}
+      {/* 액션 (링크 밖) */}
+      <div className="flex items-center gap-4 px-4 py-2 border-t border-border/50">
+        <button onClick={(e) => { e.preventDefault(); onLike(); }}
           className={`flex items-center gap-1 text-xs ${plan.is_liked ? "text-primary font-medium" : "text-muted hover:text-foreground"}`}
           style={{ minHeight: "28px", minWidth: "unset" }}>
           {plan.is_liked ? "♥" : "♡"} {plan.like_count}
         </button>
-        <span className="text-xs text-muted">💬 {plan.comment_count}</span>
-        <button onClick={onCopy}
-          className="text-xs text-muted hover:text-primary transition-colors"
-          style={{ minHeight: "28px", minWidth: "unset" }}>
+        <Link href={`/community/${plan.id}`} className="text-xs text-muted hover:text-foreground"
+          style={{ minHeight: "28px", minWidth: "unset", display: "flex", alignItems: "center" }}>
+          💬 {plan.comment_count}
+        </Link>
+        <Link href={`/community/${plan.id}`} className="text-xs text-muted hover:text-primary transition-colors"
+          style={{ minHeight: "28px", minWidth: "unset", display: "flex", alignItems: "center" }}>
           📋 {plan.copy_count}
-        </button>
+        </Link>
       </div>
     </div>
   );
@@ -264,31 +289,7 @@ export default function CommunityPage() {
     }
   };
 
-  const handleCopy = async (plan: MealPlan) => {
-    // 식단을 localStorage의 weekly_box에 저장
-    try {
-      localStorage.setItem("carefood_weekly_box", JSON.stringify({ days: plan.days, source: plan.author_display_name }));
-    } catch { /* */ }
-
-    // copy_count 증가 API
-    try {
-      await fetch("/api/community/copy", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ plan_id: plan.id }),
-      });
-    } catch { /* */ }
-
-    // Optimistic update
-    setPlans(prev => prev.map(p =>
-      p.id === plan.id ? { ...p, copy_count: p.copy_count + 1 } : p
-    ));
-
-    // 주간 박스로 이동
-    if (confirm(`"${plan.title}" 식단을 내 주간 박스에 복사했어요. 주간 박스로 이동할까요?`)) {
-      window.location.href = "/weekly-box";
-    }
-  };
+  /* handleCopy는 상세 페이지로 이동 */
 
   const [joinedIds, setJoinedIds] = useState<Set<string>>(new Set());
   const [joining, setJoining] = useState<string | null>(null);
@@ -381,7 +382,7 @@ export default function CommunityPage() {
           {plans.length > 0 ? (
             <div className="space-y-3">
               {plans.map(plan => (
-                <PlanCard key={plan.id} plan={plan} onLike={() => handleLike(plan.id)} onCopy={() => handleCopy(plan)} />
+                <PlanCard key={plan.id} plan={plan} onLike={() => handleLike(plan.id)} />
               ))}
             </div>
           ) : (
