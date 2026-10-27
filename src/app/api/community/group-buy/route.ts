@@ -21,8 +21,13 @@ export async function GET(request: NextRequest) {
   let query = sb
     .from("group_buys")
     .select("*", { count: "exact" })
-    .eq("status", status)
     .order("created_at", { ascending: false });
+
+  if (status === "all") {
+    query = query.in("status", ["recruiting", "achieved"]);
+  } else {
+    query = query.eq("status", status);
+  }
 
   if (concern) query = query.eq("concern", concern);
 

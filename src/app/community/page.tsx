@@ -49,12 +49,21 @@ const DIET_LABELS: Record<string, string> = {
   normal: "일반", diet: "다이어트", exercise: "운동병행", vegetarian: "채식", pregnant: "임산부",
 };
 
-function getUserId(): string | null {
-  try { return localStorage.getItem("carefood_anon_id") || null; } catch { return null; }
+function getUserId(): string {
+  try {
+    let id = localStorage.getItem("carefood_anon_id");
+    if (!id) {
+      id = `anon_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      localStorage.setItem("carefood_anon_id", id);
+    }
+    return id;
+  } catch {
+    return `anon_${Date.now()}`;
+  }
 }
 
 /* ───── 식단 카드 ───── */
-function PlanCard({ plan, onLike }: { plan: MealPlan; onLike: () => void }) {
+function PlanCard({ plan, onLike, onCopy }: { plan: MealPlan; onLike: () => void; onCopy: () => void }) {
   const profileTags = [
     plan.author_age_group ? AGE_LABELS[plan.author_age_group] : null,
     plan.author_diet_type ? DIET_LABELS[plan.author_diet_type] : null,
@@ -106,14 +115,18 @@ function PlanCard({ plan, onLike }: { plan: MealPlan; onLike: () => void }) {
           {plan.is_liked ? "♥" : "♡"} {plan.like_count}
         </button>
         <span className="text-xs text-muted">💬 {plan.comment_count}</span>
-        <span className="text-xs text-muted">📋 {plan.copy_count}</span>
+        <button onClick={onCopy}
+          className="text-xs text-muted hover:text-primary transition-colors"
+          style={{ minHeight: "28px", minWidth: "unset" }}>
+          📋 {plan.copy_count}
+        </button>
       </div>
     </div>
   );
 }
 
 /* ───── 공구 카드 ───── */
-function GroupBuyCard({ gb, onJoin }: { gb: GroupBuy; onJoin: () => void }) {
+function GroupBuyCard({ gb, onJoin, joined, joining }: { gb: GroupBuy; onJoin: () => void; joined: boolean; joining: boolean }) {
   const progress = gb.target_count > 0 ? Math.round(gb.current_count / gb.target_count * 100) : 0;
   const isAchieved = gb.status === "achieved";
   const daysLeft = gb.expires_at
@@ -164,11 +177,25 @@ function GroupBuyCard({ gb, onJoin }: { gb: GroupBuy; onJoin: () => void }) {
 
       {/* 참여 버튼 */}
       {gb.status === "recruiting" && (
-        <button onClick={onJoin}
-          className="w-full py-2 bg-primary text-white rounded-lg text-xs font-bold hover:bg-primary-dark transition-colors"
+        joined ? (
+          <button disabled
+            className="w-full py-2 bg-surface text-muted rounded-lg text-xs font-medium"
+            style={{ minHeight: "36px" }}>
+            ✓ 참여 완료
+          </button>
+        ) : (
+          <button onClick={onJoin} disabled={joining}
+            className="w-full py-2 bg-primary text-white rounded-lg text-xs font-bold hover:bg-primary-dark transition-colors disabled:opacity-50"
+            style={{ minHeight: "36px" }}>
+            {joining ? "참여 중..." : "참여하기"}
+          </button>
+        )
+      )}
+      {gb.status === "achieved" && (
+        <div className="w-full py-2 bg-primary/10 text-primary rounded-lg text-xs font-bold text-center"
           style={{ minHeight: "36px" }}>
-          참여하기
-        </button>
+          🎉 목표 달성!
+        </div>
       )}
     </div>
   );
@@ -200,6 +227,7 @@ export default function CommunityPage() {
     setLoading(true);
     try {
       const params = new URLSearchParams();
+      params.set("status", "all");
       if (concernFilter) params.set("concern", concernFilter);
       const res = await fetch(`/api/community/group-buy?${params}`);
       const data = await res.json();
@@ -215,26 +243,91 @@ export default function CommunityPage() {
 
   const handleLike = async (planId: string) => {
     const userId = getUserId();
-    if (!userId) return;
-    await fetch("/api/community/like", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ user_id: userId, plan_id: planId }),
-    });
-    fetchFeed();
+    // Optimistic update
+    setPlans(prev => prev.map(p => {
+      if (p.id !== planId) return p;
+      return {
+        ...p,
+        is_liked: !p.is_liked,
+        like_count: p.is_liked ? Math.max(p.like_count - 1, 0) : p.like_count + 1,
+      };
+    }));
+    try {
+      await fetch("/api/community/like", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: userId, plan_id: planId }),
+      });
+    } catch {
+      // revert on error
+      fetchFeed();
+    }
   };
 
+  const handleCopy = async (plan: MealPlan) => {
+    // 식단을 localStorage의 weekly_box에 저장
+    try {
+      localStorage.setItem("carefood_weekly_box", JSON.stringify({ days: plan.days, source: plan.author_display_name }));
+    } catch { /* */ }
+
+    // copy_count 증가 API
+    try {
+      await fetch("/api/community/copy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plan_id: plan.id }),
+      });
+    } catch { /* */ }
+
+    // Optimistic update
+    setPlans(prev => prev.map(p =>
+      p.id === plan.id ? { ...p, copy_count: p.copy_count + 1 } : p
+    ));
+
+    // 주간 박스로 이동
+    if (confirm(`"${plan.title}" 식단을 내 주간 박스에 복사했어요. 주간 박스로 이동할까요?`)) {
+      window.location.href = "/weekly-box";
+    }
+  };
+
+  const [joinedIds, setJoinedIds] = useState<Set<string>>(new Set());
+  const [joining, setJoining] = useState<string | null>(null);
+
   const handleJoinGroupBuy = async (gbId: string) => {
+    if (joining || joinedIds.has(gbId)) return;
     const userId = getUserId();
-    if (!userId) return;
-    const res = await fetch("/api/community/group-buy/join", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ user_id: userId, group_buy_id: gbId }),
-    });
-    const data = await res.json();
-    if (data.ok) fetchGroupBuys();
-    else alert(data.error || "참여에 실패했습니다");
+    setJoining(gbId);
+
+    // Optimistic update
+    setGroupBuys(prev => prev.map(gb => {
+      if (gb.id !== gbId) return gb;
+      const newCount = gb.current_count + 1;
+      return {
+        ...gb,
+        current_count: newCount,
+        status: newCount >= gb.target_count ? "achieved" : gb.status,
+      };
+    }));
+    setJoinedIds(prev => new Set(prev).add(gbId));
+
+    try {
+      const res = await fetch("/api/community/group-buy/join", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: userId, group_buy_id: gbId }),
+      });
+      const data = await res.json();
+      if (!data.ok) {
+        // revert
+        setJoinedIds(prev => { const n = new Set(prev); n.delete(gbId); return n; });
+        fetchGroupBuys();
+      }
+    } catch {
+      setJoinedIds(prev => { const n = new Set(prev); n.delete(gbId); return n; });
+      fetchGroupBuys();
+    } finally {
+      setJoining(null);
+    }
   };
 
   return (
@@ -288,7 +381,7 @@ export default function CommunityPage() {
           {plans.length > 0 ? (
             <div className="space-y-3">
               {plans.map(plan => (
-                <PlanCard key={plan.id} plan={plan} onLike={() => handleLike(plan.id)} />
+                <PlanCard key={plan.id} plan={plan} onLike={() => handleLike(plan.id)} onCopy={() => handleCopy(plan)} />
               ))}
             </div>
           ) : (
@@ -307,7 +400,7 @@ export default function CommunityPage() {
           {groupBuys.length > 0 ? (
             <div className="space-y-3">
               {groupBuys.map(gb => (
-                <GroupBuyCard key={gb.id} gb={gb} onJoin={() => handleJoinGroupBuy(gb.id)} />
+                <GroupBuyCard key={gb.id} gb={gb} onJoin={() => handleJoinGroupBuy(gb.id)} joined={joinedIds.has(gb.id)} joining={joining === gb.id} />
               ))}
             </div>
           ) : (
