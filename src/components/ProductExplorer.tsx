@@ -598,6 +598,7 @@ export default function ProductExplorer() {
   const [loading, setLoading] = useState(true);
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
   const [profile, setProfile] = useState<UserProfile>(null);
+  const [profileLoaded, setProfileLoaded] = useState(false);
 
   // 프로필 로드
   useEffect(() => {
@@ -608,6 +609,7 @@ export default function ProductExplorer() {
         setProfile(p);
       }
     } catch { /* */ }
+    setProfileLoaded(true);
   }, []);
 
   // 프로필 요약 (상단 칩 표시용)
@@ -675,7 +677,7 @@ export default function ProductExplorer() {
     }
   }, [tastes, search, selectedCategories, selectedPurposes, selectedIngredients, hasPriceOnly, priceMin, priceMax, nutrition, sortBy, page, profile]);
 
-  useEffect(() => { fetchProducts(); }, [fetchProducts]);
+  useEffect(() => { if (profileLoaded) fetchProducts(); }, [profileLoaded, fetchProducts]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();

@@ -178,8 +178,8 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
       <ProductViewTracker productId={product.id} />
       {/* 뒤로가기 */}
-      <Link href="/recommend" className="text-sm text-muted hover:text-primary transition-colors mb-6 inline-block">
-        ← 추천 목록으로
+      <Link href="/products" className="text-sm text-muted hover:text-primary transition-colors mb-6 inline-block">
+        ← 제품 목록으로
       </Link>
 
       {/* 헤더 */}
@@ -198,9 +198,18 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
             </div>
           </div>
           {product.manufacturer && (
-            <p className="text-sm text-muted mt-1">{product.manufacturer}</p>
+            <div className="flex items-center gap-2 mt-1">
+              <p className="text-sm text-muted">{
+                product.category_large === "건강식단서비스"
+                  ? ({ greating: "그리팅", yundiet: "윤식단", sixmeal: "식스밀", designmeal: "디자인밀", makesalad: "메이크샐러드" }[product.manufacturer] || product.manufacturer)
+                  : product.manufacturer
+              }</p>
+              {product.category_large === "건강식단서비스" && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/15 text-primary font-medium">건강식단 서비스</span>
+              )}
+            </div>
           )}
-          {product.food_type && (
+          {product.food_type && product.category_large !== "건강식단서비스" && (
             <p className="text-xs text-muted mt-0.5">{product.food_type}</p>
           )}
           {product.health_score != null && (
