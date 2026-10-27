@@ -323,12 +323,25 @@ export default function DiaryPage() {
   return (
     <div className="max-w-2xl mx-auto px-4 py-6">
       {/* 헤더 */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl font-extrabold">식단 다이어리</h1>
         <Link href="/products" className="text-xs text-primary hover:text-primary-dark transition-colors">
           제품 탐색 →
         </Link>
       </div>
+
+      {/* 주간 리포트 배너 */}
+      <Link href="/diary/report"
+        className="flex items-center justify-between bg-primary/8 border border-primary/20 rounded-xl px-4 py-3 mb-5 hover:bg-primary/12 transition-colors">
+        <div className="flex items-center gap-2">
+          <span className="text-lg">📊</span>
+          <div>
+            <p className="text-sm font-bold">주간 영양 리포트</p>
+            <p className="text-[10px] text-muted">이번 주 영양 밸런스를 확인하세요</p>
+          </div>
+        </div>
+        <span className="text-xs text-primary font-bold">보기 →</span>
+      </Link>
 
       {!date ? (
         <div className="flex justify-center py-12">
