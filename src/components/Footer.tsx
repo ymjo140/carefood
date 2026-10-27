@@ -18,9 +18,10 @@ export default function Footer() {
           </Link>
         </div>
       </div>
-      <div className="max-w-6xl mx-auto mt-4 text-xs text-muted/60 text-center sm:text-left">
-        본 서비스는 의학적 진단·치료를 대체하지 않습니다.
-        식품 선택 시 전문의와 상담하시기 바랍니다.
+      <div className="max-w-6xl mx-auto mt-4 text-xs text-muted/60 text-center sm:text-left leading-relaxed">
+        본 서비스는 식약처 영양성분 데이터베이스 기반 정보 제공 서비스이며,
+        의학적 진단·치료·처방을 대체하지 않습니다.
+        질환이 있는 경우 반드시 의사와 상담하세요.
       </div>
     </footer>
   );

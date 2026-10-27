@@ -24,6 +24,11 @@ const PLATFORM_LABELS: Record<string, string> = {
   homeplus: "홈플러스",
   "11st": "11번가",
   danawa: "다나와",
+  greating: "그리팅",
+  yundiet: "윤식단",
+  sixmeal: "식스밀",
+  designmeal: "디자인밀",
+  makesalad: "메이크샐러드",
 };
 
 const PLATFORM_COLORS: Record<string, string> = {
@@ -32,6 +37,11 @@ const PLATFORM_COLORS: Record<string, string> = {
   homeplus: "bg-orange-600 hover:bg-orange-700",
   "11st": "bg-red-600 hover:bg-red-700",
   danawa: "bg-blue-600 hover:bg-blue-700",
+  greating: "bg-emerald-600 hover:bg-emerald-700",
+  yundiet: "bg-amber-600 hover:bg-amber-700",
+  sixmeal: "bg-rose-600 hover:bg-rose-700",
+  designmeal: "bg-teal-600 hover:bg-teal-700",
+  makesalad: "bg-lime-600 hover:bg-lime-700",
 };
 
 function formatPrice(price: number): string {
@@ -145,6 +155,18 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
   const bestPrice = sortedPrices.length > 0 ? sortedPrices[0].price : null;
   const imageUrl = sortedPrices.find((p) => p.image_url)?.image_url;
 
+  // 건강식단서비스 제품이면 원본 상품 페이지 URL 조회
+  let originalProductUrl: string | null = null;
+  if (product.category_large === "건강식단서비스" && product.manufacturer) {
+    const { data: hmProduct } = await (supabase as any)
+      .from("health_meal_products")
+      .select("product_url")
+      .eq("source", product.manufacturer)
+      .eq("name", product.name)
+      .single();
+    originalProductUrl = hmProduct?.product_url || null;
+  }
+
   // 원재료 데이터 (food_reports에서)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: foodReport } = await (supabase as any)
@@ -162,17 +184,17 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
   if (product.sodium_mg !== null && product.sodium_mg < 400)
     safetyNotes.push({ type: "good", text: "저나트륨 (400mg 미만)" });
   if (product.sodium_mg !== null && product.sodium_mg > 1000)
-    safetyNotes.push({ type: "warn", text: "고나트륨 — 고혈압 환자 주의" });
+    safetyNotes.push({ type: "warn", text: "고나트륨 — 나트륨 섭취에 주의가 필요한 분 참고" });
   if (product.sugar_g !== null && product.sugar_g < 5)
     safetyNotes.push({ type: "good", text: "저당 (5g 미만)" });
   if (product.sugar_g !== null && product.sugar_g > 15)
-    safetyNotes.push({ type: "warn", text: "높은 당류 — 당뇨 환자 주의" });
+    safetyNotes.push({ type: "warn", text: "높은 당류 — 당류 섭취에 주의가 필요한 분 참고" });
   if (product.protein_g !== null && product.protein_g >= 15)
     safetyNotes.push({ type: "good", text: "고단백 (15g 이상)" });
   if (product.fiber_g !== null && product.fiber_g < 3)
     safetyNotes.push({ type: "good", text: "소화 부담 적음 (저섬유)" });
   if (product.spicy_score >= 3)
-    safetyNotes.push({ type: "warn", text: `매운맛 ${product.spicy_score}단계 — 어르신/환자 주의` });
+    safetyNotes.push({ type: "warn", text: `매운맛 ${product.spicy_score}단계 — 자극에 민감한 분 참고` });
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
@@ -198,16 +220,28 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
             </div>
           </div>
           {product.manufacturer && (
-            <div className="flex items-center gap-2 mt-1">
-              <p className="text-sm text-muted">{
-                product.category_large === "건강식단서비스"
-                  ? ({ greating: "그리팅", yundiet: "윤식단", sixmeal: "식스밀", designmeal: "디자인밀", makesalad: "메이크샐러드" }[product.manufacturer] || product.manufacturer)
-                  : product.manufacturer
-              }</p>
-              {product.category_large === "건강식단서비스" && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/15 text-primary font-medium">건강식단 서비스</span>
+            <>
+              <div className="flex items-center gap-2 mt-1">
+                <p className="text-sm text-muted">{
+                  product.category_large === "건강식단서비스"
+                    ? ({ greating: "그리팅", yundiet: "윤식단", sixmeal: "식스밀", designmeal: "디자인밀", makesalad: "메이크샐러드" }[product.manufacturer] || product.manufacturer)
+                    : product.manufacturer
+                }</p>
+                {product.category_large === "건강식단서비스" && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/15 text-primary font-medium">건강식단 서비스</span>
+                )}
+              </div>
+              {product.category_large === "건강식단서비스" && originalProductUrl && (
+                <a
+                  href={originalProductUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-xs text-primary hover:text-primary-dark transition-colors mt-0.5"
+                >
+                  원본 상품 페이지 →
+                </a>
               )}
-            </div>
+            </>
           )}
           {product.food_type && product.category_large !== "건강식단서비스" && (
             <p className="text-xs text-muted mt-0.5">{product.food_type}</p>
@@ -379,7 +413,7 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
 
       {/* 하단 면책 */}
       <div className="text-[10px] text-muted text-center py-6 border-t border-border">
-        본 정보는 식약처 영양성분 데이터베이스를 기반으로 하며, 의학적 진단·치료를 대체하지 않습니다.
+        본 정보는 식약처 영양성분 데이터베이스를 기반으로 하며, 의학적 진단·치료·처방을 대체하지 않습니다. 질환이 있는 경우 반드시 의사와 상담하세요.
       </div>
     </div>
   );

@@ -36,7 +36,7 @@ const BASIC_FIELDS: FieldConfig[] = [
 const GLUCOSE_FIELDS: FieldConfig[] = [
   {
     key: "fasting_glucose", label: "공복혈당", unit: "mg/dL", placeholder: "100",
-    hint: "100 미만 정상 · 100-125 주의 · 126 이상 당뇨 의심",
+    hint: "일반 참고 기준: 100 미만 · 100-125 경계 · 126 이상 높음",
     min: 30, max: 500,
   },
 ];
@@ -44,7 +44,7 @@ const GLUCOSE_FIELDS: FieldConfig[] = [
 const BP_FIELDS: FieldConfig[] = [
   {
     key: "bp_systolic", label: "수축기 혈압", unit: "mmHg", placeholder: "120",
-    hint: "120 미만 정상 · 120-139 주의 · 140 이상 고혈압 의심",
+    hint: "일반 참고 기준: 120 미만 · 120-139 경계 · 140 이상 높음",
     min: 60, max: 300,
   },
   { key: "bp_diastolic", label: "이완기 혈압", unit: "mmHg", placeholder: "80", min: 30, max: 200 },

@@ -13,9 +13,9 @@ const GOAL_CARDS = [
 ];
 
 const DISEASE_GOAL_CARDS = [
-  { key: "diabetes", emoji: "💧", label: "당뇨 관심", desc: "혈당 관리가 필요한 분", href: "/onboarding?concern=diabetes" },
-  { key: "blood_pressure", emoji: "❤️", label: "혈압 관심", desc: "나트륨 관리가 필요한 분", href: "/onboarding?concern=blood_pressure" },
-  { key: "kidney", emoji: "🫘", label: "신장 관심", desc: "신장 기능 보호가 필요한 분", href: "/onboarding?concern=kidney" },
+  { key: "diabetes", emoji: "💧", label: "당뇨 관심", desc: "저당 식품이 궁금한 분", href: "/onboarding?concern=diabetes" },
+  { key: "blood_pressure", emoji: "❤️", label: "혈압 관심", desc: "저나트륨 식품이 궁금한 분", href: "/onboarding?concern=blood_pressure" },
+  { key: "kidney", emoji: "🫘", label: "신장 관심", desc: "저단백·저염 식품이 궁금한 분", href: "/onboarding?concern=kidney" },
 ];
 
 /* ── 건강식단 서비스 데이터 ── */

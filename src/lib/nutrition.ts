@@ -207,9 +207,9 @@ function getStrategyTags(goals: HealthGoal[]): string[] {
   if (goals.includes("skin")) tags.push("항산화", "비타민", "피부건강");
   if (goals.includes("energy")) tags.push("영양균형", "활력");
   if (goals.includes("balanced")) tags.push("균형식단");
-  if (goals.includes("diabetes")) tags.push("저당", "혈당관리");
-  if (goals.includes("blood_pressure")) tags.push("저나트륨", "혈압관리");
-  if (goals.includes("kidney")) tags.push("저나트륨", "저단백", "신장보호");
+  if (goals.includes("diabetes")) tags.push("저당", "저당식");
+  if (goals.includes("blood_pressure")) tags.push("저나트륨", "저염식");
+  if (goals.includes("kidney")) tags.push("저나트륨", "저단백", "저염·저단백");
   return [...new Set(tags)];
 }
 
@@ -217,21 +217,21 @@ function getStrategySummary(goals: HealthGoal[], bmiCat: NutritionGoals["bmiCate
   const parts: string[] = [];
 
   if (goals.includes("weight_loss") && (bmiCat === "overweight" || bmiCat === "obese")) {
-    parts.push("칼로리를 조절하면서 단백질을 충분히 섭취해 건강하게 체중을 관리합니다");
+    parts.push("칼로리를 조절하면서 단백질을 충분히 섭취하는 저칼로리·고단백 식품 위주로 매칭합니다");
   } else if (goals.includes("weight_loss")) {
-    parts.push("균형 잡힌 식사로 건강한 체중을 유지합니다");
+    parts.push("균형 잡힌 영양 비율의 식품을 매칭합니다");
   }
   if (goals.includes("muscle")) {
-    parts.push("단백질 섭취를 강화해 근육 성장을 돕습니다");
+    parts.push("고단백 식품 위주로 매칭합니다");
   }
   if (goals.includes("gut_health")) {
-    parts.push("나트륨과 당류를 줄이고 식이섬유를 늘려 소화 건강을 돕습니다");
+    parts.push("저나트륨·저당·고식이섬유 식품 위주로 매칭합니다");
   }
   if (goals.includes("diabetes")) {
-    parts.push("당류 섭취를 제한해 혈당 변동을 줄이는 데 초점을 둡니다");
+    parts.push("저당 식품 위주로 매칭합니다");
   }
   if (goals.includes("blood_pressure")) {
-    parts.push("나트륨 섭취를 줄여 혈압 관리에 도움을 줍니다");
+    parts.push("저나트륨 식품 위주로 매칭합니다");
   }
   if (parts.length === 0) {
     parts.push("탄수화물, 단백질, 지방의 균형과 충분한 식이섬유를 챙깁니다");
@@ -301,7 +301,7 @@ export const HEALTH_GOAL_LABELS: Record<HealthGoal, { label: string; desc: strin
   gut_health: { label: "장 건강", desc: "소화가 편한 식품", emoji: "🫧" },
   skin: { label: "피부 건강", desc: "속부터 관리", emoji: "✨" },
   energy: { label: "활력 충전", desc: "영양 골고루", emoji: "⚡" },
-  diabetes: { label: "당뇨 관심", desc: "혈당 관리가 필요한 분", emoji: "💧" },
-  blood_pressure: { label: "혈압 관심", desc: "나트륨 관리가 필요한 분", emoji: "❤️" },
-  kidney: { label: "신장 관심", desc: "신장 기능 보호가 필요한 분", emoji: "🫘" },
+  diabetes: { label: "당뇨 관심", desc: "저당 식품이 궁금한 분", emoji: "💧" },
+  blood_pressure: { label: "혈압 관심", desc: "저나트륨 식품이 궁금한 분", emoji: "❤️" },
+  kidney: { label: "신장 관심", desc: "저단백·저염 식품이 궁금한 분", emoji: "🫘" },
 };

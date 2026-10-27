@@ -265,26 +265,26 @@ function scoreProducts(products: Record<string, unknown>[], params: ScoreParams)
     const allGoals = [...conditions, ...goals];
 
     if ((allGoals.includes("diabetes") || conditions.includes("diabetes")) && sugarG !== null) {
-      if (sugarG < 3) { score += 8; if (!reasons.includes("극저당")) { reasons.push("극저당"); reasonDetails.push(`당류 ${sugarG}g — 혈당 관리에 매우 적합해요`); } }
-      else if (sugarG < 5) { score += 5; if (!reasons.includes("저당")) { reasons.push("저당"); reasonDetails.push(`당류 ${sugarG}g — 당류 조절에 적합해요`); } }
+      if (sugarG < 3) { score += 8; if (!reasons.includes("극저당")) { reasons.push("극저당"); reasonDetails.push(`당류 ${sugarG}g — 극저당 식품`); } }
+      else if (sugarG < 5) { score += 5; if (!reasons.includes("저당")) { reasons.push("저당"); reasonDetails.push(`당류 ${sugarG}g — 저당 식품`); } }
     }
     if ((allGoals.includes("blood_pressure") || conditions.includes("hypertension")) && sodiumMg !== null) {
-      if (sodiumMg < 300) { score += 8; if (!reasons.includes("극저나트륨")) { reasons.push("극저나트륨"); reasonDetails.push(`나트륨 ${Math.round(sodiumMg)}mg — 혈압 관리에 매우 적합해요`); } }
-      else if (sodiumMg < 500) { score += 5; if (!reasons.includes("저나트륨")) { reasons.push("저나트륨"); reasonDetails.push(`나트륨 ${Math.round(sodiumMg)}mg — 저나트륨 설계`); } }
+      if (sodiumMg < 300) { score += 8; if (!reasons.includes("극저나트륨")) { reasons.push("극저나트륨"); reasonDetails.push(`나트륨 ${Math.round(sodiumMg)}mg — 극저나트륨 식품`); } }
+      else if (sodiumMg < 500) { score += 5; if (!reasons.includes("저나트륨")) { reasons.push("저나트륨"); reasonDetails.push(`나트륨 ${Math.round(sodiumMg)}mg — 저나트륨 식품`); } }
     }
     if ((allGoals.includes("kidney") || conditions.includes("kidney")) && proteinG !== null && proteinG < 10 && sodiumMg !== null && sodiumMg < 400) {
-      if (!reasons.includes("저단백")) { reasons.push("저단백"); reasonDetails.push(`단백질 ${proteinG}g, 나트륨 ${Math.round(sodiumMg)}mg — 신장 보호에 적합`); }
+      if (!reasons.includes("저단백")) { reasons.push("저단백"); reasonDetails.push(`단백질 ${proteinG}g, 나트륨 ${Math.round(sodiumMg)}mg — 저단백·저염 식품`); }
       score += 6;
     }
     if (allGoals.includes("muscle") && proteinG !== null) {
-      if (proteinG >= 25) { score += 6; if (!reasons.includes("고단백")) { reasons.push("고단백"); reasonDetails.push(`단백질 ${proteinG}g — 근육 성장에 도움`); } }
+      if (proteinG >= 25) { score += 6; if (!reasons.includes("고단백")) { reasons.push("고단백"); reasonDetails.push(`단백질 ${proteinG}g — 고단백 식품`); } }
       else if (proteinG >= 20) score += 3;
     }
     if (allGoals.includes("weight_loss") && calories !== null) {
-      if (calories > 0 && calories <= 350) { score += 5; if (!reasons.includes("저칼로리")) { reasons.push("저칼로리"); reasonDetails.push(`${calories}kcal — 체중 관리에 적합`); } }
+      if (calories > 0 && calories <= 350) { score += 5; if (!reasons.includes("저칼로리")) { reasons.push("저칼로리"); reasonDetails.push(`${calories}kcal — 저칼로리 식품`); } }
     }
     if (allGoals.includes("gut_health") && fiberG !== null && fiberG >= 5) {
-      if (!reasons.includes("고식이섬유")) { reasons.push("고식이섬유"); reasonDetails.push(`식이섬유 ${fiberG}g — 장 건강에 도움`); }
+      if (!reasons.includes("고식이섬유")) { reasons.push("고식이섬유"); reasonDetails.push(`식이섬유 ${fiberG}g — 고식이섬유 식품`); }
       score += 5;
     }
 

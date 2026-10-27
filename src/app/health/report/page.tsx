@@ -73,7 +73,7 @@ function analyzeHealth(data: HealthData): ReportData {
     } else {
       advice.push({
         nutrient: "당류", status: "warning", label: `공복혈당 ${v}mg/dL`,
-        detail: "당뇨 의심 수준이에요. 의료 전문가 상담을 권해요",
+        detail: "공복혈당이 높은 편이에요. 의사와 상담을 권해요",
         recommendation: "저당 식품 위주로 추천하고, 당류 상한을 설정했어요",
       });
       autoConditions.push("diabetes");
@@ -88,7 +88,7 @@ function analyzeHealth(data: HealthData): ReportData {
     if (s < 120 && d < 80) {
       advice.push({
         nutrient: "나트륨", status: "good", label: `혈압 ${s}/${d}mmHg`,
-        detail: "정상 혈압이에요",
+        detail: "입력하신 혈압 수치가 일반 기준 범위 안이에요",
         recommendation: "현재 식습관을 유지하세요",
       });
       score += 5;
@@ -102,7 +102,7 @@ function analyzeHealth(data: HealthData): ReportData {
     } else {
       advice.push({
         nutrient: "나트륨", status: "warning", label: `혈압 ${s}/${d}mmHg`,
-        detail: "고혈압 수준이에요. 의료 전문가 상담을 권해요",
+        detail: "혈압 수치가 높은 편이에요. 의사와 상담을 권해요",
         recommendation: "저나트륨 식품 위주로 추천해드릴게요",
       });
       autoConditions.push("hypertension");
@@ -130,7 +130,7 @@ function analyzeHealth(data: HealthData): ReportData {
     } else {
       advice.push({
         nutrient: "지방", status: "warning", label: `총 콜레스테롤 ${tc}mg/dL`,
-        detail: "높은 수준이에요. 의료 전문가 상담을 권해요",
+        detail: "콜레스테롤 수치가 높은 편이에요. 의사와 상담을 권해요",
         recommendation: "저지방·저콜레스테롤 식품 위주로 추천해드릴게요",
       });
       autoConditions.push("hyperlipidemia");

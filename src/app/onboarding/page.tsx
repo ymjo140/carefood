@@ -23,6 +23,8 @@ import {
    ════════════════════════════════════════════ */
 
 type OnboardingState = {
+  // Step 0: 민감정보 동의
+  sensitiveDataConsent: boolean;
   // Step 1: 건강 목표
   goals: HealthGoal[];
   showDiseaseGoals: boolean;
@@ -42,7 +44,7 @@ type OnboardingState = {
   tastes: { salty: TasteLevel; sweet: TasteLevel; spicy: TasteLevel; fatty: TasteLevel };
 };
 
-const STEPS = ["goals", "body", "pattern", "allergies", "tastes", "result"] as const;
+const STEPS = ["consent", "goals", "body", "pattern", "allergies", "tastes", "result"] as const;
 type StepKey = (typeof STEPS)[number];
 
 const MAIN_GOALS: HealthGoal[] = ["balanced", "weight_loss", "muscle", "gut_health", "skin", "energy"];
@@ -118,6 +120,7 @@ function OnboardingContent() {
 
   const [step, setStep] = useState(0);
   const [state, setState] = useState<OnboardingState>({
+    sensitiveDataConsent: false,
     goals: [],
     showDiseaseGoals: false,
     gender: "other",
@@ -176,6 +179,8 @@ function OnboardingContent() {
 
   const canProceed = (): boolean => {
     switch (currentStepKey) {
+      case "consent":
+        return state.sensitiveDataConsent;
       case "goals":
         return state.goals.length > 0;
       case "body":
@@ -297,13 +302,13 @@ function OnboardingContent() {
     <div className="min-h-[calc(100vh-3.5rem)] flex items-center justify-center px-4 py-8">
       <div className="w-full max-w-lg">
         {/* ── 진행 바 ── */}
-        {!isResultStep && (
+        {!isResultStep && currentStepKey !== "consent" && (
           <div className="flex gap-1.5 mb-8">
-            {STEPS.slice(0, -1).map((_, i) => (
+            {STEPS.slice(1, -1).map((_, i) => (
               <div
                 key={i}
                 className={`h-1 flex-1 rounded-full transition-colors duration-300 ${
-                  i <= step ? "bg-primary" : "bg-border"
+                  i <= step - 1 ? "bg-primary" : "bg-border"
                 }`}
               />
             ))}
@@ -312,6 +317,14 @@ function OnboardingContent() {
 
         {/* ── 스텝 콘텐츠 ── */}
         <div className={isResultStep ? "" : "min-h-[400px]"}>
+          {currentStepKey === "consent" && (
+            <StepConsent
+              agreed={state.sensitiveDataConsent}
+              onToggle={() =>
+                setState((prev) => ({ ...prev, sensitiveDataConsent: !prev.sensitiveDataConsent }))
+              }
+            />
+          )}
           {currentStepKey === "goals" && (
             <StepGoals
               selected={state.goals}
@@ -434,6 +447,90 @@ function OnboardingContent() {
           </button>
         )}
       </div>
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════
+   Step 0: 민감정보 수집 동의
+   ════════════════════════════════════════════ */
+
+function StepConsent({ agreed, onToggle }: { agreed: boolean; onToggle: () => void }) {
+  return (
+    <div>
+      <h1 className="text-2xl font-extrabold mb-1">시작하기 전에</h1>
+      <p className="text-muted text-sm mb-6">
+        맞춤 식품 추천을 위해 아래 정보 수집에 동의해주세요
+      </p>
+
+      <div className="bg-surface rounded-2xl p-5 mb-4 text-sm leading-relaxed space-y-3">
+        <p className="font-bold text-foreground">수집하는 정보</p>
+        <ul className="space-y-1 text-muted">
+          <li>• <span className="text-foreground">건강 목표</span> — 체중관리, 장건강 등 관심 영역</li>
+          <li>• <span className="text-foreground">신체 정보</span> — 성별, 출생연도, 키, 체중 (선택)</li>
+          <li>• <span className="text-foreground">식사 패턴</span> — 끼니 수, 식단 유형</li>
+          <li>• <span className="text-foreground">알레르기·맛 선호</span></li>
+        </ul>
+
+        <div className="border-t border-border pt-3 mt-3">
+          <p className="font-bold text-foreground mb-1">이용 목적</p>
+          <p className="text-muted">
+            식품 영양성분 기반 맞춤 추천 및 영양 분석 제공
+          </p>
+        </div>
+
+        <div className="border-t border-border pt-3 mt-3">
+          <p className="font-bold text-foreground mb-1">보관 및 파기</p>
+          <p className="text-muted">
+            기기 내 로컬 저장 · 회원가입 시 서버 저장 · 탈퇴 시 즉시 파기
+          </p>
+        </div>
+      </div>
+
+      <div className="bg-accent/5 border border-accent/20 rounded-xl p-4 mb-5 text-xs text-accent/90 leading-relaxed">
+        <p className="font-bold mb-1">⚠ 민감정보(건강정보) 수집 안내</p>
+        <p>
+          건강 목표·질환 관심사·신체 정보는 개인정보보호법 제23조에 따른 민감정보에 해당합니다.
+          해당 정보는 식품 성분 매칭에만 사용되며, 제3자에게 제공되지 않습니다.
+        </p>
+      </div>
+
+      <div className="bg-surface rounded-xl p-4 mb-2 text-xs text-muted leading-relaxed">
+        <p>
+          본 서비스는 식약처 영양성분 데이터베이스 기반 정보 제공 서비스이며,
+          의학적 진단·치료·처방을 대체하지 않습니다. 질환이 있는 경우 반드시 의사와 상담하세요.
+        </p>
+      </div>
+
+      <button
+        onClick={onToggle}
+        className={`w-full text-left px-4 py-4 rounded-2xl border-2 transition-all mt-4 ${
+          agreed
+            ? "border-primary bg-primary/5"
+            : "border-border hover:border-primary/30"
+        }`}
+      >
+        <div className="flex items-center gap-3">
+          <div
+            className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-colors ${
+              agreed ? "bg-primary border-primary" : "border-muted"
+            }`}
+          >
+            {agreed && (
+              <svg className="w-3 h-3 text-white" viewBox="0 0 20 20" fill="currentColor">
+                <path
+                  fillRule="evenodd"
+                  d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            )}
+          </div>
+          <span className="text-sm font-medium">
+            민감정보(건강정보) 수집·이용에 동의합니다
+          </span>
+        </div>
+      </button>
     </div>
   );
 }
