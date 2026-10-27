@@ -1,14 +1,57 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import type { Metadata } from "next";
+import { cache } from "react";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import TasteReview from "@/components/TasteReview";
 import MealLogButton from "@/components/MealLogButton";
 import ProductViewTracker from "@/components/ProductViewTracker";
 import ProductReviews from "@/components/ProductReviews";
 import FavoriteButton from "@/components/FavoriteButton";
+import TrackableLink from "@/components/TrackableLink";
 
 // 동적 라우트 — DB 조회 필요
 export const instant = false;
+
+/* ── 제품 메타데이터 캐시 ── */
+const getProductMeta = cache(async (id: string) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sb = createServiceRoleClient() as any;
+  const { data } = await sb
+    .from("products")
+    .select("id, name, manufacturer, health_score, calories, protein_g, sodium_mg, category_large")
+    .eq("id", id)
+    .single();
+  return data as { id: string; name: string; manufacturer: string | null; health_score: number | null; calories: number | null; protein_g: number | null; sodium_mg: number | null; category_large: string | null } | null;
+});
+
+export async function generateMetadata(
+  { params }: { params: Promise<{ id: string }> },
+): Promise<Metadata> {
+  const { id } = await params;
+  const product = await getProductMeta(id);
+
+  if (!product) {
+    return { title: "제품을 찾을 수 없습니다" };
+  }
+
+  const title = product.name;
+  const desc = [
+    product.manufacturer && `${product.manufacturer}`,
+    product.health_score && `건강점수 ${product.health_score}`,
+    product.calories != null && `${product.calories}kcal`,
+    product.protein_g != null && `단백질 ${product.protein_g}g`,
+  ].filter(Boolean).join(" · ");
+
+  return {
+    title,
+    description: `${title} — ${desc}. 영양 성분 분석, 가격 비교, 맛 평가를 확인하세요.`,
+    openGraph: {
+      title: `${title} | 케어푸드`,
+      description: desc,
+    },
+  };
+}
 
 /* ───── 타입 ───── */
 type PriceInfo = {
@@ -130,6 +173,7 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
     cholesterol_mg: number | null; ingredients_raw: string | null;
     spicy_score: number; is_active: boolean;
     health_score: number | null;
+    source: string | null;
   };
 
   const { data: product, error } = await supabase
@@ -232,14 +276,14 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
                 )}
               </div>
               {product.category_large === "건강식단서비스" && originalProductUrl && (
-                <a
+                <TrackableLink
                   href={originalProductUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  productId={product.id}
+                  platform={product.manufacturer || "health_meal"}
                   className="inline-flex items-center gap-1 text-xs text-primary hover:text-primary-dark transition-colors mt-0.5"
                 >
                   원본 상품 페이지 →
-                </a>
+                </TrackableLink>
               )}
             </>
           )}
@@ -279,18 +323,18 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
           <h2 className="text-sm font-extrabold mb-3">구매처 비교</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {sortedPrices.map((pp) => (
-              <a
+              <TrackableLink
                 key={pp.platform}
                 href={pp.url}
-                target="_blank"
-                rel="noopener noreferrer"
+                productId={product.id}
+                platform={pp.platform}
                 className={`flex items-center justify-between px-4 py-3 rounded-xl text-white text-sm font-medium transition-colors ${
                   PLATFORM_COLORS[pp.platform] || "bg-gray-600 hover:bg-gray-700"
                 }`}
               >
                 <span>{PLATFORM_LABELS[pp.platform] || pp.platform}</span>
                 <span>{formatPrice(pp.price)}</span>
-              </a>
+              </TrackableLink>
             ))}
           </div>
         </section>

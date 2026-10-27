@@ -22,14 +22,36 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "케어푸드 | 성분으로 찾는 내 몸에 맞는 식품",
+  metadataBase: new URL("https://carefood-iota.vercel.app"),
+  title: {
+    default: "케어푸드 | 성분으로 찾는 내 몸에 맞는 식품",
+    template: "%s | 케어푸드",
+  },
   description:
-    "식약처 31만 건 영양성분 DB 기반, 건강 관심사에 맞는 식품 매칭. 장건강·피부·체중관리·활력 — 성분 분석으로 나에게 맞는 식품을 찾아보세요.",
-  keywords: ["케어푸드", "이너케어", "성분분석", "식품매칭", "장건강식품", "건강식", "영양성분", "식품추천"],
+    "34만 식품 영양 DB · 5개 건강식단 서비스 비교 · AI 맞춤 추천. 장건강·피부·체중관리·활력 — 매끼 달라지는 영양 최적 해를 풀어주는 식단 인텔리전스.",
+  keywords: [
+    "케어푸드", "건강식품", "영양성분", "식품매칭", "건강식단",
+    "그리팅", "윤식단", "디자인밀", "식단추천", "AI식단",
+    "장건강식품", "다이어트식단", "고단백식품", "저당식품",
+  ],
   openGraph: {
     title: "케어푸드 | 성분으로 찾는 내 몸에 맞는 식품",
-    description: "식약처 영양성분 DB 기반 이너케어 식품 매칭 플랫폼",
+    description: "34만 식품 영양 DB 기반 AI 맞춤 식단 인텔리전스 플랫폼",
     type: "website",
+    siteName: "케어푸드",
+    locale: "ko_KR",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "케어푸드 | 성분으로 찾는 내 몸에 맞는 식품",
+    description: "34만 식품 영양 DB 기반 AI 맞춤 식단 인텔리전스 플랫폼",
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
+  alternates: {
+    canonical: "https://carefood-iota.vercel.app",
   },
 };
 

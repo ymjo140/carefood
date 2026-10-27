@@ -1,10 +1,50 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import type { Metadata } from "next";
+import { cache } from "react";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import MealPlanActions from "./MealPlanActions";
 
 // 동적 라우트 — 런타임 데이터 필요
 export const instant = false;
+
+/* ── 식단 메타데이터 캐시 ── */
+const getPlanMeta = cache(async (id: string) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sb = createServiceRoleClient() as any;
+  const { data } = await sb
+    .from("shared_meal_plans")
+    .select("id, title, description, author_display_name, like_count")
+    .eq("id", id)
+    .eq("is_active", true)
+    .single();
+  return data as { id: string; title: string; description: string | null; author_display_name: string; like_count: number } | null;
+});
+
+export async function generateMetadata(
+  { params }: { params: Promise<{ id: string }> },
+): Promise<Metadata> {
+  const { id } = await params;
+  const plan = await getPlanMeta(id);
+
+  if (!plan) {
+    return { title: "식단을 찾을 수 없습니다" };
+  }
+
+  const title = plan.title;
+  const desc = plan.description
+    ? `${plan.author_display_name}의 식단 — ${plan.description}`
+    : `${plan.author_display_name}의 식단 공유. ♥ ${plan.like_count}`;
+
+  return {
+    title: `${title} | 커뮤니티`,
+    description: desc,
+    openGraph: {
+      title: `${title} | 케어푸드 커뮤니티`,
+      description: desc,
+    },
+  };
+}
 
 /* ───── 타입 ───── */
 type DaySlot = {

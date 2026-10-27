@@ -167,6 +167,24 @@ export async function GET() {
     .sort((a, b) => b.opportunity - a.opportunity)
     .slice(0, 8);
 
+  // ── 7. 구매 전환 클릭 통계 ──
+  const { data: recentClicks } = await sb
+    .from("product_clicks")
+    .select("platform, created_at")
+    .order("created_at", { ascending: false })
+    .limit(500);
+
+  const clicksByPlatform: Record<string, number> = {};
+  for (const c of (recentClicks || [])) {
+    clicksByPlatform[c.platform] = (clicksByPlatform[c.platform] || 0) + 1;
+  }
+
+  const clickStats = {
+    total: recentClicks?.length || 0,
+    byPlatform: clicksByPlatform,
+    recentDays: 30,
+  };
+
   return NextResponse.json({
     overview,
     categoryHealth,
@@ -174,5 +192,6 @@ export async function GET() {
     serviceCompare,
     opportunity,
     dishDistribution,
+    clickStats,
   });
 }
