@@ -125,6 +125,10 @@ export default function DiaryPage() {
     weeklyAvg: { calories: number; protein_g: number; sodium_mg: number; goalAchievement: number } | null;
     goalCalories: number;
   } | null>(null);
+  const [gapSuggestions, setGapSuggestions] = useState<{
+    gaps: { nutrient: string; label: string; current: number; target: number; ratio: number; severity: string }[];
+    suggestions: { nutrient_gap: string; gap_label: string; severity: string; product_id: string; product_name: string; nutrient_value: number; nutrient_unit: string; health_score: number | null; price: number | null; reason: string }[];
+  } | null>(null);
 
   useEffect(() => {
     setUserId(getUserId());
@@ -229,6 +233,15 @@ export default function DiaryPage() {
   }, [userId]);
 
   useEffect(() => { loadWeeklyTrend(); }, [loadWeeklyTrend]);
+
+  // 영양 갭 기반 공구 추천
+  useEffect(() => {
+    if (!userId) return;
+    fetch(`/api/community/group-buy/suggest?user_id=${userId}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setGapSuggestions(d); })
+      .catch(() => {});
+  }, [userId]);
 
   // 제품 검색
   const searchProducts = async (q: string) => {
@@ -666,6 +679,84 @@ export default function DiaryPage() {
               </div>
             </div>
           )}
+        </section>
+      )}
+
+      {/* ── 영양 갭 기반 공구 추천 ── */}
+      {gapSuggestions && gapSuggestions.gaps.length > 0 && gapSuggestions.suggestions.length > 0 && (
+        <section className="mt-8">
+          <h2 className="text-sm font-bold mb-1">🛒 이번 주 부족한 영양소 공구</h2>
+          <p className="text-[10px] text-muted mb-3">식단 기록 기반으로 부족한 영양소를 채울 제품을 추천해요</p>
+
+          {/* 영양 갭 요약 */}
+          <div className="flex gap-2 mb-3 overflow-x-auto no-scrollbar">
+            {gapSuggestions.gaps.map((gap) => (
+              <div
+                key={gap.nutrient}
+                className={`shrink-0 px-3 py-2 rounded-xl text-xs ${
+                  gap.severity === "critical"
+                    ? "bg-accent/10 border border-accent/30 text-accent"
+                    : "bg-primary/5 border border-primary/20 text-primary"
+                }`}
+              >
+                <span className="font-bold">{gap.label}</span>
+                {gap.nutrient.includes("over") ? (
+                  <span className="ml-1">
+                    {Math.round(gap.current)}→목표 {Math.round(gap.target)}
+                  </span>
+                ) : (
+                  <span className="ml-1">
+                    {Math.round(gap.ratio * 100)}%
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* 추천 제품 */}
+          <div className="space-y-2">
+            {gapSuggestions.suggestions.map((s) => (
+              <div
+                key={s.product_id}
+                className="bg-card rounded-xl p-3 shadow-[0_1px_3px_rgba(0,0,0,0.04)] flex items-center justify-between gap-3"
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5 mb-0.5">
+                    <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-medium ${
+                      s.severity === "critical"
+                        ? "bg-accent/10 text-accent"
+                        : "bg-primary/10 text-primary"
+                    }`}>
+                      {s.gap_label} 보충
+                    </span>
+                    {s.health_score && (
+                      <span className="text-[9px] text-muted">점수 {s.health_score}</span>
+                    )}
+                  </div>
+                  <p className="text-sm font-medium truncate">{s.product_name}</p>
+                  <p className="text-[10px] text-muted">{s.reason}</p>
+                </div>
+                <div className="shrink-0 text-right">
+                  {s.price && (
+                    <p className="text-xs font-bold">{s.price.toLocaleString()}원</p>
+                  )}
+                  <a
+                    href={`/products/${s.product_id}`}
+                    className="text-[10px] text-primary hover:text-primary-dark"
+                  >
+                    상세 →
+                  </a>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <a
+            href="/community"
+            className="block mt-3 text-center text-xs text-primary hover:text-primary-dark transition-colors py-2"
+          >
+            공구 더 보기 →
+          </a>
         </section>
       )}
 
