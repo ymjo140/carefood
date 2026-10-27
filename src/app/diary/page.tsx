@@ -81,18 +81,45 @@ function formatDate(dateStr: string): string {
   return `${d.getMonth() + 1}월 ${d.getDate()}일 (${days[d.getDay()]})`;
 }
 
+/* ── 제품 리스트 (공통) ── */
+function ProductList({ items, onSelect }: { items: SearchResult[]; onSelect: (p: SearchResult) => void }) {
+  return (
+    <div className="space-y-1 max-h-52 overflow-y-auto">
+      {items.map((p) => (
+        <button
+          key={p.id}
+          onClick={() => onSelect(p)}
+          className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-card transition-colors flex items-center justify-between gap-2"
+        >
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium truncate">{p.name}</p>
+            <div className="flex gap-2 text-[10px] text-muted">
+              {p.manufacturer && <span>{p.manufacturer}</span>}
+              {p.calories != null && <span>{p.calories}kcal</span>}
+              {p.protein_g != null && <span>단백질 {p.protein_g}g</span>}
+            </div>
+          </div>
+          <span className="text-primary text-xs shrink-0">+ 추가</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 /* ── 메인 ── */
 export default function DiaryPage() {
   const [date, setDate] = useState("");
   const [data, setData] = useState<DiaryData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [addingMeal, setAddingMeal] = useState<string | null>(null); // meal_type being added
+  const [addingMeal, setAddingMeal] = useState<string | null>(null);
+  const [addTab, setAddTab] = useState<"search" | "favorites" | "weekly" | "manual">("search");
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [searching, setSearching] = useState(false);
-  const [manualMode, setManualMode] = useState(false);
   const [manualForm, setManualForm] = useState({ food_name: "", calories: "", protein_g: "", serving_g: "" });
   const [userId, setUserId] = useState("");
+  const [favorites, setFavorites] = useState<SearchResult[]>([]);
+  const [weeklyItems, setWeeklyItems] = useState<SearchResult[]>([]);
 
   useEffect(() => {
     setUserId(getUserId());
@@ -136,6 +163,56 @@ export default function DiaryPage() {
   }, [date, userId]);
 
   useEffect(() => { fetchDiary(); }, [fetchDiary]);
+
+  // 즐겨찾기 로드
+  const loadFavorites = useCallback(async () => {
+    if (!userId) return;
+    try {
+      const res = await fetch(`/api/favorites?user_id=${userId}`);
+      if (res.ok) {
+        const d = await res.json();
+        setFavorites((d.favorites || []).map((f: any) => ({
+          id: f.product_id,
+          name: f.name,
+          manufacturer: f.manufacturer,
+          calories: f.calories,
+          protein_g: f.protein_g,
+          serving_size_g: null,
+        })));
+      }
+    } catch { /* */ }
+  }, [userId]);
+
+  // 주간 식단 박스 로드 (localStorage에 저장된 최근 결과)
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("carefood_weekly_box");
+      if (saved) {
+        const box = JSON.parse(saved);
+        // weekly box 결과에서 제품 목록 추출
+        const items: SearchResult[] = [];
+        const seen = new Set<string>();
+        for (const day of box.days || []) {
+          for (const slot of Object.values(day.slots || {}) as any[]) {
+            if (slot?.product_id && !seen.has(slot.product_id)) {
+              seen.add(slot.product_id);
+              items.push({
+                id: slot.product_id,
+                name: slot.name || slot.product_name || "알 수 없음",
+                manufacturer: slot.manufacturer || slot.source || null,
+                calories: slot.calories || null,
+                protein_g: slot.protein_g || null,
+                serving_size_g: slot.serving_size_g || null,
+              });
+            }
+          }
+        }
+        setWeeklyItems(items);
+      }
+    } catch { /* */ }
+  }, []);
+
+  useEffect(() => { if (addTab === "favorites") loadFavorites(); }, [addTab, loadFavorites]);
 
   // 제품 검색
   const searchProducts = async (q: string) => {
@@ -187,7 +264,7 @@ export default function DiaryPage() {
       }),
     });
     setAddingMeal(null);
-    setManualMode(false);
+    setAddTab("search");
     setManualForm({ food_name: "", calories: "", protein_g: "", serving_g: "" });
     fetchDiary();
   };
@@ -316,9 +393,9 @@ export default function DiaryPage() {
                     <button
                       onClick={() => {
                         setAddingMeal(addingMeal === meal.key ? null : meal.key);
+                        setAddTab("search");
                         setSearchQuery("");
                         setSearchResults([]);
-                        setManualMode(false);
                       }}
                       className="w-7 h-7 rounded-full bg-primary/10 text-primary flex items-center justify-center hover:bg-primary/20 transition-colors text-sm font-bold"
                     >
@@ -355,7 +432,7 @@ export default function DiaryPage() {
                   <button
                     onClick={() => {
                       setAddingMeal(meal.key);
-                      setManualMode(false);
+                      setAddTab("search");
                     }}
                     className="w-full px-4 py-4 text-sm text-muted hover:text-foreground hover:bg-surface/50 transition-colors"
                   >
@@ -365,114 +442,132 @@ export default function DiaryPage() {
 
                 {/* 추가 모드 */}
                 {addingMeal === meal.key && (
-                  <div className="p-4 bg-surface/50 border-t border-border/50">
-                    {!manualMode ? (
-                      <>
-                        {/* 제품 검색 */}
-                        <div className="relative mb-3">
-                          <input
-                            type="text"
-                            value={searchQuery}
-                            onChange={(e) => {
-                              setSearchQuery(e.target.value);
-                              searchProducts(e.target.value);
-                            }}
-                            placeholder="제품명 검색 (예: 닭가슴살, 샐러드...)"
-                            className="w-full px-3 py-2.5 rounded-xl bg-background border border-border text-sm focus:border-primary focus:outline-none"
-                            autoFocus
-                          />
-                          {searching && (
-                            <div className="absolute right-3 top-3">
-                              <div className="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-                            </div>
-                          )}
-                        </div>
-
-                        {/* 검색 결과 */}
-                        {searchResults.length > 0 && (
-                          <div className="space-y-1 mb-3 max-h-48 overflow-y-auto">
-                            {searchResults.map((p) => (
-                              <button
-                                key={p.id}
-                                onClick={() => addFromProduct(p)}
-                                className="w-full text-left px-3 py-2 rounded-lg hover:bg-card transition-colors"
-                              >
-                                <p className="text-sm font-medium truncate">{p.name}</p>
-                                <div className="flex gap-2 text-[10px] text-muted">
-                                  {p.manufacturer && <span>{p.manufacturer}</span>}
-                                  {p.calories != null && <span>{p.calories}kcal/100g</span>}
-                                  {p.protein_g != null && <span>단백질 {p.protein_g}g</span>}
-                                </div>
-                              </button>
-                            ))}
-                          </div>
-                        )}
-
-                        {searchQuery && searchResults.length === 0 && !searching && (
-                          <p className="text-xs text-muted text-center py-2 mb-2">검색 결과가 없어요</p>
-                        )}
-
+                  <div className="border-t border-border/50">
+                    {/* 탭 */}
+                    <div className="flex border-b border-border/50 bg-surface/30">
+                      {([
+                        { key: "search" as const, label: "검색" },
+                        { key: "favorites" as const, label: `즐겨찾기${favorites.length > 0 ? ` (${favorites.length})` : ""}` },
+                        { key: "weekly" as const, label: `식단박스${weeklyItems.length > 0 ? ` (${weeklyItems.length})` : ""}` },
+                        { key: "manual" as const, label: "직접 입력" },
+                      ]).map((tab) => (
                         <button
-                          onClick={() => setManualMode(true)}
-                          className="w-full text-xs text-primary hover:text-primary-dark transition-colors py-1"
+                          key={tab.key}
+                          onClick={() => setAddTab(tab.key)}
+                          className={`flex-1 py-2 text-[11px] font-medium transition-colors ${
+                            addTab === tab.key
+                              ? "text-primary border-b-2 border-primary"
+                              : "text-muted hover:text-foreground"
+                          }`}
                         >
-                          DB에 없는 음식 직접 입력 →
+                          {tab.label}
                         </button>
-                      </>
-                    ) : (
-                      <>
-                        {/* 직접 입력 */}
-                        <p className="text-xs font-bold mb-2">직접 입력</p>
-                        <div className="space-y-2 mb-3">
-                          <input
-                            type="text"
-                            value={manualForm.food_name}
-                            onChange={(e) => setManualForm({ ...manualForm, food_name: e.target.value })}
-                            placeholder="음식 이름"
-                            className="w-full px-3 py-2 rounded-lg bg-background border border-border text-sm focus:border-primary focus:outline-none"
-                            autoFocus
-                          />
-                          <div className="grid grid-cols-3 gap-2">
+                      ))}
+                    </div>
+
+                    <div className="p-4 bg-surface/50">
+                      {/* 검색 탭 */}
+                      {addTab === "search" && (
+                        <>
+                          <div className="relative mb-3">
                             <input
-                              type="number"
-                              value={manualForm.calories}
-                              onChange={(e) => setManualForm({ ...manualForm, calories: e.target.value })}
-                              placeholder="칼로리"
-                              className="px-2 py-2 rounded-lg bg-background border border-border text-xs focus:border-primary focus:outline-none text-center"
+                              type="text"
+                              value={searchQuery}
+                              onChange={(e) => {
+                                setSearchQuery(e.target.value);
+                                searchProducts(e.target.value);
+                              }}
+                              placeholder="제품명 검색 (예: 닭가슴살, 샐러드...)"
+                              className="w-full px-3 py-2.5 rounded-xl bg-background border border-border text-sm focus:border-primary focus:outline-none"
+                              autoFocus
                             />
-                            <input
-                              type="number"
-                              value={manualForm.protein_g}
-                              onChange={(e) => setManualForm({ ...manualForm, protein_g: e.target.value })}
-                              placeholder="단백질(g)"
-                              className="px-2 py-2 rounded-lg bg-background border border-border text-xs focus:border-primary focus:outline-none text-center"
-                            />
-                            <input
-                              type="number"
-                              value={manualForm.serving_g}
-                              onChange={(e) => setManualForm({ ...manualForm, serving_g: e.target.value })}
-                              placeholder="양(g)"
-                              className="px-2 py-2 rounded-lg bg-background border border-border text-xs focus:border-primary focus:outline-none text-center"
-                            />
+                            {searching && (
+                              <div className="absolute right-3 top-3">
+                                <div className="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+                              </div>
+                            )}
                           </div>
-                        </div>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => setManualMode(false)}
-                            className="flex-1 py-2 rounded-lg border border-border text-xs hover:bg-card transition-colors"
-                          >
-                            제품 검색
-                          </button>
+                          {searchResults.length > 0 && (
+                            <ProductList items={searchResults} onSelect={addFromProduct} />
+                          )}
+                          {searchQuery && searchResults.length === 0 && !searching && (
+                            <p className="text-xs text-muted text-center py-3">검색 결과가 없어요</p>
+                          )}
+                        </>
+                      )}
+
+                      {/* 즐겨찾기 탭 */}
+                      {addTab === "favorites" && (
+                        favorites.length > 0 ? (
+                          <ProductList items={favorites} onSelect={addFromProduct} />
+                        ) : (
+                          <div className="text-center py-6">
+                            <p className="text-2xl mb-2">♡</p>
+                            <p className="text-xs text-muted">즐겨찾기한 제품이 없어요</p>
+                            <p className="text-[10px] text-muted mt-1">제품 탐색에서 ♡를 눌러 추가해보세요</p>
+                          </div>
+                        )
+                      )}
+
+                      {/* 주간 식단 박스 탭 */}
+                      {addTab === "weekly" && (
+                        weeklyItems.length > 0 ? (
+                          <ProductList items={weeklyItems} onSelect={addFromProduct} />
+                        ) : (
+                          <div className="text-center py-6">
+                            <p className="text-2xl mb-2">📦</p>
+                            <p className="text-xs text-muted">주간 식단 박스를 먼저 만들어보세요</p>
+                            <a href="/weekly-box" className="text-[10px] text-primary mt-1 inline-block">주간 박스 만들기 →</a>
+                          </div>
+                        )
+                      )}
+
+                      {/* 직접 입력 탭 */}
+                      {addTab === "manual" && (
+                        <>
+                          <div className="space-y-2 mb-3">
+                            <input
+                              type="text"
+                              value={manualForm.food_name}
+                              onChange={(e) => setManualForm({ ...manualForm, food_name: e.target.value })}
+                              placeholder="음식 이름"
+                              className="w-full px-3 py-2.5 rounded-xl bg-background border border-border text-sm focus:border-primary focus:outline-none"
+                              autoFocus
+                            />
+                            <div className="grid grid-cols-3 gap-2">
+                              <input
+                                type="number"
+                                value={manualForm.calories}
+                                onChange={(e) => setManualForm({ ...manualForm, calories: e.target.value })}
+                                placeholder="칼로리"
+                                className="px-2 py-2 rounded-lg bg-background border border-border text-xs focus:border-primary focus:outline-none text-center"
+                              />
+                              <input
+                                type="number"
+                                value={manualForm.protein_g}
+                                onChange={(e) => setManualForm({ ...manualForm, protein_g: e.target.value })}
+                                placeholder="단백질(g)"
+                                className="px-2 py-2 rounded-lg bg-background border border-border text-xs focus:border-primary focus:outline-none text-center"
+                              />
+                              <input
+                                type="number"
+                                value={manualForm.serving_g}
+                                onChange={(e) => setManualForm({ ...manualForm, serving_g: e.target.value })}
+                                placeholder="양(g)"
+                                className="px-2 py-2 rounded-lg bg-background border border-border text-xs focus:border-primary focus:outline-none text-center"
+                              />
+                            </div>
+                          </div>
                           <button
                             onClick={addManual}
                             disabled={!manualForm.food_name}
-                            className="flex-1 py-2 rounded-lg bg-primary text-white text-xs font-bold hover:bg-primary-dark transition-colors disabled:opacity-40"
+                            className="w-full py-2.5 rounded-xl bg-primary text-white text-sm font-bold hover:bg-primary-dark transition-colors disabled:opacity-40"
                           >
                             추가
                           </button>
-                        </div>
-                      </>
-                    )}
+                        </>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
