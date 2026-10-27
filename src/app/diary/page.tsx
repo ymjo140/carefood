@@ -120,6 +120,11 @@ export default function DiaryPage() {
   const [userId, setUserId] = useState("");
   const [favorites, setFavorites] = useState<SearchResult[]>([]);
   const [weeklyItems, setWeeklyItems] = useState<SearchResult[]>([]);
+  const [weeklyTrend, setWeeklyTrend] = useState<{
+    days: { date: string; label: string; dayOfWeek: string; calories: number; protein_g: number; count: number }[];
+    weeklyAvg: { calories: number; protein_g: number; sodium_mg: number; goalAchievement: number } | null;
+    goalCalories: number;
+  } | null>(null);
 
   useEffect(() => {
     setUserId(getUserId());
@@ -214,6 +219,17 @@ export default function DiaryPage() {
 
   useEffect(() => { if (addTab === "favorites") loadFavorites(); }, [addTab, loadFavorites]);
 
+  // 주간 추이 로드
+  const loadWeeklyTrend = useCallback(async () => {
+    if (!userId) return;
+    try {
+      const res = await fetch(`/api/diary/weekly?user_id=${userId}`);
+      if (res.ok) setWeeklyTrend(await res.json());
+    } catch { /* */ }
+  }, [userId]);
+
+  useEffect(() => { loadWeeklyTrend(); }, [loadWeeklyTrend]);
+
   // 제품 검색
   const searchProducts = async (q: string) => {
     if (q.length < 1) { setSearchResults([]); return; }
@@ -245,6 +261,7 @@ export default function DiaryPage() {
     setSearchQuery("");
     setSearchResults([]);
     fetchDiary();
+    loadWeeklyTrend();
   };
 
   // 직접 입력으로 기록 추가
@@ -267,6 +284,7 @@ export default function DiaryPage() {
     setAddTab("search");
     setManualForm({ food_name: "", calories: "", protein_g: "", serving_g: "" });
     fetchDiary();
+    loadWeeklyTrend();
   };
 
   // 기록 삭제
@@ -574,6 +592,81 @@ export default function DiaryPage() {
             );
           })}
         </div>
+      )}
+
+      {/* ── 주간 영양 추이 ── */}
+      {weeklyTrend && weeklyTrend.days.some(d => d.count > 0) && (
+        <section className="mt-8">
+          <h2 className="text-sm font-bold mb-3">📈 최근 7일 영양 추이</h2>
+
+          {/* 칼로리 바 차트 */}
+          <div className="bg-card rounded-xl p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)] mb-3">
+            <div className="flex items-end justify-between gap-1" style={{ height: 100 }}>
+              {weeklyTrend.days.map((d) => {
+                const maxCal = Math.max(...weeklyTrend.days.map(x => x.calories), weeklyTrend.goalCalories);
+                const h = maxCal > 0 ? (d.calories / maxCal) * 100 : 0;
+                const goalH = maxCal > 0 ? (weeklyTrend.goalCalories / maxCal) * 100 : 0;
+                const isOver = d.calories > weeklyTrend.goalCalories;
+                return (
+                  <div key={d.date} className="flex-1 flex flex-col items-center gap-0.5">
+                    {d.count > 0 && (
+                      <span className="text-[9px] text-muted">{d.calories}</span>
+                    )}
+                    <div className="w-full relative" style={{ height: 80 }}>
+                      {/* 목표 라인 */}
+                      <div
+                        className="absolute w-full border-t border-dashed border-primary/30"
+                        style={{ bottom: `${goalH * 0.8}%` }}
+                      />
+                      {/* 바 */}
+                      <div
+                        className={`absolute bottom-0 w-full rounded-t transition-all ${
+                          d.count === 0 ? "bg-border/20" : isOver ? "bg-accent/40" : "bg-primary/40"
+                        }`}
+                        style={{ height: `${d.count > 0 ? Math.max(h * 0.8, 4) : 4}%` }}
+                      />
+                    </div>
+                    <span className={`text-[9px] ${d.date === date ? "font-bold text-primary" : "text-muted"}`}>
+                      {d.dayOfWeek}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="flex justify-between mt-2 text-[10px] text-muted">
+              <span>목표: {weeklyTrend.goalCalories}kcal</span>
+              {weeklyTrend.weeklyAvg && (
+                <span>7일 평균: {weeklyTrend.weeklyAvg.calories}kcal</span>
+              )}
+            </div>
+          </div>
+
+          {/* 주간 평균 */}
+          {weeklyTrend.weeklyAvg && (
+            <div className="bg-card rounded-xl p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+              <p className="text-xs font-bold mb-2">주간 평균</p>
+              <div className="grid grid-cols-3 gap-3 text-center">
+                <div>
+                  <p className="text-lg font-extrabold">{weeklyTrend.weeklyAvg.calories}</p>
+                  <p className="text-[10px] text-muted">kcal/일</p>
+                </div>
+                <div>
+                  <p className="text-lg font-extrabold">{weeklyTrend.weeklyAvg.protein_g}g</p>
+                  <p className="text-[10px] text-muted">단백질/일</p>
+                </div>
+                <div>
+                  <p className={`text-lg font-extrabold ${
+                    weeklyTrend.weeklyAvg.goalAchievement >= 80 && weeklyTrend.weeklyAvg.goalAchievement <= 110
+                      ? "text-green-500" : "text-accent"
+                  }`}>
+                    {weeklyTrend.weeklyAvg.goalAchievement}%
+                  </p>
+                  <p className="text-[10px] text-muted">목표 달성률</p>
+                </div>
+              </div>
+            </div>
+          )}
+        </section>
       )}
 
       {/* 하단 안내 */}

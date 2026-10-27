@@ -536,9 +536,16 @@ export default function WeeklyBoxPage() {
     }));
   };
 
-  // 통계 계산
+  // 통계 계산 + 서비스 믹스 분석
   const stats = (() => {
     let totalPrice = 0, totalCal = 0, totalProtein = 0, products = 0, eatingOut = 0;
+    const serviceMap: Record<string, { count: number; cost: number; cal: number; protein: number }> = {};
+    const SERVICE_NAMES: Record<string, string> = {
+      greating: "그리팅", yundiet: "윤식단", sixmeal: "식스밀",
+      designmeal: "디자인밀", makesalad: "메이크샐러드",
+      "11st": "11번가", kurly: "컬리", oasis: "오아시스", homeplus: "홈플러스",
+    };
+
     for (const d of DAYS) {
       for (const m of MEALS) {
         const cell = grid[d.key]?.[m.key];
@@ -549,10 +556,38 @@ export default function WeeklyBoxPage() {
           totalPrice += cell.price || 0;
           totalCal += cell.calories || 0;
           totalProtein += cell.protein_g || 0;
+          // 서비스 분류
+          const svc = cell.platform || "기타";
+          if (!serviceMap[svc]) serviceMap[svc] = { count: 0, cost: 0, cal: 0, protein: 0 };
+          serviceMap[svc].count++;
+          serviceMap[svc].cost += cell.price || 0;
+          serviceMap[svc].cal += cell.calories || 0;
+          serviceMap[svc].protein += cell.protein_g || 0;
         }
       }
     }
-    return { totalPrice, avgCal: Math.round(totalCal / 7), avgProtein: Math.round(totalProtein / 7), products, eatingOut };
+
+    // 서비스별 정렬 (건강식단 서비스 → 쇼핑몰 → 기타)
+    const healthServices = ["greating", "yundiet", "sixmeal", "designmeal", "makesalad"];
+    const serviceMix = Object.entries(serviceMap)
+      .map(([key, v]) => ({
+        key,
+        name: SERVICE_NAMES[key] || key,
+        isHealthService: healthServices.includes(key),
+        ...v,
+        ratio: products > 0 ? Math.round((v.count / products) * 100) : 0,
+      }))
+      .sort((a, b) => b.count - a.count);
+
+    // 구독 최적화: 건강식단 서비스만 쓸 때 vs 현재 믹스 비교
+    const healthServiceCost = serviceMix.filter(s => s.isHealthService).reduce((a, s) => a + s.cost, 0);
+    const retailCost = serviceMix.filter(s => !s.isHealthService).reduce((a, s) => a + s.cost, 0);
+    const monthlyEstimate = Math.round(totalPrice * 4.3);
+
+    return {
+      totalPrice, avgCal: Math.round(totalCal / 7), avgProtein: Math.round(totalProtein / 7),
+      products, eatingOut, serviceMix, healthServiceCost, retailCost, monthlyEstimate,
+    };
   })();
 
   if (loading) {
@@ -599,9 +634,11 @@ export default function WeeklyBoxPage() {
       {/* 요약 바 */}
       {stats.products > 0 && (
         <div className="flex gap-4 flex-wrap mb-4 px-3 py-2.5 bg-surface rounded-xl text-xs">
-          <span className="text-muted">주간 총액 <strong className="text-foreground">{stats.totalPrice.toLocaleString()}원</strong></span>
-          <span className="text-muted">일 평균 <strong className="text-foreground">{stats.avgCal}kcal</strong></span>
-          <span className="text-muted">일 평균 단백질 <strong className="text-foreground">{stats.avgProtein}g</strong></span>
+          <span className="text-muted">주간 <strong className="text-foreground">{stats.totalPrice.toLocaleString()}원</strong></span>
+          <span className="text-muted">월 예상 <strong className="text-primary">{stats.monthlyEstimate.toLocaleString()}원</strong></span>
+          <span className="text-muted">일 <strong className="text-foreground">{stats.avgCal}kcal</strong></span>
+          <span className="text-muted">단백질 <strong className="text-foreground">{stats.avgProtein}g</strong></span>
+          <span className="text-muted">{stats.serviceMix.filter(s => s.isHealthService).length}개 서비스</span>
         </div>
       )}
 
@@ -635,6 +672,99 @@ export default function WeeklyBoxPage() {
           ))}
         </div>
       </div>
+
+      {/* ── 서비스 믹스 분석 + 구독 최적화 ── */}
+      {stats.products > 0 && stats.serviceMix.length > 0 && (
+        <section className="mb-6">
+          <h2 className="text-sm font-bold mb-3">📊 서비스 믹스 분석</h2>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {/* 서비스 구성 비율 */}
+            <div className="bg-card rounded-xl p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+              <p className="text-xs font-bold mb-3">이번 주 식단 구성</p>
+              <div className="space-y-2">
+                {stats.serviceMix.map((svc) => (
+                  <div key={svc.key} className="flex items-center gap-2">
+                    <span className="text-xs w-20 truncate shrink-0 font-medium">{svc.name}</span>
+                    <div className="flex-1 h-4 bg-surface rounded overflow-hidden">
+                      <div
+                        className={`h-full rounded transition-all ${svc.isHealthService ? "bg-primary/40" : "bg-muted/30"}`}
+                        style={{ width: `${svc.ratio}%` }}
+                      />
+                    </div>
+                    <span className="text-[10px] text-muted w-12 text-right shrink-0">
+                      {svc.count}끼 ({svc.ratio}%)
+                    </span>
+                  </div>
+                ))}
+              </div>
+              {stats.eatingOut > 0 && (
+                <p className="text-[10px] text-muted mt-2">+ 외식 {stats.eatingOut}끼</p>
+              )}
+            </div>
+
+            {/* 비용 분해 */}
+            <div className="bg-card rounded-xl p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+              <p className="text-xs font-bold mb-3">비용 분석</p>
+              <div className="space-y-2.5">
+                {stats.serviceMix.map((svc) => (
+                  <div key={svc.key} className="flex justify-between text-xs">
+                    <span className="text-muted">{svc.name}</span>
+                    <div className="text-right">
+                      <span className="font-medium">{svc.cost.toLocaleString()}원</span>
+                      <span className="text-[10px] text-muted ml-1.5">
+                        (끼당 {svc.count > 0 ? Math.round(svc.cost / svc.count).toLocaleString() : 0}원)
+                      </span>
+                    </div>
+                  </div>
+                ))}
+                <div className="border-t border-border pt-2 flex justify-between text-xs">
+                  <span className="font-bold">주간 합계</span>
+                  <span className="font-bold">{stats.totalPrice.toLocaleString()}원</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-primary font-medium">월 예상 (×4.3주)</span>
+                  <span className="text-primary font-bold">{stats.monthlyEstimate.toLocaleString()}원</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* 구독 최적화 인사이트 */}
+          {stats.serviceMix.length >= 2 && (
+            <div className="mt-3 bg-primary/5 border border-primary/15 rounded-xl p-4">
+              <p className="text-xs font-bold text-primary mb-1.5">💡 구독 최적화 제안</p>
+              <div className="text-xs text-muted leading-relaxed space-y-1">
+                {stats.healthServiceCost > 0 && stats.retailCost > 0 && (
+                  <p>
+                    건강식단 서비스 {stats.healthServiceCost.toLocaleString()}원 + 시판 제품 {stats.retailCost.toLocaleString()}원으로 구성되어 있어요.
+                    건강식단 서비스만으로 전체를 구성하면 월 {Math.round(
+                      (stats.healthServiceCost / stats.serviceMix.filter(s => s.isHealthService).reduce((a, s) => a + s.count, 0)) * stats.products * 4.3
+                    ).toLocaleString()}원이 예상되고,
+                    현재 믹스 구성은 월 {stats.monthlyEstimate.toLocaleString()}원으로 {
+                      Math.round((1 - stats.monthlyEstimate / (
+                        (stats.healthServiceCost / Math.max(stats.serviceMix.filter(s => s.isHealthService).reduce((a, s) => a + s.count, 0), 1)) * stats.products * 4.3
+                      )) * 100)
+                    }% 절약됩니다.
+                  </p>
+                )}
+                {stats.serviceMix.filter(s => s.isHealthService).length === 1 && (
+                  <p>
+                    현재 {stats.serviceMix.find(s => s.isHealthService)?.name}만 이용 중이에요.
+                    다른 서비스의 특화 메뉴를 섞으면 영양 다양성을 높일 수 있어요.
+                  </p>
+                )}
+                {stats.serviceMix.filter(s => s.isHealthService).length === 0 && (
+                  <p>
+                    시판 제품만으로 구성되어 있어요.
+                    건강식단 서비스를 일부 끼니에 넣으면 영양 밸런스가 개선될 수 있어요.
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+        </section>
+      )}
 
       {/* 저장된 식단 목록 */}
       <section>
