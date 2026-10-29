@@ -400,7 +400,17 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
             <span className="text-xs text-muted">1회 제공량 {product.serving_size_g}g 기준</span>
           )}
         </div>
-        {(() => {
+        {/* 영양 데이터 없는 경우 안내 */}
+        {product.calories == null && product.protein_g == null && product.carbs_g == null && product.fat_g == null ? (
+          <div className="border border-border rounded-xl p-6 text-center">
+            <p className="text-2xl mb-2">📊</p>
+            <p className="text-sm font-medium mb-1">영양 정보 수집 중</p>
+            <p className="text-xs text-muted">해당 제품의 상세 영양 성분을 수집하고 있습니다.</p>
+            {product.category_large === "건강식단서비스" && (
+              <p className="text-xs text-muted mt-1">건강식단 서비스 제품은 원본 상품 페이지에서 확인해주세요.</p>
+            )}
+          </div>
+        ) : (() => {
           // 100g당 환산 계산
           const s = product.serving_size_g;
           const per100 = (v: number | null) => (v != null && s && s > 0) ? Math.round((v / s) * 100 * 10) / 10 : null;
@@ -437,9 +447,11 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
             </div>
           );
         })()}
-        <p className="text-[10px] text-muted mt-2">
-          * 일일기준치: 성인 2,000kcal 기준 · 100g당 수치로 제품 간 비교 가능
-        </p>
+        {product.calories != null || product.protein_g != null || product.carbs_g != null || product.fat_g != null ? (
+          <p className="text-[10px] text-muted mt-2">
+            * 일일기준치: 성인 2,000kcal 기준 · 100g당 수치로 제품 간 비교 가능
+          </p>
+        ) : null}
       </section>
 
       {/* 원재료 */}
