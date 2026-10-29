@@ -799,15 +799,45 @@ export default function WeeklyBoxPage() {
       </section>
 
       {/* CTA */}
-      <div className="flex gap-3 mt-6">
-        <Link href="/products"
-          className="flex-1 border border-border py-3 rounded-full font-medium text-center text-sm hover:bg-surface transition-colors">
-          제품 추천 보기
-        </Link>
-        <Link href="/community"
-          className="flex-1 border border-border py-3 rounded-full font-medium text-center text-sm hover:bg-surface transition-colors">
-          식단 공유하기
-        </Link>
+      <div className="space-y-3 mt-6">
+        {/* 주문 버튼 — 식단이 있을 때만 */}
+        {Object.values(grid).some(day => Object.values(day).some(v => v !== null)) && (
+          <button
+            onClick={() => {
+              // 주간 박스 데이터를 주문 페이지로 전달
+              const orderItems: { day: string; slot: string; product_name: string; product_id?: string }[] = [];
+              for (const [day, slots] of Object.entries(grid)) {
+                for (const [slot, cell] of Object.entries(slots)) {
+                  if (cell && cell.name) {
+                    orderItems.push({
+                      day,
+                      slot,
+                      product_name: cell.name,
+                      product_id: cell.product_id || undefined,
+                    });
+                  }
+                }
+              }
+              if (orderItems.length > 0) {
+                localStorage.setItem("carefood_order_items", JSON.stringify(orderItems));
+                window.location.href = "/order";
+              }
+            }}
+            className="w-full bg-primary text-white py-3.5 rounded-full font-bold text-sm hover:bg-primary-dark transition-colors"
+            style={{ minHeight: "44px" }}>
+            🛒 이 식단 주문하기
+          </button>
+        )}
+        <div className="flex gap-3">
+          <Link href="/products"
+            className="flex-1 border border-border py-3 rounded-full font-medium text-center text-sm hover:bg-surface transition-colors">
+            제품 추천 보기
+          </Link>
+          <Link href="/community"
+            className="flex-1 border border-border py-3 rounded-full font-medium text-center text-sm hover:bg-surface transition-colors">
+            식단 공유하기
+          </Link>
+        </div>
       </div>
 
       {/* 제품 검색 모달 */}

@@ -27,6 +27,7 @@ const ADMIN_EMAILS = ["ymjo9907@gmail.com"];
 
 const ADMIN_MENU_ITEMS = [
   { href: "/admin", label: "📊 데이터 현황" },
+  { href: "/admin/orders", label: "📦 발주 관리" },
   { href: "/admin/insights", label: "📈 시장 인사이트" },
   { href: "/admin/odm", label: "🏭 ODM 수요 분석" },
 ];
