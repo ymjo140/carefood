@@ -3,7 +3,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { cache } from "react";
 import { createServiceRoleClient } from "@/lib/supabase/server";
-import TasteReview from "@/components/TasteReview";
+import ProductTasteSection from "@/components/ProductTasteSection";
 import MealLogButton from "@/components/MealLogButton";
 import ProductViewTracker from "@/components/ProductViewTracker";
 import ProductReviews from "@/components/ProductReviews";
@@ -375,8 +375,19 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
         </section>
       )}
 
-      {/* 맛평가 */}
-      <TasteReview productId={productId} />
+      {/* 맛·영양 이중 프로필 */}
+      <ProductTasteSection
+        productId={productId}
+        productName={product.name}
+        nutrition={{
+          calories: product.calories,
+          protein_g: product.protein_g,
+          carbs_g: product.carbs_g,
+          fat_g: product.fat_g,
+          fiber_g: product.fiber_g,
+          sodium_mg: product.sodium_mg,
+        }}
+      />
 
       {/* 건강 프로필 연동 리뷰 */}
       <ProductReviews productId={productId} />
