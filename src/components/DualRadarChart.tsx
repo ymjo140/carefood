@@ -5,7 +5,7 @@
  *
  * 두 개의 오각형이 겹쳐서 보이며, 제품/사용자의 맛·영양 매칭 상태를 한눈에 보여줌.
  * - 맛 프로필: 매운맛 · 단맛 · 짠맛 · 감칠맛 · 신맛 (1~5)
- * - 영양 프로필: 단백질 · 탄수화물 · 지방 · 섬유질 · 비타민 (0~100% 충족률)
+ * - 영양 프로필: 단백질 · 탄수화물 · 지방 · 섬유질 · 균형 (1~5 스코어)
  */
 
 type TasteProfile = {
@@ -17,11 +17,11 @@ type TasteProfile = {
 };
 
 type NutritionProfile = {
-  protein: number;    // 0~100 충족률
+  protein: number;    // 1~5 스코어
   carbs: number;
   fat: number;
   fiber: number;
-  vitamins: number;
+  vitamins: number;   // 균형 (나트륨 역산)
 };
 
 type DualRadarChartProps = {
@@ -42,7 +42,7 @@ type DualRadarChartProps = {
 };
 
 const TASTE_LABELS = ["매운맛", "단맛", "짠맛", "감칠맛", "신맛"];
-const NUTRITION_LABELS = ["단백질", "탄수화물", "지방", "섬유질", "비타민"];
+const NUTRITION_LABELS = ["단백질", "탄수화물", "지방", "섬유질", "균형"];
 
 function polarToCartesian(cx: number, cy: number, r: number, angleDeg: number) {
   const rad = ((angleDeg - 90) * Math.PI) / 180;
@@ -105,7 +105,7 @@ function RadarGrid({
   const axes = labels.map((label, i) => {
     const angle = (360 / sides) * i;
     const outer = polarToCartesian(cx, cy, radius, angle);
-    const labelPos = polarToCartesian(cx, cy, radius + 18, angle);
+    const labelPos = polarToCartesian(cx, cy, radius + 22, angle);
     return (
       <g key={`axis-${i}`}>
         <line
@@ -172,12 +172,13 @@ export default function DualRadarChart({
 
   // 듀얼 모드: 좌우로 두 오각형 나란히
   if (mode === "dual" && nutritionValues) {
-    const halfW = size / 2 + padding;
-    const dualSvgW = halfW * 2 + 24;
-    const smallR = size * 0.38;
-    const cx1 = halfW / 2 + 12;
-    const cx2 = halfW + halfW / 2 + 12;
-    const dualCy = halfW / 2 + 8;
+    const pad = 44; // 라벨 잘림 방지 여백
+    const halfW = size / 2 + pad;
+    const dualSvgW = halfW * 2 + 20;
+    const smallR = size * 0.34;
+    const cx1 = halfW / 2 + 10;
+    const cx2 = halfW + halfW / 2 + 10;
+    const dualCy = halfW / 2 + 14;
 
     return (
       <div className="flex flex-col items-center gap-3">
@@ -195,7 +196,7 @@ export default function DualRadarChart({
           </div>
         )}
         <svg
-          viewBox={`0 0 ${dualSvgW} ${halfW + 16}`}
+          viewBox={`0 0 ${dualSvgW} ${halfW + 28}`}
           width={dualSvgW}
           style={{ maxWidth: "100%" }}
         >
@@ -237,7 +238,7 @@ export default function DualRadarChart({
             <RadarGrid cx={cx2} cy={dualCy} radius={smallR} levels={5} labels={NUTRITION_LABELS} sides={5} />
             {userNutritionValues && (
               <polygon
-                points={makePolygonPoints(cx2, dualCy, userNutritionValues, 100, smallR)}
+                points={makePolygonPoints(cx2, dualCy, userNutritionValues, 5, smallR)}
                 fill="rgba(106,163,232,0.15)"
                 stroke="#6BA3E8"
                 strokeWidth="1.5"
@@ -245,14 +246,14 @@ export default function DualRadarChart({
               />
             )}
             <polygon
-              points={makePolygonPoints(cx2, dualCy, nutritionValues, 100, smallR)}
+              points={makePolygonPoints(cx2, dualCy, nutritionValues, 5, smallR)}
               fill="rgba(224,96,48,0.25)"
               stroke="#E06030"
               strokeWidth="2"
             />
             {nutritionValues.map((v, i) => {
               const angle = (360 / 5) * i;
-              const r = (v / 100) * smallR;
+              const r = (v / 5) * smallR;
               const { x, y } = polarToCartesian(cx2, dualCy, r, angle);
               return <circle key={i} cx={x} cy={y} r="3" fill="#E06030" />;
             })}
@@ -283,7 +284,7 @@ export default function DualRadarChart({
 
   // 단일 모드 (맛 or 영양)
   const values = showTaste ? tasteValues : (nutritionValues || [0, 0, 0, 0, 0]);
-  const maxVal = showTaste ? 5 : 100;
+  const maxVal = 5;
   const labels = showTaste ? TASTE_LABELS : NUTRITION_LABELS;
   const color = showTaste ? "#D4A843" : "#E06030";
   const bgValues = showTaste ? userTasteValues : userNutritionValues;
@@ -346,12 +347,8 @@ export function calcTasteMatchScore(product: TasteProfile, user: TasteProfile): 
 
 export function calcNutritionMatchScore(nutrition: NutritionProfile): number {
   const axes: (keyof NutritionProfile)[] = ["protein", "carbs", "fat", "fiber", "vitamins"];
-  // 충족률 평균 (100%에 가까울수록 좋음, 초과는 감점)
-  const scores = axes.map((k) => {
-    const v = nutrition[k];
-    if (v <= 100) return v;
-    return Math.max(0, 100 - (v - 100) * 0.5); // 초과시 감점
-  });
+  // 1~5 스케일 평균을 0~100 점수로 변환 (5=100, 3=60, 1=20)
+  const scores = axes.map((k) => ((nutrition[k] - 1) / 4) * 100);
   return Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
 }
 

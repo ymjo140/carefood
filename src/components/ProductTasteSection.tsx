@@ -45,17 +45,41 @@ function getUserId(): string {
   }
 }
 
-/** 영양 데이터를 일일 권장량 대비 충족률(%)로 변환 */
+/**
+ * 영양 데이터를 1~5 스케일로 변환 (맛 프로필과 동일 스케일)
+ * 단백질/섬유질: 높을수록 좋음 (5점)
+ * 탄수화물/지방: 적당하면 좋음 (균형 기준)
+ * 나트륨: 낮을수록 좋음 → "균형" 점수로 역산
+ */
 function toNutritionProfile(n: Props["nutrition"]) {
-  const daily = { protein: 55, carbs: 324, fat: 54, fiber: 25, vitamins: 2000 }; // vitamins = sodium 역산
-  return {
-    protein: n.protein_g ? Math.min(Math.round((n.protein_g / daily.protein) * 100), 100) : 0,
-    carbs: n.carbs_g ? Math.min(Math.round((n.carbs_g / daily.carbs) * 100), 100) : 0,
-    fat: n.fat_g ? Math.min(Math.round((n.fat_g / daily.fat) * 100), 100) : 0,
-    fiber: n.fiber_g ? Math.min(Math.round((n.fiber_g / daily.fiber) * 100), 100) : 0,
-    // 비타민 지표: 나트륨이 낮을수록 좋음 (역산)
-    vitamins: n.sodium_mg != null ? Math.max(0, Math.min(100, Math.round((1 - n.sodium_mg / daily.vitamins) * 100))) : 50,
-  };
+  // 단백질: 0g=1, 5g=2, 10g=3, 20g=4, 30g+=5
+  const protein = n.protein_g != null
+    ? Math.min(5, Math.max(1, Math.round(n.protein_g / 7) + 1))
+    : 2.5;
+
+  // 탄수화물: 1끼 기준 적당량(30~50g)=5, 너무 많거나 적으면 감점
+  const carbVal = n.carbs_g ?? 40;
+  const carbs = carbVal <= 60
+    ? Math.min(5, Math.max(1, Math.round(carbVal / 15) + 1))
+    : Math.max(1, 5 - Math.round((carbVal - 60) / 20));
+
+  // 지방: 적당량(5~15g)=4~5, 과다(30g+)=1~2
+  const fatVal = n.fat_g ?? 10;
+  const fat = fatVal <= 20
+    ? Math.min(5, Math.max(1, Math.round(fatVal / 5) + 1))
+    : Math.max(1, 5 - Math.round((fatVal - 20) / 10));
+
+  // 섬유질: 높을수록 좋음. 0g=1, 2g=2, 4g=3, 7g=4, 10g+=5
+  const fiber = n.fiber_g != null
+    ? Math.min(5, Math.max(1, Math.round(n.fiber_g / 2.5) + 1))
+    : 1;
+
+  // 균형(나트륨 역산): 나트륨 낮을수록 좋음. 0=5, 400=4, 800=3, 1200=2, 1600+=1
+  const balance = n.sodium_mg != null
+    ? Math.min(5, Math.max(1, 5 - Math.round(n.sodium_mg / 400)))
+    : 3;
+
+  return { protein, carbs, fat, fiber, vitamins: balance };
 }
 
 export default function ProductTasteSection({ productId, productName, nutrition }: Props) {
