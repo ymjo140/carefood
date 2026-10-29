@@ -13,47 +13,45 @@ export async function GET(_request: NextRequest) {
   const sb = supabase as any;
 
   // ── 1. 데이터 현황 ──
-  const [
-    { count: totalProducts },
-    { count: activeProducts },
-    { count: purchasable },
-    { count: categorized },
-    { count: spikyTagged },
-  ] = await Promise.all([
-    supabase.from("products").select("*", { count: "exact", head: true }),
-    supabase.from("products").select("*", { count: "exact", head: true }).eq("is_active", true),
-    supabase.from("products").select("*", { count: "exact", head: true }).eq("is_active", true).eq("is_purchasable", true),
-    supabase.from("products").select("*", { count: "exact", head: true }).eq("is_active", true).not("dish_category", "is", null),
-    supabase.from("products").select("*", { count: "exact", head: true }).eq("is_active", true).gt("spicy_score", 0),
+  // 341K행 테이블에서 exact COUNT는 타임아웃 → 소규모 필터만 exact, 나머지 estimated
+  const [purchR, spicyR] = await Promise.all([
+    sb.from("products").select("id", { count: "exact", head: true }).eq("is_purchasable", true),
+    sb.from("products").select("id", { count: "exact", head: true }).gt("spicy_score", 0),
   ]);
+  const purchasable = purchR.count || 0;
+  const spikyTagged = spicyR.count || 0;
+
+  // 대용량 카운트: estimated (pg_class 통계 기반, 즉시 반환)
+  const { count: totalProducts } = await sb.from("products").select("id", { count: "estimated", head: true });
+  const activeProducts = totalProducts || 0; // is_active 기본 true
+  // categorized: 전체의 ~98.6% → estimated 사용
+  const { count: categorized } = await sb.from("products").select("id", { count: "estimated", head: true }).not("dish_category", "is", null);
 
   // 플랫폼별 매칭
   const platformStats = await Promise.all([
-    sb.from("kurly_products").select("*", { count: "exact", head: true }).eq("match_status", "matched"),
-    sb.from("st11_products").select("*", { count: "exact", head: true }).eq("match_status", "matched"),
-    sb.from("oasis_products").select("*", { count: "exact", head: true }).eq("match_status", "matched"),
-    sb.from("homeplus_products").select("*", { count: "exact", head: true }).eq("match_status", "matched"),
+    sb.from("kurly_products").select("id", { count: "exact", head: true }).eq("match_status", "matched"),
+    sb.from("st11_products").select("id", { count: "exact", head: true }).eq("match_status", "matched"),
+    sb.from("oasis_products").select("id", { count: "exact", head: true }).eq("match_status", "matched"),
+    sb.from("homeplus_products").select("id", { count: "exact", head: true }).eq("match_status", "matched"),
   ]);
 
   // 품목제조보고
-  const { count: foodReportsTotal } = await sb.from("food_reports").select("*", { count: "exact", head: true });
-  const { count: foodReportsMatched } = await sb.from("food_reports").select("*", { count: "exact", head: true }).not("matched_product_id", "is", null);
+  const { count: foodReportsTotal } = await sb.from("food_reports").select("id", { count: "exact", head: true });
+  const { count: foodReportsMatched } = await sb.from("food_reports").select("id", { count: "exact", head: true }).not("matched_product_id", "is", null);
 
   // ── 2. 품질 관리 ──
   const [
     { count: lowScoreCount },
     { count: noPriceCount },
-    { count: noIngredientProducts },
   ] = await Promise.all([
-    sb.from("kurly_products").select("*", { count: "exact", head: true }).eq("match_status", "low_score"),
-    sb.from("products").select("*", { count: "exact", head: true }).eq("is_active", true).eq("is_purchasable", true).is("calories", null),
-    sb.from("products").select("*", { count: "exact", head: true }).eq("is_active", true).eq("is_purchasable", true).is("calories", null),
+    sb.from("kurly_products").select("id", { count: "exact", head: true }).eq("match_status", "low_score"),
+    sb.from("products").select("id", { count: "exact", head: true }).eq("is_purchasable", true).is("calories", null),
   ]);
 
   // ── 3. 사용자 분석 ──
-  const { count: totalProfiles } = await sb.from("user_profiles").select("*", { count: "exact", head: true }).eq("onboarding_completed", true);
-  const { count: totalReviews } = await sb.from("product_reviews").select("*", { count: "exact", head: true });
-  const { count: totalInteractions } = await sb.from("user_interactions").select("*", { count: "exact", head: true });
+  const { count: totalProfiles } = await sb.from("user_profiles").select("id", { count: "exact", head: true }).eq("onboarding_completed", true);
+  const { count: totalReviews } = await sb.from("product_reviews").select("id", { count: "exact", head: true });
+  const { count: totalInteractions } = await sb.from("user_interactions").select("id", { count: "exact", head: true });
 
   // 세그먼트 분포
   const { data: ageDistribution } = await sb

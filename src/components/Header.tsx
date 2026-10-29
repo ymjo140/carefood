@@ -23,6 +23,14 @@ const USER_MENU_ITEMS = [
   { href: "/onboarding", label: "프로필 수정" },
 ];
 
+const ADMIN_EMAILS = ["ymjo9907@gmail.com"];
+
+const ADMIN_MENU_ITEMS = [
+  { href: "/admin", label: "📊 데이터 현황" },
+  { href: "/admin/insights", label: "📈 시장 인사이트" },
+  { href: "/admin/odm", label: "🏭 ODM 수요 분석" },
+];
+
 export default function Header() {
   const pathname = usePathname();
   const router = useRouter();
@@ -119,6 +127,23 @@ export default function Header() {
                         {item.label}
                       </Link>
                     ))}
+                    {ADMIN_EMAILS.includes(user.email) && (
+                      <>
+                        <div className="border-t border-border mt-1 pt-1">
+                          <p className="px-4 py-1 text-[10px] text-muted font-medium">관리자</p>
+                        </div>
+                        {ADMIN_MENU_ITEMS.map((item) => (
+                          <Link
+                            key={item.href}
+                            href={item.href}
+                            onClick={() => setMenuOpen(false)}
+                            className="block px-4 py-2.5 text-sm hover:bg-primary/5 transition-colors"
+                          >
+                            {item.label}
+                          </Link>
+                        ))}
+                      </>
+                    )}
                     <button
                       onClick={handleLogout}
                       disabled={isPending}
@@ -218,6 +243,26 @@ export default function Header() {
                       {item.label}
                     </Link>
                   ))}
+                  {ADMIN_EMAILS.includes(user.email) && (
+                    <>
+                      <div className="border-t border-border mt-2 pt-2">
+                        <p className="px-3 py-1 text-[10px] text-muted font-medium">관리자</p>
+                      </div>
+                      {ADMIN_MENU_ITEMS.map((item) => (
+                        <Link
+                          key={item.href}
+                          href={item.href}
+                          className={`block px-3 py-2.5 rounded-xl text-sm transition-colors ${
+                            pathname === item.href
+                              ? "font-semibold text-foreground bg-primary/5"
+                              : "text-muted hover:text-foreground hover:bg-card"
+                          }`}
+                        >
+                          {item.label}
+                        </Link>
+                      ))}
+                    </>
+                  )}
                   <button
                     onClick={handleLogout}
                     disabled={isPending}
