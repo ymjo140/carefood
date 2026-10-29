@@ -107,7 +107,7 @@ export default function AdminDashboard() {
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4">
         <div>
           <h1 className="text-xl font-extrabold">관리 대시보드</h1>
           <p className="text-xs text-muted mt-0.5">
@@ -117,6 +117,24 @@ export default function AdminDashboard() {
         <Link href="/" className="text-xs text-muted hover:text-primary"
           style={{ minHeight: "unset", minWidth: "unset" }}>
           ← 홈으로
+        </Link>
+      </div>
+
+      {/* B2B 네비게이션 */}
+      <div className="flex gap-2 mb-6 overflow-x-auto no-scrollbar">
+        <span className="text-xs px-3 py-1.5 rounded-full bg-foreground text-card shrink-0"
+          style={{ minHeight: "unset", minWidth: "unset" }}>
+          📊 데이터 현황
+        </span>
+        <Link href="/admin/insights"
+          className="text-xs px-3 py-1.5 rounded-full bg-surface text-foreground/70 hover:bg-border shrink-0"
+          style={{ minHeight: "unset", minWidth: "unset" }}>
+          📈 시장 인사이트
+        </Link>
+        <Link href="/admin/odm"
+          className="text-xs px-3 py-1.5 rounded-full bg-surface text-foreground/70 hover:bg-border shrink-0"
+          style={{ minHeight: "unset", minWidth: "unset" }}>
+          🏭 ODM 수요 분석
         </Link>
       </div>
 

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import HomePersonalized from "@/components/HomePersonalized";
 import HomeSimilarUsers from "@/components/HomeSimilarUsers";
+import HomeTodayWidget from "@/components/HomeTodayWidget";
 
 /* ── 건강 목표 카드 데이터 ── */
 const GOAL_CARDS = [
@@ -74,6 +75,9 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+
+      {/* ── 재방문 사용자: 오늘의 상태 ── */}
+      <HomeTodayWidget />
 
       {/* ── 재방문 사용자 개인화 추천 ── */}
       <HomePersonalized />
