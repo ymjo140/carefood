@@ -50,27 +50,22 @@ export default function HomePersonalized() {
       const parsed = JSON.parse(raw);
       setProfile(parsed);
 
-      // 건강검진 데이터에서 자동 감지된 질환 병합
-      let healthConditions: string[] = [];
+      // 건강검진 데이터
+      let healthData: Record<string, unknown> | null = null;
       try {
         const healthRaw = localStorage.getItem("carefood_health");
         if (healthRaw) {
-          const hd = JSON.parse(healthRaw);
-          healthConditions = hd.conditions || [];
+          healthData = JSON.parse(healthRaw);
         }
       } catch { /* silent */ }
-      const mergedConditions = [...new Set([...(parsed.conditions || []), ...healthConditions])];
 
-      // 빠른 추천 3개 가져오기
+      // v4: 프로필 + 건강검진 데이터 전체 전송 → 5축 복합 프로필 기반 추천
       fetch("/api/recommend", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          concerns: parsed.concerns || [],
-          sensitivity: parsed.sensitivity || { digestive: 2, additive: 2 },
-          conditions: mergedConditions,
-          allergies: parsed.allergies || [],
-          tastes: parsed.tastes || { salty: 3, sweet: 3, spicy: 3, fatty: 3 },
+          profile: parsed,
+          health: healthData,
         }),
       })
         .then((r) => r.json())

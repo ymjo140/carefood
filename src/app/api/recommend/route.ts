@@ -716,179 +716,53 @@ export async function GET(request: NextRequest) {
 }
 
 // ═══════════════════════════════════════════════════════
-// POST — 기존 v2 호환 (평탄 목록 반환)
+// POST — v4: 5축 복합 프로필 기반 추천
 // ═══════════════════════════════════════════════════════
 
-type RecommendRequest = {
-  concerns: HealthConcern[];
-  sensitivity?: { digestive: number; additive: number };
-  persona?: string;
-  conditions?: string[];
-  allergies?: string[];
-  pregnancyStage?: string;
-  healthGoal?: string;
-  tastes: { salty: number; sweet: number; spicy: number; fatty: number };
-};
+import {
+  parseProfile,
+  getProfileLabels,
+  scoreAndRank,
+  fetchRecommendPool,
+  loadPurchasableIds as loadPurchasableIdsV4,
+  loadPrices as loadPricesV4,
+} from "@/lib/recommend";
 
 export async function POST(request: NextRequest) {
   try {
-    const body: RecommendRequest = await request.json();
-    const {
-      concerns = [],
-      sensitivity = { digestive: 2, additive: 2 },
-      conditions = [],
-      tastes: rawTastes,
-    } = body;
+    const body = await request.json();
 
-    // 5단계 → 10단계 변환 (하위호환)
-    const tastes = {
-      salty: rawTastes.salty <= 5 ? tasteLevel5to10(rawTastes.salty) : rawTastes.salty,
-      sweet: rawTastes.sweet <= 5 ? tasteLevel5to10(rawTastes.sweet) : rawTastes.sweet,
-      spicy: rawTastes.spicy, // spicy는 별도 (spicy_score 사용)
-      fatty: rawTastes.fatty <= 5 ? tasteLevel5to10(rawTastes.fatty) : rawTastes.fatty,
-    };
+    // v2 호환: concerns/tastes 직접 전달 → v4 프로필로 변환
+    const profileRaw = body.profile || body; // 새 방식: body.profile, 레거시: body 자체
+    const healthRaw = body.health || null;
+
+    const profile = parseProfile(profileRaw, healthRaw);
 
     const supabase = createServiceRoleClient();
 
-    const [{ safetyFilters, safetyMinFilters }, purchasableSet] = await Promise.all([
-      loadSafetyFilters(supabase, conditions),
-      loadPurchasableSet(supabase),
+    // 3계층 필터 + Graceful Degradation으로 제품 풀 가져오기
+    const [{ products, degraded, degradeMessage }, purchasableIds] = await Promise.all([
+      fetchRecommendPool(supabase, profile, 500),
+      loadPurchasableIdsV4(supabase),
     ]);
 
-    // DB 쿼리
-    let query = supabase
-      .from("products")
-      .select("*", { count: "exact" })
-      .eq("is_active", true)
-      .eq("category_large", "상용제품");
-
-    // 소스·원재료 제외 (v2에서도 기본 제외)
-    query = query.neq("dish_category", "sauce").neq("dish_category", "ingredient");
-
-    for (const [nutrient, maxVal] of Object.entries(safetyFilters)) {
-      query = query.lte(nutrient, maxVal);
-    }
-    for (const [nutrient, minVal] of Object.entries(safetyMinFilters)) {
-      query = query.gte(nutrient, minVal);
-    }
-
-    // 맛 필터 (±1단계)
-    const maxTaste = 10;
-    if (tastes.salty >= 1 && tastes.salty <= maxTaste) {
-      const low = Math.max(1, tastes.salty - 1);
-      const high = Math.min(maxTaste, tastes.salty + 1);
-      query = query.gte("sodium_mg", TASTE_RANGES.salty[low][0]).lt("sodium_mg", TASTE_RANGES.salty[high][1]);
-    }
-    if (tastes.sweet >= 1 && tastes.sweet <= maxTaste) {
-      const low = Math.max(1, tastes.sweet - 1);
-      const high = Math.min(maxTaste, tastes.sweet + 1);
-      query = query.gte("sugar_g", TASTE_RANGES.sweet[low][0]).lt("sugar_g", TASTE_RANGES.sweet[high][1]);
-    }
-    if (tastes.fatty >= 1 && tastes.fatty <= maxTaste) {
-      const low = Math.max(1, tastes.fatty - 1);
-      const high = Math.min(maxTaste, tastes.fatty + 1);
-      query = query.gte("fat_g", TASTE_RANGES.fatty[low][0]).lt("fat_g", TASTE_RANGES.fatty[high][1]);
-    }
-    if (tastes.spicy >= 1 && tastes.spicy <= 5) {
-      const minSpicy = Math.max(0, tastes.spicy - 1);
-      const maxSpicy = Math.min(5, tastes.spicy + 1);
-      query = query.gte("spicy_score", minSpicy).lte("spicy_score", maxSpicy);
-    }
-
-    // health_score 있는 제품만
-    query = query.not("health_score", "is", null);
-
-    // ── 관심사별 차별화 쿼리: 관심사마다 다른 풀에서 가져와 합침 ──
-    // 단일 쿼리(health_score DESC)만 쓰면 모든 관심사가 같은 제품 풀 → 추천 중복
-    const primaryConcern = concerns[0] as HealthConcern | undefined;
-
-    // 관심사별 보조 필터 + 정렬 (핵심 차별화)
-    const concernQueryTweaks: Record<HealthConcern, { filter: (q: typeof query) => typeof query; order: string }> = {
-      gut_health: {
-        filter: (q) => q.gte("fiber_g", 2).lt("sugar_g", 10),
-        order: "fiber_g",
-      },
-      skin: {
-        filter: (q) => q.gte("protein_g", 8).lt("sugar_g", 8),
-        order: "protein_g",
-      },
-      weight: {
-        filter: (q) => q.lte("calories", 400).gte("protein_g", 10),
-        order: "calories",
-      },
-      energy: {
-        filter: (q) => q.gte("protein_g", 8).gte("carbs_g", 15),
-        order: "protein_g",
-      },
-    };
-
-    let allProducts: Record<string, unknown>[] = [];
-    let totalCount: number | null = null;
-
-    if (primaryConcern && concernQueryTweaks[primaryConcern]) {
-      const tweak = concernQueryTweaks[primaryConcern];
-      // 1차: 관심사 특화 쿼리 (300개)
-      const specializedQuery = tweak.filter(query)
-        .order(tweak.order, { ascending: tweak.order === "calories" })
-        .limit(300);
-      const { data: specialized, count: c1 } = await specializedQuery as { data: Record<string, unknown>[] | null; count: number | null };
-      totalCount = c1;
-
-      // 2차: 일반 건강 점수 순 (200개, 1차와 합침)
-      const generalQuery = supabase
-        .from("products")
-        .select("*")
-        .eq("is_active", true)
-        .eq("category_large", "상용제품")
-        .neq("dish_category", "sauce")
-        .neq("dish_category", "ingredient")
-        .not("health_score", "is", null)
-        .order("health_score", { ascending: false })
-        .limit(200);
-      const { data: general } = await generalQuery as { data: Record<string, unknown>[] | null };
-
-      // 합치기 (중복 제거)
-      const seen = new Set<string>();
-      for (const p of [...(specialized || []), ...(general || [])]) {
-        const id = p.id as string;
-        if (!seen.has(id)) {
-          seen.add(id);
-          allProducts.push(p);
-        }
-      }
-    } else {
-      // 관심사 없으면 기존 방식
-      query = query.order("health_score", { ascending: false }).limit(500);
-      const { data, count: c } = await query as { data: Record<string, unknown>[] | null; count: number | null };
-      allProducts = data || [];
-      totalCount = c;
-    }
-
-    const products = allProducts;
-    const count = totalCount;
-    const error = null as { message: string } | null;
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-    if (!products || products.length === 0) {
+    if (products.length === 0) {
       return NextResponse.json({
         recommendations: [],
+        profileLabels: getProfileLabels(profile),
         total: 0,
-        filters_applied: { concerns, safetyFilters, safetyMinFilters },
-        message: "조건에 맞는 제품이 없습니다. 필터를 조정해보세요.",
+        message: "조건에 맞는 제품이 없습니다.",
       });
     }
 
-    // 스코어링
-    const scored = scoreProducts(products, { concerns, sensitivity, conditions, purchasableSet, tastes });
-    scored.sort((a, b) => b.match_score - a.match_score);
+    // 곱연산 스코어링 + percentile 정규화
+    const scored = scoreAndRank(products, profile, purchasableIds);
     const top = scored.slice(0, 30);
     const productIds = top.map((p) => p.id as string);
 
     // 가격 + 리뷰
     const [priceMap, reviewMap] = await Promise.all([
-      loadPrices(supabase, productIds),
+      loadPricesV4(supabase, productIds),
       loadReviews(supabase, productIds),
     ]);
 
@@ -898,14 +772,27 @@ export async function POST(request: NextRequest) {
       review_stats: reviewMap[p.id as string] || null,
     }));
 
-    // 큐레이션 그룹
-    const curationGroups = buildCurationGroups(recommendations, concerns, conditions);
+    // 큐레이션 그룹 (레거시 호환)
+    const curationGroups = buildCurationGroups(
+      recommendations as unknown as RecommendationWithPrices[],
+      profile.concerns,
+      profile.conditions,
+    );
 
     return NextResponse.json({
       recommendations,
       curationGroups,
-      total: count,
-      filters_applied: { concerns, conditions, sensitivity, safetyFilters, safetyMinFilters },
+      profileLabels: getProfileLabels(profile),
+      total: products.length,
+      degraded,
+      degradeMessage,
+      filters_applied: {
+        concerns: profile.concerns,
+        conditions: profile.conditions,
+        perMeal: profile.perMeal,
+        healthRisks: profile.healthRisks,
+        bmi: profile.body.bmi,
+      },
     });
   } catch (err) {
     console.error("Recommend POST error:", err);
