@@ -12,6 +12,30 @@
   --border: #E5E5E5;
   --surface: #F5F5F5;          /* 필터칩·플레이스홀더 배경 */
 
+  /* 매크로 영양소 컬러 */
+  --macro-protein: #4A8FD4;
+  --macro-protein-bg: rgba(74,143,212,0.08);
+  --macro-carbs: #D4960A;
+  --macro-carbs-bg: rgba(212,150,10,0.08);
+  --macro-fat: #D46A3A;
+  --macro-fat-bg: rgba(212,106,58,0.08);
+  --macro-sodium: #8A6EBF;
+  --macro-sodium-bg: rgba(138,110,191,0.08);
+
+  /* 끼니 컬러 */
+  --meal-breakfast: #E8A830;
+  --meal-lunch: #D47040;
+  --meal-dinner: #6870C8;
+  --meal-snack: #48A870;
+
+  /* 링 그라데이션 */
+  --ring-start: #D4A020;
+  --ring-end: #B87008;
+  --ring-track: #E8E6E0;
+
+  /* 상태 */
+  --success: #2EA860;
+
   /* 페르소나 아이콘 배경색 (레거시 호환) */
   --persona-elderly: #F59E0B;
   --persona-patient: #3B82F6;
@@ -30,7 +54,17 @@
   --color-card: var(--card);
   --color-border: var(--border);
   --color-surface: var(--surface);
+  --color-macro-protein: var(--macro-protein);
+  --color-macro-protein-bg: var(--macro-protein-bg);
+  --color-macro-carbs: var(--macro-carbs);
+  --color-macro-carbs-bg: var(--macro-carbs-bg);
+  --color-macro-fat: var(--macro-fat);
+  --color-macro-fat-bg: var(--macro-fat-bg);
+  --color-macro-sodium: var(--macro-sodium);
+  --color-macro-sodium-bg: var(--macro-sodium-bg);
+  --color-success: var(--success);
   --font-sans: var(--font-noto-sans-kr), var(--font-geist-sans);
+  --font-display: var(--font-outfit), var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
@@ -46,6 +80,18 @@
     --border: #584D40;
     --muted: #A6977F;
     --surface: #4A4038;
+    --macro-protein: #6AACF0;
+    --macro-protein-bg: rgba(106,172,240,0.10);
+    --macro-carbs: #E8B840;
+    --macro-carbs-bg: rgba(232,184,64,0.10);
+    --macro-fat: #E88060;
+    --macro-fat-bg: rgba(232,128,96,0.10);
+    --macro-sodium: #A890D8;
+    --macro-sodium-bg: rgba(168,144,216,0.10);
+    --ring-start: #E8AD3F;
+    --ring-end: #C88010;
+    --ring-track: #2E2C28;
+    --success: #40C870;
     color-scheme: dark;
   }
 }
@@ -61,6 +107,18 @@
   --border: #584D40;
   --muted: #A6977F;
   --surface: #4A4038;
+  --macro-protein: #6AACF0;
+  --macro-protein-bg: rgba(106,172,240,0.10);
+  --macro-carbs: #E8B840;
+  --macro-carbs-bg: rgba(232,184,64,0.10);
+  --macro-fat: #E88060;
+  --macro-fat-bg: rgba(232,128,96,0.10);
+  --macro-sodium: #A890D8;
+  --macro-sodium-bg: rgba(168,144,216,0.10);
+  --ring-start: #E8AD3F;
+  --ring-end: #C88010;
+  --ring-track: #2E2C28;
+  --success: #40C870;
   color-scheme: dark;
 }
 
