@@ -36,6 +36,14 @@ export const metadata: Metadata = {
   },
   description:
     "34만 식품 영양 DB · 5개 건강식단 서비스 비교 · AI 맞춤 추천. 장건강·피부·체중관리·활력 — 매끼 달라지는 영양 최적 해를 풀어주는 식단 인텔리전스.",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "케어푸드",
+  },
+  other: {
+    "mobile-web-app-capable": "yes",
+  },
   keywords: [
     "케어푸드", "건강식품", "영양성분", "식품매칭", "건강식단",
     "그리팅", "윤식단", "디자인밀", "식단추천", "AI식단",
@@ -68,8 +76,17 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       lang="ko"
       className={`${notoSansKR.variable} ${geistSans.variable} ${geistMono.variable} ${outfit.variable} h-full antialiased`}
     >
+      <head>
+        <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+        <meta name="theme-color" content="#C4870A" />
+      </head>
       <body className="min-h-full flex flex-col bg-background text-foreground">
         <Header />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(()=>{})}`,
+          }}
+        />
         <main className="flex-1">{children}</main>
         <Footer />
       </body>
