@@ -194,15 +194,23 @@ export function scoreProduct(
     if (["soup", "stew", "rice"].includes(dishCategory)) preference *= 1.08;
   }
 
-  // ─── 맛 점수 (0~100): 맛 선호 일치도 ───
-  // tasteMatch: 짠맛·단맛 일치 여부 + 고소함(지방 범위) 일치
+  // ─── 맛 점수 (0~100): 거리 기반 연속 점수 ───
   const fatVal = (p.fat_g as number) || 0;
-  const fattyPref = profile.tastes.fatty;
-  if (fattyPref >= 1 && fattyPref <= 10) {
-    const range = TASTE_RANGES.fatty[fattyPref];
-    if (range && fatVal >= range[0] && fatVal < range[1]) tasteMatch++;
+  let tasteDist = 0;
+  let tasteAxes = 0;
+  if (profile.tastes.salty >= 1 && profile.tastes.salty <= 10 && sodiumMg > 0) {
+    const range = TASTE_RANGES.salty[profile.tastes.salty];
+    if (range) { tasteDist += Math.min(1, Math.abs(sodiumMg - (range[0] + range[1]) / 2) / 1500); tasteAxes++; }
   }
-  const tasteScoreRaw = Math.round((tasteMatch / 3) * 100); // 3축 중 몇 개 일치
+  if (profile.tastes.sweet >= 1 && profile.tastes.sweet <= 10 && sugarG < 99) {
+    const range = TASTE_RANGES.sweet[profile.tastes.sweet];
+    if (range) { tasteDist += Math.min(1, Math.abs(sugarG - (range[0] + range[1]) / 2) / 25); tasteAxes++; }
+  }
+  if (profile.tastes.fatty >= 1 && profile.tastes.fatty <= 10) {
+    const range = TASTE_RANGES.fatty[profile.tastes.fatty];
+    if (range) { tasteDist += Math.min(1, Math.abs(fatVal - (range[0] + range[1]) / 2) / 30); tasteAxes++; }
+  }
+  const tasteScoreRaw = tasteAxes > 0 ? Math.round((1 - tasteDist / tasteAxes) * 100) : 50;
 
   // ─── 영양 점수 (0~100): perMeal 기준 충족도 ───
   let nutritionHits = 0;

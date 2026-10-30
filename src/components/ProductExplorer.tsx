@@ -579,7 +579,7 @@ function ProductCard({ product, isFavorite, onToggleFavorite }: {
               매칭 {matchScore}점
             </span>
           )}
-          {tasteScore != null && tasteScore > 0 && (
+          {tasteScore != null && (
             <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-[#D4A843]/15 text-[#D4A843] font-semibold"
               style={{ minHeight: "unset", minWidth: "unset" }}>
               맛 {tasteScore}

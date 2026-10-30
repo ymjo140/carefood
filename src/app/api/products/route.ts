@@ -252,8 +252,38 @@ function scoreProduct(p: Record<string, any>, profile: ProfileData, isPurchasabl
   }
   if (tasteMatch >= 2 && !reasons.includes("맛 취향 일치")) reasons.push("맛 취향 일치");
 
-  // ── 맛 점수 (0~100) ──
-  const taste_score = Math.round((tasteMatch / 3) * 100);
+  // ── 맛 점수 (0~100): 거리 기반 연속 점수 ──
+  // 각 축의 실제 값이 선호 범위 중심에서 얼마나 가까운지
+  let tasteDist = 0;
+  let tasteAxes = 0;
+  if (tastes.salty >= 1 && tastes.salty <= 10 && sodiumMg) {
+    const range = TASTE_RANGES.salty[tastes.salty];
+    if (range) {
+      const mid = (range[0] + range[1]) / 2;
+      const maxRange = 1500; // 나트륨 최대 범위
+      tasteDist += Math.min(1, Math.abs(sodiumMg - mid) / maxRange);
+      tasteAxes++;
+    }
+  }
+  if (tastes.sweet >= 1 && tastes.sweet <= 10 && sugarG !== null) {
+    const range = TASTE_RANGES.sweet[tastes.sweet];
+    if (range) {
+      const mid = (range[0] + range[1]) / 2;
+      tasteDist += Math.min(1, Math.abs(sugarG - mid) / 25);
+      tasteAxes++;
+    }
+  }
+  if (tastes.fatty >= 1 && tastes.fatty <= 10) {
+    const range = TASTE_RANGES.fatty[tastes.fatty];
+    if (range) {
+      const mid = (range[0] + range[1]) / 2;
+      tasteDist += Math.min(1, Math.abs(fatVal - mid) / 30);
+      tasteAxes++;
+    }
+  }
+  const taste_score = tasteAxes > 0
+    ? Math.round((1 - tasteDist / tasteAxes) * 100)
+    : 50;
 
   // ── 영양 점수 (0~100) ──
   let nHits = 0, nTotal = 0;
