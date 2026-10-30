@@ -44,7 +44,7 @@ type DualRadarChartProps = {
 // 맛 프로필: 영양성분에서 확실히 알 수 있는 것만
 // (나중에 캡사이신·글루탐산 데이터 확보 시 매운맛·감칠맛 추가)
 const TASTE_LABELS = ["짠맛", "단맛", "고소함", "담백함", "자극도"];
-const NUTRITION_LABELS = ["단백", "탄수", "지방", "섬유질", "균형"];
+const NUTRITION_LABELS = ["단백", "탄수", "지방", "섬유질", "저염도"];
 
 function polarToCartesian(cx: number, cy: number, r: number, angleDeg: number) {
   const rad = ((angleDeg - 90) * Math.PI) / 180;
