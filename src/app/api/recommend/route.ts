@@ -795,10 +795,78 @@ export async function POST(request: NextRequest) {
       query = query.gte("spicy_score", minSpicy).lte("spicy_score", maxSpicy);
     }
 
-    // health_score 있는 제품만 + 높은 순 정렬 (75%가 NULL이라 필터 필수)
-    query = query.not("health_score", "is", null).order("health_score", { ascending: false }).limit(500);
+    // health_score 있는 제품만
+    query = query.not("health_score", "is", null);
 
-    const { data: products, error, count } = await query as { data: Record<string, unknown>[] | null; error: { message: string } | null; count: number | null };
+    // ── 관심사별 차별화 쿼리: 관심사마다 다른 풀에서 가져와 합침 ──
+    // 단일 쿼리(health_score DESC)만 쓰면 모든 관심사가 같은 제품 풀 → 추천 중복
+    const primaryConcern = concerns[0] as HealthConcern | undefined;
+
+    // 관심사별 보조 필터 + 정렬 (핵심 차별화)
+    const concernQueryTweaks: Record<HealthConcern, { filter: (q: typeof query) => typeof query; order: string }> = {
+      gut_health: {
+        filter: (q) => q.gte("fiber_g", 2).lt("sugar_g", 10),
+        order: "fiber_g",
+      },
+      skin: {
+        filter: (q) => q.gte("protein_g", 8).lt("sugar_g", 8),
+        order: "protein_g",
+      },
+      weight: {
+        filter: (q) => q.lte("calories", 400).gte("protein_g", 10),
+        order: "calories",
+      },
+      energy: {
+        filter: (q) => q.gte("protein_g", 8).gte("carbs_g", 15),
+        order: "protein_g",
+      },
+    };
+
+    let allProducts: Record<string, unknown>[] = [];
+    let totalCount: number | null = null;
+
+    if (primaryConcern && concernQueryTweaks[primaryConcern]) {
+      const tweak = concernQueryTweaks[primaryConcern];
+      // 1차: 관심사 특화 쿼리 (300개)
+      const specializedQuery = tweak.filter(query)
+        .order(tweak.order, { ascending: tweak.order === "calories" })
+        .limit(300);
+      const { data: specialized, count: c1 } = await specializedQuery as { data: Record<string, unknown>[] | null; count: number | null };
+      totalCount = c1;
+
+      // 2차: 일반 건강 점수 순 (200개, 1차와 합침)
+      const generalQuery = supabase
+        .from("products")
+        .select("*")
+        .eq("is_active", true)
+        .eq("category_large", "상용제품")
+        .neq("dish_category", "sauce")
+        .neq("dish_category", "ingredient")
+        .not("health_score", "is", null)
+        .order("health_score", { ascending: false })
+        .limit(200);
+      const { data: general } = await generalQuery as { data: Record<string, unknown>[] | null };
+
+      // 합치기 (중복 제거)
+      const seen = new Set<string>();
+      for (const p of [...(specialized || []), ...(general || [])]) {
+        const id = p.id as string;
+        if (!seen.has(id)) {
+          seen.add(id);
+          allProducts.push(p);
+        }
+      }
+    } else {
+      // 관심사 없으면 기존 방식
+      query = query.order("health_score", { ascending: false }).limit(500);
+      const { data, count: c } = await query as { data: Record<string, unknown>[] | null; count: number | null };
+      allProducts = data || [];
+      totalCount = c;
+    }
+
+    const products = allProducts;
+    const count = totalCount;
+    const error = null as { message: string } | null;
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
