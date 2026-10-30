@@ -22,7 +22,7 @@ type ApiResponse = {
   totalPages: number;
 };
 
-type SortOption = "recommend" | "price_asc" | "price_desc" | "protein_desc" | "calories_asc" | "name";
+type SortOption = "recommend" | "taste_desc" | "nutrition_desc" | "price_asc" | "price_desc" | "protein_desc" | "calories_asc" | "name";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type UserProfile = Record<string, any> | null;
@@ -37,6 +37,8 @@ const TASTE_CONFIG = [
 
 const SORT_OPTIONS: { value: SortOption; label: string }[] = [
   { value: "recommend", label: "추천순" },
+  { value: "taste_desc", label: "맛순" },
+  { value: "nutrition_desc", label: "영양순" },
   { value: "price_asc", label: "낮은 가격순" },
   { value: "price_desc", label: "높은 가격순" },
   { value: "protein_desc", label: "고단백순" },
@@ -516,6 +518,8 @@ function ProductCard({ product, isFavorite, onToggleFavorite }: {
   const bestPrice = prices.length > 0 ? Math.min(...prices.map(p => p.price!)) : null;
   const imageUrl = (product as ProductWithPrices & { image_url?: string }).image_url || prices.find(p => p.image_url)?.image_url;
   const matchScore = (product as ProductWithPrices & { match_score?: number }).match_score;
+  const tasteScore = (product as ProductWithPrices & { taste_score?: number }).taste_score;
+  const nutritionScore = (product as ProductWithPrices & { nutrition_score?: number }).nutrition_score;
   const matchReasons = (product as ProductWithPrices & { match_reasons?: string[] }).match_reasons;
 
   return (
@@ -564,7 +568,7 @@ function ProductCard({ product, isFavorite, onToggleFavorite }: {
           {matchScore == null && <HealthBadge score={product.health_score} />}
         </div>
 
-        {/* 매칭 점수 + 태그 */}
+        {/* 3가지 점수 + 태그 */}
         <div className="flex flex-wrap items-center gap-1 mb-1.5">
           {matchScore != null && (
             <span className={`text-[11px] px-2 py-0.5 rounded-full font-bold ${
@@ -573,6 +577,18 @@ function ProductCard({ product, isFavorite, onToggleFavorite }: {
               : "bg-primary/40 text-white"
             }`} style={{ minHeight: "unset", minWidth: "unset" }}>
               매칭 {matchScore}점
+            </span>
+          )}
+          {tasteScore != null && tasteScore > 0 && (
+            <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-[#D4A843]/15 text-[#D4A843] font-semibold"
+              style={{ minHeight: "unset", minWidth: "unset" }}>
+              맛 {tasteScore}
+            </span>
+          )}
+          {nutritionScore != null && (
+            <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-[#E06030]/15 text-[#E06030] font-semibold"
+              style={{ minHeight: "unset", minWidth: "unset" }}>
+              영양 {nutritionScore}
             </span>
           )}
           {matchReasons?.slice(0, 3).map((r: string) => (
@@ -687,13 +703,14 @@ export default function ProductExplorer() {
       if (nutrition.per100g_protein_min > 0) params.set("per100g_protein_min", String(nutrition.per100g_protein_min));
       if (nutrition.per100g_calories_max > 0) params.set("per100g_calories_max", String(nutrition.per100g_calories_max));
       if (nutrition.health_min > 0) params.set("health_min", String(nutrition.health_min));
-      params.set("sort", sortBy === "recommend" ? "recommend" : sortBy);
+      const needsProfile = ["recommend", "taste_desc", "nutrition_desc"].includes(sortBy);
+      params.set("sort", needsProfile ? "recommend" : sortBy);
       params.set("page", String(page));
       params.set("limit", "20");
 
       let res: Response;
-      if (sortBy === "recommend" && profile) {
-        // 추천순: POST로 프로필 데이터 전송 → match_score 계산
+      if (needsProfile && profile) {
+        // 추천/맛/영양순: POST로 프로필 전송 → 3가지 점수 계산
         res = await fetch(`/api/products?${params.toString()}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -711,6 +728,18 @@ export default function ProductExplorer() {
       }
       if (!res.ok) throw new Error("Failed to fetch");
       const json: ApiResponse = await res.json();
+
+      // 맛순/영양순: 클라이언트에서 재정렬
+      if (sortBy === "taste_desc" && json.products) {
+        json.products.sort((a: Record<string, unknown>, b: Record<string, unknown>) =>
+          ((b as { taste_score?: number }).taste_score ?? 0) - ((a as { taste_score?: number }).taste_score ?? 0)
+        );
+      } else if (sortBy === "nutrition_desc" && json.products) {
+        json.products.sort((a: Record<string, unknown>, b: Record<string, unknown>) =>
+          ((b as { nutrition_score?: number }).nutrition_score ?? 0) - ((a as { nutrition_score?: number }).nutrition_score ?? 0)
+        );
+      }
+
       setData(json);
     } catch (err) {
       console.error("Failed to fetch products:", err);

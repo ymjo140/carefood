@@ -68,7 +68,9 @@ export type UserProfile = {
 
 // ── 스코어링 결과 ──
 export type ScoredProduct = Record<string, unknown> & {
-  match_score: number;
+  match_score: number;      // 종합 매칭 (목적+맛+영양 전부)
+  taste_score: number;      // 맛 일치도
+  nutrition_score: number;  // 영양 충족도
   match_reasons: string[];
   reason_detail: string | null;
   dish_keyword: string;

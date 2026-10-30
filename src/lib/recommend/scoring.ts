@@ -194,12 +194,51 @@ export function scoreProduct(
     if (["soup", "stew", "rice"].includes(dishCategory)) preference *= 1.08;
   }
 
-  // ─── 최종 점수 ───
+  // ─── 맛 점수 (0~100): 맛 선호 일치도 ───
+  // tasteMatch: 짠맛·단맛 일치 여부 + 고소함(지방 범위) 일치
+  const fatVal = (p.fat_g as number) || 0;
+  const fattyPref = profile.tastes.fatty;
+  if (fattyPref >= 1 && fattyPref <= 10) {
+    const range = TASTE_RANGES.fatty[fattyPref];
+    if (range && fatVal >= range[0] && fatVal < range[1]) tasteMatch++;
+  }
+  const tasteScoreRaw = Math.round((tasteMatch / 3) * 100); // 3축 중 몇 개 일치
+
+  // ─── 영양 점수 (0~100): perMeal 기준 충족도 ───
+  let nutritionHits = 0;
+  let nutritionTotal = 0;
+  if (profile.perMeal.minProteinG > 0) {
+    nutritionTotal++;
+    if (proteinG >= profile.perMeal.minProteinG) nutritionHits++;
+  }
+  if (profile.perMeal.caloriesMax > 0 && calories > 0) {
+    nutritionTotal++;
+    if (calories <= profile.perMeal.caloriesMax) nutritionHits++;
+  }
+  if (profile.perMeal.maxSodiumMg > 0 && sodiumMg > 0) {
+    nutritionTotal++;
+    if (sodiumMg <= profile.perMeal.maxSodiumMg) nutritionHits++;
+  }
+  if (profile.perMeal.maxSugarG > 0 && sugarG < 99) {
+    nutritionTotal++;
+    if (sugarG <= profile.perMeal.maxSugarG) nutritionHits++;
+  }
+  // 기본 영양 균형 (매크로 3종 존재 여부)
+  nutritionTotal++;
+  if (proteinG >= 5 && (p.carbs_g as number) >= 5 && fatVal >= 1) nutritionHits++;
+
+  const nutritionScoreRaw = nutritionTotal > 0
+    ? Math.round((nutritionHits / nutritionTotal) * 100)
+    : 50;
+
+  // ─── 종합 매칭 점수 ───
   const rawScore = healthBase * relevance * preference;
 
   return {
     ...p,
     match_score: rawScore, // percentile로 나중에 변환
+    taste_score: tasteScoreRaw,
+    nutrition_score: nutritionScoreRaw,
     match_reasons: reasons.slice(0, 4),
     reason_detail: reasonDetails[0] || null,
     dish_keyword: extractDishKeyword(p.name as string, p.manufacturer as string | null),

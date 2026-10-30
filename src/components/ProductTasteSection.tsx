@@ -182,10 +182,15 @@ export default function ProductTasteSection({ productId, productName, nutrition 
 
   const nutritionProfile = toNutritionProfile(nutrition);
 
-  // 매칭 점수 계산
+  // 3가지 점수 계산
   const tasteScore = userTasteProfile ? calcTasteMatchScore(tasteProfile, userTasteProfile) : null;
   const nutritionScore = calcNutritionMatchScore(nutritionProfile);
-  const overallScore = tasteScore != null ? calcOverallMatchScore(tasteScore, nutritionScore) : null;
+  // 종합 매칭 = 맛 40% + 영양 60% (리스트의 매칭 점수와 동일 기준)
+  const matchScore = tasteScore != null ? calcOverallMatchScore(tasteScore, nutritionScore) : null;
+
+  // 점수 색상
+  const scoreColor = (s: number) =>
+    s >= 80 ? "#2EA860" : s >= 60 ? "#D4A843" : s >= 40 ? "#E06030" : "#6E7A8A";
 
   return (
     <section className="mb-8">
@@ -199,34 +204,49 @@ export default function ProductTasteSection({ productId, productName, nutrition 
         )}
       </div>
 
-      {/* 이중 레이더 차트 */}
+      {/* ── 3가지 점수 카드 ── */}
+      {(tasteScore != null || nutritionScore > 0) && (
+        <div className="grid grid-cols-3 gap-2 mb-3">
+          {matchScore != null && (
+            <div className="bg-surface border border-border rounded-xl p-3 text-center">
+              <div className="text-[10px] text-muted mb-1">매칭</div>
+              <div className="text-xl font-extrabold" style={{ color: scoreColor(matchScore), fontFamily: "var(--font-display, Outfit), sans-serif" }}>
+                {matchScore}
+              </div>
+            </div>
+          )}
+          {tasteScore != null && (
+            <div className="bg-surface border border-border rounded-xl p-3 text-center">
+              <div className="text-[10px] text-muted mb-1">맛</div>
+              <div className="text-xl font-extrabold" style={{ color: scoreColor(tasteScore), fontFamily: "var(--font-display, Outfit), sans-serif" }}>
+                {tasteScore}
+              </div>
+            </div>
+          )}
+          <div className="bg-surface border border-border rounded-xl p-3 text-center">
+            <div className="text-[10px] text-muted mb-1">영양</div>
+            <div className="text-xl font-extrabold" style={{ color: scoreColor(nutritionScore), fontFamily: "var(--font-display, Outfit), sans-serif" }}>
+              {nutritionScore}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {!userTasteProfile && (
+        <p className="text-[10px] text-center text-muted mb-3 bg-surface/50 rounded-lg py-2">
+          온보딩을 완료하면 맛 매칭 점수를 볼 수 있어요
+        </p>
+      )}
+
+      {/* ── 이중 레이더 차트 (점수 헤드라인 없이, 시각적 비교만) ── */}
       <div className="border border-border rounded-xl p-4 mb-3">
         <DualRadarChart
           taste={tasteProfile}
           userTaste={userTasteProfile}
           nutrition={nutritionProfile}
-          matchScore={overallScore ?? undefined}
           mode="dual"
           size={240}
         />
-
-        {/* 점수 분해 */}
-        {tasteScore != null && (
-          <div className="flex justify-center gap-4 mt-3 text-[10px]">
-            <span className="text-muted">
-              맛 매칭 <b className="text-foreground">{tasteScore}점</b>
-            </span>
-            <span className="text-muted">
-              영양 충족 <b className="text-foreground">{nutritionScore}점</b>
-            </span>
-          </div>
-        )}
-
-        {!userTasteProfile && (
-          <p className="text-[10px] text-center text-muted mt-2">
-            맛 리뷰를 남기면 내 입맛 기반 매칭 점수를 볼 수 있어요
-          </p>
-        )}
       </div>
 
       {/* 맛 리뷰 버튼/폼 */}
