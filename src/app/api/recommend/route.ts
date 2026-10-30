@@ -565,8 +565,8 @@ export async function GET(request: NextRequest) {
     if (sugarMax > 0) query = query.lte("sugar_g", sugarMax);
     if (fiberMin > 0) query = query.gte("fiber_g", fiberMin);
 
-    // 스코어링 풀: 건강 점수 높은 순으로 최대 1000개
-    query = query.order("health_score", { ascending: false }).limit(1000);
+    // health_score 있는 제품만 + 높은 순 (75%가 NULL이라 필터 필수)
+    query = query.not("health_score", "is", null).order("health_score", { ascending: false }).limit(1000);
 
     const { data: products, error } = await query as { data: Record<string, unknown>[] | null; error: { message: string } | null };
 
@@ -795,8 +795,8 @@ export async function POST(request: NextRequest) {
       query = query.gte("spicy_score", minSpicy).lte("spicy_score", maxSpicy);
     }
 
-    // 건강 점수 높은 제품부터 가져오기 (limit 500이므로 정렬 필수)
-    query = query.order("health_score", { ascending: false }).limit(500);
+    // health_score 있는 제품만 + 높은 순 정렬 (75%가 NULL이라 필터 필수)
+    query = query.not("health_score", "is", null).order("health_score", { ascending: false }).limit(500);
 
     const { data: products, error, count } = await query as { data: Record<string, unknown>[] | null; error: { message: string } | null; count: number | null };
 
