@@ -148,6 +148,11 @@ function scoreProduct(p: Record<string, any>, profile: ProfileData, isPurchasabl
   let score = Math.round(healthScore * 0.3); // 0~30
   const reasons: string[] = [];
 
+  // per-serving 보정: DB값은 모두 100g 기준
+  const baseG = (p.nutrient_base_g as number) || 100;
+  const servG = (p.serving_size_g as number) || 100;
+  const sRatio = baseG > 0 ? servG / baseG : 1;
+
   if (healthScore >= 70) reasons.push("건강 지표 우수");
 
   // ── 기능성 태그 매칭 ──
@@ -188,43 +193,53 @@ function scoreProduct(p: Record<string, any>, profile: ProfileData, isPurchasabl
     }
   }
 
-  // ── 기본 영양 보너스 ──
-  const calories = p.calories as number | null;
-  const proteinG = p.protein_g as number | null;
+  // ── 영양 변수 ──
+  // per-100g (식품 특성 비교용)
+  const cal100 = p.calories as number | null;
+  const pro100 = p.protein_g as number | null;
+  const sug100 = p.sugar_g as number | null;
+  const sod100 = p.sodium_mg as number | null;
+  const fib100 = p.fiber_g as number | null;
+  // per-serving (식사 충족 비교용)
+  const calories = cal100 != null ? Math.round(cal100 * sRatio * 10) / 10 : null;
+  const proteinG = pro100 != null ? Math.round(pro100 * sRatio * 10) / 10 : null;
+  const sugarG = sug100 != null ? Math.round(sug100 * sRatio * 10) / 10 : null;
+  const sodiumMg = sod100 != null ? Math.round(sod100 * sRatio * 10) / 10 : null;
+  const fiberG = fib100 != null ? Math.round(fib100 * sRatio * 10) / 10 : null;
+
+  // 기본 영양 보너스 (per-serving 기준)
   if (calories && calories > 0 && calories < 600) score += 3;
   if (proteinG && proteinG >= 10 && !reasons.includes("단백질 풍부") && !reasons.includes("고단백")) score += 3;
 
   // ── 건강 목표 기반 보너스 ──
-  const sugarG = p.sugar_g as number | null;
-  const sodiumMg = p.sodium_mg as number | null;
-  const fiberG = p.fiber_g as number | null;
   const allGoals = [...conditions, ...goals];
 
-  if ((allGoals.includes("diabetes") || conditions.includes("diabetes")) && sugarG !== null) {
-    if (sugarG < 3) { score += 8; if (!reasons.includes("극저당")) reasons.push("극저당"); }
-    else if (sugarG < 5) { score += 5; if (!reasons.includes("저당")) reasons.push("저당"); }
+  // 식품 특성 판단 (per-100g): "이 음식이 저당인가?"
+  if ((allGoals.includes("diabetes") || conditions.includes("diabetes")) && sug100 !== null) {
+    if (sug100 < 3) { score += 8; if (!reasons.includes("극저당")) reasons.push("극저당"); }
+    else if (sug100 < 5) { score += 5; if (!reasons.includes("저당")) reasons.push("저당"); }
   }
-  if ((allGoals.includes("blood_pressure") || conditions.includes("hypertension")) && sodiumMg !== null) {
-    if (sodiumMg < 300) { score += 8; if (!reasons.includes("극저나트륨")) reasons.push("극저나트륨"); }
-    else if (sodiumMg < 500) { score += 5; if (!reasons.includes("저나트륨")) reasons.push("저나트륨"); }
+  if ((allGoals.includes("blood_pressure") || conditions.includes("hypertension")) && sod100 !== null) {
+    if (sod100 < 300) { score += 8; if (!reasons.includes("극저나트륨")) reasons.push("극저나트륨"); }
+    else if (sod100 < 500) { score += 5; if (!reasons.includes("저나트륨")) reasons.push("저나트륨"); }
   }
-  if ((allGoals.includes("kidney") || conditions.includes("kidney")) && proteinG !== null && proteinG < 10 && sodiumMg !== null && sodiumMg < 400) {
+  if ((allGoals.includes("kidney") || conditions.includes("kidney")) && pro100 !== null && pro100 < 10 && sod100 !== null && sod100 < 400) {
     if (!reasons.includes("저단백")) reasons.push("저단백");
     score += 6;
   }
-  if (allGoals.includes("muscle") && proteinG !== null) {
-    if (proteinG >= 25) { score += 6; if (!reasons.includes("고단백")) reasons.push("고단백"); }
-    else if (proteinG >= 20) score += 3;
+  if (allGoals.includes("muscle") && pro100 !== null) {
+    if (pro100 >= 20) { score += 6; if (!reasons.includes("고단백")) reasons.push("고단백"); }
+    else if (pro100 >= 15) score += 3;
   }
   if (allGoals.includes("weight_loss") && calories !== null) {
     if (calories > 0 && calories <= 350) { score += 5; if (!reasons.includes("저칼로리")) reasons.push("저칼로리"); }
   }
-  if ((allGoals.includes("gut_health") || concerns.includes("gut_health")) && fiberG !== null && fiberG >= 5) {
+  if ((allGoals.includes("gut_health") || concerns.includes("gut_health")) && fib100 !== null && fib100 >= 5) {
     if (!reasons.includes("고식이섬유")) reasons.push("고식이섬유");
     score += 5;
   }
 
-  // ── nutrition_goals 적합성 ──
+  // ── nutrition_goals 적합성 (per-serving: 한끼 충족 여부) ──
   if (ng) {
     if (ng.perMealSodiumMax && sodiumMg !== null && sodiumMg <= ng.perMealSodiumMax * 0.7) score += 3;
     if (ng.perMealSugarMax && sugarG !== null && sugarG <= ng.perMealSugarMax * 0.7) score += 3;
@@ -234,15 +249,15 @@ function scoreProduct(p: Record<string, any>, profile: ProfileData, isPurchasabl
   // ── 구매 가능 보너스 ──
   if (isPurchasable) score += 10;
 
-  // ── 맛 일치도 ──
+  // ── 맛 일치도 (per-100g: 식품 자체의 맛 특성) ──
   let tasteMatch = 0;
-  if (tastes.salty >= 1 && tastes.salty <= 10 && sodiumMg) {
+  if (tastes.salty >= 1 && tastes.salty <= 10 && sod100) {
     const range = TASTE_RANGES.salty[tastes.salty];
-    if (range && sodiumMg >= range[0] && sodiumMg < range[1]) { score += 5; tasteMatch++; }
+    if (range && sod100 >= range[0] && sod100 < range[1]) { score += 5; tasteMatch++; }
   }
-  if (tastes.sweet >= 1 && tastes.sweet <= 10 && sugarG !== null) {
+  if (tastes.sweet >= 1 && tastes.sweet <= 10 && sug100 !== null) {
     const range = TASTE_RANGES.sweet[tastes.sweet];
-    if (range && sugarG >= range[0] && sugarG < range[1]) { score += 5; tasteMatch++; }
+    if (range && sug100 >= range[0] && sug100 < range[1]) { score += 5; tasteMatch++; }
   }
   // 고소함 일치 확인
   const fatVal = (p.fat_g as number) || 0;
@@ -252,24 +267,23 @@ function scoreProduct(p: Record<string, any>, profile: ProfileData, isPurchasabl
   }
   if (tasteMatch >= 2 && !reasons.includes("맛 취향 일치")) reasons.push("맛 취향 일치");
 
-  // ── 맛 점수 (0~100): 거리 기반 연속 점수 ──
-  // 각 축의 실제 값이 선호 범위 중심에서 얼마나 가까운지
+  // ── 맛 점수 (0~100): 거리 기반 연속 점수 (per-100g) ──
   let tasteDist = 0;
   let tasteAxes = 0;
-  if (tastes.salty >= 1 && tastes.salty <= 10 && sodiumMg) {
+  if (tastes.salty >= 1 && tastes.salty <= 10 && sod100) {
     const range = TASTE_RANGES.salty[tastes.salty];
     if (range) {
       const mid = (range[0] + range[1]) / 2;
-      const maxRange = 1500; // 나트륨 최대 범위
-      tasteDist += Math.min(1, Math.abs(sodiumMg - mid) / maxRange);
+      const maxRange = 1500;
+      tasteDist += Math.min(1, Math.abs(sod100 - mid) / maxRange);
       tasteAxes++;
     }
   }
-  if (tastes.sweet >= 1 && tastes.sweet <= 10 && sugarG !== null) {
+  if (tastes.sweet >= 1 && tastes.sweet <= 10 && sug100 !== null) {
     const range = TASTE_RANGES.sweet[tastes.sweet];
     if (range) {
       const mid = (range[0] + range[1]) / 2;
-      tasteDist += Math.min(1, Math.abs(sugarG - mid) / 25);
+      tasteDist += Math.min(1, Math.abs(sug100 - mid) / 25);
       tasteAxes++;
     }
   }
@@ -291,7 +305,7 @@ function scoreProduct(p: Record<string, any>, profile: ProfileData, isPurchasabl
   if (ng?.perMealCalMax && ng.perMealCalMax > 0 && calories && calories > 0) { nTotal++; if (calories <= ng.perMealCalMax) nHits++; }
   if (ng?.perMealSodiumMax && ng.perMealSodiumMax > 0 && sodiumMg) { nTotal++; if (sodiumMg <= ng.perMealSodiumMax) nHits++; }
   if (ng?.perMealSugarMax && ng.perMealSugarMax > 0 && sugarG !== null) { nTotal++; if (sugarG <= ng.perMealSugarMax) nHits++; }
-  nTotal++; if (proteinG && proteinG >= 5 && (p.carbs_g as number) >= 5 && fatVal >= 1) nHits++;
+  nTotal++; if (proteinG && proteinG >= 5 && (p.carbs_g as number) * sRatio >= 5 && fatVal * sRatio >= 1) nHits++;
   const nutrition_score = nTotal > 0 ? Math.round((nHits / nTotal) * 100) : 50;
 
   return { match_score: Math.min(score, 100), taste_score, nutrition_score, match_reasons: reasons.slice(0, 4) };

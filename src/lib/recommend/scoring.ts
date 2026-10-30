@@ -56,16 +56,16 @@ export function scoreProduct(
   const reasons: string[] = [];
   const reasonDetails: string[] = [];
 
-  // ─── 0. 100g당 데이터 보정 ───
-  // serving_size_g=100인 제품은 100g당 기준 데이터일 가능성 높음
-  // 스코어링에서 신뢰도를 낮춰 반영 (실제 1회 섭취량 불확실)
+  // ─── 0. per-serving 보정 ───
+  // DB 값은 모두 nutrient_base_g(보통 100g) 기준
+  // perMeal 비교 시 per-serving 값으로 변환
+  const baseG = (p.nutrient_base_g as number) || 100;
   const servingG = (p.serving_size_g as number) || 100;
-  const isPerHundredG = servingG === 100;
+  const servingRatio = baseG > 0 ? servingG / baseG : 1;
 
   // ─── 1. Health Base (0.4 ~ 1.0) ───
   const healthScore = (p.health_score as number) || 50;
-  let healthBase = 0.3 + (healthScore / 100) * 0.7;
-  if (isPerHundredG) healthBase *= 0.85; // 100g당 데이터는 15% 감점 (신뢰도 불확실)
+  const healthBase = 0.3 + (healthScore / 100) * 0.7;
 
   if (healthScore >= 75) {
     reasons.push("건강 지표 우수");
@@ -117,19 +117,28 @@ export function scoreProduct(
   }
 
   // 건강 목표별 보너스
-  const calories = (p.calories as number) || 0;
-  const proteinG = (p.protein_g as number) || 0;
-  const sugarG = (p.sugar_g as number) ?? 99;
-  const sodiumMg = (p.sodium_mg as number) || 0;
-  const fiberG = (p.fiber_g as number) || 0;
+  // per-100g 값 (식품 특성 비교용)
+  const cal100 = (p.calories as number) || 0;
+  const pro100 = (p.protein_g as number) || 0;
+  const sug100 = (p.sugar_g as number) ?? 99;
+  const sod100 = (p.sodium_mg as number) || 0;
+  const fib100 = (p.fiber_g as number) || 0;
+  // per-serving 값 (식사 충족 비교용)
+  const calories = Math.round(cal100 * servingRatio * 10) / 10;
+  const proteinG = Math.round(pro100 * servingRatio * 10) / 10;
+  const sugarG = sug100 < 99 ? Math.round(sug100 * servingRatio * 10) / 10 : 99;
+  const sodiumMg = Math.round(sod100 * servingRatio * 10) / 10;
+  const fiberG = Math.round(fib100 * servingRatio * 10) / 10;
 
-  if (profile.goals.includes("muscle") && proteinG >= 25) {
+  // 식품 특성 기반 보너스 (per-100g: "이 식품이 고단백인가?")
+  if (profile.goals.includes("muscle") && pro100 >= 20) {
     relevance *= 1.15;
-    if (!reasons.includes("고단백")) { reasons.push("고단백"); reasonDetails.push(`단백질 ${proteinG}g — 근력 강화에 적합`); }
+    if (!reasons.includes("고단백")) { reasons.push("고단백"); reasonDetails.push(`단백질 ${proteinG}g/1회 — 근력 강화에 적합`); }
   }
+  // perMeal 비교 (per-serving: "이 한끼가 칼로리 예산에 맞는가?")
   if (profile.goals.includes("weight_loss") && calories > 0 && calories <= profile.perMeal.caloriesMax) {
     relevance *= 1.1;
-    if (!reasons.includes("칼로리 적정")) { reasons.push("칼로리 적정"); reasonDetails.push(`${calories}kcal — 끼니당 ${profile.perMeal.caloriesMax}kcal 이하`); }
+    if (!reasons.includes("칼로리 적정")) { reasons.push("칼로리 적정"); reasonDetails.push(`${calories}kcal/1회 — 끼니당 ${profile.perMeal.caloriesMax}kcal 이하`); }
   }
   if (profile.goals.includes("diabetes") && sugarG <= profile.perMeal.maxSugarG) {
     relevance *= 1.1;
@@ -138,21 +147,23 @@ export function scoreProduct(
     relevance *= 1.1;
   }
 
-  // perMeal 적합성 보너스 (개인화 핵심)
+  // perMeal 적합성 보너스 (per-serving 기준)
   if (proteinG >= profile.perMeal.minProteinG) {
     relevance *= 1.1;
     if (!reasons.includes("단백질 충족")) {
       reasons.push("단백질 충족");
-      reasonDetails.push(`단백질 ${proteinG}g — 끼니당 ${profile.perMeal.minProteinG}g 권장 충족`);
+      reasonDetails.push(`단백질 ${proteinG}g/1회 — 끼니당 ${profile.perMeal.minProteinG}g 권장 충족`);
     }
   }
   if (sodiumMg > 0 && sodiumMg <= profile.perMeal.maxSodiumMg * 0.7) {
     relevance *= 1.05;
   }
 
-  // 매크로 균형 보너스
-  if (calories >= 150 && calories <= 500 && proteinG >= 10 && (p.carbs_g as number) >= 10
-      && (p.fat_g as number) >= 2 && (p.fat_g as number) <= 20) {
+  // 매크로 균형 보너스 (per-serving: 실제 식사로서 균형 잡혀 있는가?)
+  if (calories >= 150 && calories <= 500 && proteinG >= 10
+      && (p.carbs_g as number) * servingRatio >= 10
+      && (p.fat_g as number) * servingRatio >= 2
+      && (p.fat_g as number) * servingRatio <= 20) {
     relevance *= 1.1;
     if (!reasons.includes("영양 균형")) {
       reasons.push("영양 균형");
@@ -163,15 +174,15 @@ export function scoreProduct(
   // ─── 3. Preference (맛 + 구매 + 민감도, 0.7 ~ 1.3) ───
   let preference = 1.0;
 
-  // 맛 일치
+  // 맛 일치 (per-100g: 식품 자체의 맛 특성)
   let tasteMatch = 0;
   if (profile.tastes.salty >= 1 && profile.tastes.salty <= 10) {
     const range = TASTE_RANGES.salty[profile.tastes.salty];
-    if (range && sodiumMg >= range[0] && sodiumMg < range[1]) { preference *= 1.05; tasteMatch++; }
+    if (range && sod100 >= range[0] && sod100 < range[1]) { preference *= 1.05; tasteMatch++; }
   }
-  if (profile.tastes.sweet >= 1 && profile.tastes.sweet <= 10 && sugarG < 99) {
+  if (profile.tastes.sweet >= 1 && profile.tastes.sweet <= 10 && sug100 < 99) {
     const range = TASTE_RANGES.sweet[profile.tastes.sweet];
-    if (range && sugarG >= range[0] && sugarG < range[1]) { preference *= 1.05; tasteMatch++; }
+    if (range && sug100 >= range[0] && sug100 < range[1]) { preference *= 1.05; tasteMatch++; }
   }
   if (tasteMatch >= 2) {
     reasons.push("맛 취향 일치");
@@ -202,16 +213,17 @@ export function scoreProduct(
   }
 
   // ─── 맛 점수 (0~100): 거리 기반 연속 점수 ───
+  // 맛 프로필은 per-100g 기준 (식품 자체의 맛 특성)
   const fatVal = (p.fat_g as number) || 0;
   let tasteDist = 0;
   let tasteAxes = 0;
-  if (profile.tastes.salty >= 1 && profile.tastes.salty <= 10 && sodiumMg > 0) {
+  if (profile.tastes.salty >= 1 && profile.tastes.salty <= 10 && sod100 > 0) {
     const range = TASTE_RANGES.salty[profile.tastes.salty];
-    if (range) { tasteDist += Math.min(1, Math.abs(sodiumMg - (range[0] + range[1]) / 2) / 1500); tasteAxes++; }
+    if (range) { tasteDist += Math.min(1, Math.abs(sod100 - (range[0] + range[1]) / 2) / 1500); tasteAxes++; }
   }
-  if (profile.tastes.sweet >= 1 && profile.tastes.sweet <= 10 && sugarG < 99) {
+  if (profile.tastes.sweet >= 1 && profile.tastes.sweet <= 10 && sug100 < 99) {
     const range = TASTE_RANGES.sweet[profile.tastes.sweet];
-    if (range) { tasteDist += Math.min(1, Math.abs(sugarG - (range[0] + range[1]) / 2) / 25); tasteAxes++; }
+    if (range) { tasteDist += Math.min(1, Math.abs(sug100 - (range[0] + range[1]) / 2) / 25); tasteAxes++; }
   }
   if (profile.tastes.fatty >= 1 && profile.tastes.fatty <= 10) {
     const range = TASTE_RANGES.fatty[profile.tastes.fatty];
