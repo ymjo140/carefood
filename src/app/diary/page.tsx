@@ -207,12 +207,22 @@ export default function DiaryPage() {
   const [data, setData] = useState<DiaryData | null>(null);
   const [loading, setLoading] = useState(true);
   const [addingMeal, setAddingMeal] = useState<string | null>(null);
-  const [addTab, setAddTab] = useState<"search" | "favorites" | "weekly" | "manual">("search");
+  const [addTab, setAddTab] = useState<"search" | "favorites" | "weekly" | "manual" | "photo">("search");
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [commonFoods, setCommonFoods] = useState<CommonFood[]>([]);
   const [searching, setSearching] = useState(false);
   const [manualForm, setManualForm] = useState({ food_name: "", calories: "", protein_g: "", serving_g: "" });
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [photoAnalyzing, setPhotoAnalyzing] = useState(false);
+  const [photoResults, setPhotoResults] = useState<{
+    recognized: { name: string; confidence: number }[];
+    matched: {
+      commonFoods: CommonFood[];
+      products: SearchResult[];
+    };
+    hasAI: boolean;
+  } | null>(null);
   const [userId, setUserId] = useState("");
   const [favorites, setFavorites] = useState<SearchResult[]>([]);
   const [weeklyItems, setWeeklyItems] = useState<SearchResult[]>([]);
@@ -410,6 +420,67 @@ export default function DiaryPage() {
     setManualForm({ food_name: "", calories: "", protein_g: "", serving_g: "" });
     fetchDiary();
     loadWeeklyTrend();
+  };
+
+  // 사진 촬영/업로드 핸들러
+  const handlePhotoCapture = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // 이미지 리사이즈 (최대 800px) + 압축
+    const resized = await resizeImage(file, 800);
+    setPhotoPreview(resized);
+    setPhotoAnalyzing(true);
+    setPhotoResults(null);
+
+    try {
+      const res = await fetch("/api/diary/photo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image: resized }),
+      });
+      const data = await res.json();
+      setPhotoResults(data);
+    } catch {
+      setPhotoResults({ recognized: [], matched: { commonFoods: [], products: [] }, hasAI: false });
+    } finally {
+      setPhotoAnalyzing(false);
+    }
+  };
+
+  const resizeImage = (file: File, maxSize: number): Promise<string> => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          let { width, height } = img;
+          if (width > maxSize || height > maxSize) {
+            if (width > height) {
+              height = Math.round((height * maxSize) / width);
+              width = maxSize;
+            } else {
+              width = Math.round((width * maxSize) / height);
+              height = maxSize;
+            }
+          }
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          ctx?.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL("image/jpeg", 0.7));
+        };
+        img.src = e.target?.result as string;
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const resetPhoto = () => {
+    setPhotoPreview(null);
+    setPhotoResults(null);
+    setPhotoAnalyzing(false);
   };
 
   const deleteEntry = async (id: string) => {
@@ -640,6 +711,7 @@ export default function DiaryPage() {
                       <div className="flex border-b" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
                         {([
                           { key: "search" as const, label: "검색" },
+                          { key: "photo" as const, label: "📷 사진" },
                           { key: "favorites" as const, label: `즐겨찾기${favorites.length > 0 ? ` (${favorites.length})` : ""}` },
                           { key: "weekly" as const, label: `식단박스${weeklyItems.length > 0 ? ` (${weeklyItems.length})` : ""}` },
                           { key: "manual" as const, label: "직접 입력" },
@@ -710,6 +782,139 @@ export default function DiaryPage() {
                           weeklyItems.length > 0 ? <ProductList items={weeklyItems} onSelect={addFromProduct} /> : (
                             <div className="text-center py-6"><p className="text-2xl mb-2">📦</p><p className="text-xs text-muted">주간 식단 박스를 먼저 만들어보세요</p><Link href="/weekly-box" className="text-[10px] text-primary mt-1 inline-block">주간 박스 만들기 →</Link></div>
                           )
+                        )}
+                        {addTab === "photo" && (
+                          <div>
+                            {!photoPreview ? (
+                              <div className="text-center py-6">
+                                <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-primary/10 mb-4">
+                                  <svg className="w-10 h-10 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
+                                  </svg>
+                                </div>
+                                <p className="text-sm font-bold mb-1">음식 사진으로 기록하기</p>
+                                <p className="text-xs text-muted mb-4">사진을 찍거나 갤러리에서 선택하세요</p>
+                                <div className="flex gap-2 justify-center">
+                                  <label className="cursor-pointer px-4 py-2.5 bg-primary text-white rounded-xl text-sm font-bold hover:brightness-110 transition-all flex items-center gap-2">
+                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
+                                    </svg>
+                                    촬영
+                                    <input type="file" accept="image/*" capture="environment" onChange={handlePhotoCapture} className="hidden" />
+                                  </label>
+                                  <label className="cursor-pointer px-4 py-2.5 bg-card border border-border rounded-xl text-sm font-medium hover:bg-surface transition-all flex items-center gap-2">
+                                    <svg className="w-4 h-4 text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z" />
+                                    </svg>
+                                    갤러리
+                                    <input type="file" accept="image/*" onChange={handlePhotoCapture} className="hidden" />
+                                  </label>
+                                </div>
+                              </div>
+                            ) : (
+                              <div>
+                                {/* 사진 미리보기 */}
+                                <div className="relative mb-3">
+                                  <img src={photoPreview} alt="음식 사진" className="w-full h-48 object-cover rounded-xl" />
+                                  <button
+                                    onClick={resetPhoto}
+                                    className="absolute top-2 right-2 w-7 h-7 bg-black/50 text-white rounded-full flex items-center justify-center text-xs hover:bg-black/70"
+                                  >
+                                    ✕
+                                  </button>
+                                  {photoAnalyzing && (
+                                    <div className="absolute inset-0 bg-black/40 rounded-xl flex items-center justify-center">
+                                      <div className="bg-card rounded-xl px-4 py-3 flex items-center gap-2">
+                                        <div className="w-5 h-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+                                        <span className="text-sm font-medium">음식 분석 중...</span>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* AI 인식 결과 */}
+                                {photoResults && (
+                                  <div>
+                                    {photoResults.recognized.length > 0 && (
+                                      <div className="mb-3">
+                                        <div className="flex items-center gap-1.5 mb-2">
+                                          <span className="text-xs font-bold text-primary">AI 인식 결과</span>
+                                          <span className="text-[10px] text-muted">
+                                            {photoResults.recognized.map((r) => r.name).join(", ")}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {/* 매칭된 일반 음식 */}
+                                    {photoResults.matched.commonFoods.length > 0 && (
+                                      <div className="mb-3">
+                                        <div className="text-[10px] font-bold text-muted uppercase tracking-wider px-1 mb-1.5">매칭된 음식</div>
+                                        <div className="space-y-1">
+                                          {photoResults.matched.commonFoods.map((food) => (
+                                            <button key={food.id} onClick={() => { addFromCommonFood(food); resetPhoto(); }}
+                                              className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-card transition-colors flex items-center gap-3">
+                                              <span className="text-xl shrink-0">{food.icon}</span>
+                                              <div className="flex-1 min-w-0">
+                                                <p className="text-sm font-semibold">{food.name}</p>
+                                                <div className="flex gap-2 text-[10px] text-muted mt-0.5" style={{ fontFamily: "'Outfit', sans-serif" }}>
+                                                  <span>{food.serving_desc}</span>
+                                                  {food.calories != null && <span>{food.calories}kcal</span>}
+                                                </div>
+                                              </div>
+                                              <span className="text-xs text-primary font-bold shrink-0">+ 기록</span>
+                                            </button>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {/* 매칭된 제품 */}
+                                    {photoResults.matched.products.length > 0 && (
+                                      <div className="mb-3">
+                                        <div className="text-[10px] font-bold text-muted uppercase tracking-wider px-1 mb-1.5">매칭된 제품</div>
+                                        <ProductList items={photoResults.matched.products} onSelect={(p) => { addFromProduct(p); resetPhoto(); }} />
+                                      </div>
+                                    )}
+
+                                    {/* 결과 없음 / AI 없음 → 검색 or 직접 입력 유도 */}
+                                    {photoResults.matched.commonFoods.length === 0 && photoResults.matched.products.length === 0 && (
+                                      <div className="text-center py-4">
+                                        <p className="text-sm text-muted mb-3">
+                                          {photoResults.hasAI
+                                            ? "매칭되는 음식을 찾지 못했어요"
+                                            : "사진이 저장되었어요. 음식을 선택해주세요"}
+                                        </p>
+                                        <div className="flex gap-2 justify-center">
+                                          <button
+                                            onClick={() => setAddTab("search")}
+                                            className="px-4 py-2 bg-primary text-white rounded-xl text-sm font-bold"
+                                          >
+                                            검색으로 추가
+                                          </button>
+                                          <button
+                                            onClick={() => setAddTab("manual")}
+                                            className="px-4 py-2 bg-card border border-border rounded-xl text-sm font-medium"
+                                          >
+                                            직접 입력
+                                          </button>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+
+                                {/* 다시 찍기 */}
+                                {!photoAnalyzing && (
+                                  <label className="cursor-pointer block text-center mt-3 text-xs text-muted hover:text-foreground transition-colors">
+                                    다른 사진으로 변경
+                                    <input type="file" accept="image/*" capture="environment" onChange={handlePhotoCapture} className="hidden" />
+                                  </label>
+                                )}
+                              </div>
+                            )}
+                          </div>
                         )}
                         {addTab === "manual" && (
                           <>
