@@ -107,7 +107,18 @@ function RadarGrid({
   const axes = labels.map((label, i) => {
     const angle = (360 / sides) * i;
     const outer = polarToCartesian(cx, cy, radius, angle);
-    const labelPos = polarToCartesian(cx, cy, radius + 22, angle);
+    const labelPos = polarToCartesian(cx, cy, radius + 18, angle);
+    // 위치에 따른 text-anchor 결정
+    const dx = labelPos.x - cx;
+    const dy = labelPos.y - cy;
+    let anchor: "start" | "middle" | "end" = "middle";
+    let offsetX = 0;
+    if (dx < -5) { anchor = "end"; offsetX = -2; }
+    else if (dx > 5) { anchor = "start"; offsetX = 2; }
+    // 상단/하단 라벨은 위/아래로 더 밀기
+    let offsetY = 0;
+    if (dy < -5) offsetY = -4;
+    else if (dy > 5) offsetY = 6;
     return (
       <g key={`axis-${i}`}>
         <line
@@ -120,9 +131,9 @@ function RadarGrid({
           opacity={0.2}
         />
         <text
-          x={labelPos.x}
-          y={labelPos.y}
-          textAnchor="middle"
+          x={labelPos.x + offsetX}
+          y={labelPos.y + offsetY}
+          textAnchor={anchor}
           dominantBaseline="middle"
           fontSize="10"
           fill="currentColor"
