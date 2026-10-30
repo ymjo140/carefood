@@ -107,7 +107,7 @@ function RadarGrid({
   const axes = labels.map((label, i) => {
     const angle = (360 / sides) * i;
     const outer = polarToCartesian(cx, cy, radius, angle);
-    const labelPos = polarToCartesian(cx, cy, radius + 18, angle);
+    const labelPos = polarToCartesian(cx, cy, radius + 14, angle);
     // 위치에 따른 text-anchor 결정
     const dx = labelPos.x - cx;
     const dy = labelPos.y - cy;
@@ -135,7 +135,7 @@ function RadarGrid({
           y={labelPos.y + offsetY}
           textAnchor={anchor}
           dominantBaseline="middle"
-          fontSize="10"
+          fontSize="8"
           fill="currentColor"
           opacity={0.6}
           fontWeight="500"
@@ -185,10 +185,10 @@ export default function DualRadarChart({
 
   // 듀얼 모드: 좌우로 두 오각형 나란히
   if (mode === "dual" && nutritionValues) {
-    const pad = 62; // 라벨 잘림 방지 여백 (한글 3글자 기준)
+    const pad = 70; // 라벨 잘림 방지 여백
     const halfW = size / 2 + pad;
     const dualSvgW = halfW * 2 + 20;
-    const smallR = size * 0.30;
+    const smallR = size * 0.22;
     const cx1 = halfW / 2 + 10;
     const cx2 = halfW + halfW / 2 + 10;
     const dualCy = halfW / 2 + 18;
@@ -214,7 +214,7 @@ export default function DualRadarChart({
           style={{ maxWidth: "100%" }}
         >
           {/* 맛 프로필 */}
-          <text x={cx1} y={14} textAnchor="middle" fontSize="11" fontWeight="700" fill="currentColor" opacity={0.8}>
+          <text x={cx1} y={12} textAnchor="middle" fontSize="9" fontWeight="700" fill="currentColor" opacity={0.8}>
             맛 프로필
           </text>
           <g>
@@ -244,7 +244,7 @@ export default function DualRadarChart({
           </g>
 
           {/* 영양 프로필 */}
-          <text x={cx2} y={14} textAnchor="middle" fontSize="11" fontWeight="700" fill="currentColor" opacity={0.8}>
+          <text x={cx2} y={12} textAnchor="middle" fontSize="9" fontWeight="700" fill="currentColor" opacity={0.8}>
             영양 프로필
           </text>
           <g>
