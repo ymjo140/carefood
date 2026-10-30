@@ -84,7 +84,7 @@ const TASTE_CONFIG = [
   { key: "salty" as const, label: "짠맛", color: "var(--macro-sodium)" },
   { key: "sweet" as const, label: "단맛", color: "var(--macro-carbs)" },
   { key: "spicy" as const, label: "매운맛", color: "var(--macro-fat)" },
-  { key: "fatty" as const, label: "기름진맛", color: "var(--macro-protein)" },
+  { key: "fatty" as const, label: "고소한맛", color: "var(--macro-protein)" },
 ];
 
 const EATING_OUT_OPTIONS = [

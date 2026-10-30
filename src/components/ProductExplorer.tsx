@@ -32,7 +32,7 @@ const TASTE_CONFIG = [
   { key: "salty" as const, label: "짠맛" },
   { key: "sweet" as const, label: "단맛" },
   { key: "spicy" as const, label: "매운맛" },
-  { key: "fatty" as const, label: "기름진맛" },
+  { key: "fatty" as const, label: "고소한맛" },
 ];
 
 const SORT_OPTIONS: { value: SortOption; label: string }[] = [
