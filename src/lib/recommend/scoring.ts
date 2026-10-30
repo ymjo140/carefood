@@ -56,9 +56,16 @@ export function scoreProduct(
   const reasons: string[] = [];
   const reasonDetails: string[] = [];
 
+  // ─── 0. 100g당 데이터 보정 ───
+  // serving_size_g=100인 제품은 100g당 기준 데이터일 가능성 높음
+  // 스코어링에서 신뢰도를 낮춰 반영 (실제 1회 섭취량 불확실)
+  const servingG = (p.serving_size_g as number) || 100;
+  const isPerHundredG = servingG === 100;
+
   // ─── 1. Health Base (0.4 ~ 1.0) ───
   const healthScore = (p.health_score as number) || 50;
-  const healthBase = 0.3 + (healthScore / 100) * 0.7; // 50점→0.65, 80점→0.86, 95점→0.965
+  let healthBase = 0.3 + (healthScore / 100) * 0.7;
+  if (isPerHundredG) healthBase *= 0.85; // 100g당 데이터는 15% 감점 (신뢰도 불확실)
 
   if (healthScore >= 75) {
     reasons.push("건강 지표 우수");

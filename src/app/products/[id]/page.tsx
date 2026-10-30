@@ -295,7 +295,7 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
               </span>
               <span className="text-sm text-muted ml-1">kcal</span>
             </div>
-            {s && <span className="text-xs text-muted">1회 제공량 {s}g</span>}
+            {s && <span className="text-xs text-muted">{s === 100 ? "100g 당" : `1회 제공량 ${s}g`}</span>}
           </div>
 
           <div className="divide-y divide-border/50">
