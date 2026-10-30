@@ -174,13 +174,13 @@ export default function DualRadarChart({
 
   // 듀얼 모드: 좌우로 두 오각형 나란히
   if (mode === "dual" && nutritionValues) {
-    const pad = 52; // 라벨 잘림 방지 여백 (한글 2글자 기준)
+    const pad = 62; // 라벨 잘림 방지 여백 (한글 3글자 기준)
     const halfW = size / 2 + pad;
     const dualSvgW = halfW * 2 + 20;
-    const smallR = size * 0.34;
+    const smallR = size * 0.30;
     const cx1 = halfW / 2 + 10;
     const cx2 = halfW + halfW / 2 + 10;
-    const dualCy = halfW / 2 + 14;
+    const dualCy = halfW / 2 + 18;
 
     return (
       <div className="flex flex-col items-center gap-3">
@@ -198,7 +198,7 @@ export default function DualRadarChart({
           </div>
         )}
         <svg
-          viewBox={`0 0 ${dualSvgW} ${halfW + 28}`}
+          viewBox={`0 0 ${dualSvgW} ${halfW + 36}`}
           width={dualSvgW}
           style={{ maxWidth: "100%" }}
         >
