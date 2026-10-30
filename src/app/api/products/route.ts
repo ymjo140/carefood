@@ -141,7 +141,7 @@ interface ProfileData {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function scoreProduct(p: Record<string, any>, profile: ProfileData, isPurchasable: boolean): { match_score: number; match_reasons: string[] } {
+function scoreProduct(p: Record<string, any>, profile: ProfileData, isPurchasable: boolean): { match_score: number; taste_score: number; nutrition_score: number; match_reasons: string[] } {
   const { concerns, goals, conditions, sensitivity, tastes, nutrition_goals: ng } = profile;
 
   const healthScore = (p.health_score as number) || 50;
@@ -244,9 +244,27 @@ function scoreProduct(p: Record<string, any>, profile: ProfileData, isPurchasabl
     const range = TASTE_RANGES.sweet[tastes.sweet];
     if (range && sugarG >= range[0] && sugarG < range[1]) { score += 5; tasteMatch++; }
   }
+  // 고소함 일치 확인
+  const fatVal = (p.fat_g as number) || 0;
+  if (tastes.fatty >= 1 && tastes.fatty <= 10) {
+    const range = TASTE_RANGES.fatty[tastes.fatty];
+    if (range && fatVal >= range[0] && fatVal < range[1]) tasteMatch++;
+  }
   if (tasteMatch >= 2 && !reasons.includes("맛 취향 일치")) reasons.push("맛 취향 일치");
 
-  return { match_score: Math.min(score, 100), match_reasons: reasons.slice(0, 4) };
+  // ── 맛 점수 (0~100) ──
+  const taste_score = Math.round((tasteMatch / 3) * 100);
+
+  // ── 영양 점수 (0~100) ──
+  let nHits = 0, nTotal = 0;
+  if (ng?.perMealProteinMin && ng.perMealProteinMin > 0) { nTotal++; if (proteinG && proteinG >= ng.perMealProteinMin) nHits++; }
+  if (ng?.perMealCalMax && ng.perMealCalMax > 0 && calories && calories > 0) { nTotal++; if (calories <= ng.perMealCalMax) nHits++; }
+  if (ng?.perMealSodiumMax && ng.perMealSodiumMax > 0 && sodiumMg) { nTotal++; if (sodiumMg <= ng.perMealSodiumMax) nHits++; }
+  if (ng?.perMealSugarMax && ng.perMealSugarMax > 0 && sugarG !== null) { nTotal++; if (sugarG <= ng.perMealSugarMax) nHits++; }
+  nTotal++; if (proteinG && proteinG >= 5 && (p.carbs_g as number) >= 5 && fatVal >= 1) nHits++;
+  const nutrition_score = nTotal > 0 ? Math.round((nHits / nTotal) * 100) : 50;
+
+  return { match_score: Math.min(score, 100), taste_score, nutrition_score, match_reasons: reasons.slice(0, 4) };
 }
 
 /* ════════════════════════════════════════════
@@ -542,8 +560,8 @@ export async function POST(request: NextRequest) {
     // match_score 계산
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const scored = result.map((p: any) => {
-      const { match_score, match_reasons } = scoreProduct(p, profile, purchasableIds.has(p.id));
-      return { ...p, match_score, match_reasons };
+      const { match_score, taste_score, nutrition_score, match_reasons } = scoreProduct(p, profile, purchasableIds.has(p.id));
+      return { ...p, match_score, taste_score, nutrition_score, match_reasons };
     });
 
     // match_score 내림차순 정렬
