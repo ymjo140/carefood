@@ -158,6 +158,27 @@ function escapeRegex(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+// ─── 관심사별 dish_category 적합도 가중치 ───
+// 양수: 보너스, 음수: 감점 (해당 관심사에 부적합한 카테고리)
+const CONCERN_CATEGORY_WEIGHT: Record<HealthConcern, Record<string, number>> = {
+  gut_health: {
+    rice: 8, soup: 10, stew: 8, salad: 10, side: 5, grill: 5, seafood: 5,
+    snack: -15, beverage: -5, bread: -8, sauce: -20, ingredient: -20,
+  },
+  skin: {
+    grill: 8, seafood: 10, salad: 10, dairy: 8, soup: 5, side: 5,
+    snack: -12, sauce: -20, ingredient: -20, bread: -5,
+  },
+  weight: {
+    salad: 12, grill: 10, seafood: 10, soup: 8, side: 8, rice: 3,
+    snack: -15, bread: -10, sauce: -20, ingredient: -20, beverage: -5,
+  },
+  energy: {
+    grill: 12, rice: 10, stew: 8, noodle: 5, seafood: 8, dairy: 8, soup: 5,
+    snack: -15, sauce: -20, ingredient: -20, beverage: -8,
+  },
+};
+
 // ─── 공통 스코어링 ───
 
 type ScoredProduct = Record<string, unknown> & {
@@ -187,9 +208,9 @@ function scoreProducts(products: Record<string, unknown>[], params: ScoreParams)
   const { concerns, sensitivity, conditions, purchasableSet, tastes, goals = [], nutritionGoals } = params;
 
   return products.map((p) => {
-    // 건강 점수를 기본 점수에 반영 (0~100 → 0~20으로 스케일)
+    // 건강 점수 기반 시작점 (0~100 → 15~45 스케일, 더 넓은 범위)
     const healthScore = (p.health_score as number) || 50;
-    let score = 20 + Math.round(healthScore * 0.2); // health_score 70 → 34점 시작
+    let score = 15 + Math.round(healthScore * 0.3); // health_score 70 → 36, 80 → 39, 90 → 42
     const reasons: string[] = [];
     const reasonDetails: string[] = [];
 
@@ -197,6 +218,28 @@ function scoreProducts(products: Record<string, unknown>[], params: ScoreParams)
     if (healthScore >= 70) {
       reasons.push("건강 지표 우수");
       reasonDetails.push(`건강 점수 ${healthScore}점 — 영양 균형이 좋아요`);
+    }
+
+    // dish_category 적합도 가중치 (관심사별로 식사류 보너스, 간식류 감점)
+    const dishCategory = (p.dish_category as string) || "other";
+    for (const concern of concerns) {
+      const categoryWeights = CONCERN_CATEGORY_WEIGHT[concern];
+      if (categoryWeights && dishCategory in categoryWeights) {
+        score += categoryWeights[dishCategory];
+      }
+    }
+
+    // 영양 균형 보너스 (3대 영양소 모두 적정 범위면 추가 점수)
+    const cal = (p.calories as number) || 0;
+    const pro = (p.protein_g as number) || 0;
+    const carb = (p.carbs_g as number) || 0;
+    const fat = (p.fat_g as number) || 0;
+    if (cal >= 150 && cal <= 500 && pro >= 10 && carb >= 10 && fat >= 2 && fat <= 20) {
+      score += 8;
+      if (!reasons.includes("영양 균형")) {
+        reasons.push("영양 균형");
+        reasonDetails.push("3대 영양소가 골고루 포함된 균형식");
+      }
     }
 
     // 기능성 태그 매칭
@@ -719,8 +762,8 @@ export async function POST(request: NextRequest) {
       .eq("is_active", true)
       .eq("category_large", "상용제품");
 
-    // 소스 제외 (v2에서도 기본 제외)
-    query = query.neq("dish_category", "sauce");
+    // 소스·원재료 제외 (v2에서도 기본 제외)
+    query = query.neq("dish_category", "sauce").neq("dish_category", "ingredient");
 
     for (const [nutrient, maxVal] of Object.entries(safetyFilters)) {
       query = query.lte(nutrient, maxVal);
