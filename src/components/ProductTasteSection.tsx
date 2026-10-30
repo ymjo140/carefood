@@ -47,7 +47,8 @@ function getUserId(): string {
 
 /**
  * 영양성분 → 맛 프로필 예측 (1~5 스케일)
- * 리뷰 없어도 영양성분에서 맛을 합리적으로 추정
+ * 영양성분에서 확실히 알 수 있는 5축만 사용
+ * (캡사이신·글루탐산 데이터 확보 시 매운맛·감칠맛 추가 예정)
  */
 function predictTasteFromNutrition(n: Props["nutrition"]) {
   // 짠맛: 나트륨 기반. 0mg=1, 200=2, 500=3, 800=4, 1200+=5
@@ -55,23 +56,28 @@ function predictTasteFromNutrition(n: Props["nutrition"]) {
     ? Math.min(5, Math.max(1, Math.round(n.sodium_mg / 300) + 1))
     : 2.5;
 
-  // 단맛: 당류 기반. 0g=1, 3=2, 6=3, 12=4, 20+=5
-  const sweet = n.calories != null
-    ? Math.min(5, Math.max(1, Math.round((n.calories > 0 ? (n.carbs_g ?? 0) * 0.3 : 0) / 3) + 1))
+  // 단맛: 탄수화물 중 당류 비중 추정. carbs가 높고 칼로리 대비 비율 높으면 단맛↑
+  const carbRatio = (n.carbs_g ?? 0) / Math.max(1, (n.calories ?? 100) / 100);
+  const sweet = Math.min(5, Math.max(1, Math.round(carbRatio * 0.8) + 1));
+
+  // 고소함: 지방 기반. 0g=1, 5=2, 10=3, 15=4, 20+=5
+  const savory = n.fat_g != null
+    ? Math.min(5, Math.max(1, Math.round(n.fat_g / 5) + 1))
     : 2.5;
 
-  // 매운맛: 직접 추정 어려움 → 기본 2 (리뷰로 보정 기대)
-  const spicy = 2;
+  // 담백함: 단백질÷칼로리 비율. 높으면 담백 (닭가슴살=5, 과자=1)
+  const proteinDensity = n.protein_g != null && n.calories != null && n.calories > 0
+    ? (n.protein_g * 4) / n.calories  // 단백질 칼로리 비율 (0~1)
+    : 0.15;
+  const light = Math.min(5, Math.max(1, Math.round(proteinDensity * 10) + 1));
 
-  // 감칠맛: 단백질+지방 기반 (고기/해산물/발효식품 = 감칠맛↑)
-  const umami = n.protein_g != null
-    ? Math.min(5, Math.max(1, Math.round(n.protein_g / 7) + 1))
-    : 2.5;
+  // 자극도: 칼로리 밀도(kcal/100g). 높으면 진한맛, 낮으면 가벼운맛
+  const calDensity = n.calories != null
+    ? n.calories / Math.max(100, 300) // serving 대비 칼로리 밀도 근사
+    : 0.5;
+  const intensity = Math.min(5, Math.max(1, Math.round(calDensity * 3) + 1));
 
-  // 신맛: 직접 추정 어려움 → 기본 2 (리뷰로 보정 기대)
-  const sour = 2;
-
-  return { spicy, sweet, salty, umami, sour };
+  return { salty, sweet, savory, light, intensity };
 }
 
 /**
@@ -140,13 +146,17 @@ export default function ProductTasteSection({ productId, productName, nutrition 
               const profile = JSON.parse(profileRaw);
               const t = profile.tastes;
               if (t) {
-                // 온보딩: 4축(salty/sweet/spicy/fatty, 1-10) → 차트: 5축(1-5)
+                // 온보딩: 4축(salty/sweet/spicy/fatty, 1-10) → 새 5축(1-5)
+                const salty = Math.max(1, Math.min(5, Math.round(t.salty / 2)));
+                const sweet = Math.max(1, Math.min(5, Math.round(t.sweet / 2)));
+                const spicy = Math.max(1, Math.min(5, Math.round(t.spicy / 2)));
+                const fatty = Math.max(1, Math.min(5, Math.round(t.fatty / 2)));
                 setUserTaste({
-                  pref_spicy: Math.max(1, Math.min(5, Math.round(t.spicy / 2))),
-                  pref_sweet: Math.max(1, Math.min(5, Math.round(t.sweet / 2))),
-                  pref_salty: Math.max(1, Math.min(5, Math.round(t.salty / 2))),
-                  pref_umami: 3, // 온보딩에 umami 없음 → 중간값
-                  pref_sour: 3,  // 온보딩에 sour 없음 → 중간값
+                  pref_salty: salty,
+                  pref_sweet: sweet,
+                  pref_spicy: spicy,
+                  pref_umami: fatty, // fatty → 고소함 매핑에 활용
+                  pref_sour: 3,
                 });
               }
             }
@@ -156,13 +166,18 @@ export default function ProductTasteSection({ productId, productName, nutrition 
       .catch(() => {});
   }, [productId]);
 
-  // 맛 프로필: 리뷰 있으면 리뷰 데이터, 없으면 영양성분에서 예측
-  const tasteProfile = (taste && taste.review_count > 0)
-    ? { spicy: +taste.spicy, sweet: +taste.sweet, salty: +taste.salty, umami: +taste.umami, sour: +taste.sour }
-    : predictTasteFromNutrition(nutrition);
+  // 맛 프로필: 영양성분에서 예측 (리뷰 데이터는 향후 보정용)
+  const tasteProfile = predictTasteFromNutrition(nutrition);
 
+  // 사용자 선호: 온보딩 데이터를 새 5축으로 매핑
   const userTasteProfile = userTaste
-    ? { spicy: +userTaste.pref_spicy, sweet: +userTaste.pref_sweet, salty: +userTaste.pref_salty, umami: +userTaste.pref_umami, sour: +userTaste.pref_sour }
+    ? {
+        salty: +userTaste.pref_salty,
+        sweet: +userTaste.pref_sweet,
+        savory: Math.round((+userTaste.pref_umami + (+userTaste.pref_salty > 3 ? 1 : 0)) * 0.8 + 1), // 감칠맛+짠맛 → 고소함 근사
+        light: Math.max(1, 6 - Math.round((+userTaste.pref_spicy + +userTaste.pref_salty) / 2)), // 자극 적으면 담백 선호
+        intensity: Math.round((+userTaste.pref_spicy + +userTaste.pref_salty) / 2), // 매운+짠 → 자극도
+      }
     : undefined;
 
   const nutritionProfile = toNutritionProfile(nutrition);
