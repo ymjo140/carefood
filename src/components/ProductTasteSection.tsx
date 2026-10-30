@@ -102,11 +102,32 @@ export default function ProductTasteSection({ productId, productName, nutrition 
     setUserId(uid);
     fetchData();
 
-    // 사용자 맛 선호 조회
+    // 사용자 맛 선호 조회 (user_taste_preferences 테이블 우선 → 온보딩 폴백)
     fetch(`/api/taste?user_id=${uid}`)
       .then((r) => r.json())
       .then((d) => {
-        if (d.preferences) setUserTaste(d.preferences);
+        if (d.preferences && d.preferences.source !== "default") {
+          setUserTaste(d.preferences);
+        } else {
+          // 테이블에 없으면 온보딩 데이터에서 폴백
+          try {
+            const profileRaw = localStorage.getItem("carefood_profile");
+            if (profileRaw) {
+              const profile = JSON.parse(profileRaw);
+              const t = profile.tastes;
+              if (t) {
+                // 온보딩: 4축(salty/sweet/spicy/fatty, 1-10) → 차트: 5축(1-5)
+                setUserTaste({
+                  pref_spicy: Math.max(1, Math.min(5, Math.round(t.spicy / 2))),
+                  pref_sweet: Math.max(1, Math.min(5, Math.round(t.sweet / 2))),
+                  pref_salty: Math.max(1, Math.min(5, Math.round(t.salty / 2))),
+                  pref_umami: 3, // 온보딩에 umami 없음 → 중간값
+                  pref_sour: 3,  // 온보딩에 sour 없음 → 중간값
+                });
+              }
+            }
+          } catch { /* silent */ }
+        }
       })
       .catch(() => {});
   }, [productId]);

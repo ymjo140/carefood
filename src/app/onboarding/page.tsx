@@ -275,11 +275,27 @@ function OnboardingContent() {
         }
       }
       if (userId) {
+        // 프로필 저장
         await fetch("/api/profile", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ user_id: userId, ...profile }),
         });
+
+        // 맛 선호를 user_taste_preferences 테이블에도 저장 (차트 연동)
+        await fetch("/api/taste", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "save_preference",
+            user_id: userId,
+            pref_spicy: Math.max(1, Math.min(5, Math.round(state.tastes.spicy / 2))),
+            pref_sweet: Math.max(1, Math.min(5, Math.round(state.tastes.sweet / 2))),
+            pref_salty: Math.max(1, Math.min(5, Math.round(state.tastes.salty / 2))),
+            pref_umami: 3,
+            pref_sour: 3,
+          }),
+        }).catch(() => {});
       }
     } catch { /* DB 저장 실패해도 localStorage가 있으니 진행 */ }
 
