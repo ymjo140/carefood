@@ -319,7 +319,7 @@ export default function DiaryPage() {
     if (q.length < 1) { setSearchResults([]); return; }
     setSearching(true);
     try {
-      const res = await fetch(`/api/products?search=${encodeURIComponent(q)}&limit=8&sort=health_desc`);
+      const res = await fetch(`/api/products?q=${encodeURIComponent(q)}&limit=8&sort=health_desc`);
       const d = await res.json();
       setSearchResults(d.products || []);
     } catch { /* */ }
