@@ -5,12 +5,12 @@ import HomeTodayWidget from "@/components/HomeTodayWidget";
 
 /* ── 건강 목표 카드 데이터 ── */
 const GOAL_CARDS = [
-  { key: "balanced", emoji: "⚖️", label: "균형식단", desc: "전반적 건강 관리", href: "/onboarding?concern=balanced" },
-  { key: "weight_loss", emoji: "📉", label: "체중관리", desc: "건강한 다이어트", href: "/onboarding?concern=weight" },
-  { key: "muscle", emoji: "💪", label: "근력강화", desc: "고단백 식단", href: "/onboarding?concern=muscle" },
-  { key: "gut_health", emoji: "🫧", label: "장건강", desc: "소화가 편한 식품", href: "/onboarding?concern=gut_health" },
-  { key: "skin", emoji: "✨", label: "피부건강", desc: "속부터 관리", href: "/onboarding?concern=skin" },
-  { key: "energy", emoji: "⚡", label: "활력충전", desc: "영양 골고루", href: "/onboarding?concern=energy" },
+  { key: "balanced", emoji: "⚖️", label: "균형식단", desc: "전반적 건강 관리", href: "/onboarding?concern=balanced", accent: "#C4870A", accentBg: "rgba(196,135,10,0.08)" },
+  { key: "weight_loss", emoji: "📉", label: "체중관리", desc: "건강한 다이어트", href: "/onboarding?concern=weight", accent: "#2EA860", accentBg: "rgba(46,168,96,0.08)" },
+  { key: "muscle", emoji: "💪", label: "근력강화", desc: "고단백 식단", href: "/onboarding?concern=muscle", accent: "#4A8FD4", accentBg: "rgba(74,143,212,0.08)" },
+  { key: "gut_health", emoji: "🫧", label: "장건강", desc: "소화가 편한 식품", href: "/onboarding?concern=gut_health", accent: "#2BA8A0", accentBg: "rgba(43,168,160,0.08)" },
+  { key: "skin", emoji: "✨", label: "피부건강", desc: "속부터 관리", href: "/onboarding?concern=skin", accent: "#D46A8A", accentBg: "rgba(212,106,138,0.08)" },
+  { key: "energy", emoji: "⚡", label: "활력충전", desc: "영양 골고루", href: "/onboarding?concern=energy", accent: "#D47040", accentBg: "rgba(212,112,64,0.08)" },
 ];
 
 const DISEASE_GOAL_CARDS = [
@@ -30,9 +30,9 @@ const MEAL_SERVICES = [
 
 /* ── 신뢰 배지 데이터 ── */
 const TRUST_ITEMS = [
-  { emoji: "🔬", label: "식약처 영양 DB", desc: "34만 건 성분 데이터 기반 분석" },
-  { emoji: "📊", label: "건강 점수", desc: "100g당 영양소 기준 0~100점 자동 산출" },
-  { emoji: "🏷️", label: "5곳 비교", desc: "건강식단 서비스 + 4개 쇼핑몰 가격 비교" },
+  { emoji: "🔬", label: "식약처 영양 DB", num: "341,860", unit: "건", desc: "성분 데이터 기반 분석" },
+  { emoji: "📊", label: "건강 점수", num: "0~100", unit: "점", desc: "100g당 영양소 기준 자동 산출" },
+  { emoji: "🏷️", label: "통합 비교", num: "5", unit: "곳", desc: "건강식단 서비스 + 쇼핑몰 가격 비교" },
 ];
 
 /* ── 작동 방식 ── */
@@ -42,33 +42,33 @@ const HOW_IT_WORKS = [
   { step: "3", title: "주간 식단까지 자동 구성", desc: "끼니별 영양 밸런스 맞춘 7일 식단 추천" },
 ];
 
+const numFont = { fontFamily: "var(--font-display)" } as const;
+
 export default function HomePage() {
   return (
     <>
       {/* ── 히어로 ── */}
-      <section className="py-14 sm:py-24 px-4">
+      <section className="py-16 sm:py-28 px-4">
         <div className="max-w-6xl mx-auto">
-          <div className="inline-block px-3 py-1 rounded-full bg-primary-light text-primary text-xs font-bold mb-5">
-            가입 없이 체험 가능
-          </div>
           <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight leading-tight">
             내 몸에 맞는 식품,
             <br />
             <span className="text-primary">성분으로 찾다</span>
           </h1>
           <p className="mt-4 text-sm sm:text-base text-muted max-w-lg">
-            34만 식품 영양 DB · 5개 건강식단 서비스 비교 · AI 맞춤 추천
+            <span style={numFont} className="font-semibold text-foreground">341,860</span>개 식품 영양 DB ·{" "}
+            <span style={numFont} className="font-semibold text-foreground">5</span>개 건강식단 서비스 비교 · AI 맞춤 추천
           </p>
-          <div className="flex flex-wrap gap-3 mt-7">
+          <div className="flex flex-wrap gap-3 mt-8">
             <Link
               href="/onboarding"
-              className="bg-primary text-white px-7 py-3 rounded-full text-sm font-bold hover:bg-primary-dark transition-colors"
+              className="bg-primary text-white px-7 py-3.5 rounded-full text-sm font-bold hover:bg-primary-dark transition-colors"
             >
               무료로 시작하기
             </Link>
             <Link
               href="/products"
-              className="border border-border px-7 py-3 rounded-full text-sm font-medium hover:bg-card transition-colors"
+              className="border border-border px-7 py-3.5 rounded-full text-sm font-medium hover:bg-card transition-colors"
             >
               제품 둘러보기
             </Link>
@@ -88,14 +88,20 @@ export default function HomePage() {
         <div className="max-w-6xl mx-auto">
           <h2 className="text-lg font-extrabold mb-5">어떤 건강 목표가 있으세요?</h2>
 
-          {/* 메인 목표 3x2 */}
+          {/* 메인 목표 3x2 — 카드별 악센트 색상 */}
           <div className="grid grid-cols-3 gap-2.5 sm:gap-3 mb-3">
             {GOAL_CARDS.map((card) => (
               <Link
                 key={card.key}
                 href={card.href}
-                className="bg-card rounded-2xl p-3 sm:p-4 text-center hover:-translate-y-0.5 transition-transform shadow-[0_1px_3px_rgba(0,0,0,0.04)] focus-visible:ring-2 focus-visible:ring-primary"
+                className="rounded-2xl p-3 sm:p-4 text-center hover:-translate-y-0.5 transition-transform shadow-[0_1px_4px_rgba(0,0,0,0.05)] focus-visible:ring-2 focus-visible:ring-primary overflow-hidden relative"
+                style={{ background: card.accentBg }}
               >
+                {/* 상단 컬러 바 */}
+                <div
+                  className="absolute top-0 left-0 right-0 h-[3px]"
+                  style={{ background: card.accent }}
+                />
                 <div className="text-2xl mb-1.5">{card.emoji}</div>
                 <h3 className="text-sm font-bold">{card.label}</h3>
                 <p className="text-[10px] sm:text-[11px] text-muted mt-0.5">{card.desc}</p>
@@ -131,7 +137,9 @@ export default function HomePage() {
       <section className="px-4 pb-12">
         <div className="max-w-6xl mx-auto">
           <h2 className="text-lg font-extrabold mb-2">건강식단 서비스 한눈에 비교</h2>
-          <p className="text-sm text-muted mb-5">시중 식품과 함께 비교해보세요</p>
+          <p className="text-sm text-muted mb-5">
+            <span style={numFont} className="font-semibold text-foreground">260</span>개 개별 메뉴, 영양성분까지 분석
+          </p>
 
           <div className="flex gap-3 overflow-x-auto pb-2 no-scrollbar sm:grid sm:grid-cols-5 sm:overflow-visible">
             {MEAL_SERVICES.map((svc) => (
@@ -140,17 +148,17 @@ export default function HomePage() {
                 href={`/products?q=${encodeURIComponent(svc.name)}`}
                 className="min-w-[160px] sm:min-w-0 bg-card border border-border rounded-2xl p-4 hover:-translate-y-0.5 transition-transform shrink-0"
               >
-                <div className="text-2xl mb-2">{svc.emoji}</div>
+                <div className="text-3xl mb-2">{svc.emoji}</div>
                 <h3 className="font-bold text-sm">{svc.name}</h3>
                 <p className="text-[10px] text-primary font-medium mt-0.5">{svc.tag}</p>
-                <div className="mt-3 space-y-1">
+                <div className="mt-3 space-y-1.5">
                   <div className="flex justify-between text-xs">
                     <span className="text-muted">메뉴</span>
-                    <span className="font-medium">{svc.count}개</span>
+                    <span className="font-semibold" style={numFont}>{svc.count}<span className="font-normal text-muted">개</span></span>
                   </div>
                   <div className="flex justify-between text-xs">
                     <span className="text-muted">끼니당</span>
-                    <span className="font-medium">~{svc.avgPrice}원</span>
+                    <span className="font-semibold" style={numFont}>~{svc.avgPrice}<span className="font-normal text-muted">원</span></span>
                   </div>
                 </div>
               </Link>
@@ -169,7 +177,13 @@ export default function HomePage() {
                 key={item.label}
                 className="bg-card rounded-2xl p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)]"
               >
-                <div className="text-2xl mb-2">{item.emoji}</div>
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="text-2xl">{item.emoji}</div>
+                  <div>
+                    <span className="text-xl font-bold" style={numFont}>{item.num}</span>
+                    <span className="text-xs text-muted ml-0.5">{item.unit}</span>
+                  </div>
+                </div>
                 <h3 className="font-bold text-sm mb-1">{item.label}</h3>
                 <p className="text-xs text-muted">{item.desc}</p>
               </div>
@@ -182,13 +196,21 @@ export default function HomePage() {
       <section className="py-10 px-4">
         <div className="max-w-6xl mx-auto">
           <h2 className="text-lg font-extrabold mb-8">3단계로 시작하세요</h2>
-          <div className="space-y-6">
-            {HOW_IT_WORKS.map((s) => (
-              <div key={s.step} className="flex gap-4 items-start">
-                <div className="w-9 h-9 rounded-xl bg-primary text-white flex items-center justify-center font-bold text-sm shrink-0">
+          <div className="relative">
+            {HOW_IT_WORKS.map((s, i) => (
+              <div key={s.step} className="flex gap-5 items-start relative pb-8 last:pb-0">
+                {/* 세로 연결선 */}
+                {i < HOW_IT_WORKS.length - 1 && (
+                  <div className="absolute left-[18px] top-[44px] bottom-0 w-[2px] bg-border" />
+                )}
+                {/* 원형 번호 */}
+                <div
+                  className="w-[38px] h-[38px] rounded-full bg-primary text-white flex items-center justify-center font-bold text-sm shrink-0 relative z-[1]"
+                  style={numFont}
+                >
                   {s.step}
                 </div>
-                <div>
+                <div className="pt-1.5">
                   <h3 className="font-bold">{s.title}</h3>
                   <p className="text-muted text-sm mt-0.5">{s.desc}</p>
                 </div>
@@ -246,7 +268,7 @@ export default function HomePage() {
             지금 바로 내 건강 목표에 맞는 식품을 찾아보세요
           </h2>
           <p className="text-sm text-muted mb-5">
-            가입 없이도 체험할 수 있어요. 90초면 충분합니다.
+            가입 없이도 체험할 수 있어요. <span style={numFont} className="font-semibold text-foreground">90</span>초면 충분합니다.
           </p>
           <Link
             href="/onboarding"

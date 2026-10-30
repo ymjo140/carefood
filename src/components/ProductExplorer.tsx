@@ -145,6 +145,14 @@ const PER100G_PRESETS = {
   ],
 };
 
+/* ───── 매크로 색상 ───── */
+const MACRO_COLORS = {
+  protein: { bar: "#4A8FD4", bg: "rgba(74,143,212,0.08)" },
+  carbs: { bar: "#D4960A", bg: "rgba(212,150,10,0.08)" },
+  fat: { bar: "#D46A3A", bg: "rgba(212,106,58,0.08)" },
+  sodium: { bar: "#8A6EBF", bg: "rgba(138,110,191,0.08)" },
+};
+
 /* ───── 칩 버튼 ───── */
 function Chip({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
   return (
@@ -152,13 +160,62 @@ function Chip({ label, active, onClick }: { label: string; active: boolean; onCl
       onClick={onClick}
       className={`text-xs px-2.5 py-1 rounded-full transition-colors ${
         active
-          ? "bg-foreground text-card font-medium"
-          : "bg-surface text-foreground/70 hover:bg-border"
+          ? "bg-primary text-white font-medium"
+          : "bg-surface border border-border text-foreground/70 hover:border-primary/30"
       }`}
       style={{ minHeight: "28px", minWidth: "unset" }}
     >
       {label}
     </button>
+  );
+}
+
+/* ───── 매크로 미니 바 ───── */
+function MacroMiniBars({ protein, carbs, fat, sodium }: {
+  protein: number | null; carbs: number | null; fat: number | null; sodium: number | null;
+}) {
+  const items = [
+    { label: "단백", value: protein, max: 80, color: MACRO_COLORS.protein },
+    { label: "탄수", value: carbs, max: 260, color: MACRO_COLORS.carbs },
+    { label: "지방", value: fat, max: 60, color: MACRO_COLORS.fat },
+    { label: "Na", value: sodium, max: 2000, color: MACRO_COLORS.sodium },
+  ];
+  if (items.every(i => i.value == null)) return null;
+  return (
+    <div className="flex gap-1.5 mt-2">
+      {items.map(item => {
+        const ratio = item.value != null ? Math.min((item.value / item.max) * 100, 100) : 0;
+        return (
+          <div key={item.label} className="flex-1 min-w-0">
+            <div className="h-[4px] rounded-full overflow-hidden" style={{ background: item.color.bg }}>
+              <div className="h-full rounded-full transition-all" style={{ width: `${ratio}%`, background: item.color.bar }} />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ───── 건강점수 원형 배지 ───── */
+function HealthBadge({ score }: { score: number | null }) {
+  if (score == null) return null;
+  const color = score >= 80 ? "#22A860" : score >= 60 ? "#C4870A" : "#9C9A90";
+  const bg = score >= 80 ? "rgba(34,168,96,0.1)" : score >= 60 ? "rgba(196,135,10,0.1)" : "rgba(156,154,144,0.08)";
+  const r = 14;
+  const circ = 2 * Math.PI * r;
+  const offset = circ * (1 - score / 100);
+  return (
+    <div className="relative w-[38px] h-[38px] shrink-0" title={`건강점수 ${score}`}>
+      <svg viewBox="0 0 36 36" width="38" height="38">
+        <circle cx="18" cy="18" r={r} fill={bg} stroke="none" />
+        <circle cx="18" cy="18" r={r} fill="none" stroke={color} strokeWidth="2.5"
+          strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round"
+          transform="rotate(-90 18 18)" style={{ transition: "stroke-dashoffset 0.4s" }} />
+      </svg>
+      <span className="absolute inset-0 flex items-center justify-center text-[11px] font-bold"
+        style={{ fontFamily: "'Outfit', sans-serif", color }}>{score}</span>
+    </div>
   );
 }
 
@@ -449,7 +506,7 @@ function FilterPanel({
   );
 }
 
-/* ───── 제품 카드 (이미지 + 정보) ───── */
+/* ───── 제품 카드 (리디자인: 건강점수 배지 + 매크로 미니 바) ───── */
 function ProductCard({ product, isFavorite, onToggleFavorite }: {
   product: ProductWithPrices;
   isFavorite: boolean;
@@ -458,17 +515,19 @@ function ProductCard({ product, isFavorite, onToggleFavorite }: {
   const prices = product.product_prices?.filter(p => p.price && p.price > 0) || [];
   const bestPrice = prices.length > 0 ? Math.min(...prices.map(p => p.price!)) : null;
   const imageUrl = (product as ProductWithPrices & { image_url?: string }).image_url || prices.find(p => p.image_url)?.image_url;
+  const matchScore = (product as ProductWithPrices & { match_score?: number }).match_score;
+  const matchReasons = (product as ProductWithPrices & { match_reasons?: string[] }).match_reasons;
 
   return (
-    <article className="border border-border rounded-xl p-4 hover:shadow-sm transition-all flex gap-4 relative">
+    <article className="bg-card border border-border rounded-2xl p-4 hover:shadow-md transition-all flex gap-4 relative">
       {/* 이미지 */}
       {imageUrl ? (
-        <div className="w-[100px] h-[100px] sm:w-[120px] sm:h-[120px] rounded-lg overflow-hidden shrink-0 bg-surface">
+        <div className="w-[90px] h-[90px] sm:w-[110px] sm:h-[110px] rounded-xl overflow-hidden shrink-0 bg-surface">
           <img src={imageUrl} alt="" className="w-full h-full object-cover" loading="lazy" />
         </div>
       ) : (
-        <div className="w-[100px] h-[100px] sm:w-[120px] sm:h-[120px] rounded-lg shrink-0 bg-surface flex items-center justify-center">
-          <svg className="w-10 h-10 text-border" viewBox="0 0 24 24" fill="currentColor"
+        <div className="w-[90px] h-[90px] sm:w-[110px] sm:h-[110px] rounded-xl shrink-0 bg-surface flex items-center justify-center">
+          <svg className="w-8 h-8 text-border" viewBox="0 0 24 24" fill="currentColor"
             style={{ minHeight: "unset", minWidth: "unset" }}>
             <path d="M20 6h-2.18c.11-.31.18-.65.18-1 0-1.66-1.34-3-3-3-1.05 0-1.96.54-2.5 1.35l-.5.67-.5-.68C10.96 2.54 10.05 2 9 2 7.34 2 6 3.34 6 5c0 .35.07.69.18 1H4c-1.11 0-1.99.89-1.99 2L2 19c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2zm-5-2c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zM9 4c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm11 15H4v-2h16v2zm0-5H4V8h5.08L7 10.83 8.62 12 11 8.76l1-1.36 1 1.36L15.38 12 17 10.83 14.92 8H20v6z"/>
           </svg>
@@ -491,89 +550,72 @@ function ProductCard({ product, isFavorite, onToggleFavorite }: {
 
       {/* 정보 */}
       <div className="flex-1 min-w-0 flex flex-col">
-        <div className="mb-1 pr-6">
-          <Link href={`/products/${product.id}`}
-            className="text-[15px] font-bold leading-snug hover:text-primary transition-colors line-clamp-2">
-            {product.name}
-          </Link>
-          {product.manufacturer && (
-            <p className="text-xs text-muted mt-0.5 truncate">{product.manufacturer}</p>
-          )}
+        {/* 제목 + 건강점수 배지 */}
+        <div className="flex items-start gap-2 mb-1 pr-6">
+          <div className="flex-1 min-w-0">
+            <Link href={`/products/${product.id}`}
+              className="text-[15px] font-bold leading-snug hover:text-primary transition-colors line-clamp-2">
+              {product.name}
+            </Link>
+            {product.manufacturer && (
+              <p className="text-[11px] text-muted mt-0.5 truncate">{product.manufacturer}</p>
+            )}
+          </div>
+          {matchScore == null && <HealthBadge score={product.health_score} />}
         </div>
 
-        {/* 점수 + 태그 */}
-        <div className="flex flex-wrap gap-1 mb-2">
-          {/* 추천 점수 (추천순일 때) */}
-          {(product as ProductWithPrices & { match_score?: number }).match_score != null && (
-            <span className={`text-[11px] px-2 py-0.5 rounded font-bold ${
-              (product as ProductWithPrices & { match_score?: number }).match_score! >= 80 ? "bg-primary text-white"
-              : (product as ProductWithPrices & { match_score?: number }).match_score! >= 60 ? "bg-primary/70 text-white"
+        {/* 매칭 점수 + 태그 */}
+        <div className="flex flex-wrap items-center gap-1 mb-1.5">
+          {matchScore != null && (
+            <span className={`text-[11px] px-2 py-0.5 rounded-full font-bold ${
+              matchScore >= 80 ? "bg-primary text-white"
+              : matchScore >= 60 ? "bg-primary/70 text-white"
               : "bg-primary/40 text-white"
             }`} style={{ minHeight: "unset", minWidth: "unset" }}>
-              매칭 {(product as ProductWithPrices & { match_score?: number }).match_score}점
+              매칭 {matchScore}점
             </span>
           )}
-          {/* 건강 점수 (추천 점수 없을 때) */}
-          {(product as ProductWithPrices & { match_score?: number }).match_score == null && product.health_score != null && (
-            <span className={`text-[11px] px-2 py-0.5 rounded font-bold ${
-              product.health_score >= 70 ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-              : product.health_score >= 50 ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"
-              : "bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400"
-            }`} style={{ minHeight: "unset", minWidth: "unset" }}>
-              건강 {product.health_score}
-            </span>
-          )}
-          {/* 매칭 이유 (추천순) */}
-          {(product as ProductWithPrices & { match_reasons?: string[] }).match_reasons?.slice(0, 3).map((r: string) => (
-            <span key={r} className="text-[11px] px-2 py-0.5 rounded bg-primary/10 text-primary font-medium"
+          {matchReasons?.slice(0, 3).map((r: string) => (
+            <span key={r} className="text-[11px] px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium"
               style={{ minHeight: "unset", minWidth: "unset" }}>
               {r}
             </span>
           ))}
-          {/* 기능성 태그 (추천 이유 없을 때) */}
-          {!(product as ProductWithPrices & { match_reasons?: string[] }).match_reasons?.length && product.functional_tags?.slice(0, 3).map((t: string) => (
-            <span key={t} className="text-[11px] px-2 py-0.5 rounded bg-primary/8 text-primary/80 font-medium"
+          {!matchReasons?.length && product.functional_tags?.slice(0, 2).map((t: string) => (
+            <span key={t} className="text-[11px] px-2 py-0.5 rounded-full bg-primary/8 text-primary/80 font-medium"
               style={{ minHeight: "unset", minWidth: "unset" }}>
               {ALL_TAG_LABELS[t] || t}
             </span>
           ))}
         </div>
 
-        {/* 영양 인라인 */}
-        <div className="flex flex-wrap gap-x-3 gap-y-1 mb-auto">
+        {/* 칼로리 + 가격 행 */}
+        <div className="flex items-baseline justify-between mt-auto">
           {product.calories != null && (
-            <span className="text-xs text-muted"><span className="text-foreground/70 font-medium">칼로리</span> {Math.round(product.calories)}kcal</span>
+            <span className="text-xs text-muted" style={{ fontVariantNumeric: "tabular-nums" }}>
+              <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: "14px", fontWeight: 600, color: "var(--color-foreground)" }}>
+                {Math.round(product.calories)}
+              </span>
+              <span className="ml-0.5">kcal</span>
+            </span>
           )}
-          {product.protein_g != null && (
-            <span className="text-xs text-muted"><span className="text-foreground/70 font-medium">단백질</span> {Math.round(product.protein_g)}g</span>
-          )}
-          {product.sodium_mg != null && (
-            <span className="text-xs text-muted"><span className="text-foreground/70 font-medium">나트륨</span> {Math.round(product.sodium_mg)}mg</span>
-          )}
-          {product.sugar_g != null && (
-            <span className="text-xs text-muted"><span className="text-foreground/70 font-medium">당류</span> {Math.round(product.sugar_g)}g</span>
+          {bestPrice ? (
+            <span style={{ fontFamily: "'Outfit', sans-serif", fontVariantNumeric: "tabular-nums" }}
+              className="text-base font-bold">
+              {formatPrice(bestPrice)}
+            </span>
+          ) : (
+            <span className="text-[11px] text-muted">가격 수집 중</span>
           )}
         </div>
 
-        {/* 가격 */}
-        <div className="flex items-end justify-between pt-2 border-t border-border/50 mt-2">
-          {bestPrice ? (
-            <>
-              <span className="text-lg font-bold">{formatPrice(bestPrice)}</span>
-              <div className="flex gap-2 flex-wrap justify-end">
-                {prices.slice(0, 3).map(pp => pp.url ? (
-                  <a key={pp.platform} href={pp.url} target="_blank" rel="noopener noreferrer"
-                    className={`text-[11px] hover:underline ${PLATFORM_COLORS[pp.platform] || "text-muted"}`}
-                    style={{ minHeight: "unset", minWidth: "unset" }}>
-                    {PLATFORM_LABELS[pp.platform] || pp.platform} {formatPrice(pp.price!)}
-                  </a>
-                ) : null)}
-              </div>
-            </>
-          ) : (
-            <span className="text-xs text-muted">가격 정보 수집 중</span>
-          )}
-        </div>
+        {/* 매크로 미니 바 */}
+        <MacroMiniBars
+          protein={product.protein_g}
+          carbs={(product as ProductWithPrices & { carbs_g?: number | null }).carbs_g ?? null}
+          fat={(product as ProductWithPrices & { fat_g?: number | null }).fat_g ?? null}
+          sodium={product.sodium_mg}
+        />
       </div>
     </article>
   );
@@ -723,12 +765,19 @@ export default function ProductExplorer() {
       {/* 검색 */}
       <form onSubmit={handleSearch} className="mb-4">
         <div className="flex gap-2">
-          <input type="text" value={searchInput}
-            onChange={e => setSearchInput(e.target.value)}
-            placeholder="제품명으로 검색 (예: 햇반, 닭가슴살, 두부...)"
-            className="flex-1 px-4 py-2.5 rounded-lg border border-border bg-card text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
+          <div className="flex-1 relative">
+            <svg className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" viewBox="0 0 24 24"
+              fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"
+              style={{ minHeight: "unset", minWidth: "unset" }}>
+              <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+            </svg>
+            <input type="text" value={searchInput}
+              onChange={e => setSearchInput(e.target.value)}
+              placeholder="제품명으로 검색 (예: 닭가슴살, 샐러드...)"
+              className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-border bg-card text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
+          </div>
           <button type="submit"
-            className="px-5 py-2.5 bg-primary text-white rounded-lg text-sm font-bold hover:bg-primary-dark transition-colors">
+            className="px-5 py-2.5 bg-primary text-white rounded-xl text-sm font-bold hover:bg-primary-dark transition-colors">
             검색
           </button>
         </div>
@@ -752,7 +801,7 @@ export default function ProductExplorer() {
             <button key={opt.value}
               onClick={() => { setSortBy(opt.value); setPage(1); }}
               className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                sortBy === opt.value ? "bg-foreground text-card" : "text-muted hover:text-foreground"
+                sortBy === opt.value ? "bg-primary text-white" : "text-muted hover:text-foreground"
               }`}
               style={{ minHeight: "32px", minWidth: "unset" }}>
               {opt.label}
@@ -812,7 +861,9 @@ export default function ProductExplorer() {
         {/* 제품 목록 */}
         <main className="flex-1 min-w-0">
           <p className="text-sm text-muted mb-3">
-            {data ? <>총 <span className="font-bold text-foreground">{(data.total ?? 0).toLocaleString()}</span>개 제품</> : "로딩 중..."}
+            {data ? (
+              <><span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 600 }} className="text-foreground">{(data.total ?? 0).toLocaleString()}</span>개 제품{search && <span className="text-muted"> · &quot;{search}&quot; 검색 결과</span>}</>
+            ) : "로딩 중..."}
           </p>
 
           {loading && !data ? (
