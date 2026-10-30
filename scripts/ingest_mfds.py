@@ -532,8 +532,14 @@ def transform_row(row: dict) -> dict:
       AMT_NUM4    = 지방 (g)
       AMT_NUM6    = 탄수화물 (g)
       Z10500      = 1회 섭취참고량 (g)
+      영양성분함량기준량 = 영양값 기준량 (보통 100g)
+      식품중량    = 전체 제품 무게 (g)
       DB_CLASS_CM = 분류코드 (01=원재료, 02=가공식품, 03=외식)
       FOOD_REF_NM = 참고음식명
+
+    영양성분 표시 공식:
+      1회 섭취 영양값 = DB영양값 × (1회섭취참고량 / 영양성분함량기준량)
+      예: 녹차 단백질 = 27.9g × (2g / 100g) = 0.56g
 
     추정 필드 (실제 응답으로 확인 필요 → --discover 참고):
       AMT_NUM7    = 당류 (g)
@@ -592,9 +598,19 @@ def transform_row(row: dict) -> dict:
         "manufacturer":     manufacturer,
         "category_large":   category,
 
-        # 영양성분 — 확인된 필드 (AMT_NUM 기반)
+        # 제공량/중량 필드
+        # Z10500 = 1회 섭취참고량, 영양성분함량기준량 = 영양값 기준, 식품중량 = 전체 제품
         "serving_size_g":   safe_numeric(row.get("Z10500")
-                            or row.get("SERVING_SIZE")),
+                            or row.get("SERVING_SIZE")
+                            or row.get("1회섭취참고량")),
+        "nutrient_base_g":  safe_numeric(row.get("SERVING_WT")
+                            or row.get("영양성분함량기준량")
+                            or row.get("NUTRI_AMOUNT_SERVING")),
+        "total_weight_g":   safe_numeric(row.get("FOOD_SIZE")
+                            or row.get("식품중량")
+                            or row.get("Z10000")),
+
+        # 영양성분 — 확인된 필드 (AMT_NUM 기반)
         "calories":         safe_numeric(row.get("AMT_NUM1")
                             or row.get("NUTR_CONT1")),
         "carbs_g":          safe_numeric(row.get("AMT_NUM6")

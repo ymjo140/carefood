@@ -148,6 +148,7 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
     food_code: string | null; food_type: string | null;
     category_large: string | null; meal_type: string | null;
     serving_size_g: number | null; calories: number | null;
+    nutrient_base_g: number | null; total_weight_g: number | null;
     protein_g: number | null; fat_g: number | null;
     saturated_fat_g: number | null; trans_fat_g: number | null;
     carbs_g: number | null; sugar_g: number | null;
@@ -222,13 +223,37 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
   if (product.spicy_score >= 3)
     safetyNotes.push({ type: "warn", text: `매운맛 ${product.spicy_score}단계 — 자극에 민감한 분 참고` });
 
-  // 매크로 경고 판단
-  const sodiumHigh = product.sodium_mg != null && product.sodium_mg > 1000;
-  const fatHigh = product.fat_g != null && product.fat_g > 25;
-  const sugarHigh = product.sugar_g != null && product.sugar_g > 15;
+  // ── 영양성분 기준 보정 ──
+  // DB 값 = nutrient_base_g(보통 100g) 기준
+  // 표시 = serving_size_g(1회 섭취참고량) 기준
+  const baseG = product.nutrient_base_g || product.serving_size_g || 100;
+  const servingG = product.serving_size_g || baseG;
+  const ratio = (baseG > 0 && servingG !== baseG) ? servingG / baseG : 1;
+
+  // 보정된 영양값 (1회 섭취 기준)
+  const adj = (v: number | null) => v != null ? Math.round(v * ratio * 100) / 100 : null;
+  const displayCal = adj(product.calories);
+  const displayProtein = adj(product.protein_g);
+  const displayFat = adj(product.fat_g);
+  const displayCarbs = adj(product.carbs_g);
+  const displaySodium = adj(product.sodium_mg);
+  const displaySugar = adj(product.sugar_g);
+  const displayFiber = adj(product.fiber_g);
+  const displaySatFat = adj(product.saturated_fat_g);
+  const displayCholesterol = adj(product.cholesterol_mg);
+
+  // 표시 기준 라벨
+  const servingLabel = ratio === 1
+    ? (baseG === 100 ? "100g 당" : `1회 제공량 ${servingG}g`)
+    : `1회 제공량 ${servingG}g`;
+
+  // 매크로 경고 판단 (보정값 기준)
+  const sodiumHigh = displaySodium != null && displaySodium > 1000;
+  const fatHigh = displayFat != null && displayFat > 25;
+  const sugarHigh = displaySugar != null && displaySugar > 15;
 
   // 서빙 기준 100g 환산
-  const s = product.serving_size_g;
+  const s = servingG;
   const per100 = (v: number | null) => (v != null && s && s > 0) ? Math.round((v / s) * 100 * 10) / 10 : null;
 
   const mfrLabel = product.category_large === "건강식단서비스"
@@ -291,25 +316,25 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
           <div className="flex items-center justify-between mb-4">
             <div>
               <span className="font-[family-name:var(--font-outfit)] text-3xl font-extrabold tabular-nums">
-                {product.calories ?? "—"}
+                {displayCal != null ? Math.round(displayCal) : "—"}
               </span>
               <span className="text-sm text-muted ml-1">kcal</span>
             </div>
-            {s && <span className="text-xs text-muted">{s === 100 ? "100g 당" : `1회 제공량 ${s}g`}</span>}
+            {s && <span className="text-xs text-muted">{servingLabel}</span>}
           </div>
 
           <div className="divide-y divide-border/50">
-            {product.protein_g != null && (
-              <MacroBar label="단백질" value={product.protein_g} unit="g" dailyMax={80} cssVar="macro-protein" />
+            {displayProtein != null && (
+              <MacroBar label="단백질" value={displayProtein} unit="g" dailyMax={80} cssVar="macro-protein" />
             )}
-            {product.carbs_g != null && (
-              <MacroBar label="탄수화물" value={product.carbs_g} unit="g" dailyMax={260} cssVar="macro-carbs" />
+            {displayCarbs != null && (
+              <MacroBar label="탄수화물" value={displayCarbs} unit="g" dailyMax={260} cssVar="macro-carbs" />
             )}
-            {product.fat_g != null && (
-              <MacroBar label="지방" value={product.fat_g} unit="g" dailyMax={60} cssVar="macro-fat" />
+            {displayFat != null && (
+              <MacroBar label="지방" value={displayFat} unit="g" dailyMax={60} cssVar="macro-fat" />
             )}
-            {product.sodium_mg != null && (
-              <MacroBar label="나트륨" value={product.sodium_mg} unit="mg" dailyMax={2000} cssVar="macro-sodium" />
+            {displaySodium != null && (
+              <MacroBar label="나트륨" value={displaySodium} unit="mg" dailyMax={2000} cssVar="macro-sodium" />
             )}
           </div>
 
@@ -359,15 +384,15 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
               <tbody>
                 {[
                   { label: "칼로리", val: product.calories, unit: "kcal" },
-                  { label: "탄수화물", val: product.carbs_g, unit: "g" },
-                  { label: "당류", val: product.sugar_g, unit: "g" },
+                  { label: "탄수화물", val: displayCarbs, unit: "g" },
+                  { label: "당류", val: displaySugar, unit: "g" },
                   { label: "단백질", val: product.protein_g, unit: "g" },
-                  { label: "지방", val: product.fat_g, unit: "g" },
-                  { label: "포화지방", val: product.saturated_fat_g, unit: "g" },
-                  { label: "트랜스지방", val: product.trans_fat_g, unit: "g" },
-                  { label: "콜레스테롤", val: product.cholesterol_mg, unit: "mg" },
-                  { label: "나트륨", val: product.sodium_mg, unit: "mg" },
-                  { label: "식이섬유", val: product.fiber_g, unit: "g" },
+                  { label: "지방", val: displayFat, unit: "g" },
+                  { label: "포화지방", val: displaySatFat, unit: "g" },
+                  { label: "트랜스지방", val: adj(product.trans_fat_g), unit: "g" },
+                  { label: "콜레스테롤", val: displayCholesterol, unit: "mg" },
+                  { label: "나트륨", val: displaySodium, unit: "mg" },
+                  { label: "식이섬유", val: displayFiber, unit: "g" },
                 ].filter(r => r.val != null).map(r => (
                   <tr key={r.label} className="border-b border-border/50 last:border-0">
                     <td className="py-2 px-4 font-medium">{r.label}</td>
@@ -423,12 +448,12 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
         productId={productId}
         productName={product.name}
         nutrition={{
-          calories: product.calories,
-          protein_g: product.protein_g,
-          carbs_g: product.carbs_g,
-          fat_g: product.fat_g,
-          fiber_g: product.fiber_g,
-          sodium_mg: product.sodium_mg,
+          calories: displayCal,
+          protein_g: displayProtein,
+          carbs_g: displayCarbs,
+          fat_g: displayFat,
+          fiber_g: displayFiber,
+          sodium_mg: displaySodium,
         }}
       />
 
