@@ -42,7 +42,7 @@ type DualRadarChartProps = {
 };
 
 const TASTE_LABELS = ["매운맛", "단맛", "짠맛", "감칠맛", "신맛"];
-const NUTRITION_LABELS = ["단백질", "탄수화물", "지방", "섬유질", "균형"];
+const NUTRITION_LABELS = ["단백", "탄수", "지방", "섬유질", "균형"];
 
 function polarToCartesian(cx: number, cy: number, r: number, angleDeg: number) {
   const rad = ((angleDeg - 90) * Math.PI) / 180;
@@ -172,7 +172,7 @@ export default function DualRadarChart({
 
   // 듀얼 모드: 좌우로 두 오각형 나란히
   if (mode === "dual" && nutritionValues) {
-    const pad = 44; // 라벨 잘림 방지 여백
+    const pad = 52; // 라벨 잘림 방지 여백 (한글 2글자 기준)
     const halfW = size / 2 + pad;
     const dualSvgW = halfW * 2 + 20;
     const smallR = size * 0.34;
