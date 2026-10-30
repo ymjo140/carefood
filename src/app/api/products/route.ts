@@ -315,6 +315,7 @@ function buildProductQuery(supabase: any, params: ReturnType<typeof parseSearchP
     .from("products")
     .select("*", { count: "exact" })
     .eq("is_active", true)
+    .not("health_score", "is", null)
     .order(orderBy.column, { ascending: orderBy.ascending });
 
   // 맛 필터
