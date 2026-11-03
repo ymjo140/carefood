@@ -39,15 +39,13 @@ function getTasteBenchmarkLabel(key: string, level: number): string {
   if (level === 0) return "전체";
   const benchmarks = TASTE_BENCHMARKS[key];
   if (!benchmarks) return `${level}`;
-  // 정확히 일치하는 벤치마크가 있으면 그 이름
-  if (benchmarks[level]) return benchmarks[level];
-  // 없으면 가장 가까운 벤치마크 사이로 표현
+  // 정확히 일치하는 벤치마크
+  if (benchmarks[level]) return `${benchmarks[level]} 정도`;
+  // 가장 가까운 벤치마크
   const levels = Object.keys(benchmarks).map(Number).sort((a, b) => a - b);
-  const lower = levels.filter(l => l <= level).pop();
-  const upper = levels.find(l => l >= level);
-  if (lower && benchmarks[lower] && level - lower <= 1) return `${benchmarks[lower]}+`;
-  if (upper && benchmarks[upper] && upper - level <= 1) return `${benchmarks[upper]}-`;
-  return `${level}`;
+  let closest = levels[0];
+  for (const l of levels) { if (Math.abs(l - level) < Math.abs(closest - level)) closest = l; }
+  return `${benchmarks[closest]} 정도`;
 }
 
 const TASTE_CONFIG = [
