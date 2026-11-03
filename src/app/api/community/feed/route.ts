@@ -10,14 +10,40 @@ import { createServiceRoleClient } from "@/lib/supabase/server";
 export async function GET(request: NextRequest) {
   await connection();
   const { searchParams } = request.nextUrl;
+  const userId = searchParams.get("user_id");
+  const postId = searchParams.get("id"); // 단일 게시글 조회
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sb = createServiceRoleClient() as any;
+
+  /* ── 단일 게시글 조회 모드 ── */
+  if (postId) {
+    const { data: post, error } = await sb
+      .from("community_feed")
+      .select("*")
+      .eq("id", postId)
+      .eq("is_active", true)
+      .single();
+    if (error || !post) return NextResponse.json({ error: "게시글 없음" }, { status: 404 });
+
+    let isLiked = false;
+    let isFollowing = false;
+    if (userId) {
+      const [likeRes, followRes] = await Promise.all([
+        sb.from("community_feed_likes").select("id").eq("post_id", postId).eq("user_id", userId).maybeSingle(),
+        sb.from("community_follows").select("id").eq("follower_id", userId).eq("following_id", post.user_id).maybeSingle(),
+      ]);
+      isLiked = !!likeRes.data;
+      isFollowing = !!followRes.data;
+    }
+    return NextResponse.json({ post: { ...post, is_liked: isLiked, is_following: isFollowing } });
+  }
+
+  /* ── 피드 목록 모드 ── */
   const tab = searchParams.get("tab") || "recommend";
   const concern = searchParams.get("concern");
   const page = Number(searchParams.get("page") || 1);
   const limit = 20;
-  const userId = searchParams.get("user_id");
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const sb = createServiceRoleClient() as any;
 
   let query = sb
     .from("community_feed")

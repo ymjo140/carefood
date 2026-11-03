@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import MealCard from "@/components/community/MealCard";
 import DailyCard from "@/components/community/DailyCard";
 import PostComposer from "@/components/community/PostComposer";
@@ -20,20 +20,41 @@ function getUserId(): string {
   }
 }
 
+const NICKNAME_ADJECTIVES = ["건강한", "활기찬", "든든한", "상쾌한", "깔끔한", "씩씩한", "발랄한", "포근한", "산뜻한", "튼튼한"];
+const NICKNAME_ANIMALS = ["사자", "호랑이", "토끼", "곰", "여우", "다람쥐", "펭귄", "고래", "부엉이", "사슴"];
+
+function generateNickname(): string {
+  const adj = NICKNAME_ADJECTIVES[Math.floor(Math.random() * NICKNAME_ADJECTIVES.length)];
+  const animal = NICKNAME_ANIMALS[Math.floor(Math.random() * NICKNAME_ANIMALS.length)];
+  const num = Math.floor(Math.random() * 100);
+  return `${adj}${animal}${num}`;
+}
+
 function getUserProfile(): { nickname: string; ageGroup?: string; concerns?: string[]; goals?: string[] } {
   try {
     const raw = localStorage.getItem("carefood_profile");
     if (raw) {
       const p = JSON.parse(raw);
+      let nick = p.nickname || p.display_name;
+      if (!nick || nick === "익명") {
+        nick = generateNickname();
+        // 생성된 닉네임 저장
+        p.nickname = nick;
+        localStorage.setItem("carefood_profile", JSON.stringify(p));
+      }
       return {
-        nickname: p.nickname || p.display_name || "익명",
+        nickname: nick,
         ageGroup: p.age_group,
         concerns: p.health_concerns || p.concerns,
         goals: p.goals,
       };
     }
+    // 프로필 자체가 없으면 닉네임만 생성해서 저장
+    const nick = generateNickname();
+    localStorage.setItem("carefood_profile", JSON.stringify({ nickname: nick }));
+    return { nickname: nick };
   } catch { /* */ }
-  return { nickname: "익명" };
+  return { nickname: generateNickname() };
 }
 
 const CONCERN_LABELS: Record<string, string> = {
@@ -55,11 +76,16 @@ export default function CommunityPage() {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [composerOpen, setComposerOpen] = useState(false);
+  const [toast, setToast] = useState("");
   const sentinelRef = useRef<HTMLDivElement>(null);
   const userId = useRef("");
-  const profile = useRef(getUserProfile());
+  const profile = useRef<{ nickname: string; ageGroup?: string; concerns?: string[]; goals?: string[] }>({ nickname: "익명" });
+  const router = useRouter();
 
-  useEffect(() => { userId.current = getUserId(); }, []);
+  useEffect(() => {
+    userId.current = getUserId();
+    profile.current = getUserProfile();
+  }, []);
 
   /* ─── fetch feed ─── */
   const fetchFeed = useCallback(async (pg = 1, append = false) => {
@@ -118,10 +144,30 @@ export default function CommunityPage() {
         body: JSON.stringify({ post_id: postId, user_id: userId.current }),
       });
       if (res.ok) {
+        const data = await res.json();
         setPosts(prev => prev.map(p =>
           p.id === postId ? { ...p, copy_count: (p.copy_count || 0) + 1 } : p
         ));
+        setToast(`식단 ${data.copied || ""}개가 오늘 식단에 저장되었어요!`);
+        setTimeout(() => setToast(""), 2500);
       }
+    } catch { /* */ }
+  };
+
+  const handleFollow = async (authorId: string) => {
+    try {
+      const res = await fetch("/api/community/follow", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ follower_id: userId.current, following_id: authorId }),
+      });
+      const data = await res.json();
+      if (data.following) {
+        setToast("팔로우했어요!");
+      } else {
+        setToast("팔로우를 취소했어요");
+      }
+      setTimeout(() => setToast(""), 2000);
     } catch { /* */ }
   };
 
@@ -192,15 +238,19 @@ export default function CommunityPage() {
                 post={post}
                 onLike={() => handleLike(post.id)}
                 onCopy={() => handleCopy(post.id)}
-                onComment={() => {/* navigate to detail */}}
-                onAuthorClick={() => {/* future: profile */}}
+                onComment={() => router.push(`/community/${post.id}`)}
+                onAuthorClick={() => router.push(`/community/${post.id}`)}
+                onFollow={post.user_id !== userId.current ? () => handleFollow(post.user_id) : undefined}
+                onCardClick={() => router.push(`/community/${post.id}`)}
               />
             ) : (
               <DailyCard
                 key={post.id}
                 post={post}
                 onLike={() => handleLike(post.id)}
-                onComment={() => {/* navigate to detail */}}
+                onComment={() => router.push(`/community/${post.id}`)}
+                onFollow={post.user_id !== userId.current ? () => handleFollow(post.user_id) : undefined}
+                onCardClick={() => router.push(`/community/${post.id}`)}
               />
             )
           )
@@ -214,6 +264,14 @@ export default function CommunityPage() {
           </div>
         )}
       </div>
+
+      {/* ── Toast ── */}
+      {toast && (
+        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-xl shadow-lg text-[13px] font-medium"
+          style={{ background: "#C4870A", color: "#0C1117", maxWidth: "90vw" }}>
+          {toast}
+        </div>
+      )}
 
       {/* ── FAB (글쓰기) ── */}
       <button onClick={() => setComposerOpen(true)}

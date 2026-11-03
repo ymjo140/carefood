@@ -21,9 +21,11 @@ type Props = {
   };
   onLike: () => void;
   onComment: () => void;
+  onFollow?: () => void;
+  onCardClick?: () => void;
 };
 
-export default function DailyCard({ post, onLike, onComment }: Props) {
+export default function DailyCard({ post, onLike, onComment, onFollow, onCardClick }: Props) {
   const timeAgo = (() => {
     const diff = Date.now() - new Date(post.created_at).getTime();
     const mins = Math.floor(diff / 60000);
@@ -34,7 +36,11 @@ export default function DailyCard({ post, onLike, onComment }: Props) {
   })();
 
   return (
-    <div className="rounded-xl overflow-hidden" style={{ background: "#161C24" }}>
+    <div className="rounded-xl overflow-hidden cursor-pointer" style={{ background: "#161C24" }}
+      onClick={(e) => {
+        if ((e.target as HTMLElement).closest("button")) return;
+        onCardClick?.();
+      }}>
       <div className="p-4">
         {/* Author */}
         <div className="flex items-center gap-2.5 mb-3">
@@ -45,6 +51,13 @@ export default function DailyCard({ post, onLike, onComment }: Props) {
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
               <span className="text-[13px] font-bold" style={{ color: "#ECEBE6" }}>{post.author_nickname}</span>
+              {onFollow && (
+                <button onClick={onFollow}
+                  className="text-[10px] px-2.5 py-0.5 rounded-full font-medium transition-colors"
+                  style={{ background: "#C4870A", color: "#0C1117" }}>
+                  팔로우
+                </button>
+              )}
               <span className="text-[10px]" style={{ color: "#8A919A" }}>{timeAgo}</span>
             </div>
             <div className="flex gap-1 mt-0.5">

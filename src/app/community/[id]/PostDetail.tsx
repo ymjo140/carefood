@@ -10,6 +10,34 @@ const CONCERN_LABELS: Record<string, string> = {
   muscle: "근력", blood_pressure: "혈압", diabetes: "혈당", kidney: "신장",
 };
 
+const NICKNAME_ADJECTIVES = ["건강한", "활기찬", "든든한", "상쾌한", "깔끔한", "씩씩한", "발랄한", "포근한", "산뜻한", "튼튼한"];
+const NICKNAME_ANIMALS = ["사자", "호랑이", "토끼", "곰", "여우", "다람쥐", "펭귄", "고래", "부엉이", "사슴"];
+
+function getOrCreateNickname(): string {
+  try {
+    const raw = localStorage.getItem("carefood_profile");
+    if (raw) {
+      const p = JSON.parse(raw);
+      if (p.nickname && p.nickname !== "익명") return p.nickname;
+      // 닉네임 없으면 생성 후 저장
+      const adj = NICKNAME_ADJECTIVES[Math.floor(Math.random() * NICKNAME_ADJECTIVES.length)];
+      const animal = NICKNAME_ANIMALS[Math.floor(Math.random() * NICKNAME_ANIMALS.length)];
+      const num = Math.floor(Math.random() * 100);
+      const nick = `${adj}${animal}${num}`;
+      p.nickname = nick;
+      localStorage.setItem("carefood_profile", JSON.stringify(p));
+      return nick;
+    }
+    // 프로필 자체가 없는 경우
+    const adj = NICKNAME_ADJECTIVES[Math.floor(Math.random() * NICKNAME_ADJECTIVES.length)];
+    const animal = NICKNAME_ANIMALS[Math.floor(Math.random() * NICKNAME_ANIMALS.length)];
+    const num = Math.floor(Math.random() * 100);
+    const nick = `${adj}${animal}${num}`;
+    localStorage.setItem("carefood_profile", JSON.stringify({ nickname: nick }));
+    return nick;
+  } catch { return "익명"; }
+}
+
 function getUserId(): string {
   try {
     let id = localStorage.getItem("carefood_anon_id");
@@ -43,6 +71,7 @@ export default function PostDetail() {
   const [commentText, setCommentText] = useState("");
   const [sending, setSending] = useState(false);
   const [following, setFollowing] = useState(false);
+  const [toast, setToast] = useState("");
   const userId = useRef("");
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -55,13 +84,16 @@ export default function PostDetail() {
       setLoading(true);
       try {
         const uid = getUserId();
-        const params = new URLSearchParams({ tab: "recommend", page: "1", user_id: uid });
-        const res = await fetch(`/api/community/feed?${params}`);
-        const data = await res.json();
-        const found = (data.posts || []).find((p: FeedPost) => p.id === id);
-        if (found) setPost(found);
-
-        const cRes = await fetch(`/api/community/comment?post_id=${id}`);
+        // 단일 게시글 조회 API
+        const [postRes, cRes] = await Promise.all([
+          fetch(`/api/community/feed?id=${id}&user_id=${uid}`),
+          fetch(`/api/community/comment?post_id=${id}`),
+        ]);
+        const postData = await postRes.json();
+        if (postData.post) {
+          setPost(postData.post);
+          setFollowing(postData.post.is_following ?? false);
+        }
         const cData = await cRes.json();
         setComments(cData.comments || []);
       } catch { /* */ }
@@ -92,7 +124,13 @@ export default function PostDetail() {
       body: JSON.stringify({ post_id: id, user_id: userId.current }),
     });
     if (res.ok) {
+      const data = await res.json();
       setPost((p: FeedPost) => ({ ...p, copy_count: (p.copy_count || 0) + 1 }));
+      setToast(`식단 ${data.copied || ""}개가 오늘 식단에 저장되었어요!`);
+      setTimeout(() => setToast(""), 2500);
+    } else {
+      setToast("따라하기 실패 — 다시 시도해주세요");
+      setTimeout(() => setToast(""), 2500);
     }
   };
 
@@ -111,9 +149,7 @@ export default function PostDetail() {
     if (!commentText.trim() || sending) return;
     setSending(true);
     try {
-      const nickname = (() => {
-        try { return JSON.parse(localStorage.getItem("carefood_profile") || "{}").nickname || "익명"; } catch { return "익명"; }
-      })();
+      const nickname = getOrCreateNickname();
       const res = await fetch("/api/community/comment", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -250,6 +286,14 @@ export default function PostDetail() {
           </p>
         )}
       </div>
+
+      {/* ── Toast ── */}
+      {toast && (
+        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-xl shadow-lg text-[13px] font-medium animate-[fadeIn_0.2s_ease]"
+          style={{ background: "#C4870A", color: "#0C1117", maxWidth: "90vw" }}>
+          {toast}
+        </div>
+      )}
 
       {/* ── Comment input (fixed bottom) ── */}
       <div className="fixed bottom-0 left-0 right-0 z-40 px-4 py-3 border-t"

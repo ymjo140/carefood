@@ -30,14 +30,17 @@ type Props = {
     is_liked?: boolean;
     created_at: string;
     user_id: string;
+    product_ids?: string[];
   };
   onLike: () => void;
   onCopy: () => void;
   onComment: () => void;
   onAuthorClick?: () => void;
+  onFollow?: () => void;
+  onCardClick?: () => void;
 };
 
-export default function MealCard({ post, onLike, onCopy, onComment, onAuthorClick }: Props) {
+export default function MealCard({ post, onLike, onCopy, onComment, onAuthorClick, onFollow, onCardClick }: Props) {
   const meal = post.meal_data;
   const total = meal?.total;
   const emoji = post.meal_type ? MEAL_EMOJI[post.meal_type] || "🍽️" : "🍽️";
@@ -54,7 +57,12 @@ export default function MealCard({ post, onLike, onCopy, onComment, onAuthorClic
   })();
 
   return (
-    <div className="rounded-xl overflow-hidden" style={{ background: "#161C24" }}>
+    <div className="rounded-xl overflow-hidden cursor-pointer" style={{ background: "#161C24" }}
+      onClick={(e) => {
+        // 버튼 클릭 시에는 카드 이동 방지
+        if ((e.target as HTMLElement).closest("button")) return;
+        onCardClick?.();
+      }}>
       {/* Author header */}
       <div className="px-4 pt-3 pb-2 flex items-start justify-between">
         <div className="flex items-center gap-2.5 min-w-0">
@@ -81,6 +89,13 @@ export default function MealCard({ post, onLike, onCopy, onComment, onAuthorClic
           </div>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
+          {onFollow && (
+            <button onClick={onFollow}
+              className="text-[10px] px-2.5 py-1 rounded-full font-medium transition-colors"
+              style={{ background: "#C4870A", color: "#0C1117" }}>
+              팔로우
+            </button>
+          )}
           {mealLabel && (
             <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ background: "#252C35", color: "#ECEBE6" }}>
               {emoji} {mealLabel}
