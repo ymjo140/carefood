@@ -148,8 +148,8 @@ export default function CommunityPage() {
         setPosts(prev => prev.map(p =>
           p.id === postId ? { ...p, copy_count: (p.copy_count || 0) + 1 } : p
         ));
-        setToast(`식단 ${data.copied || ""}개가 오늘 식단에 저장되었어요!`);
-        setTimeout(() => setToast(""), 2500);
+        setToast(`✅ ${data.copied || ""}개 음식이 오늘 식단에 저장됨 · 보러가기 →`);
+        setTimeout(() => setToast(""), 4000);
       }
     } catch { /* */ }
   };
@@ -267,8 +267,10 @@ export default function CommunityPage() {
 
       {/* ── Toast ── */}
       {toast && (
-        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-xl shadow-lg text-[13px] font-medium"
-          style={{ background: "#C4870A", color: "#0C1117", maxWidth: "90vw" }}>
+        <div
+          onClick={() => { if (toast.includes("보러가기")) router.push("/diary"); }}
+          className="fixed top-16 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-xl shadow-lg text-[13px] font-medium"
+          style={{ background: "#C4870A", color: "#0C1117", maxWidth: "90vw", cursor: toast.includes("보러가기") ? "pointer" : "default" }}>
           {toast}
         </div>
       )}
