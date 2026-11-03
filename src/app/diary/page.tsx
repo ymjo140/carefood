@@ -10,6 +10,7 @@ type DiaryEntry = {
   food_name: string;
   product_id: string | null;
   serving_g: number | null;
+  serving_multiplier: number | null;
   calories: number | null;
   protein_g: number | null;
   fat_g: number | null;
@@ -18,6 +19,19 @@ type DiaryEntry = {
   sodium_mg: number | null;
   fiber_g: number | null;
   memo: string | null;
+};
+
+type RecentMeal = {
+  food_name: string;
+  product_id: string | null;
+  serving_g: number | null;
+  calories: number | null;
+  protein_g: number | null;
+  fat_g: number | null;
+  carbs_g: number | null;
+  sugar_g: number | null;
+  sodium_mg: number | null;
+  fiber_g: number | null;
 };
 
 type DiaryData = {
@@ -213,6 +227,9 @@ export default function DiaryPage() {
   const [commonFoods, setCommonFoods] = useState<CommonFood[]>([]);
   const [searching, setSearching] = useState(false);
   const [manualForm, setManualForm] = useState({ food_name: "", calories: "", protein_g: "", serving_g: "" });
+  const [servingMultiplier, setServingMultiplier] = useState<number>(1);
+  const [recentMeals, setRecentMeals] = useState<RecentMeal[]>([]);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [photoAnalyzing, setPhotoAnalyzing] = useState(false);
   const [photoResults, setPhotoResults] = useState<{
@@ -320,7 +337,20 @@ export default function DiaryPage() {
     } catch { /* */ }
   }, []);
 
+  // 최근 기록 로드 (다시 먹기)
+  const loadRecentMeals = useCallback(async () => {
+    if (!userId) return;
+    try {
+      const res = await fetch(`/api/diary?user_id=${userId}&recent=true`);
+      if (res.ok) {
+        const d = await res.json();
+        setRecentMeals(d.recent || []);
+      }
+    } catch { /* */ }
+  }, [userId]);
+
   useEffect(() => { if (addTab === "favorites") loadFavorites(); }, [addTab, loadFavorites]);
+  useEffect(() => { if (addingMeal) loadRecentMeals(); }, [addingMeal, loadRecentMeals]);
 
   const loadWeeklyTrend = useCallback(async () => {
     if (!userId) return;
@@ -366,12 +396,14 @@ export default function DiaryPage() {
         user_id: userId, date, meal_type: addingMeal,
         product_id: product.id, food_name: product.name,
         serving_g: product.serving_size_g || 100,
+        serving_multiplier: servingMultiplier,
       }),
     });
     setAddingMeal(null);
     setSearchQuery("");
     setSearchResults([]);
     setCommonFoods([]);
+    setServingMultiplier(1);
     fetchDiary();
     loadWeeklyTrend();
   };
@@ -386,6 +418,7 @@ export default function DiaryPage() {
         user_id: userId, date, meal_type: addingMeal,
         food_name: food.name,
         serving_g: food.serving_size_g || 100,
+        serving_multiplier: servingMultiplier,
         calories: food.calories,
         protein_g: food.protein_g,
         carbs_g: food.carbs_g,
@@ -398,6 +431,33 @@ export default function DiaryPage() {
     setSearchQuery("");
     setSearchResults([]);
     setCommonFoods([]);
+    setServingMultiplier(1);
+    fetchDiary();
+    loadWeeklyTrend();
+  };
+
+  // 다시 먹기
+  const addFromRecent = async (meal: RecentMeal) => {
+    if (!addingMeal) return;
+    await fetch("/api/diary", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        user_id: userId, date, meal_type: addingMeal,
+        product_id: meal.product_id,
+        food_name: meal.food_name,
+        serving_g: meal.serving_g,
+        serving_multiplier: servingMultiplier,
+        calories: meal.calories,
+        protein_g: meal.protein_g,
+        carbs_g: meal.carbs_g,
+        fat_g: meal.fat_g,
+        sodium_mg: meal.sodium_mg,
+        sugar_g: meal.sugar_g,
+      }),
+    });
+    setAddingMeal(null);
+    setServingMultiplier(1);
     fetchDiary();
     loadWeeklyTrend();
   };
@@ -484,8 +544,10 @@ export default function DiaryPage() {
   };
 
   const deleteEntry = async (id: string) => {
-    await fetch(`/api/diary?id=${id}`, { method: "DELETE" });
+    await fetch(`/api/diary?id=${id}&user_id=${userId}`, { method: "DELETE" });
+    setDeleteConfirmId(null);
     fetchDiary();
+    loadWeeklyTrend();
   };
 
   /* ── 날짜 이동 ── */
@@ -690,6 +752,7 @@ export default function DiaryPage() {
                           <div className="flex-1 min-w-0">
                             <p className="text-[13px] font-semibold truncate">{e.food_name}</p>
                             <div className="flex gap-2 text-[11px] text-muted mt-0.5" style={{ fontVariantNumeric: "tabular-nums" }}>
+                              {e.serving_multiplier != null && e.serving_multiplier !== 1 && <span className="text-primary font-semibold">{e.serving_multiplier}인분</span>}
                               {e.serving_g != null && <span>{e.serving_g}g</span>}
                               {e.protein_g != null && <span>단백질 {e.protein_g}g</span>}
                               {e.sodium_mg != null && e.sodium_mg > 600 && <span style={{ color: "var(--macro-sodium)", fontWeight: 600 }}>나트륨 {e.sodium_mg}mg</span>}
@@ -699,7 +762,16 @@ export default function DiaryPage() {
                           <span className="text-[14px] font-semibold shrink-0" style={{ fontFamily: "var(--font-outfit), sans-serif", fontVariantNumeric: "tabular-nums" }}>
                             {e.calories || 0}
                           </span>
-                          <button onClick={() => deleteEntry(e.id)} className="text-muted hover:text-accent opacity-0 group-hover:opacity-100 transition-all text-xs px-1">✕</button>
+                          {deleteConfirmId === e.id ? (
+                            <div className="flex gap-1 shrink-0">
+                              <button onClick={() => deleteEntry(e.id)} className="text-[10px] px-2 py-1 rounded-lg bg-accent/15 text-accent font-bold">삭제</button>
+                              <button onClick={() => setDeleteConfirmId(null)} className="text-[10px] px-2 py-1 rounded-lg bg-surface text-muted font-medium">취소</button>
+                            </div>
+                          ) : (
+                            <button onClick={() => setDeleteConfirmId(e.id)} className="text-muted hover:text-accent transition-all text-xs px-1.5 py-1 shrink-0 rounded-lg hover:bg-accent/10" title="삭제">
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14"/></svg>
+                            </button>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -728,6 +800,45 @@ export default function DiaryPage() {
                         ))}
                       </div>
                       <div className="p-4" style={{ background: "color-mix(in srgb, var(--surface) 50%, transparent)" }}>
+                        {/* 섭취량 선택 (모든 탭 공통) */}
+                        <div className="flex items-center gap-2 mb-3">
+                          <span className="text-[11px] text-muted font-medium">섭취량</span>
+                          <div className="flex gap-1">
+                            {[0.5, 1, 1.5, 2].map((m) => (
+                              <button
+                                key={m}
+                                onClick={() => setServingMultiplier(m)}
+                                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all ${
+                                  servingMultiplier === m
+                                    ? "bg-primary text-white"
+                                    : "bg-surface text-muted hover:text-foreground"
+                                }`}
+                              >
+                                {m === 1 ? "1인분" : `${m}인분`}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* 다시 먹기 (최근 기록) */}
+                        {recentMeals.length > 0 && addTab === "search" && !searchQuery && (
+                          <div className="mb-3">
+                            <div className="text-[10px] font-bold text-muted uppercase tracking-wider px-1 mb-1.5">최근 기록</div>
+                            <div className="flex gap-1.5 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
+                              {recentMeals.slice(0, 5).map((m, i) => (
+                                <button
+                                  key={i}
+                                  onClick={() => addFromRecent(m)}
+                                  className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl bg-card border border-border hover:border-primary transition-all text-[11px]"
+                                >
+                                  <span className="font-semibold truncate max-w-[100px]">{m.food_name}</span>
+                                  {m.calories != null && <span className="text-muted">{m.calories}kcal</span>}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
                         {addTab === "search" && (
                           <>
                             <div className="relative mb-3">

@@ -10,11 +10,9 @@ function getUserId(req: NextRequest): string | null {
   return null;
 }
 
-// GET: 특정 날짜의 식단 기록 조회
+// GET: 특정 날짜의 식단 기록 조회 (+ recent=true 모드)
 export async function GET(req: NextRequest) {
-  const date = req.nextUrl.searchParams.get("date") || new Date().toISOString().slice(0, 10);
   const userId = req.nextUrl.searchParams.get("user_id") || getUserId(req);
-
   if (!userId) {
     return NextResponse.json({ error: "user_id required" }, { status: 400 });
   }
@@ -22,7 +20,31 @@ export async function GET(req: NextRequest) {
   const supabase = createServiceRoleClient();
   const sb = supabase as any;
 
-  // 해당 날짜 식단 기록
+  // ── "다시 먹기" 모드: 최근 기록한 음식 10개 (중복 제거) ──
+  if (req.nextUrl.searchParams.get("recent") === "true") {
+    const { data: recent } = await sb
+      .from("meal_diary")
+      .select("food_name, product_id, serving_g, calories, protein_g, fat_g, carbs_g, sugar_g, sodium_mg, fiber_g, serving_multiplier")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(50);
+
+    // 음식 이름으로 중복 제거, 최근 10개
+    const seen = new Set<string>();
+    const unique = [];
+    for (const r of recent || []) {
+      if (!seen.has(r.food_name)) {
+        seen.add(r.food_name);
+        unique.push(r);
+      }
+      if (unique.length >= 10) break;
+    }
+    return NextResponse.json({ recent: unique });
+  }
+
+  // ── 기본 모드: 특정 날짜 식단 조회 ──
+  const date = req.nextUrl.searchParams.get("date") || new Date().toISOString().slice(0, 10);
+
   const { data: entries, error } = await sb
     .from("meal_diary")
     .select("*")
@@ -95,11 +117,18 @@ export async function GET(req: NextRequest) {
 // POST: 식단 기록 추가
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { user_id, date, meal_type, product_id, food_name, serving_g, calories, protein_g, fat_g, carbs_g, sugar_g, sodium_mg, fiber_g, memo } = body;
+  const {
+    user_id, date, meal_type, product_id, food_name,
+    serving_g, calories, protein_g, fat_g, carbs_g, sugar_g, sodium_mg, fiber_g,
+    serving_multiplier: rawMultiplier, memo,
+  } = body;
 
   if (!user_id || !meal_type || !food_name) {
     return NextResponse.json({ error: "필수 항목 누락" }, { status: 400 });
   }
+
+  // 섭취량 배수 (0.5, 1, 1.5, 2)
+  const multiplier = [0.5, 1, 1.5, 2].includes(Number(rawMultiplier)) ? Number(rawMultiplier) : 1;
 
   const supabase = createServiceRoleClient();
   const sb = supabase as any;
@@ -110,23 +139,39 @@ export async function POST(req: NextRequest) {
   if (product_id && (!calories || calories === 0)) {
     const { data: product } = await sb
       .from("products")
-      .select("calories, protein_g, fat_g, carbs_g, sugar_g, sodium_mg, fiber_g, serving_size_g")
+      .select("calories, protein_g, fat_g, carbs_g, sugar_g, sodium_mg, fiber_g, serving_size_g, nutrient_base_g")
       .eq("id", product_id)
       .single();
 
     if (product) {
-      // DB의 영양 정보는 100g 기준. serving_g로 환산
-      const ratio = (serving_g || product.serving_size_g || 100) / 100;
+      // nutrient_base_g 보정: DB값은 baseG 기준, servingG로 환산 후 multiplier 적용
+      const baseG = product.nutrient_base_g || 100;
+      const servG = serving_g || product.serving_size_g || baseG;
+      const ratio = (servG / baseG) * multiplier;
+
+      const round1 = (v: number | null) => v != null ? Math.round(v * ratio * 10) / 10 : null;
       nutrition = {
-        calories: product.calories ? Math.round(product.calories * ratio) : null,
-        protein_g: product.protein_g ? Math.round(product.protein_g * ratio * 10) / 10 : null,
-        fat_g: product.fat_g ? Math.round(product.fat_g * ratio * 10) / 10 : null,
-        carbs_g: product.carbs_g ? Math.round(product.carbs_g * ratio * 10) / 10 : null,
-        sugar_g: product.sugar_g ? Math.round(product.sugar_g * ratio * 10) / 10 : null,
-        sodium_mg: product.sodium_mg ? Math.round(product.sodium_mg * ratio) : null,
-        fiber_g: product.fiber_g ? Math.round(product.fiber_g * ratio * 10) / 10 : null,
+        calories: product.calories != null ? Math.round(product.calories * ratio) : null,
+        protein_g: round1(product.protein_g),
+        fat_g: round1(product.fat_g),
+        carbs_g: round1(product.carbs_g),
+        sugar_g: round1(product.sugar_g),
+        sodium_mg: product.sodium_mg != null ? Math.round(product.sodium_mg * ratio) : null,
+        fiber_g: round1(product.fiber_g),
       };
     }
+  } else if (multiplier !== 1 && calories) {
+    // 직접 입력 or common_food인데 multiplier가 있으면 적용
+    const m = multiplier;
+    nutrition = {
+      calories: calories ? Math.round(calories * m) : null,
+      protein_g: protein_g ? Math.round(protein_g * m * 10) / 10 : null,
+      fat_g: fat_g ? Math.round(fat_g * m * 10) / 10 : null,
+      carbs_g: carbs_g ? Math.round(carbs_g * m * 10) / 10 : null,
+      sugar_g: sugar_g ? Math.round(sugar_g * m * 10) / 10 : null,
+      sodium_mg: sodium_mg ? Math.round(sodium_mg * m) : null,
+      fiber_g: fiber_g ? Math.round(fiber_g * m * 10) / 10 : null,
+    };
   }
 
   const { data, error } = await sb
@@ -138,6 +183,7 @@ export async function POST(req: NextRequest) {
       product_id: product_id || null,
       food_name,
       serving_g: serving_g || null,
+      serving_multiplier: multiplier,
       ...nutrition,
       memo: memo || null,
     })
@@ -151,17 +197,29 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ success: true, id: data.id });
 }
 
-// DELETE: 식단 기록 삭제
+// DELETE: 식단 기록 삭제 (소유자 검증)
 export async function DELETE(req: NextRequest) {
   const id = req.nextUrl.searchParams.get("id");
+  const userId = req.nextUrl.searchParams.get("user_id") || getUserId(req);
+
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
+  if (!userId) return NextResponse.json({ error: "user_id required" }, { status: 400 });
 
   const supabase = createServiceRoleClient();
-  const { error } = await (supabase as any)
+  const sb = supabase as any;
+
+  // 소유자 확인 후 삭제 (user_id 일치해야만 삭제)
+  const { data, error } = await sb
     .from("meal_diary")
     .delete()
-    .eq("id", id);
+    .eq("id", id)
+    .eq("user_id", userId)
+    .select("id")
+    .single();
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error || !data) {
+    return NextResponse.json({ error: "삭제 권한이 없거나 기록을 찾을 수 없습니다." }, { status: 403 });
+  }
+
   return NextResponse.json({ success: true });
 }

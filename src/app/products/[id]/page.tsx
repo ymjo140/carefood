@@ -323,7 +323,7 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
       {/* ── 액션 바 ── */}
       <div className="flex items-center gap-2 mb-6">
         <FavoriteButton productId={product.id} />
-        <MealLogButton productId={product.id} />
+        <MealLogButton productId={product.id} productName={product.name} />
         {product.food_type && product.category_large !== "건강식단서비스" && (
           <span className="text-xs text-muted ml-auto">{product.food_type}</span>
         )}

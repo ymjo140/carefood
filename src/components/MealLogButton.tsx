@@ -1,23 +1,27 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { createClient } from "@/lib/supabase/client";
 
 /**
  * "먹었어요" 버튼 — 상품 상세 페이지에서 식사 기록 추가
+ * /api/diary로 통합 (nutrient_base_g 보정 + serving_multiplier 지원)
  */
-export default function MealLogButton({ productId }: { productId: string }) {
+export default function MealLogButton({ productId, productName }: { productId: string; productName?: string }) {
   const [userId, setUserId] = useState<string | null>(null);
   const [showMenu, setShowMenu] = useState(false);
   const [logged, setLogged] = useState(false);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    (async () => {
-      const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) setUserId(user.id);
-    })();
+    try {
+      const profile = localStorage.getItem("carefood_profile");
+      if (profile) {
+        const p = JSON.parse(profile);
+        if (p.user_id) { setUserId(p.user_id); return; }
+      }
+      const anonId = localStorage.getItem("carefood_anon_id");
+      if (anonId) setUserId(anonId);
+    } catch { /* */ }
   }, []);
 
   const handleLog = async (mealType: string) => {
@@ -25,10 +29,16 @@ export default function MealLogButton({ productId }: { productId: string }) {
     setSaving(true);
 
     try {
-      const res = await fetch("/api/meals", {
+      const res = await fetch("/api/diary", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId, productId, mealType }),
+        body: JSON.stringify({
+          user_id: userId,
+          product_id: productId,
+          food_name: productName || "제품",
+          meal_type: mealType,
+          date: new Date().toISOString().slice(0, 10),
+        }),
       });
       if (res.ok) {
         setLogged(true);
