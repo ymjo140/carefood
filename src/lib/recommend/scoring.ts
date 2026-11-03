@@ -6,6 +6,7 @@
 import type { UserProfile, ScoredProduct, HealthConcern } from "./types";
 import type { UserInteractions } from "./interactions";
 import type { ProductReviewStats } from "./reviews";
+import type { CFBoost } from "./collaborative";
 import {
   CONCERN_TAG_BOOSTS,
   CONCERN_RULES,
@@ -57,6 +58,7 @@ export function scoreProduct(
   interactions?: UserInteractions,
   reviewStats?: Record<string, ProductReviewStats>,
   timeOfDay?: number, // KST 시간 (0~23)
+  cfBoosts?: CFBoost[],
 ): ScoredProduct {
   const reasons: string[] = [];
   const reasonDetails: string[] = [];
@@ -326,8 +328,20 @@ export function scoreProduct(
     }
   }
 
+  // ─── 6. Collaborative Filtering (비슷한 사용자 추천, 0~15% 부스트) ───
+  let cfMul = 1.0;
+  if (cfBoosts && cfBoosts.length > 0) {
+    const pid = p.id as string;
+    const boost = cfBoosts.find(b => b.productId === pid);
+    if (boost) {
+      cfMul = 1 + boost.cfScore * 0.15; // 최대 ~15% 부스트
+      reasons.push("비슷한 사용자 추천");
+      reasonDetails.push("나와 비슷한 관심사를 가진 사용자들이 선호한 제품");
+    }
+  }
+
   // ─── 종합 매칭 점수 ───
-  const rawScore = healthBase * relevance * preference * interactionMul * reviewMul;
+  const rawScore = healthBase * relevance * preference * interactionMul * reviewMul * cfMul;
 
   return {
     ...p,
@@ -363,9 +377,10 @@ export function scoreAndRank(
   interactions?: UserInteractions,
   reviewStats?: Record<string, ProductReviewStats>,
   timeOfDay?: number,
+  cfBoosts?: CFBoost[],
 ): ScoredProduct[] {
   const scored = products.map((p) =>
-    scoreProduct(p, profile, purchasableIds.has(p.id as string), interactions, reviewStats, timeOfDay)
+    scoreProduct(p, profile, purchasableIds.has(p.id as string), interactions, reviewStats, timeOfDay, cfBoosts)
   );
   const normalized = normalizeScores(scored);
   normalized.sort((a, b) => b.match_score - a.match_score);

@@ -11,6 +11,7 @@ import {
   loadProductReviewStats,
   diversifyResults,
   insertExplorationSlots,
+  getCFBoosts,
   CONCERN_RULES,
 } from "@/lib/recommend";
 import type {
@@ -19,6 +20,7 @@ import type {
   HealthConcern,
   UserInteractions,
   ProductReviewStats,
+  CFBoost,
 } from "@/lib/recommend";
 
 /**
@@ -303,14 +305,17 @@ export async function GET(request: NextRequest) {
       allergies: [],
     };
 
-    // 리뷰 통계 로드 (제품 품질 시그널)
+    // 리뷰 통계 + 협업 필터링 로드 (병렬)
     const productIds = products.map((p) => p.id as string);
-    const reviewStats = await loadProductReviewStats(supabase, productIds);
+    const [reviewStats, cfBoosts] = await Promise.all([
+      loadProductReviewStats(supabase, productIds),
+      userId ? getCFBoosts(supabase, userId) : Promise.resolve([] as CFBoost[]),
+    ]);
 
     // 시간대별 부스트 (KST)
     const kstHour = new Date(Date.now() + 9 * 3600 * 1000).getUTCHours();
 
-    const scored = scoreAndRank(products, userProfile, purchasableSet, interactions, reviewStats, kstHour);
+    const scored = scoreAndRank(products, userProfile, purchasableSet, interactions, reviewStats, kstHour, cfBoosts.length > 0 ? cfBoosts : undefined);
 
     // 다양성 보장 + 탐색 슬롯
     const diversified = diversifyResults(scored);
@@ -476,11 +481,20 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // 리뷰 통계 로드 + 통합 스코어링 + 시간대별 부스트
+    // 리뷰 통계 + 협업 필터링 로드 (병렬) + 시간대별 부스트
     const allProductIds = products.map((p) => p.id as string);
-    const reviewStats = await loadProductReviewStats(supabase, allProductIds);
+    const [reviewStats, cfBoosts] = await Promise.all([
+      loadProductReviewStats(supabase, allProductIds),
+      userId ? getCFBoosts(supabase, userId, {
+        goals: profile.goals,
+        concerns: profile.concerns,
+        age: profile.body.age,
+        bmi: profile.body.bmi,
+        tastes: profile.tastes,
+      }) : Promise.resolve([] as CFBoost[]),
+    ]);
     const kstHour = new Date(Date.now() + 9 * 3600 * 1000).getUTCHours();
-    const scored = scoreAndRank(products, profile, purchasableIds, interactions, reviewStats, kstHour);
+    const scored = scoreAndRank(products, profile, purchasableIds, interactions, reviewStats, kstHour, cfBoosts.length > 0 ? cfBoosts : undefined);
 
     // 다양성 보장 + 탐색 슬롯
     const diversified = diversifyResults(scored);
