@@ -3,8 +3,10 @@ import { connection } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 
 /**
- * GET /api/meal-plans?user_id=xxx — 저장된 식단 목록
+ * GET  /api/meal-plans?user_id=xxx — 저장된 식단 목록
  * POST /api/meal-plans — 식단 저장/수정
+ * PATCH /api/meal-plans — 이름 변경
+ * DELETE /api/meal-plans?id=xxx&user_id=xxx — 식단 삭제 (soft)
  */
 
 export async function GET(request: NextRequest) {
@@ -17,11 +19,11 @@ export async function GET(request: NextRequest) {
 
   const { data: plans, error } = await sb
     .from("saved_meal_plans")
-    .select("id, title, tags, total_price, avg_daily_calories, avg_daily_protein, product_count, eating_out_count, updated_at")
+    .select("id, title, tags, total_price, avg_daily_calories, avg_daily_protein, product_count, eating_out_count, source, updated_at, created_at")
     .eq("user_id", userId)
     .eq("is_active", true)
     .order("updated_at", { ascending: false })
-    .limit(20);
+    .limit(50);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ plans: plans || [] });
@@ -36,7 +38,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "user_id, grid 필수" }, { status: 400 });
     }
 
-    // 통계 계산
+    // 통계 계산 — 실제로 채워진 날 기준
     const days = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
     const meals = ["breakfast", "lunch", "dinner", "supplement"];
     let totalPrice = 0, totalCalories = 0, totalProtein = 0, productCount = 0, eatingOutCount = 0;
@@ -47,7 +49,7 @@ export async function POST(request: NextRequest) {
         const cell = dayData[meal];
         if (!cell) continue;
         if (cell.type === "eating_out") { eatingOutCount++; continue; }
-        if (cell.product_id) {
+        if (cell.product_id || cell.name) {
           productCount++;
           totalPrice += cell.price || 0;
           totalCalories += cell.calories || 0;
@@ -62,8 +64,8 @@ export async function POST(request: NextRequest) {
       grid,
       tags: tags || [],
       total_price: totalPrice,
-      avg_daily_calories: Math.round(totalCalories / 7),
-      avg_daily_protein: Math.round(totalProtein / 7),
+      avg_daily_calories: Math.round(totalCalories / Math.max(productCount, 1)),
+      avg_daily_protein: Math.round(totalProtein / Math.max(productCount, 1)),
       product_count: productCount,
       eating_out_count: eatingOutCount,
       updated_at: new Date().toISOString(),
@@ -73,12 +75,10 @@ export async function POST(request: NextRequest) {
     const sb = createServiceRoleClient() as any;
 
     if (id) {
-      // 기존 식단 수정
       const { error } = await sb.from("saved_meal_plans").update(planData).eq("id", id).eq("user_id", user_id);
       if (error) return NextResponse.json({ error: error.message }, { status: 500 });
       return NextResponse.json({ ok: true, id });
     } else {
-      // 새 식단 생성
       const { data: plan, error } = await sb.from("saved_meal_plans").insert(planData).select("id").single();
       if (error) return NextResponse.json({ error: error.message }, { status: 500 });
       return NextResponse.json({ ok: true, id: plan.id });
@@ -86,4 +86,43 @@ export async function POST(request: NextRequest) {
   } catch {
     return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
   }
+}
+
+/** PATCH — 이름 변경 */
+export async function PATCH(request: NextRequest) {
+  try {
+    const { id, user_id, title } = await request.json();
+    if (!id || !user_id || !title) return NextResponse.json({ error: "id, user_id, title 필수" }, { status: 400 });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sb = createServiceRoleClient() as any;
+    const { error } = await sb
+      .from("saved_meal_plans")
+      .update({ title, updated_at: new Date().toISOString() })
+      .eq("id", id)
+      .eq("user_id", user_id);
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ ok: true });
+  } catch {
+    return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
+  }
+}
+
+/** DELETE — soft delete */
+export async function DELETE(request: NextRequest) {
+  const id = request.nextUrl.searchParams.get("id");
+  const userId = request.nextUrl.searchParams.get("user_id");
+  if (!id || !userId) return NextResponse.json({ error: "id, user_id 필수" }, { status: 400 });
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sb = createServiceRoleClient() as any;
+  const { error } = await sb
+    .from("saved_meal_plans")
+    .update({ is_active: false, updated_at: new Date().toISOString() })
+    .eq("id", id)
+    .eq("user_id", userId);
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ ok: true });
 }
