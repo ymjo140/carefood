@@ -19,6 +19,7 @@ type Props = {
     fat_g: number | null;
     fiber_g: number | null;
     sodium_mg: number | null;
+    spicy_score: number | null;
   };
 };
 
@@ -47,8 +48,8 @@ function getUserId(): string {
 
 /**
  * 영양성분 → 맛 프로필 예측 (1~5 스케일)
- * 영양성분에서 확실히 알 수 있는 5축만 사용
- * (캡사이신·글루탐산 데이터 확보 시 매운맛·감칠맛 추가 예정)
+ * 영양성분 + spicy_score에서 알 수 있는 5축 사용
+ * 짠맛(나트륨), 단맛(당류비율), 고소함(지방), 담백함(단백질밀도), 매운맛(spicy_score)
  */
 function predictTasteFromNutrition(n: Props["nutrition"]) {
   // 짠맛: 나트륨 기반. 0mg=1, 200=2, 500=3, 800=4, 1200+=5
@@ -71,13 +72,12 @@ function predictTasteFromNutrition(n: Props["nutrition"]) {
     : 0.15;
   const light = Math.min(5, Math.max(1, Math.round(proteinDensity * 10) + 1));
 
-  // 자극도: 칼로리 밀도(kcal/100g). 높으면 진한맛, 낮으면 가벼운맛
-  const calDensity = n.calories != null
-    ? n.calories / Math.max(100, 300) // serving 대비 칼로리 밀도 근사
-    : 0.5;
-  const intensity = Math.min(5, Math.max(1, Math.round(calDensity * 3) + 1));
+  // 매운맛: spicy_score 기반 (원재료명 키워드 파싱, 0~5)
+  const spicy = n.spicy_score != null
+    ? Math.min(5, Math.max(1, n.spicy_score || 1))
+    : 1;
 
-  return { salty, sweet, savory, light, intensity };
+  return { salty, sweet, savory, light, spicy };
 }
 
 /**
@@ -176,7 +176,7 @@ export default function ProductTasteSection({ productId, productName, nutrition 
         sweet: +userTaste.pref_sweet,
         savory: Math.round((+userTaste.pref_umami + (+userTaste.pref_salty > 3 ? 1 : 0)) * 0.8 + 1), // 감칠맛+짠맛 → 고소함 근사
         light: Math.max(1, 6 - Math.round((+userTaste.pref_spicy + +userTaste.pref_salty) / 2)), // 자극 적으면 담백 선호
-        intensity: Math.round((+userTaste.pref_spicy + +userTaste.pref_salty) / 2), // 매운+짠 → 자극도
+        spicy: +userTaste.pref_spicy || 3, // 매운맛 선호도
       }
     : undefined;
 

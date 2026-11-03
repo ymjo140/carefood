@@ -454,6 +454,7 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
           fat_g: displayFat,
           fiber_g: displayFiber,
           sodium_mg: displaySodium,
+          spicy_score: product.spicy_score,
         }}
       />
 

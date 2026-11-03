@@ -13,7 +13,7 @@ type TasteProfile = {
   sweet: number;    // 단맛 (당류 기반)
   savory: number;   // 고소함 (지방 기반)
   light: number;    // 담백함 (단백질÷칼로리 비율)
-  intensity: number; // 자극도 (칼로리밀도 = kcal/100g)
+  spicy: number;     // 매운맛 (spicy_score 기반)
 };
 
 type NutritionProfile = {
@@ -43,7 +43,7 @@ type DualRadarChartProps = {
 
 // 맛 프로필: 영양성분에서 확실히 알 수 있는 것만
 // (나중에 캡사이신·글루탐산 데이터 확보 시 매운맛·감칠맛 추가)
-const TASTE_LABELS = ["짠맛", "단맛", "고소함", "담백함", "자극도"];
+const TASTE_LABELS = ["짠맛", "단맛", "고소함", "담백함", "매운맛"];
 const NUTRITION_LABELS = ["단백", "탄수", "지방", "섬유질", "저염도"];
 
 function polarToCartesian(cx: number, cy: number, r: number, angleDeg: number) {
@@ -171,9 +171,9 @@ export default function DualRadarChart({
   const cy = svgSize / 2;
   const radius = size / 2;
 
-  const tasteValues = [taste.salty, taste.sweet, taste.savory, taste.light, taste.intensity];
+  const tasteValues = [taste.salty, taste.sweet, taste.savory, taste.light, taste.spicy];
   const userTasteValues = userTaste
-    ? [userTaste.salty, userTaste.sweet, userTaste.savory, userTaste.light, userTaste.intensity]
+    ? [userTaste.salty, userTaste.sweet, userTaste.savory, userTaste.light, userTaste.spicy]
     : null;
 
   const nutritionValues = nutrition
@@ -350,7 +350,7 @@ export default function DualRadarChart({
  * 매칭 점수 계산 유틸
  */
 export function calcTasteMatchScore(product: TasteProfile, user: TasteProfile): number {
-  const axes: (keyof TasteProfile)[] = ["salty", "sweet", "savory", "light", "intensity"];
+  const axes: (keyof TasteProfile)[] = ["salty", "sweet", "savory", "light", "spicy"];
   const maxDist = Math.sqrt(axes.length * 16); // 각 축 최대 차이 4, 5축
   const dist = Math.sqrt(
     axes.reduce((sum, k) => sum + Math.pow(product[k] - user[k], 2), 0)

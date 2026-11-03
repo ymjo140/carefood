@@ -81,10 +81,14 @@ const ALLERGIES = [
 ];
 
 const TASTE_CONFIG = [
-  { key: "salty" as const, label: "짠맛", color: "var(--macro-sodium)" },
-  { key: "sweet" as const, label: "단맛", color: "var(--macro-carbs)" },
-  { key: "spicy" as const, label: "매운맛", color: "var(--macro-fat)" },
-  { key: "fatty" as const, label: "고소한맛", color: "var(--macro-protein)" },
+  { key: "salty" as const, label: "짠맛", color: "var(--macro-sodium)",
+    benchmarks: [{ lv: 2, name: "흰밥" }, { lv: 4, name: "계란찜" }, { lv: 6, name: "김치찌개" }, { lv: 8, name: "라면" }, { lv: 10, name: "간장게장" }] },
+  { key: "sweet" as const, label: "단맛", color: "var(--macro-carbs)",
+    benchmarks: [{ lv: 2, name: "우유" }, { lv: 4, name: "식빵" }, { lv: 6, name: "콜라" }, { lv: 8, name: "아이스크림" }, { lv: 10, name: "초콜릿" }] },
+  { key: "spicy" as const, label: "매운맛", color: "var(--macro-fat)",
+    benchmarks: [{ lv: 2, name: "짜장면" }, { lv: 4, name: "김치" }, { lv: 6, name: "떡볶이" }, { lv: 8, name: "신라면" }, { lv: 10, name: "불닭볶음면" }] },
+  { key: "fatty" as const, label: "고소한맛", color: "var(--macro-protein)",
+    benchmarks: [{ lv: 2, name: "닭가슴살" }, { lv: 4, name: "두부" }, { lv: 6, name: "계란찜" }, { lv: 8, name: "삼겹살" }, { lv: 10, name: "버터" }] },
 ];
 
 const EATING_OUT_OPTIONS = [
@@ -1091,10 +1095,21 @@ function StepTastes({
                 accentColor: t.color,
               }}
             />
-            <div className="flex justify-between text-[10px] text-muted mt-1">
-              <span>약하게</span>
-              <span>보통</span>
-              <span>강하게</span>
+            <div className="relative h-5 mt-1">
+              {t.benchmarks.map((b) => (
+                <span
+                  key={b.lv}
+                  className="absolute text-[9px] -translate-x-1/2 whitespace-nowrap"
+                  style={{
+                    left: `${((b.lv - 1) / 9) * 100}%`,
+                    color: tastes[t.key] === b.lv ? t.color : 'var(--muted)',
+                    fontWeight: tastes[t.key] === b.lv ? 700 : 400,
+                    opacity: tastes[t.key] === b.lv ? 1 : 0.6,
+                  }}
+                >
+                  {b.name}
+                </span>
+              ))}
             </div>
           </div>
         ))}
