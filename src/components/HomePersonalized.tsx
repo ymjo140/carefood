@@ -59,13 +59,15 @@ export default function HomePersonalized() {
         }
       } catch { /* silent */ }
 
-      // v4: 프로필 + 건강검진 데이터 전체 전송 → 5축 복합 프로필 기반 추천
+      // v5: 프로필 + 건강검진 + user_id → 5축 복합 프로필 + 피드백 루프 반영 추천
+      const anonId = (() => { try { return localStorage.getItem("carefood_anon_id") || ""; } catch { return ""; } })();
       fetch("/api/recommend", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           profile: parsed,
           health: healthData,
+          user_id: anonId,
         }),
       })
         .then((r) => r.json())

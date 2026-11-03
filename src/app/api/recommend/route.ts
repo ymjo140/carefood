@@ -1,87 +1,46 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
+import {
+  parseProfile,
+  getProfileLabels,
+  scoreAndRank,
+  fetchRecommendPool,
+  loadPurchasableIds as loadPurchasableIdsV4,
+  loadPrices as loadPricesV4,
+  loadUserInteractions,
+  CONCERN_RULES,
+} from "@/lib/recommend";
+import type {
+  UserProfile,
+  ScoredProduct,
+  HealthConcern,
+  UserInteractions,
+} from "@/lib/recommend";
 
 /**
- * 이너케어 추천 API v3
- * GET: 그룹핑 + 필터 + 페이지네이션 (신규 탐색 UI)
- * POST: 기존 v2 호환 (추천 결과 평탄)
+ * 이너케어 추천 API v5 — 통합 스코어링 엔진
+ * GET: 그룹핑 + 필터 + 페이지네이션 (탐색 UI)
+ * POST: 5축 복합 프로필 기반 추천 (홈)
  *
- * 관심사(concern) × 민감도 × 영양성분 매칭 × 안전 규칙
- * 팜킷 특허 회피: 온톨로지 음식유사도 방식이 아닌,
- * 전문가 설계 분기형 규칙 기반 매칭 사용
+ * 공통 스코어링: lib/recommend/scoring.ts (곱연산)
+ * 피드백 루프: 조회/클릭/즐겨찾기 → 스코어링 반영
  */
 
-type HealthConcern = "gut_health" | "skin" | "weight" | "energy";
+// ── checkRule: CONCERN_RULES의 규칙을 제품에 적용 (buildCurationGroups에서 사용) ──
+function checkRule(product: Record<string, unknown>, rule: { field: string; op: string; value: number | [number, number] }): boolean {
+  const v = product[rule.field] as number | null | undefined;
+  if (v === null || v === undefined) return false;
+  switch (rule.op) {
+    case "lt": return v < (rule.value as number);
+    case "gt": return v > (rule.value as number);
+    case "lte": return v <= (rule.value as number);
+    case "gte": return v >= (rule.value as number);
+    case "between": { const [min, max] = rule.value as [number, number]; return v >= min && v <= max; }
+    default: return false;
+  }
+}
 
-// ─── 관심사별 기능성 성분 태그 매핑 ───
-const CONCERN_TAG_BOOSTS: Record<HealthConcern, { tag: string; score: number; reason: string; detail: string }[]> = {
-  gut_health: [
-    { tag: "probiotics", score: 20, reason: "유산균 함유", detail: "유산균이 포함된 제품이에요" },
-    { tag: "prebiotic", score: 18, reason: "식이섬유 함유", detail: "프리바이오틱스(식이섬유)가 포함돼 있어요" },
-  ],
-  skin: [
-    { tag: "collagen", score: 20, reason: "콜라겐 함유", detail: "콜라겐이 포함된 제품이에요" },
-    { tag: "vitamin", score: 12, reason: "비타민 함유", detail: "비타민이 포함돼 있어요" },
-    { tag: "zinc", score: 10, reason: "아연 함유", detail: "아연이 포함된 제품이에요" },
-  ],
-  weight: [
-    { tag: "protein", score: 15, reason: "프로틴 제품", detail: "단백질 보충용으로 설계된 제품이에요" },
-    { tag: "diet", score: 15, reason: "다이어트 설계", detail: "저칼로리/다이어트용으로 설계됐어요" },
-    { tag: "sugar_free", score: 12, reason: "무설탕", detail: "설탕 없이 만든 제품이에요" },
-  ],
-  energy: [
-    { tag: "vitamin", score: 15, reason: "비타민 함유", detail: "비타민이 포함돼 있어요" },
-    { tag: "iron", score: 12, reason: "철분 함유", detail: "철분이 포함된 제품이에요" },
-    { tag: "calcium", score: 10, reason: "칼슘 함유", detail: "칼슘이 포함돼 있어요" },
-    { tag: "omega3", score: 10, reason: "오메가3 함유", detail: "오메가3가 포함된 제품이에요" },
-  ],
-};
-
-// ─── 관심사별 영양 스코어링 규칙 ───
-type NutrientRule = {
-  field: string;
-  op: "lt" | "gt" | "gte" | "lte" | "between";
-  value: number | [number, number];
-  score: number;
-  reason: string;
-  detail: (v: number) => string;
-};
-
-const CONCERN_RULES: Record<HealthConcern, NutrientRule[]> = {
-  gut_health: [
-    { field: "fiber_g", op: "gte", value: 3, score: 15, reason: "식이섬유 풍부", detail: (v) => `식이섬유 ${v}g — 고식이섬유 식품` },
-    { field: "sugar_g", op: "lt", value: 8, score: 8, reason: "당류 적정", detail: (v) => `당류 ${v}g — 저당 식품` },
-    { field: "fat_g", op: "lt", value: 10, score: 5, reason: "저지방", detail: (v) => `지방 ${v}g — 저지방 식품` },
-  ],
-  skin: [
-    { field: "protein_g", op: "gte", value: 10, score: 12, reason: "단백질 풍부", detail: (v) => `단백질 ${v}g — 고단백 식품` },
-    { field: "fat_g", op: "between", value: [3, 15], score: 8, reason: "건강한 지방", detail: (v) => `지방 ${v}g — 적정 지방 함유` },
-    { field: "sugar_g", op: "lt", value: 5, score: 10, reason: "저당", detail: (v) => `당류 ${v}g — 저당 식품` },
-  ],
-  weight: [
-    { field: "calories", op: "lt", value: 300, score: 15, reason: "저칼로리", detail: (v) => `${v}kcal — 저칼로리 식품` },
-    { field: "protein_g", op: "gte", value: 15, score: 12, reason: "고단백", detail: (v) => `단백질 ${v}g — 고단백 식품` },
-    { field: "fat_g", op: "lt", value: 8, score: 8, reason: "저지방", detail: (v) => `지방 ${v}g — 저지방 식품` },
-    { field: "sugar_g", op: "lt", value: 5, score: 8, reason: "저당", detail: (v) => `당류 ${v}g — 저당 식품` },
-  ],
-  energy: [
-    { field: "calories", op: "between", value: [200, 500], score: 10, reason: "적정 열량", detail: (v) => `${v}kcal — 적정 열량 식품` },
-    { field: "protein_g", op: "gte", value: 12, score: 12, reason: "단백질 풍부", detail: (v) => `단백질 ${v}g — 고단백 식품` },
-    { field: "carbs_g", op: "gte", value: 20, score: 8, reason: "탄수화물 충분", detail: (v) => `탄수화물 ${v}g — 탄수화물 충분` },
-  ],
-};
-
-const SENSITIVITY_RULES = {
-  digestive: [
-    { sensitivityLevel: 3, field: "fat_g", op: "lt" as const, value: 8, score: 8, reason: "소화 편한" },
-    { sensitivityLevel: 3, field: "sodium_mg", op: "lt" as const, value: 500, score: 5, reason: "자극 적은" },
-  ],
-  additive: [
-    { sensitivityLevel: 3, field: "sodium_mg", op: "lt" as const, value: 400, score: 8, reason: "저나트륨" },
-  ],
-};
-
-// ─── 맛 레벨 → 영양성분 범위 (10단계) ───
+// ── TASTE_RANGES: GET 핸들러의 DB 쿼리 필터에서 사용 ──
 const TASTE_RANGES: Record<string, Record<number, [number, number]>> = {
   salty: {
     1: [0, 100], 2: [100, 200], 3: [200, 350], 4: [350, 500], 5: [500, 650],
@@ -97,280 +56,9 @@ const TASTE_RANGES: Record<string, Record<number, [number, number]>> = {
   },
 };
 
-// v1 5단계 → 10단계 변환 (하위호환)
-function tasteLevel5to10(level: number): number {
-  if (level <= 0 || level > 5) return level;
-  return level * 2; // 1→2, 2→4, 3→6, 4→8, 5→10
-}
-
-// ─── 유틸 ───
-
-function checkRule(product: Record<string, unknown>, rule: { field: string; op: string; value: number | [number, number] }): boolean {
-  const v = product[rule.field] as number | null | undefined;
-  if (v === null || v === undefined) return false;
-  switch (rule.op) {
-    case "lt": return v < (rule.value as number);
-    case "gt": return v > (rule.value as number);
-    case "lte": return v <= (rule.value as number);
-    case "gte": return v >= (rule.value as number);
-    case "between": {
-      const [min, max] = rule.value as [number, number];
-      return v >= min && v <= max;
-    }
-    default: return false;
-  }
-}
-
-// ─── 요리 키워드 추출 ───
-
-function extractDishKeyword(name: string, manufacturer: string | null): string {
-  let s = name;
-  // 제조사명 제거
-  if (manufacturer) {
-    const mfr = manufacturer.replace(/[㈜(주)주식회사]/g, "").trim();
-    if (mfr.length >= 2) {
-      s = s.replace(new RegExp(escapeRegex(mfr), "gi"), "").trim();
-    }
-  }
-  // [브랜드] 제거
-  s = s.replace(/^\[.*?\]\s*/, "");
-  // (부가정보) 제거
-  s = s.replace(/\s*\(.*?\)\s*/g, " ");
-  // 수량·중량 제거
-  s = s.replace(/\s*\d+(?:\.\d+)?\s*(g|kg|ml|l|mL|리터)\b/gi, " ");
-  s = s.replace(/\s*[xX×*]\s*\d+\s*(개입|입|팩|봉|ea|개)?/g, " ");
-  s = s.replace(/\s*\d+\s*(개입|입|팩|봉|ea)\s*/g, " ");
-  s = s.replace(/\s*\d+종\s*/g, " ");
-  s = s.replace(/\s*(택1|택\d+)\s*/g, "");
-  // 숫자만 남은 토큰 제거
-  s = s.replace(/\b\d+\b/g, "");
-  s = s.replace(/\s+/g, " ").trim();
-
-  // 남은 텍스트가 너무 길면 마지막 핵심 단어들만 (최대 4단어)
-  const tokens = s.split(" ").filter((t) => t.length >= 1);
-  if (tokens.length > 4) {
-    return tokens.slice(-4).join(" ");
-  }
-  return tokens.join(" ") || name.slice(0, 20);
-}
-
-function escapeRegex(str: string): string {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-// ─── 관심사별 dish_category 적합도 가중치 ───
-// 양수: 보너스, 음수: 감점 (해당 관심사에 부적합한 카테고리)
-const CONCERN_CATEGORY_WEIGHT: Record<HealthConcern, Record<string, number>> = {
-  gut_health: {
-    rice: 8, soup: 10, stew: 8, salad: 10, side: 5, grill: 5, seafood: 5,
-    snack: -15, beverage: -5, bread: -8, sauce: -20, ingredient: -20,
-  },
-  skin: {
-    grill: 8, seafood: 10, salad: 10, dairy: 8, soup: 5, side: 5,
-    snack: -12, sauce: -20, ingredient: -20, bread: -5,
-  },
-  weight: {
-    salad: 12, grill: 10, seafood: 10, soup: 8, side: 8, rice: 3,
-    snack: -15, bread: -10, sauce: -20, ingredient: -20, beverage: -5,
-  },
-  energy: {
-    grill: 12, rice: 10, stew: 8, noodle: 5, seafood: 8, dairy: 8, soup: 5,
-    snack: -15, sauce: -20, ingredient: -20, beverage: -8,
-  },
-};
-
-// ─── 공통 스코어링 ───
-
-type ScoredProduct = Record<string, unknown> & {
-  match_score: number;
-  matched_concerns: HealthConcern[];
-  reasons: string[];
-  reason_detail: string | null;
-  dish_keyword: string;
-};
-
-interface ScoreParams {
-  concerns: HealthConcern[];
-  sensitivity: { digestive: number; additive: number };
-  conditions: string[];
-  purchasableSet: Set<string>;
-  tastes: { salty: number; sweet: number; spicy: number; fatty: number };
-  goals?: string[];           // v3: HealthGoal[]
-  nutritionGoals?: {          // v3: 온보딩 계산 결과
-    perMealCalMax?: number;
-    perMealSodiumMax?: number;
-    perMealSugarMax?: number;
-    perMealProteinMin?: number;
-  };
-}
-
-function scoreProducts(products: Record<string, unknown>[], params: ScoreParams): ScoredProduct[] {
-  const { concerns, sensitivity, conditions, purchasableSet, tastes, goals = [], nutritionGoals } = params;
-
-  return products.map((p) => {
-    // 건강 점수 기반 시작점 (0~100 → 15~45 스케일, 더 넓은 범위)
-    const healthScore = (p.health_score as number) || 50;
-    let score = 15 + Math.round(healthScore * 0.3); // health_score 70 → 36, 80 → 39, 90 → 42
-    const reasons: string[] = [];
-    const reasonDetails: string[] = [];
-
-    // 건강 점수 높으면 reason 추가
-    if (healthScore >= 70) {
-      reasons.push("건강 지표 우수");
-      reasonDetails.push(`건강 점수 ${healthScore}점 — 영양 균형이 좋아요`);
-    }
-
-    // dish_category 적합도 가중치 (관심사별로 식사류 보너스, 간식류 감점)
-    const dishCategory = (p.dish_category as string) || "other";
-    for (const concern of concerns) {
-      const categoryWeights = CONCERN_CATEGORY_WEIGHT[concern];
-      if (categoryWeights && dishCategory in categoryWeights) {
-        score += categoryWeights[dishCategory];
-      }
-    }
-
-    // 영양 균형 보너스 (3대 영양소 모두 적정 범위면 추가 점수)
-    const cal = (p.calories as number) || 0;
-    const pro = (p.protein_g as number) || 0;
-    const carb = (p.carbs_g as number) || 0;
-    const fat = (p.fat_g as number) || 0;
-    if (cal >= 150 && cal <= 500 && pro >= 10 && carb >= 10 && fat >= 2 && fat <= 20) {
-      score += 8;
-      if (!reasons.includes("영양 균형")) {
-        reasons.push("영양 균형");
-        reasonDetails.push("3대 영양소가 골고루 포함된 균형식");
-      }
-    }
-
-    // 기능성 태그 매칭
-    const productTags: string[] = (p.functional_tags as string[]) || [];
-    for (const concern of concerns) {
-      const tagBoosts = CONCERN_TAG_BOOSTS[concern];
-      if (tagBoosts) {
-        for (const boost of tagBoosts) {
-          if (productTags.includes(boost.tag)) {
-            score += boost.score;
-            if (!reasons.includes(boost.reason)) {
-              reasons.push(boost.reason);
-              reasonDetails.push(boost.detail);
-            }
-          }
-        }
-      }
-    }
-
-    // 관심사 영양 매칭
-    for (const concern of concerns) {
-      const rules = CONCERN_RULES[concern];
-      if (!rules) continue;
-      for (const rule of rules) {
-        if (checkRule(p, rule)) {
-          score += rule.score;
-          if (!reasons.includes(rule.reason)) {
-            reasons.push(rule.reason);
-            const val = p[rule.field] as number | null;
-            if (val !== null && val !== undefined) {
-              reasonDetails.push(rule.detail(val));
-            }
-          }
-        }
-      }
-    }
-
-    // 민감도
-    if (sensitivity.digestive === 3) {
-      for (const rule of SENSITIVITY_RULES.digestive) {
-        if (checkRule(p, rule)) {
-          score += rule.score;
-          if (!reasons.includes(rule.reason)) reasons.push(rule.reason);
-        }
-      }
-    }
-    if (sensitivity.additive === 3) {
-      for (const rule of SENSITIVITY_RULES.additive) {
-        if (checkRule(p, rule)) {
-          score += rule.score;
-          if (!reasons.includes(rule.reason)) reasons.push(rule.reason);
-        }
-      }
-    }
-
-    // 영양 기본 보너스
-    const calories = p.calories as number | null;
-    const proteinG = p.protein_g as number | null;
-    if (calories && calories > 0 && calories < 600) score += 3;
-    if (proteinG && proteinG >= 10 && !reasons.includes("단백질 풍부") && !reasons.includes("고단백")) score += 3;
-
-    // 질환/목표 기반 영양 보너스 (concerns + goals + conditions 통합)
-    const sugarG = p.sugar_g as number | null;
-    const sodiumMg = p.sodium_mg as number | null;
-    const fiberG = p.fiber_g as number | null;
-    const allGoals = [...conditions, ...goals];
-
-    if ((allGoals.includes("diabetes") || conditions.includes("diabetes")) && sugarG !== null) {
-      if (sugarG < 3) { score += 8; if (!reasons.includes("극저당")) { reasons.push("극저당"); reasonDetails.push(`당류 ${sugarG}g — 극저당 식품`); } }
-      else if (sugarG < 5) { score += 5; if (!reasons.includes("저당")) { reasons.push("저당"); reasonDetails.push(`당류 ${sugarG}g — 저당 식품`); } }
-    }
-    if ((allGoals.includes("blood_pressure") || conditions.includes("hypertension")) && sodiumMg !== null) {
-      if (sodiumMg < 300) { score += 8; if (!reasons.includes("극저나트륨")) { reasons.push("극저나트륨"); reasonDetails.push(`나트륨 ${Math.round(sodiumMg)}mg — 극저나트륨 식품`); } }
-      else if (sodiumMg < 500) { score += 5; if (!reasons.includes("저나트륨")) { reasons.push("저나트륨"); reasonDetails.push(`나트륨 ${Math.round(sodiumMg)}mg — 저나트륨 식품`); } }
-    }
-    if ((allGoals.includes("kidney") || conditions.includes("kidney")) && proteinG !== null && proteinG < 10 && sodiumMg !== null && sodiumMg < 400) {
-      if (!reasons.includes("저단백")) { reasons.push("저단백"); reasonDetails.push(`단백질 ${proteinG}g, 나트륨 ${Math.round(sodiumMg)}mg — 저단백·저염 식품`); }
-      score += 6;
-    }
-    if (allGoals.includes("muscle") && proteinG !== null) {
-      if (proteinG >= 25) { score += 6; if (!reasons.includes("고단백")) { reasons.push("고단백"); reasonDetails.push(`단백질 ${proteinG}g — 고단백 식품`); } }
-      else if (proteinG >= 20) score += 3;
-    }
-    if (allGoals.includes("weight_loss") && calories !== null) {
-      if (calories > 0 && calories <= 350) { score += 5; if (!reasons.includes("저칼로리")) { reasons.push("저칼로리"); reasonDetails.push(`${calories}kcal — 저칼로리 식품`); } }
-    }
-    if (allGoals.includes("gut_health") && fiberG !== null && fiberG >= 5) {
-      if (!reasons.includes("고식이섬유")) { reasons.push("고식이섬유"); reasonDetails.push(`식이섬유 ${fiberG}g — 고식이섬유 식품`); }
-      score += 5;
-    }
-
-    // v3: nutrition_goals 기반 영양 적합성 보너스
-    if (nutritionGoals) {
-      if (nutritionGoals.perMealSodiumMax && sodiumMg !== null && sodiumMg <= nutritionGoals.perMealSodiumMax * 0.7) score += 3;
-      if (nutritionGoals.perMealSugarMax && sugarG !== null && sugarG <= nutritionGoals.perMealSugarMax * 0.7) score += 3;
-      if (nutritionGoals.perMealProteinMin && proteinG !== null && proteinG >= nutritionGoals.perMealProteinMin) score += 3;
-    }
-
-    // 구매 가능 보너스
-    if (purchasableSet.has(p.id as string)) score += 10;
-
-    // 맛 일치도 보너스
-    let tasteMatch = 0;
-    if (tastes.salty >= 1 && tastes.salty <= 10 && sodiumMg) {
-      const [idealMin, idealMax] = TASTE_RANGES.salty[tastes.salty];
-      if (sodiumMg >= idealMin && sodiumMg < idealMax) { score += 5; tasteMatch++; }
-    }
-    if (tastes.sweet >= 1 && tastes.sweet <= 10 && sugarG !== null) {
-      const [idealMin, idealMax] = TASTE_RANGES.sweet[tastes.sweet];
-      if (sugarG >= idealMin && sugarG < idealMax) { score += 5; tasteMatch++; }
-    }
-    if (tasteMatch >= 2) {
-      reasons.push("맛 취향 일치");
-      reasonDetails.push("선호하시는 맛 프로필에 가까워요");
-    }
-
-    return {
-      ...p,
-      match_score: Math.min(score, 100),
-      matched_concerns: concerns.filter((c) => {
-        const rules = CONCERN_RULES[c];
-        return rules?.some((rule) => checkRule(p, rule));
-      }),
-      reasons: reasons.slice(0, 4),
-      reason_detail: reasonDetails[0] || null,
-      dish_keyword: extractDishKeyword(p.name as string, p.manufacturer as string | null),
-    };
-  });
-}
-
-// ─── 공통: DB 쿼리 + 안전 필터 ───
+// ═══════════════════════════════════════════════════════
+// 공통: DB 쿼리 + 안전 필터 + 가격·리뷰 로드
+// ═══════════════════════════════════════════════════════
 
 async function loadSafetyFilters(supabase: ReturnType<typeof createServiceRoleClient>, conditions: string[]) {
   const safetyFilters: Record<string, number> = {};
@@ -404,8 +92,6 @@ async function loadPurchasableSet(supabase: ReturnType<typeof createServiceRoleC
     .select("product_id") as { data: { product_id: string }[] | null };
   return new Set<string>((priceIds || []).map((p) => p.product_id));
 }
-
-// ─── 가격·리뷰 로드 ───
 
 type PriceInfo = { platform: string; price: number; url: string; image_url: string | null };
 
@@ -456,7 +142,8 @@ async function loadReviews(supabase: ReturnType<typeof createServiceRoleClient>,
 }
 
 // ═══════════════════════════════════════════════════════
-// GET — 그룹핑 + 필터 + 페이지네이션 (신규 탐색 UI)
+// GET — 그룹핑 + 필터 + 페이지네이션 (탐색 UI)
+// 스코어링: lib/recommend/scoring.ts 통합 엔진 사용
 // ═══════════════════════════════════════════════════════
 
 export async function GET(request: NextRequest) {
@@ -476,6 +163,7 @@ export async function GET(request: NextRequest) {
       fatty: Number(sp.get("tastes_fatty") || 0),
     };
     const conditions = (sp.get("conditions") || "").split(",").filter(Boolean);
+    const goals = (sp.get("goals") || "").split(",").filter(Boolean);
     const dishCategoryParam = sp.get("dish_category") || "";
     const priceMin = Number(sp.get("price_min") || 0);
     const priceMax = Number(sp.get("price_max") || 0);
@@ -488,13 +176,19 @@ export async function GET(request: NextRequest) {
     const page = Math.max(1, Number(sp.get("page") || 1));
     const limit = Math.min(50, Math.max(1, Number(sp.get("limit") || 20)));
     const platformFilter = sp.get("platform") || "";
+    const userId = sp.get("user_id") || "";
 
     const supabase = createServiceRoleClient();
 
-    // 안전 필터 + 구매 가능 셋
-    const [{ safetyFilters, safetyMinFilters }, purchasableSet] = await Promise.all([
+    // 안전 필터 + 구매 가능 셋 + 인터랙션 (병렬 로드)
+    const loadInteractions = userId
+      ? loadUserInteractions(supabase, userId)
+      : Promise.resolve(undefined);
+
+    const [{ safetyFilters, safetyMinFilters }, purchasableSet, interactions] = await Promise.all([
       loadSafetyFilters(supabase, conditions),
       loadPurchasableSet(supabase),
+      loadInteractions,
     ]);
 
     // DB 쿼리 구성
@@ -525,7 +219,6 @@ export async function GET(request: NextRequest) {
         }
       }
     } else {
-      // 기본: sauce, ingredient 제외
       excludedCategories.push("sauce", "ingredient");
     }
     if (includedCategories.length > 0) {
@@ -558,14 +251,14 @@ export async function GET(request: NextRequest) {
       query = query.gte("spicy_score", minSpicy).lte("spicy_score", maxSpicy);
     }
 
-    // 영양 조건 필터 (직접 g 수 지정)
+    // 영양 조건 필터
     if (proteinMin > 0) query = query.gte("protein_g", proteinMin);
     if (caloriesMax > 0) query = query.lte("calories", caloriesMax);
     if (sodiumMax > 0) query = query.lte("sodium_mg", sodiumMax);
     if (sugarMax > 0) query = query.lte("sugar_g", sugarMax);
     if (fiberMin > 0) query = query.gte("fiber_g", fiberMin);
 
-    // health_score 있는 제품만 + 높은 순 (75%가 NULL이라 필터 필수)
+    // health_score 있는 제품만
     query = query.not("health_score", "is", null).order("health_score", { ascending: false }).limit(1000);
 
     const { data: products, error } = await query as { data: Record<string, unknown>[] | null; error: { message: string } | null };
@@ -584,13 +277,33 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // 스코어링
-    const scored = scoreProducts(products, { concerns, sensitivity, conditions, purchasableSet, tastes });
+    // ── 통합 스코어링 (lib/recommend 엔진) ──
+    // GET 파라미터 → UserProfile 변환
+    const userProfile: UserProfile = {
+      goals: [...concerns, ...goals] as UserProfile["goals"],
+      dietType: "normal",
+      concerns,
+      healthRisks: { glucose: "normal", bloodPressure: "normal", cholesterol: "normal", kidney: false },
+      conditions,
+      body: { gender: "other", birthYear: 1994, heightCm: 170, weightKg: 65, bmi: 22.5, bmiCategory: "normal", age: 30 },
+      perMeal: { caloriesMin: 300, caloriesMax: 600, maxSodiumMg: 800, maxSugarG: 15, minProteinG: 15 },
+      eatingOutFreq: "1_2",
+      mealsPerDay: 3,
+      sensitivity,
+      tastes: {
+        salty: tastes.salty || 5,
+        sweet: tastes.sweet || 5,
+        spicy: tastes.spicy || 3,
+        fatty: tastes.fatty || 5,
+      },
+      allergies: [],
+    };
 
-    // 가격 필터 (가격 범위가 지정된 경우 구매 가능한 제품만 + 범위 필터)
+    const scored = scoreAndRank(products, userProfile, purchasableSet, interactions);
+
+    // 가격 필터
     let filtered = scored;
     if (priceMin > 0 || priceMax > 0 || platformFilter) {
-      // 가격 필터 필요 → 구매 가능 제품만
       filtered = scored.filter((p) => purchasableSet.has(p.id as string));
     }
 
@@ -609,7 +322,7 @@ export async function GET(request: NextRequest) {
       case "health_desc":
         filtered.sort((a, b) => ((b.health_score as number) || 0) - ((a.health_score as number) || 0));
         break;
-      default: // score
+      default:
         filtered.sort((a, b) => b.match_score - a.match_score);
     }
 
@@ -621,17 +334,15 @@ export async function GET(request: NextRequest) {
       groupMap.get(key)!.push(p);
     }
 
-    // 그룹을 대표 제품 점수순 정렬
     const sortedGroups = Array.from(groupMap.entries())
       .map(([dishName, groupProducts]) => ({
         dish_name: dishName,
         dish_category: (groupProducts[0].dish_category as string) || "other",
-        representative: groupProducts[0], // 이미 정렬됨
+        representative: groupProducts[0],
         total_in_group: groupProducts.length,
-        products: groupProducts.slice(0, 3), // 상위 3개만 포함
+        products: groupProducts.slice(0, 3),
       }));
 
-    // 그룹 정렬 (대표 제품의 점수/영양 기준)
     if (sortBy === "protein_desc") {
       sortedGroups.sort((a, b) => ((b.representative.protein_g as number) || 0) - ((a.representative.protein_g as number) || 0));
     } else if (sortBy === "calories_asc") {
@@ -645,14 +356,14 @@ export async function GET(request: NextRequest) {
     const startIdx = (page - 1) * limit;
     const pageGroups = sortedGroups.slice(startIdx, startIdx + limit);
 
-    // 페이지 내 모든 제품의 가격 로드
+    // 가격 + 리뷰 로드
     const allProductIds = pageGroups.flatMap((g) => g.products.map((p) => p.id as string));
     const [priceMap, reviewMap] = await Promise.all([
       loadPrices(supabase, allProductIds, platformFilter || undefined),
       loadReviews(supabase, allProductIds),
     ]);
 
-    // 가격 정보 병합 + 가격 필터 적용
+    // 가격 병합 + 필터
     const responseGroups = pageGroups.map((group) => {
       const enrichedProducts = group.products.map((p) => {
         const prices = (priceMap[p.id as string] || []).sort((a, b) => a.price - b.price);
@@ -663,7 +374,6 @@ export async function GET(request: NextRequest) {
         };
       });
 
-      // 가격 필터
       let filteredProducts = enrichedProducts;
       if (priceMin > 0 || priceMax > 0) {
         filteredProducts = enrichedProducts.filter((p) => {
@@ -675,7 +385,6 @@ export async function GET(request: NextRequest) {
         });
       }
 
-      // 가격 정렬 (가격 로드 후 정렬 가능)
       if (sortBy === "price_asc") {
         filteredProducts.sort((a, b) => (a.product_prices[0]?.price || 999999) - (b.product_prices[0]?.price || 999999));
       } else if (sortBy === "price_desc") {
@@ -716,34 +425,31 @@ export async function GET(request: NextRequest) {
 }
 
 // ═══════════════════════════════════════════════════════
-// POST — v4: 5축 복합 프로필 기반 추천
+// POST — v5: 5축 복합 프로필 기반 추천 + 피드백 루프
 // ═══════════════════════════════════════════════════════
-
-import {
-  parseProfile,
-  getProfileLabels,
-  scoreAndRank,
-  fetchRecommendPool,
-  loadPurchasableIds as loadPurchasableIdsV4,
-  loadPrices as loadPricesV4,
-} from "@/lib/recommend";
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
     // v2 호환: concerns/tastes 직접 전달 → v4 프로필로 변환
-    const profileRaw = body.profile || body; // 새 방식: body.profile, 레거시: body 자체
+    const profileRaw = body.profile || body;
     const healthRaw = body.health || null;
+    const userId = body.user_id || "";
 
     const profile = parseProfile(profileRaw, healthRaw);
 
     const supabase = createServiceRoleClient();
 
-    // 3계층 필터 + Graceful Degradation으로 제품 풀 가져오기
-    const [{ products, degraded, degradeMessage }, purchasableIds] = await Promise.all([
+    // 3계층 필터 + Graceful Degradation + 인터랙션 (병렬)
+    const loadInteractions = userId
+      ? loadUserInteractions(supabase, userId)
+      : Promise.resolve(undefined);
+
+    const [{ products, degraded, degradeMessage }, purchasableIds, interactions] = await Promise.all([
       fetchRecommendPool(supabase, profile, 500),
       loadPurchasableIdsV4(supabase),
+      loadInteractions,
     ]);
 
     if (products.length === 0) {
@@ -755,8 +461,8 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // 곱연산 스코어링 + percentile 정규화
-    const scored = scoreAndRank(products, profile, purchasableIds);
+    // 통합 스코어링 + 인터랙션 반영
+    const scored = scoreAndRank(products, profile, purchasableIds, interactions);
     const top = scored.slice(0, 30);
     const productIds = top.map((p) => p.id as string);
 
@@ -772,7 +478,7 @@ export async function POST(request: NextRequest) {
       review_stats: reviewMap[p.id as string] || null,
     }));
 
-    // 큐레이션 그룹 (레거시 호환)
+    // 큐레이션 그룹
     const curationGroups = buildCurationGroups(
       recommendations as unknown as RecommendationWithPrices[],
       profile.concerns,
@@ -813,20 +519,25 @@ function buildCurationGroups(
 ) {
   const groups: { title: string; description: string; emoji: string; productIds: string[] }[] = [];
 
+  // 관심사별 매칭: CONCERN_RULES로 직접 체크
   if (concerns.includes("gut_health")) {
-    const items = products.filter((p) => p.matched_concerns?.includes("gut_health")).slice(0, 6);
+    const rules = CONCERN_RULES.gut_health;
+    const items = rules ? products.filter((p) => rules.some((rule) => checkRule(p, rule))).slice(0, 6) : [];
     if (items.length > 0) groups.push({ title: "장건강 맞춤", description: "식이섬유가 풍부하고 소화에 부담 적은 식품", emoji: "🌿", productIds: items.map((p) => p.id as string) });
   }
   if (concerns.includes("skin")) {
-    const items = products.filter((p) => p.matched_concerns?.includes("skin")).slice(0, 6);
+    const rules = CONCERN_RULES.skin;
+    const items = rules ? products.filter((p) => rules.some((rule) => checkRule(p, rule))).slice(0, 6) : [];
     if (items.length > 0) groups.push({ title: "피부건강 맞춤", description: "단백질과 건강한 지방이 풍부한 저당 식품", emoji: "✨", productIds: items.map((p) => p.id as string) });
   }
   if (concerns.includes("weight")) {
-    const items = products.filter((p) => p.matched_concerns?.includes("weight")).slice(0, 6);
+    const rules = CONCERN_RULES.weight;
+    const items = rules ? products.filter((p) => rules.some((rule) => checkRule(p, rule))).slice(0, 6) : [];
     if (items.length > 0) groups.push({ title: "체중관리 맞춤", description: "저칼로리 고단백으로 든든하면서 가벼운 식품", emoji: "🏃", productIds: items.map((p) => p.id as string) });
   }
   if (concerns.includes("energy")) {
-    const items = products.filter((p) => p.matched_concerns?.includes("energy")).slice(0, 6);
+    const rules = CONCERN_RULES.energy;
+    const items = rules ? products.filter((p) => rules.some((rule) => checkRule(p, rule))).slice(0, 6) : [];
     if (items.length > 0) groups.push({ title: "활력충전 맞춤", description: "적정 열량과 단백질로 에너지를 채워줄 식품", emoji: "⚡", productIds: items.map((p) => p.id as string) });
   }
 

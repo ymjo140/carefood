@@ -4,6 +4,7 @@
  */
 
 import type { UserProfile, ScoredProduct, HealthConcern } from "./types";
+import type { UserInteractions } from "./interactions";
 import {
   CONCERN_TAG_BOOSTS,
   CONCERN_RULES,
@@ -52,6 +53,7 @@ export function scoreProduct(
   p: Record<string, unknown>,
   profile: UserProfile,
   isPurchasable: boolean,
+  interactions?: UserInteractions,
 ): ScoredProduct {
   const reasons: string[] = [];
   const reasonDetails: string[] = [];
@@ -258,8 +260,25 @@ export function scoreProduct(
     ? Math.round((nutritionHits / nutritionTotal) * 100)
     : 50;
 
+  // ─── 4. Interaction (피드백 루프, 0.8 ~ 1.2) ───
+  let interactionMul = 1.0;
+  if (interactions) {
+    const pid = p.id as string;
+    // 이미 본 제품 감점 (재방문 시 새로운 제품 노출)
+    if (interactions.viewedIds.has(pid)) interactionMul *= 0.85;
+    // 클릭한 적 있으면 약간 복원 (관심 있었던 제품)
+    if (interactions.clickedIds.has(pid)) interactionMul *= 1.05;
+    // 즐겨찾기한 제품은 부스트
+    if (interactions.favoritedIds.has(pid)) interactionMul *= 1.1;
+    // 선호 카테고리 부스트
+    const cat = (p.dish_category as string) || "other";
+    const catCount = interactions.preferredCategories[cat] || 0;
+    if (catCount >= 3) interactionMul *= 1.08;
+    else if (catCount >= 1) interactionMul *= 1.03;
+  }
+
   // ─── 종합 매칭 점수 ───
-  const rawScore = healthBase * relevance * preference;
+  const rawScore = healthBase * relevance * preference * interactionMul;
 
   return {
     ...p,
@@ -292,9 +311,10 @@ export function scoreAndRank(
   products: Record<string, unknown>[],
   profile: UserProfile,
   purchasableIds: Set<string>,
+  interactions?: UserInteractions,
 ): ScoredProduct[] {
   const scored = products.map((p) =>
-    scoreProduct(p, profile, purchasableIds.has(p.id as string))
+    scoreProduct(p, profile, purchasableIds.has(p.id as string), interactions)
   );
   const normalized = normalizeScores(scored);
   normalized.sort((a, b) => b.match_score - a.match_score);
