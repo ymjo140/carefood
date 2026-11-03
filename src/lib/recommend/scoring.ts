@@ -5,6 +5,7 @@
 
 import type { UserProfile, ScoredProduct, HealthConcern } from "./types";
 import type { UserInteractions } from "./interactions";
+import type { ProductReviewStats } from "./reviews";
 import {
   CONCERN_TAG_BOOSTS,
   CONCERN_RULES,
@@ -54,6 +55,7 @@ export function scoreProduct(
   profile: UserProfile,
   isPurchasable: boolean,
   interactions?: UserInteractions,
+  reviewStats?: Record<string, ProductReviewStats>,
 ): ScoredProduct {
   const reasons: string[] = [];
   const reasonDetails: string[] = [];
@@ -277,8 +279,31 @@ export function scoreProduct(
     else if (catCount >= 1) interactionMul *= 1.03;
   }
 
+  // ─── 5. Review Signal (리뷰 기반 품질 시그널) ───
+  let reviewMul = 1.0;
+  if (reviewStats) {
+    const stats = reviewStats[p.id as string];
+    if (stats && stats.reviewCount >= 2) {
+      // 평점 반영
+      if (stats.avgRating >= 4.0) { reviewMul *= 1.08; }
+      else if (stats.avgRating >= 3.5) { reviewMul *= 1.03; }
+      else if (stats.avgRating <= 2.5) { reviewMul *= 0.85; }
+
+      // 재구매율 반영
+      if (stats.rebuyRate >= 0.8) reviewMul *= 1.05;
+
+      // 리뷰 수 자체가 인기 시그널
+      if (stats.reviewCount >= 5) reviewMul *= 1.03;
+
+      if (stats.avgRating >= 4.0) {
+        reasons.push("높은 평점");
+        reasonDetails.push(`평균 ${stats.avgRating.toFixed(1)}점 (${stats.reviewCount}건)`);
+      }
+    }
+  }
+
   // ─── 종합 매칭 점수 ───
-  const rawScore = healthBase * relevance * preference * interactionMul;
+  const rawScore = healthBase * relevance * preference * interactionMul * reviewMul;
 
   return {
     ...p,
@@ -312,9 +337,10 @@ export function scoreAndRank(
   profile: UserProfile,
   purchasableIds: Set<string>,
   interactions?: UserInteractions,
+  reviewStats?: Record<string, ProductReviewStats>,
 ): ScoredProduct[] {
   const scored = products.map((p) =>
-    scoreProduct(p, profile, purchasableIds.has(p.id as string), interactions)
+    scoreProduct(p, profile, purchasableIds.has(p.id as string), interactions, reviewStats)
   );
   const normalized = normalizeScores(scored);
   normalized.sort((a, b) => b.match_score - a.match_score);

@@ -8,6 +8,7 @@ import {
   loadPurchasableIds as loadPurchasableIdsV4,
   loadPrices as loadPricesV4,
   loadUserInteractions,
+  loadProductReviewStats,
   CONCERN_RULES,
 } from "@/lib/recommend";
 import type {
@@ -15,6 +16,7 @@ import type {
   ScoredProduct,
   HealthConcern,
   UserInteractions,
+  ProductReviewStats,
 } from "@/lib/recommend";
 
 /**
@@ -299,7 +301,11 @@ export async function GET(request: NextRequest) {
       allergies: [],
     };
 
-    const scored = scoreAndRank(products, userProfile, purchasableSet, interactions);
+    // 리뷰 통계 로드 (제품 품질 시그널)
+    const productIds = products.map((p) => p.id as string);
+    const reviewStats = await loadProductReviewStats(supabase, productIds);
+
+    const scored = scoreAndRank(products, userProfile, purchasableSet, interactions, reviewStats);
 
     // 가격 필터
     let filtered = scored;
@@ -461,8 +467,10 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // 통합 스코어링 + 인터랙션 반영
-    const scored = scoreAndRank(products, profile, purchasableIds, interactions);
+    // 리뷰 통계 로드 + 통합 스코어링
+    const allProductIds = products.map((p) => p.id as string);
+    const reviewStats = await loadProductReviewStats(supabase, allProductIds);
+    const scored = scoreAndRank(products, profile, purchasableIds, interactions, reviewStats);
     const top = scored.slice(0, 30);
     const productIds = top.map((p) => p.id as string);
 

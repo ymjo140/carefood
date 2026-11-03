@@ -8,6 +8,14 @@ import DualRadarChart, {
 } from "./DualRadarChart";
 import TasteReviewForm from "./TasteReviewForm";
 
+type ReviewTasteData = {
+  avgSalty: number;   // 1~5, 0=데이터없음
+  avgSweet: number;
+  avgSpicy: number;
+  avgFatty: number;
+  reviewCount: number;
+};
+
 type Props = {
   productId: string;
   productName: string;
@@ -21,6 +29,8 @@ type Props = {
     sodium_mg: number | null;
     spicy_score: number | null;
   };
+  /** 리뷰 기반 맛 체감 평균 (있으면 영양 예측을 보정) */
+  reviewTaste?: ReviewTasteData;
 };
 
 type TasteData = {
@@ -112,7 +122,7 @@ function toNutritionProfile(n: Props["nutrition"]) {
   return { protein, carbs, fat, fiber, vitamins: balance };
 }
 
-export default function ProductTasteSection({ productId, productName, nutrition }: Props) {
+export default function ProductTasteSection({ productId, productName, nutrition, reviewTaste }: Props) {
   const [taste, setTaste] = useState<TasteData | null>(null);
   const [userTaste, setUserTaste] = useState<{ pref_spicy: number; pref_sweet: number; pref_salty: number; pref_umami: number; pref_sour: number } | null>(null);
   const [showReviewForm, setShowReviewForm] = useState(false);
@@ -166,8 +176,26 @@ export default function ProductTasteSection({ productId, productName, nutrition 
       .catch(() => {});
   }, [productId]);
 
-  // 맛 프로필: 영양성분에서 예측 (리뷰 데이터는 향후 보정용)
-  const tasteProfile = predictTasteFromNutrition(nutrition);
+  // 맛 프로필: 영양성분 예측 + 리뷰 체감 보정
+  const predicted = predictTasteFromNutrition(nutrition);
+  const tasteProfile = (reviewTaste && reviewTaste.reviewCount >= 2)
+    ? {
+        // 리뷰 2건 이상이면 리뷰 70% + 예측 30% 블렌딩
+        salty: reviewTaste.avgSalty > 0
+          ? Math.round((predicted.salty * 0.3 + reviewTaste.avgSalty * 0.7) * 10) / 10
+          : predicted.salty,
+        sweet: reviewTaste.avgSweet > 0
+          ? Math.round((predicted.sweet * 0.3 + reviewTaste.avgSweet * 0.7) * 10) / 10
+          : predicted.sweet,
+        savory: reviewTaste.avgFatty > 0
+          ? Math.round((predicted.savory * 0.3 + reviewTaste.avgFatty * 0.7) * 10) / 10
+          : predicted.savory,
+        light: predicted.light, // 담백함은 리뷰에서 수집 안 함
+        spicy: reviewTaste.avgSpicy > 0
+          ? Math.round((predicted.spicy * 0.3 + reviewTaste.avgSpicy * 0.7) * 10) / 10
+          : predicted.spicy,
+      }
+    : predicted;
 
   // 사용자 선호: 온보딩 데이터를 새 5축으로 매핑
   const userTasteProfile = userTaste

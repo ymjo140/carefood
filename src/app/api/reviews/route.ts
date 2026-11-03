@@ -91,7 +91,8 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const { user_id, product_id, rating, would_rebuy,
-            taste_salty_feel, taste_sweet_feel, taste_spicy_feel, comment } = body;
+            taste_salty_feel, taste_sweet_feel, taste_spicy_feel, taste_fatty_feel,
+            consumed_as, comment } = body;
 
     if (!user_id || !product_id || !rating) {
       return NextResponse.json({ error: "user_id, product_id, rating 필수" }, { status: 400 });
@@ -119,6 +120,8 @@ export async function POST(request: NextRequest) {
       taste_salty_feel: taste_salty_feel ?? null,
       taste_sweet_feel: taste_sweet_feel ?? null,
       taste_spicy_feel: taste_spicy_feel ?? null,
+      taste_fatty_feel: taste_fatty_feel ?? null,
+      consumed_as: consumed_as || null,
       comment: comment || null,
       reviewer_age_group: profile?.age_group || null,
       reviewer_gender: profile?.gender || null,

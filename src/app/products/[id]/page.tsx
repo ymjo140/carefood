@@ -182,6 +182,24 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
   const bestPrice = sortedPrices.length > 0 ? sortedPrices[0] : null;
   const imageUrl = sortedPrices.find((p) => p.image_url)?.image_url;
 
+  // 리뷰 맛 체감 데이터 (맛 프로필 보정용)
+  const { data: reviewRows } = await (supabase as any)
+    .from("product_reviews")
+    .select("taste_salty_feel, taste_sweet_feel, taste_spicy_feel, taste_fatty_feel")
+    .eq("product_id", productId) as { data: { taste_salty_feel: number | null; taste_sweet_feel: number | null; taste_spicy_feel: number | null; taste_fatty_feel: number | null }[] | null };
+  const rr = reviewRows || [];
+  const avgTasteField = (field: string) => {
+    const valid = rr.filter(r => (r as Record<string, unknown>)[field] != null && ((r as Record<string, unknown>)[field] as number) > 0);
+    return valid.length > 0 ? Math.round(valid.reduce((s, r) => s + ((r as Record<string, unknown>)[field] as number), 0) / valid.length * 10) / 10 : 0;
+  };
+  const reviewTaste = rr.length >= 2 ? {
+    avgSalty: avgTasteField("taste_salty_feel"),
+    avgSweet: avgTasteField("taste_sweet_feel"),
+    avgSpicy: avgTasteField("taste_spicy_feel"),
+    avgFatty: avgTasteField("taste_fatty_feel"),
+    reviewCount: rr.length,
+  } : undefined;
+
   // 건강식단서비스 원본 URL
   let originalProductUrl: string | null = null;
   if (product.category_large === "건강식단서비스" && product.manufacturer) {
@@ -456,6 +474,7 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
           sodium_mg: displaySodium,
           spicy_score: product.spicy_score,
         }}
+        reviewTaste={reviewTaste}
       />
 
       {/* ── 건강 프로필 연동 리뷰 ── */}

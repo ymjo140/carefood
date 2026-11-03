@@ -51,7 +51,8 @@ export default function ProductReviews({ productId }: { productId: string }) {
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({
     rating: 0, would_rebuy: null as boolean | null,
-    taste_salty_feel: 0, taste_sweet_feel: 0, taste_spicy_feel: 0,
+    taste_salty_feel: 0, taste_sweet_feel: 0, taste_spicy_feel: 0, taste_fatty_feel: 0,
+    consumed_as: "" as string,
     comment: "",
   });
   const [submitting, setSubmitting] = useState(false);
@@ -94,10 +95,12 @@ export default function ProductReviews({ productId }: { productId: string }) {
           taste_salty_feel: formData.taste_salty_feel || null,
           taste_sweet_feel: formData.taste_sweet_feel || null,
           taste_spicy_feel: formData.taste_spicy_feel || null,
+          taste_fatty_feel: formData.taste_fatty_feel || null,
+          consumed_as: formData.consumed_as || null,
         }),
       });
       setShowForm(false);
-      setFormData({ rating: 0, would_rebuy: null, taste_salty_feel: 0, taste_sweet_feel: 0, taste_spicy_feel: 0, comment: "" });
+      setFormData({ rating: 0, would_rebuy: null, taste_salty_feel: 0, taste_sweet_feel: 0, taste_spicy_feel: 0, taste_fatty_feel: 0, consumed_as: "", comment: "" });
       fetchReviews();
     } catch { /* */ }
     finally { setSubmitting(false); }
@@ -170,11 +173,12 @@ export default function ProductReviews({ productId }: { productId: string }) {
           </div>
 
           {/* 맛 체감 */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3">
             {[
               { key: "taste_salty_feel" as const, label: "짠맛" },
               { key: "taste_sweet_feel" as const, label: "단맛" },
               { key: "taste_spicy_feel" as const, label: "매운맛" },
+              { key: "taste_fatty_feel" as const, label: "고소함" },
             ].map(t => (
               <div key={t.key}>
                 <label className="text-[11px] text-muted block mb-1">{t.label} 체감</label>
@@ -190,6 +194,26 @@ export default function ProductReviews({ productId }: { productId: string }) {
                 </div>
               </div>
             ))}
+          </div>
+
+          {/* 섭취 맥락 */}
+          <div>
+            <label className="text-xs font-medium mb-1 block">어떤 상황에서 드셨나요?</label>
+            <div className="flex gap-1.5 flex-wrap">
+              {[
+                { val: "meal", label: "식사 대용" },
+                { val: "snack", label: "간식" },
+                { val: "post_workout", label: "운동 후" },
+                { val: "late_night", label: "야식" },
+              ].map(opt => (
+                <button key={opt.val} onClick={() => setFormData(f => ({ ...f, consumed_as: f.consumed_as === opt.val ? "" : opt.val }))}
+                  className={`text-[11px] px-2.5 py-1 rounded-full ${
+                    formData.consumed_as === opt.val ? "bg-foreground text-card" : "bg-surface text-foreground/70"
+                  }`} style={{ minHeight: "26px", minWidth: "unset" }}>
+                  {opt.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* 코멘트 */}
