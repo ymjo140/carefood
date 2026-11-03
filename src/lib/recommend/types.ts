@@ -75,6 +75,7 @@ export type ScoredProduct = Record<string, unknown> & {
   reason_detail: string | null;
   dish_keyword: string;
   is_exploration?: boolean; // 탐색 슬롯 (평소 안 보던 카테고리)
+  is_excluded_allergy?: boolean; // 알레르기 제외된 제품
 };
 
 // ── 필터 계층 ──

@@ -723,6 +723,9 @@ export default function ProductExplorer() {
       if (nutrition.per100g_protein_min > 0) params.set("per100g_protein_min", String(nutrition.per100g_protein_min));
       if (nutrition.per100g_calories_max > 0) params.set("per100g_calories_max", String(nutrition.per100g_calories_max));
       if (nutrition.health_min > 0) params.set("health_min", String(nutrition.health_min));
+      // 알레르기 필터 (프로필에서 자동 적용)
+      const userAllergies: string[] = profile?.allergies || [];
+      if (userAllergies.length > 0) params.set("allergies", userAllergies.join(","));
       const needsProfile = ["recommend", "taste_desc", "nutrition_desc"].includes(sortBy);
       params.set("sort", needsProfile ? "recommend" : sortBy);
       params.set("page", String(page));
@@ -741,6 +744,7 @@ export default function ProductExplorer() {
             sensitivity: profile.sensitivity || { digestive: 2, additive: 2 },
             tastes: profile.tastes || { salty: 5, sweet: 5, spicy: 5, fatty: 5 },
             nutrition_goals: profile.nutrition_goals || undefined,
+            allergies: profile.allergies || [],
           }),
         });
       } else {

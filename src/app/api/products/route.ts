@@ -1,5 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
+import { ALLERGEN_KEYWORDS } from "@/lib/recommend/constants";
+
+/** 알레르기 유발 제품 필터링 (제품명 기반) */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function filterAllergens(products: any[], allergies: string[]): any[] {
+  if (!allergies.length) return products;
+  return products.filter((p) => {
+    const name = ((p.name as string) || "").toLowerCase();
+    return !allergies.some((allergy) => {
+      const keywords = ALLERGEN_KEYWORDS[allergy];
+      return keywords && keywords.some((kw) => name.includes(kw));
+    });
+  });
+}
 
 /* ════════════════════════════════════════════
    상수 & 타입
@@ -343,6 +357,7 @@ function parseSearchParams(searchParams: URLSearchParams) {
     page: Number(searchParams.get("page") || 1),
     limit: Math.min(Number(searchParams.get("limit") || 20), 50),
     source: searchParams.get("source") || null,
+    allergies: (searchParams.get("allergies") || "").split(",").filter(Boolean),
   };
 }
 
@@ -549,11 +564,14 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ products: [], total: count, page: params.page, limit: params.limit, totalPages: Math.ceil((count || 0) / params.limit) });
   }
 
-  const { result, postFiltered } = await attachPricesAndFilter(supabase, products, params);
+  // 알레르기 필터
+  const allergyFiltered = filterAllergens(products, params.allergies);
+
+  const { result, postFiltered } = await attachPricesAndFilter(supabase, allergyFiltered, params);
 
   return NextResponse.json({
     products: result,
-    total: postFiltered ? result.length : count,
+    total: postFiltered || params.allergies.length > 0 ? result.length : count,
     page: params.page,
     limit: params.limit,
     totalPages: Math.ceil((postFiltered ? result.length : (count || 0)) / params.limit),
@@ -592,7 +610,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ products: [], total: count, page: params.page, limit: params.limit, totalPages: Math.ceil((count || 0) / params.limit) });
     }
 
-    const { result, postFiltered } = await attachPricesAndFilter(supabase, products, params);
+    // 알레르기 필터 (body에서도 받을 수 있음)
+    const allergies = body.allergies || params.allergies || [];
+    const allergyFiltered = filterAllergens(products, allergies);
+
+    const { result, postFiltered } = await attachPricesAndFilter(supabase, allergyFiltered, params);
 
     // 구매 가능 ID 집합
     const purchasableIds = new Set(

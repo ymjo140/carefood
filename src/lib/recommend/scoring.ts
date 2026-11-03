@@ -13,6 +13,7 @@ import {
   SENSITIVITY_RULES,
   TASTE_RANGES,
   CONCERN_CATEGORY_WEIGHT,
+  ALLERGEN_KEYWORDS,
 } from "./constants";
 
 // ── 유틸 ──
@@ -62,6 +63,26 @@ export function scoreProduct(
 ): ScoredProduct {
   const reasons: string[] = [];
   const reasonDetails: string[] = [];
+
+  // ─── 알레르기 제외 ───
+  if (profile.allergies.length > 0) {
+    const productName = ((p.name as string) || "").toLowerCase();
+    for (const allergy of profile.allergies) {
+      const keywords = ALLERGEN_KEYWORDS[allergy];
+      if (keywords && keywords.some(kw => productName.includes(kw))) {
+        return {
+          ...p,
+          match_score: -1,
+          taste_score: 0,
+          nutrition_score: 0,
+          match_reasons: [],
+          reason_detail: null,
+          dish_keyword: "",
+          is_excluded_allergy: true,
+        } as ScoredProduct;
+      }
+    }
+  }
 
   // ─── 0. per-serving 보정 ───
   // DB 값은 모두 nutrient_base_g(보통 100g) 기준
@@ -382,7 +403,9 @@ export function scoreAndRank(
   const scored = products.map((p) =>
     scoreProduct(p, profile, purchasableIds.has(p.id as string), interactions, reviewStats, timeOfDay, cfBoosts)
   );
-  const normalized = normalizeScores(scored);
+  // 알레르기 제외 제품 필터링
+  const filtered = scored.filter((p) => !p.is_excluded_allergy);
+  const normalized = normalizeScores(filtered);
   normalized.sort((a, b) => b.match_score - a.match_score);
   return normalized;
 }

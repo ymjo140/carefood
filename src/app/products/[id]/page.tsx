@@ -9,6 +9,7 @@ import ProductViewTracker from "@/components/ProductViewTracker";
 import ProductReviews from "@/components/ProductReviews";
 import FavoriteButton from "@/components/FavoriteButton";
 import TrackableLink from "@/components/TrackableLink";
+import AllergenWarning from "@/components/AllergenWarning";
 
 // 동적 라우트 — DB 조회 필요
 export const instant = false;
@@ -427,6 +428,9 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
           </div>
         </details>
       )}
+
+      {/* ── 알레르기 경고 (클라이언트 컴포넌트) ── */}
+      <AllergenWarning productName={product.name} />
 
       {/* ── 건강 안전 정보 ── */}
       {safetyNotes.length > 0 && (

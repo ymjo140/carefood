@@ -122,3 +122,19 @@ export const DIET_PURPOSE_ORDER: Record<string, { column: string; ascending: boo
   balanced: { column: "health_score", ascending: false },
   default: { column: "health_score", ascending: false },
 };
+
+// ── 알레르기 유발물질 키워드 매핑 ──
+// 식약처 22종 기반, 제품명 매칭용
+export const ALLERGEN_KEYWORDS: Record<string, string[]> = {
+  egg: ["계란", "달걀", "난류", "난백", "난황", "에그"],
+  milk: ["우유", "밀크", "유단백", "카제인", "유청", "치즈", "버터", "크림"],
+  wheat: ["밀가루", "소맥", "글루텐"],
+  soybean: ["대두", "두부", "두유", "된장", "간장", "콩나물"],
+  peanut: ["땅콩", "피넛"],
+  treenut: ["호두", "아몬드", "캐슈넛", "피스타치오", "마카다미아", "잣", "헤이즐넛", "견과"],
+  shellfish: ["새우", "게", "랍스터", "크랩", "갑각"],
+  fish: ["고등어", "연어", "참치", "멸치", "오징어", "조기", "꽁치", "갈치", "생선"],
+  buckwheat: ["메밀"],
+  peach: ["복숭아"],
+  sulfite: ["아황산"],
+};
