@@ -8,6 +8,7 @@ export { scoreProduct, scoreAndRank, normalizeScores } from "./scoring";
 export { fetchRecommendPool, loadPurchasableIds, loadPrices } from "./query-builder";
 export { loadUserInteractions } from "./interactions";
 export { loadProductReviewStats } from "./reviews";
+export { diversifyResults, insertExplorationSlots } from "./diversity";
 export type { UserProfile, ScoredProduct, HealthConcern, HealthGoal, RiskLevel } from "./types";
 export type { PriceInfo } from "./query-builder";
 export type { UserInteractions } from "./interactions";

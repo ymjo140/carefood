@@ -74,6 +74,7 @@ export type ScoredProduct = Record<string, unknown> & {
   match_reasons: string[];
   reason_detail: string | null;
   dish_keyword: string;
+  is_exploration?: boolean; // 탐색 슬롯 (평소 안 보던 카테고리)
 };
 
 // ── 필터 계층 ──

@@ -9,6 +9,8 @@ import {
   loadPrices as loadPricesV4,
   loadUserInteractions,
   loadProductReviewStats,
+  diversifyResults,
+  insertExplorationSlots,
   CONCERN_RULES,
 } from "@/lib/recommend";
 import type {
@@ -305,10 +307,17 @@ export async function GET(request: NextRequest) {
     const productIds = products.map((p) => p.id as string);
     const reviewStats = await loadProductReviewStats(supabase, productIds);
 
-    const scored = scoreAndRank(products, userProfile, purchasableSet, interactions, reviewStats);
+    // 시간대별 부스트 (KST)
+    const kstHour = new Date(Date.now() + 9 * 3600 * 1000).getUTCHours();
+
+    const scored = scoreAndRank(products, userProfile, purchasableSet, interactions, reviewStats, kstHour);
+
+    // 다양성 보장 + 탐색 슬롯
+    const diversified = diversifyResults(scored);
+    const withExploration = insertExplorationSlots(diversified, interactions);
 
     // 가격 필터
-    let filtered = scored;
+    let filtered = withExploration;
     if (priceMin > 0 || priceMax > 0 || platformFilter) {
       filtered = scored.filter((p) => purchasableSet.has(p.id as string));
     }
@@ -467,11 +476,16 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // 리뷰 통계 로드 + 통합 스코어링
+    // 리뷰 통계 로드 + 통합 스코어링 + 시간대별 부스트
     const allProductIds = products.map((p) => p.id as string);
     const reviewStats = await loadProductReviewStats(supabase, allProductIds);
-    const scored = scoreAndRank(products, profile, purchasableIds, interactions, reviewStats);
-    const top = scored.slice(0, 30);
+    const kstHour = new Date(Date.now() + 9 * 3600 * 1000).getUTCHours();
+    const scored = scoreAndRank(products, profile, purchasableIds, interactions, reviewStats, kstHour);
+
+    // 다양성 보장 + 탐색 슬롯
+    const diversified = diversifyResults(scored);
+    const withExploration = insertExplorationSlots(diversified, interactions);
+    const top = withExploration.slice(0, 30);
     const productIds = top.map((p) => p.id as string);
 
     // 가격 + 리뷰

@@ -56,6 +56,7 @@ export function scoreProduct(
   isPurchasable: boolean,
   interactions?: UserInteractions,
   reviewStats?: Record<string, ProductReviewStats>,
+  timeOfDay?: number, // KST 시간 (0~23)
 ): ScoredProduct {
   const reasons: string[] = [];
   const reasonDetails: string[] = [];
@@ -118,6 +119,29 @@ export function scoreProduct(
     if (weights && dishCategory in weights) {
       relevance *= weights[dishCategory];
     }
+  }
+
+  // ─── 시간대별 카테고리 부스트 ───
+  if (timeOfDay !== undefined) {
+    const cat = dishCategory;
+    let timeMul = 1.0;
+    if (timeOfDay >= 6 && timeOfDay < 10) {
+      // 아침: 가벼운 식사, 유제품, 시리얼, 음료
+      if (["dairy", "cereal", "bread", "drink", "yogurt", "snack"].includes(cat)) timeMul = 1.08;
+      if (["soup", "stew", "meat"].includes(cat)) timeMul = 0.95;
+    } else if (timeOfDay >= 11 && timeOfDay < 14) {
+      // 점심: 균형 식사
+      if (["rice", "noodle", "soup", "stew", "lunch_box"].includes(cat)) timeMul = 1.06;
+    } else if (timeOfDay >= 17 && timeOfDay < 21) {
+      // 저녁: 든든한 식사
+      if (["rice", "soup", "stew", "meat", "fish"].includes(cat)) timeMul = 1.06;
+      if (["snack", "cereal"].includes(cat)) timeMul = 0.95;
+    } else if ((timeOfDay >= 14 && timeOfDay < 17) || timeOfDay >= 21) {
+      // 간식 시간
+      if (["snack", "drink", "dairy", "fruit", "nut", "dessert"].includes(cat)) timeMul = 1.08;
+      if (["rice", "noodle"].includes(cat)) timeMul = 0.95;
+    }
+    relevance *= timeMul;
   }
 
   // 건강 목표별 보너스
@@ -338,9 +362,10 @@ export function scoreAndRank(
   purchasableIds: Set<string>,
   interactions?: UserInteractions,
   reviewStats?: Record<string, ProductReviewStats>,
+  timeOfDay?: number,
 ): ScoredProduct[] {
   const scored = products.map((p) =>
-    scoreProduct(p, profile, purchasableIds.has(p.id as string), interactions, reviewStats)
+    scoreProduct(p, profile, purchasableIds.has(p.id as string), interactions, reviewStats, timeOfDay)
   );
   const normalized = normalizeScores(scored);
   normalized.sort((a, b) => b.match_score - a.match_score);
