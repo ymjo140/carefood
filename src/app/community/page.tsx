@@ -1,54 +1,12 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
+import MealCard from "@/components/community/MealCard";
+import DailyCard from "@/components/community/DailyCard";
+import PostComposer from "@/components/community/PostComposer";
 
-/* ───── 타입 ───── */
-type MealPlan = {
-  id: string;
-  title: string;
-  description: string | null;
-  days: unknown;
-  summary: { totalItems?: number; avgDailyCalories?: number; avgDailyProtein?: number; product_count?: number; avg_daily_calories?: number; avg_daily_protein?: number; total_price?: number; service_mix?: Record<string, number> } | null;
-  author_display_name: string;
-  author_age_group: string | null;
-  author_gender: string | null;
-  author_concerns: string[];
-  author_diet_type: string | null;
-  is_verified: boolean;
-  like_count: number;
-  copy_count: number;
-  comment_count: number;
-  is_liked: boolean;
-  created_at: string;
-};
-
-type GroupBuy = {
-  id: string;
-  title: string;
-  description: string | null;
-  product_name: string;
-  original_price: number | null;
-  target_price: number | null;
-  discount_rate: number | null;
-  target_count: number;
-  current_count: number;
-  concern: string | null;
-  status: string;
-  expires_at: string | null;
-  created_at: string;
-};
-
-const CONCERN_LABELS: Record<string, string> = {
-  gut_health: "장건강", skin: "피부건강", weight: "체중관리", energy: "활력충전",
-};
-const AGE_LABELS: Record<string, string> = {
-  "20s": "20대", "30s": "30대", "40s": "40대", "50s": "50대", "60plus": "60대+",
-};
-const DIET_LABELS: Record<string, string> = {
-  normal: "일반", diet: "다이어트", exercise: "운동병행", vegetarian: "채식", pregnant: "임산부",
-};
-
+/* ─── helpers ─── */
 function getUserId(): string {
   try {
     let id = localStorage.getItem("carefood_anon_id");
@@ -62,356 +20,219 @@ function getUserId(): string {
   }
 }
 
-/* ───── 식단 카드 ───── */
-function PlanCard({ plan, onLike }: { plan: MealPlan; onLike: () => void }) {
-  const profileTags = [
-    plan.author_age_group ? AGE_LABELS[plan.author_age_group] : null,
-    plan.author_diet_type ? DIET_LABELS[plan.author_diet_type] : null,
-    ...plan.author_concerns.map(c => CONCERN_LABELS[c] || c),
-  ].filter(Boolean);
-
-  return (
-    <div className="border border-border rounded-xl overflow-hidden hover:border-primary/30 transition-all">
-      {/* 클릭 가능 영역 → 상세 페이지 */}
-      <Link href={`/community/${plan.id}`} className="block p-4">
-        {/* 헤더 */}
-        <div className="flex items-start justify-between gap-2 mb-2">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-bold">{plan.author_display_name}</span>
-              {plan.is_verified && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium"
-                  style={{ minHeight: "unset", minWidth: "unset" }}>인증</span>
-              )}
-            </div>
-            <div className="flex gap-1 flex-wrap mt-0.5">
-              {profileTags.map(tag => (
-                <span key={tag} className="text-[10px] px-1.5 py-0.5 rounded bg-surface text-muted"
-                  style={{ minHeight: "unset", minWidth: "unset" }}>{tag}</span>
-              ))}
-            </div>
-          </div>
-          <span className="text-[10px] text-muted shrink-0">
-            {new Date(plan.created_at).toLocaleDateString("ko-KR")}
-          </span>
-        </div>
-
-        {/* 내용 */}
-        <h3 className="text-sm font-bold mb-1">{plan.title}</h3>
-        {plan.description && <p className="text-xs text-muted mb-2 line-clamp-2">{plan.description}</p>}
-
-        {/* 미리보기: 첫째 날 식단 */}
-        {Array.isArray(plan.days) && plan.days.length > 0 && (
-          <div className="bg-surface/50 rounded-lg p-2.5 mb-2 text-xs">
-            {(() => {
-              const firstDay = plan.days[0] as { day?: string; slots?: Record<string, string> };
-              if (!firstDay?.slots) return null;
-              const entries = Object.entries(firstDay.slots).slice(0, 3);
-              return entries.map(([slot, meal]) => (
-                <div key={slot} className="flex gap-2 py-0.5">
-                  <span className="text-muted w-8 shrink-0">{slot === "breakfast" ? "아침" : slot === "lunch" ? "점심" : slot === "dinner" ? "저녁" : "간식"}</span>
-                  <span className="text-foreground/80 truncate">{meal as string}</span>
-                </div>
-              ));
-            })()}
-            {plan.days.length > 1 && (
-              <p className="text-muted text-[10px] mt-1">+{plan.days.length - 1}일 더 보기 →</p>
-            )}
-          </div>
-        )}
-
-        {/* 요약 */}
-        {plan.summary && (
-          <div className="flex gap-3 text-xs text-muted">
-            {(plan.summary.product_count || plan.summary.totalItems) && <span>{plan.summary.product_count || plan.summary.totalItems}개 제품</span>}
-            {(plan.summary.avg_daily_calories || plan.summary.avgDailyCalories) && <span>일 {plan.summary.avg_daily_calories || plan.summary.avgDailyCalories}kcal</span>}
-            {(plan.summary.avg_daily_protein || plan.summary.avgDailyProtein) && <span>단백질 {plan.summary.avg_daily_protein || plan.summary.avgDailyProtein}g</span>}
-          </div>
-        )}
-      </Link>
-
-      {/* 액션 (링크 밖) */}
-      <div className="flex items-center gap-4 px-4 py-2 border-t border-border/50">
-        <button onClick={(e) => { e.preventDefault(); onLike(); }}
-          className={`flex items-center gap-1 text-xs ${plan.is_liked ? "text-primary font-medium" : "text-muted hover:text-foreground"}`}
-          style={{ minHeight: "28px", minWidth: "unset" }}>
-          {plan.is_liked ? "♥" : "♡"} {plan.like_count}
-        </button>
-        <Link href={`/community/${plan.id}`} className="text-xs text-muted hover:text-foreground"
-          style={{ minHeight: "28px", minWidth: "unset", display: "flex", alignItems: "center" }}>
-          💬 {plan.comment_count}
-        </Link>
-        <Link href={`/community/${plan.id}`} className="text-xs text-muted hover:text-primary transition-colors"
-          style={{ minHeight: "28px", minWidth: "unset", display: "flex", alignItems: "center" }}>
-          📋 {plan.copy_count}
-        </Link>
-      </div>
-    </div>
-  );
+function getUserProfile(): { nickname: string; ageGroup?: string; concerns?: string[]; goals?: string[] } {
+  try {
+    const raw = localStorage.getItem("carefood_profile");
+    if (raw) {
+      const p = JSON.parse(raw);
+      return {
+        nickname: p.nickname || p.display_name || "익명",
+        ageGroup: p.age_group,
+        concerns: p.health_concerns || p.concerns,
+        goals: p.goals,
+      };
+    }
+  } catch { /* */ }
+  return { nickname: "익명" };
 }
 
-/* ───── 공구 카드 ───── */
-function GroupBuyCard({ gb, onJoin, joined, joining }: { gb: GroupBuy; onJoin: () => void; joined: boolean; joining: boolean }) {
-  const progress = gb.target_count > 0 ? Math.round(gb.current_count / gb.target_count * 100) : 0;
-  const isAchieved = gb.status === "achieved";
-  const daysLeft = gb.expires_at
-    ? Math.max(0, Math.ceil((new Date(gb.expires_at).getTime() - Date.now()) / (24 * 3600 * 1000)))
-    : null;
+const CONCERN_LABELS: Record<string, string> = {
+  gut_health: "장건강", skin: "피부", weight: "다이어트", energy: "활력",
+  muscle: "근력", blood_pressure: "혈압", diabetes: "혈당", kidney: "신장",
+};
 
-  return (
-    <div className={`border rounded-xl p-4 ${isAchieved ? "border-primary/30 bg-primary/3" : "border-border"}`}>
-      <div className="flex items-start justify-between gap-2 mb-2">
-        <div>
-          <h3 className="text-sm font-bold">{gb.title}</h3>
-          <p className="text-xs text-muted mt-0.5">{gb.product_name}</p>
-        </div>
-        {gb.concern && (
-          <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary shrink-0"
-            style={{ minHeight: "unset", minWidth: "unset" }}>
-            {CONCERN_LABELS[gb.concern] || gb.concern}
-          </span>
-        )}
-      </div>
+type Tab = "recommend" | "following" | "concern";
 
-      {/* 가격 */}
-      {gb.original_price && gb.target_price && (
-        <div className="flex items-center gap-2 mb-2">
-          <span className="text-xs text-muted line-through">{gb.original_price.toLocaleString()}원</span>
-          <span className="text-sm font-bold text-primary">{gb.target_price.toLocaleString()}원</span>
-          {gb.discount_rate && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-accent/10 text-accent font-bold"
-              style={{ minHeight: "unset", minWidth: "unset" }}>
-              {Math.round(gb.discount_rate * 100)}% OFF
-            </span>
-          )}
-        </div>
-      )}
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type FeedPost = any;
 
-      {/* 진행 바 */}
-      <div className="mb-2">
-        <div className="flex justify-between text-[10px] text-muted mb-1">
-          <span>{gb.current_count}/{gb.target_count}명</span>
-          {daysLeft !== null && !isAchieved && <span>{daysLeft}일 남음</span>}
-          {isAchieved && <span className="text-primary font-medium">달성 완료!</span>}
-        </div>
-        <div className="h-2 bg-surface rounded-full overflow-hidden">
-          <div className={`h-full rounded-full transition-all ${isAchieved ? "bg-primary" : "bg-primary/60"}`}
-            style={{ width: `${Math.min(progress, 100)}%` }} />
-        </div>
-      </div>
-
-      {/* 참여 버튼 */}
-      {gb.status === "recruiting" && (
-        joined ? (
-          <button disabled
-            className="w-full py-2 bg-surface text-muted rounded-lg text-xs font-medium"
-            style={{ minHeight: "36px" }}>
-            ✓ 참여 완료
-          </button>
-        ) : (
-          <button onClick={onJoin} disabled={joining}
-            className="w-full py-2 bg-primary text-white rounded-lg text-xs font-bold hover:bg-primary-dark transition-colors disabled:opacity-50"
-            style={{ minHeight: "36px" }}>
-            {joining ? "참여 중..." : "참여하기"}
-          </button>
-        )
-      )}
-      {gb.status === "achieved" && (
-        <div className="w-full py-2 bg-primary/10 text-primary rounded-lg text-xs font-bold text-center"
-          style={{ minHeight: "36px" }}>
-          🎉 목표 달성!
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ───── 메인 페이지 ───── */
+/* ─── Page ─── */
 export default function CommunityPage() {
-  const [tab, setTab] = useState<"feed" | "group_buy">("feed");
-  const [plans, setPlans] = useState<MealPlan[]>([]);
-  const [groupBuys, setGroupBuys] = useState<GroupBuy[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<Tab>("recommend");
   const [concernFilter, setConcernFilter] = useState("");
+  const [posts, setPosts] = useState<FeedPost[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [composerOpen, setComposerOpen] = useState(false);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const userId = useRef("");
+  const profile = useRef(getUserProfile());
 
-  const fetchFeed = useCallback(async () => {
-    setLoading(true);
+  useEffect(() => { userId.current = getUserId(); }, []);
+
+  /* ─── fetch feed ─── */
+  const fetchFeed = useCallback(async (pg = 1, append = false) => {
+    if (pg === 1) setLoading(true);
     try {
-      const userId = getUserId();
-      const params = new URLSearchParams();
-      if (concernFilter) params.set("concern", concernFilter);
-      if (userId) params.set("user_id", userId);
+      const params = new URLSearchParams({
+        tab,
+        page: String(pg),
+        user_id: userId.current,
+      });
+      if (tab === "concern" && concernFilter) params.set("concern", concernFilter);
       const res = await fetch(`/api/community/feed?${params}`);
       const data = await res.json();
-      setPlans(data.plans || []);
+      const incoming: FeedPost[] = data.posts || [];
+      setPosts(prev => append ? [...prev, ...incoming] : incoming);
+      setHasMore(data.hasMore ?? false);
+      setPage(pg);
     } catch { /* */ }
     finally { setLoading(false); }
-  }, [concernFilter]);
+  }, [tab, concernFilter]);
 
-  const fetchGroupBuys = useCallback(async () => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams();
-      params.set("status", "all");
-      if (concernFilter) params.set("concern", concernFilter);
-      const res = await fetch(`/api/community/group-buy?${params}`);
-      const data = await res.json();
-      setGroupBuys(data.group_buys || []);
-    } catch { /* */ }
-    finally { setLoading(false); }
-  }, [concernFilter]);
+  useEffect(() => { fetchFeed(1, false); }, [fetchFeed]);
 
+  /* ─── infinite scroll ─── */
   useEffect(() => {
-    if (tab === "feed") fetchFeed();
-    else fetchGroupBuys();
-  }, [tab, fetchFeed, fetchGroupBuys]);
+    if (!hasMore) return;
+    const observer = new IntersectionObserver(
+      entries => { if (entries[0]?.isIntersecting) fetchFeed(page + 1, true); },
+      { threshold: 0.1 },
+    );
+    const el = sentinelRef.current;
+    if (el) observer.observe(el);
+    return () => { if (el) observer.unobserve(el); };
+  }, [hasMore, page, fetchFeed]);
 
-  const handleLike = async (planId: string) => {
-    const userId = getUserId();
-    // Optimistic update
-    setPlans(prev => prev.map(p => {
-      if (p.id !== planId) return p;
-      return {
-        ...p,
-        is_liked: !p.is_liked,
-        like_count: p.is_liked ? Math.max(p.like_count - 1, 0) : p.like_count + 1,
-      };
+  /* ─── actions ─── */
+  const handleLike = async (postId: string) => {
+    setPosts(prev => prev.map(p => {
+      if (p.id !== postId) return p;
+      return { ...p, is_liked: !p.is_liked, like_count: p.is_liked ? Math.max((p.like_count || 0) - 1, 0) : (p.like_count || 0) + 1 };
     }));
     try {
       await fetch("/api/community/like", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: userId, plan_id: planId }),
+        body: JSON.stringify({ user_id: userId.current, post_id: postId }),
       });
-    } catch {
-      // revert on error
-      fetchFeed();
-    }
+    } catch { fetchFeed(1); }
   };
 
-  /* handleCopy는 상세 페이지로 이동 */
-
-  const [joinedIds, setJoinedIds] = useState<Set<string>>(new Set());
-  const [joining, setJoining] = useState<string | null>(null);
-
-  const handleJoinGroupBuy = async (gbId: string) => {
-    if (joining || joinedIds.has(gbId)) return;
-    const userId = getUserId();
-    setJoining(gbId);
-
-    // Optimistic update
-    setGroupBuys(prev => prev.map(gb => {
-      if (gb.id !== gbId) return gb;
-      const newCount = gb.current_count + 1;
-      return {
-        ...gb,
-        current_count: newCount,
-        status: newCount >= gb.target_count ? "achieved" : gb.status,
-      };
-    }));
-    setJoinedIds(prev => new Set(prev).add(gbId));
-
+  const handleCopy = async (postId: string) => {
     try {
-      const res = await fetch("/api/community/group-buy/join", {
+      const res = await fetch("/api/community/copy", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: userId, group_buy_id: gbId }),
+        body: JSON.stringify({ post_id: postId, user_id: userId.current }),
       });
-      const data = await res.json();
-      if (!data.ok) {
-        // revert
-        setJoinedIds(prev => { const n = new Set(prev); n.delete(gbId); return n; });
-        fetchGroupBuys();
+      if (res.ok) {
+        setPosts(prev => prev.map(p =>
+          p.id === postId ? { ...p, copy_count: (p.copy_count || 0) + 1 } : p
+        ));
       }
-    } catch {
-      setJoinedIds(prev => { const n = new Set(prev); n.delete(gbId); return n; });
-      fetchGroupBuys();
-    } finally {
-      setJoining(null);
-    }
+    } catch { /* */ }
   };
 
+  const TABS: { key: Tab; label: string }[] = [
+    { key: "recommend", label: "추천" },
+    { key: "following", label: "팔로잉" },
+    { key: "concern", label: "내 관심사" },
+  ];
+
   return (
-    <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6">
-      <h1 className="text-xl font-extrabold mb-5">커뮤니티</h1>
+    <div className="max-w-lg mx-auto pb-24" style={{ background: "#0C1117", minHeight: "100vh" }}>
+      {/* ── Header ── */}
+      <div className="sticky top-0 z-30 px-4 pt-4 pb-2" style={{ background: "#0C1117" }}>
+        <h1 className="text-lg font-extrabold mb-3" style={{ color: "#ECEBE6" }}>식단 피드</h1>
 
-      {/* 탭 */}
-      <div className="flex gap-1 mb-4 border-b border-border">
-        {[
-          { key: "feed" as const, label: "🍱 식단 피드" },
-          { key: "group_buy" as const, label: "🛒 공구" },
-        ].map(t => (
-          <button key={t.key} onClick={() => setTab(t.key)}
-            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
-              tab === t.key
-                ? "border-primary text-primary"
-                : "border-transparent text-muted hover:text-foreground"
-            }`}
-            style={{ minHeight: "40px", minWidth: "unset" }}>
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      {/* 관심사 필터 */}
-      <div className="flex gap-1.5 mb-4 overflow-x-auto no-scrollbar">
-        <button onClick={() => setConcernFilter("")}
-          className={`text-xs px-3 py-1 rounded-full shrink-0 ${
-            !concernFilter ? "bg-foreground text-card" : "bg-surface text-foreground/70 hover:bg-border"
-          }`} style={{ minHeight: "28px", minWidth: "unset" }}>
-          전체
-        </button>
-        {Object.entries(CONCERN_LABELS).map(([key, label]) => (
-          <button key={key} onClick={() => setConcernFilter(concernFilter === key ? "" : key)}
-            className={`text-xs px-3 py-1 rounded-full shrink-0 ${
-              concernFilter === key ? "bg-foreground text-card" : "bg-surface text-foreground/70 hover:bg-border"
-            }`} style={{ minHeight: "28px", minWidth: "unset" }}>
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {/* 콘텐츠 */}
-      {loading ? (
-        <div className="text-center py-12">
-          <div className="inline-block w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin mb-3" />
-          <p className="text-sm text-muted">로딩 중...</p>
+        {/* Tabs */}
+        <div className="flex gap-1.5 mb-2">
+          {TABS.map(t => (
+            <button key={t.key} onClick={() => { setTab(t.key); setConcernFilter(""); }}
+              className="text-[12px] px-3 py-1.5 rounded-full font-medium transition-colors"
+              style={{
+                background: tab === t.key ? "#C4870A" : "#252C35",
+                color: tab === t.key ? "#0C1117" : "#8A919A",
+              }}>
+              {t.label}
+            </button>
+          ))}
         </div>
-      ) : tab === "feed" ? (
-        <>
-          {plans.length > 0 ? (
-            <div className="space-y-3">
-              {plans.map(plan => (
-                <PlanCard key={plan.id} plan={plan} onLike={() => handleLike(plan.id)} />
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-12 text-muted">
-              <p className="text-base mb-2">아직 공유된 식단이 없습니다</p>
-              <p className="text-sm mb-4">주간 박스에서 내 식단을 공유해보세요!</p>
-              <Link href="/weekly-box"
-                className="inline-block bg-primary text-white px-5 py-2 rounded-lg text-sm font-bold">
-                주간 박스 만들기
-              </Link>
-            </div>
-          )}
-        </>
-      ) : (
-        <>
-          {groupBuys.length > 0 ? (
-            <div className="space-y-3">
-              {groupBuys.map(gb => (
-                <GroupBuyCard key={gb.id} gb={gb} onJoin={() => handleJoinGroupBuy(gb.id)} joined={joinedIds.has(gb.id)} joining={joining === gb.id} />
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-12 text-muted">
-              <p className="text-base mb-2">진행 중인 공구가 없습니다</p>
-              <p className="text-sm">관심사별 공구가 시작되면 여기에 표시됩니다.</p>
-            </div>
-          )}
-        </>
-      )}
+
+        {/* Concern chips (visible when concern tab active) */}
+        {tab === "concern" && (
+          <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-1">
+            {Object.entries(CONCERN_LABELS).map(([key, label]) => (
+              <button key={key} onClick={() => setConcernFilter(concernFilter === key ? "" : key)}
+                className="text-[11px] px-2.5 py-1 rounded-full shrink-0 transition-colors"
+                style={{
+                  background: concernFilter === key ? "rgba(196,135,10,0.2)" : "#252C35",
+                  color: concernFilter === key ? "#C4870A" : "#8A919A",
+                  border: concernFilter === key ? "1px solid rgba(196,135,10,0.3)" : "1px solid transparent",
+                }}>
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── Feed ── */}
+      <div className="px-4 space-y-3">
+        {loading && posts.length === 0 ? (
+          <div className="flex justify-center py-16">
+            <div className="w-6 h-6 border-2 rounded-full animate-spin" style={{ borderColor: "#252C35", borderTopColor: "#C4870A" }} />
+          </div>
+        ) : posts.length === 0 ? (
+          <div className="text-center py-16">
+            <p className="text-[14px] mb-1" style={{ color: "#ECEBE6" }}>
+              {tab === "following" ? "팔로잉한 사람이 아직 없어요" : "아직 게시글이 없어요"}
+            </p>
+            <p className="text-[12px]" style={{ color: "#8A919A" }}>
+              {tab === "following" ? "관심 있는 사람을 팔로우하면 여기에 나타나요" : "첫 번째 식단을 공유해보세요!"}
+            </p>
+          </div>
+        ) : (
+          posts.map((post: FeedPost) =>
+            post.post_type === "meal" ? (
+              <MealCard
+                key={post.id}
+                post={post}
+                onLike={() => handleLike(post.id)}
+                onCopy={() => handleCopy(post.id)}
+                onComment={() => {/* navigate to detail */}}
+                onAuthorClick={() => {/* future: profile */}}
+              />
+            ) : (
+              <DailyCard
+                key={post.id}
+                post={post}
+                onLike={() => handleLike(post.id)}
+                onComment={() => {/* navigate to detail */}}
+              />
+            )
+          )
+        )}
+
+        {/* Infinite scroll sentinel */}
+        {hasMore && <div ref={sentinelRef} className="h-8" />}
+        {hasMore && (
+          <div className="flex justify-center py-4">
+            <div className="w-5 h-5 border-2 rounded-full animate-spin" style={{ borderColor: "#252C35", borderTopColor: "#C4870A" }} />
+          </div>
+        )}
+      </div>
+
+      {/* ── FAB (글쓰기) ── */}
+      <button onClick={() => setComposerOpen(true)}
+        className="fixed bottom-20 right-4 w-12 h-12 rounded-full shadow-lg flex items-center justify-center text-lg z-40 transition-transform hover:scale-105 active:scale-95"
+        style={{ background: "#C4870A", color: "#0C1117" }}>
+        ✏️
+      </button>
+
+      {/* ── PostComposer ── */}
+      <PostComposer
+        isOpen={composerOpen}
+        onClose={() => setComposerOpen(false)}
+        userId={userId.current}
+        nickname={profile.current.nickname}
+        ageGroup={profile.current.ageGroup}
+        concerns={profile.current.concerns}
+        goals={profile.current.goals}
+        onPosted={() => fetchFeed(1, false)}
+      />
     </div>
   );
 }
