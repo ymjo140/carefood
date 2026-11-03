@@ -785,7 +785,7 @@ export default function DiaryPage() {
                           { key: "search" as const, label: "검색" },
                           { key: "photo" as const, label: "📷 사진" },
                           { key: "favorites" as const, label: `즐겨찾기${favorites.length > 0 ? ` (${favorites.length})` : ""}` },
-                          { key: "weekly" as const, label: `식단박스${weeklyItems.length > 0 ? ` (${weeklyItems.length})` : ""}` },
+                          { key: "weekly" as const, label: `식단 리스트${weeklyItems.length > 0 ? ` (${weeklyItems.length})` : ""}` },
                           { key: "manual" as const, label: "직접 입력" },
                         ]).map((tab) => (
                           <button
@@ -891,7 +891,7 @@ export default function DiaryPage() {
                         )}
                         {addTab === "weekly" && (
                           weeklyItems.length > 0 ? <ProductList items={weeklyItems} onSelect={addFromProduct} /> : (
-                            <div className="text-center py-6"><p className="text-2xl mb-2">📦</p><p className="text-xs text-muted">주간 식단 박스를 먼저 만들어보세요</p><Link href="/weekly-box" className="text-[10px] text-primary mt-1 inline-block">주간 박스 만들기 →</Link></div>
+                            <div className="text-center py-6"><p className="text-2xl mb-2">📋</p><p className="text-xs text-muted">식단 리스트가 비어있어요</p><Link href="/weekly-box" className="text-[10px] text-primary mt-1 inline-block">식단 리스트 만들기 →</Link></div>
                           )
                         )}
                         {addTab === "photo" && (

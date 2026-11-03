@@ -230,8 +230,8 @@ export default function HomePage() {
               className="bg-card rounded-2xl p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)] hover:-translate-y-0.5 transition-transform"
             >
               <p className="text-2xl mb-2">📦</p>
-              <h3 className="font-bold text-sm mb-1">주간 식단 박스</h3>
-              <p className="text-xs text-muted">AI가 7일 식단을 자동 구성</p>
+              <h3 className="font-bold text-sm mb-1">식단 리스트</h3>
+              <p className="text-xs text-muted">AI 추천 · 따라하기 식단 모아보기</p>
             </Link>
             <Link
               href="/products"

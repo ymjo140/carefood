@@ -597,7 +597,7 @@ export default function WeeklyBoxPage() {
 
       {/* ── 저장된 식단 목록 ── */}
       <div className="mt-4">
-        <p className="text-xs font-bold mb-3 px-1">내 식단 목록</p>
+        <p className="text-xs font-bold mb-3 px-1">내 식단 리스트</p>
         <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: "none" }}>
           {savedPlans.map(p => (
             <button key={p.id} onClick={() => loadPlan(p.id)}

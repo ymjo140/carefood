@@ -127,13 +127,13 @@ export default function MealPlanActions({
           <button onClick={() => router.push("/weekly-box")}
             className="flex-1 py-3 rounded-xl text-sm font-bold bg-primary text-white"
             style={{ minHeight: "44px" }}>
-            📦 주간 박스에서 보기 →
+            📋 식단 리스트에서 보기 →
           </button>
         ) : (
           <button onClick={handleCopy}
             className="flex-1 py-3 rounded-xl text-sm font-bold border border-border bg-surface text-foreground hover:border-primary/50 transition-colors"
             style={{ minHeight: "44px" }}>
-            📋 내 식단에 담기
+            📋 식단 리스트에 담기
           </button>
         )}
       </div>

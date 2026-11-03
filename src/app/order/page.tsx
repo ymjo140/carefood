@@ -174,9 +174,9 @@ export default function OrderPage() {
       <div className="max-w-2xl mx-auto px-4 sm:px-6 py-12 text-center">
         <p className="text-4xl mb-3">📦</p>
         <h1 className="text-lg font-bold mb-2">주문할 식단이 없습니다</h1>
-        <p className="text-sm text-muted mb-6">주간 박스에서 식단을 구성한 뒤 주문해주세요</p>
+        <p className="text-sm text-muted mb-6">식단 리스트에서 식단을 구성한 뒤 주문해주세요</p>
         <Link href="/weekly-box" className="bg-primary text-white px-6 py-3 rounded-xl text-sm font-bold">
-          주간 박스 만들기
+          식단 리스트 만들기
         </Link>
       </div>
     );
@@ -184,7 +184,7 @@ export default function OrderPage() {
 
   return (
     <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6">
-      <Link href="/weekly-box" className="text-sm text-muted hover:text-foreground mb-4 inline-block">← 주간 박스</Link>
+      <Link href="/weekly-box" className="text-sm text-muted hover:text-foreground mb-4 inline-block">← 식단 리스트</Link>
       <h1 className="text-xl font-extrabold mb-5">🛒 주문 확인</h1>
 
       {/* ── 서비스별 주문 ── */}

@@ -16,7 +16,7 @@ export default function Footer() {
               <p className="font-bold text-foreground text-xs mb-2">서비스</p>
               <div className="flex flex-col gap-1.5">
                 <Link href="/products" className="text-muted hover:text-foreground transition-colors text-xs">제품 탐색</Link>
-                <Link href="/weekly-box" className="text-muted hover:text-foreground transition-colors text-xs">주간 식단 박스</Link>
+                <Link href="/weekly-box" className="text-muted hover:text-foreground transition-colors text-xs">식단 리스트</Link>
                 <Link href="/community" className="text-muted hover:text-foreground transition-colors text-xs">커뮤니티</Link>
               </div>
             </div>
