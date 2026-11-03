@@ -28,6 +28,28 @@ type SortOption = "recommend" | "taste_desc" | "nutrition_desc" | "price_asc" | 
 type UserProfile = Record<string, any> | null;
 
 /* ───── 상수 ───── */
+const TASTE_BENCHMARKS: Record<string, Record<number, string>> = {
+  salty: { 2: "흰밥", 4: "계란찜", 6: "김치찌개", 8: "라면", 10: "간장게장" },
+  sweet: { 2: "우유", 4: "식빵", 6: "콜라", 8: "아이스크림", 10: "초콜릿" },
+  spicy: { 2: "짜장면", 4: "김치", 6: "떡볶이", 8: "신라면", 10: "불닭볶음면" },
+  fatty: { 2: "닭가슴살", 4: "두부", 6: "계란찜", 8: "삼겹살", 10: "버터" },
+};
+
+function getTasteBenchmarkLabel(key: string, level: number): string {
+  if (level === 0) return "전체";
+  const benchmarks = TASTE_BENCHMARKS[key];
+  if (!benchmarks) return `${level}`;
+  // 정확히 일치하는 벤치마크가 있으면 그 이름
+  if (benchmarks[level]) return benchmarks[level];
+  // 없으면 가장 가까운 벤치마크 사이로 표현
+  const levels = Object.keys(benchmarks).map(Number).sort((a, b) => a - b);
+  const lower = levels.filter(l => l <= level).pop();
+  const upper = levels.find(l => l >= level);
+  if (lower && benchmarks[lower] && level - lower <= 1) return `${benchmarks[lower]}+`;
+  if (upper && benchmarks[upper] && upper - level <= 1) return `${benchmarks[upper]}-`;
+  return `${level}`;
+}
+
 const TASTE_CONFIG = [
   { key: "salty" as const, label: "짠맛" },
   { key: "sweet" as const, label: "단맛" },
@@ -474,7 +496,7 @@ function FilterPanel({
               <div className="flex items-center justify-between mb-0.5">
                 <span className="text-[11px] font-medium">{taste.label}</span>
                 <span className="text-[10px] text-muted">
-                  {tastes[taste.key] === 0 ? "전체" : `${tastes[taste.key]}단계`}
+                  {getTasteBenchmarkLabel(taste.key, tastes[taste.key])}
                 </span>
               </div>
               <input
