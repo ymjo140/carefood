@@ -355,6 +355,9 @@ export default function WeeklyBoxPage() {
       const data = await res.json();
       if (!res.ok || !data.plan) throw new Error(String(res.status));
       setGrid(data.plan.grid || emptyGrid()); setPlanTitle(data.plan.title); setPlanId(data.plan.id);
+      // 리스트는 편집기 아래에 있으므로 불러온 뒤 편집기로 올라간다
+      const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      window.scrollTo({ top: 0, behavior: reduce ? "auto" : "smooth" });
       toast.show(`"${data.plan.title}" 을 불러왔어요`);
     } catch {
       toast.show("식단을 불러오지 못했어요. 다시 시도해 주세요", { tone: "danger" });
@@ -455,121 +458,8 @@ export default function WeeklyBoxPage() {
   return (
     <Page width="narrow">
 
-      {/* ══════════ 내 식단 리스트 ══════════ */}
-      <section className="mb-8">
-        <SectionHeader
-          title="내 식단 리스트"
-          description="카드를 누르면 아래 편집기로 불러와요"
-          action={savedPlans.length > 0 ? <TextLink href="/community">커뮤니티에서 따라하기</TextLink> : undefined}
-        />
-
-        {savedPlans.length > 0 ? (
-          <div className="flex flex-col gap-2">
-            {savedPlans.map(p => {
-              const isActive = planId === p.id;
-              const isEditing = editingTitle === p.id;
-              return (
-                <Card key={p.id} padding="md" className={cn(isActive && "border-brand")}>
-                  <div
-                    role={isEditing ? undefined : "button"}
-                    tabIndex={isEditing ? undefined : 0}
-                    onClick={() => !isEditing && loadPlan(p.id)}
-                    onKeyDown={(e) => { if (!isEditing && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); loadPlan(p.id); } }}
-                    className={cn(!isEditing && "cursor-pointer")}
-                  >
-                    <div className="flex items-center justify-between gap-2 mb-1">
-                      {isEditing ? (
-                        <form
-                          className="flex gap-2 flex-1"
-                          onClick={e => e.stopPropagation()}
-                          onSubmit={(e) => { e.preventDefault(); renamePlan(p.id); }}
-                        >
-                          <Input value={editTitleValue} onChange={e => setEditTitleValue(e.target.value)}
-                            onKeyDown={e => { if (e.key === "Escape") setEditingTitle(null); }}
-                            aria-label="식단 이름" autoFocus />
-                          <Button type="submit" size="sm" className="h-11">저장하기</Button>
-                        </form>
-                      ) : (
-                        <h3 className="text-body font-bold text-ink flex-1 min-w-0 line-clamp-1">{p.title}</h3>
-                      )}
-                      {!isEditing && (
-                        <Badge tone={p.source === "community_copy" ? "brand" : "neutral"}>
-                          {p.source === "community_copy" ? "따라하기" : "AI 생성"}
-                        </Badge>
-                      )}
-                    </div>
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-caption text-ink-2">
-                      <span><span className="num font-bold text-ink">{p.product_count}</span>개</span>
-                      {p.avg_daily_calories > 0 && <Kcal value={p.avg_daily_calories} className="text-caption" />}
-                      {p.total_price > 0 && <Price value={p.total_price} className="text-caption" />}
-                      <span className="ml-auto">{relativeTime(p.updated_at)}</span>
-                    </div>
-                  </div>
-                  <CardActions>
-                    <Button size="sm" variant="ghost" icon="edit"
-                      onClick={() => { setEditingTitle(p.id); setEditTitleValue(p.title); }}>이름 바꾸기</Button>
-                    <Button size="sm" variant="ghost" icon="refresh" onClick={() => loadPlan(p.id)}>불러오기</Button>
-                    <Button size="sm" variant="ghost" icon="trash" className="ml-auto" onClick={() => setDeleteTarget(p)}>삭제하기</Button>
-                  </CardActions>
-                </Card>
-              );
-            })}
-          </div>
-        ) : plansError ? (
-          <EmptyState
-            title="식단 리스트를 불러오지 못했어요"
-            description="연결이 잠깐 끊겼을 수 있어요"
-            action={<Button size="sm" variant="secondary" icon="refresh" onClick={() => loadPlans()}>다시 불러오기</Button>}
-          />
-        ) : (
-          <EmptyState
-            title="아직 저장한 식단이 없어요"
-            description="아래에서 AI 추천으로 채우거나, 커뮤니티에서 따라하기 해 보세요"
-            action={<LinkButton href="/community" size="sm" variant="secondary">커뮤니티 보기</LinkButton>}
-          />
-        )}
-      </section>
-
       {/* ══════════ 7일 식단 편집기 ══════════ */}
-      <section className="border-t border-line pt-6">
-        <div className="flex flex-col gap-3 mb-5">
-          <div>
-            <Input
-              value={planTitle}
-              onChange={e => setPlanTitle(e.target.value)}
-              placeholder="식단 이름"
-              aria-label="식단 이름"
-              className="font-bold"
-            />
-            <p className="text-caption text-ink-2 mt-1.5">영양 밸런스를 맞춰 7일을 구성해요</p>
-          </div>
-          <div className="flex gap-2">
-            <Button variant="secondary" block onClick={generatePlan} loading={generating || (!precomputed && preloading)}>
-              {generating ? "만드는 중" : !precomputed && preloading ? "준비 중" : "AI 추천으로 채우기"}
-            </Button>
-            <Button block onClick={savePlan} disabled={stats.products === 0} loading={saving}>
-              {saving ? "저장 중" : "저장하기"}
-            </Button>
-          </div>
-        </div>
-
-        {/* ── 주간 요약 ── */}
-        {stats.products > 0 && (
-          <Card className="mb-5">
-            <div className="flex items-end justify-between gap-4 mb-4">
-              <Stat size="lg" emphasis label="일 평균 kcal" value={stats.avgCal.toLocaleString()} />
-              <div className="flex gap-5">
-                <Stat label="목표 달성률" value={stats.goalPct} unit="%" />
-                <Stat label="주간 예상 비용" value={stats.totalPrice.toLocaleString()} unit="원" />
-              </div>
-            </div>
-            <MacroGrid
-              values={{ protein: stats.avgProtein, carbs: stats.avgCarbs, fat: stats.avgFat, sodium: stats.avgSodium }}
-              targets={{ protein: 80, carbs: 260, fat: 60, sodium: 2000 }}
-            />
-          </Card>
-        )}
-
+      <section>
         {/* ── 요일 고르기 ── */}
         <div role="tablist" aria-label="요일" className="grid grid-cols-7 gap-1 mb-4">
           {DAYS.map(d => {
@@ -649,9 +539,47 @@ export default function WeeklyBoxPage() {
           })}
         </div>
 
+        <div className="flex flex-col gap-3 mt-6">
+          <div>
+            <Input
+              value={planTitle}
+              onChange={e => setPlanTitle(e.target.value)}
+              placeholder="식단 이름"
+              aria-label="식단 이름"
+              className="font-bold"
+            />
+            <p className="text-caption text-ink-2 mt-1.5">영양 밸런스를 맞춰 7일을 구성해요</p>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="secondary" block onClick={generatePlan} loading={generating || (!precomputed && preloading)}>
+              {generating ? "만드는 중" : !precomputed && preloading ? "준비 중" : "AI 추천으로 채우기"}
+            </Button>
+            <Button block onClick={savePlan} disabled={stats.products === 0} loading={saving}>
+              {saving ? "저장 중" : "저장하기"}
+            </Button>
+          </div>
+        </div>
+
+        {/* ── 주간 요약 ── */}
+        {stats.products > 0 && (
+          <Card className="mt-6">
+            <div className="flex items-end justify-between gap-4 mb-4">
+              <Stat size="lg" emphasis label="일 평균 kcal" value={stats.avgCal.toLocaleString()} />
+              <div className="flex gap-5">
+                <Stat label="목표 달성률" value={stats.goalPct} unit="%" />
+                <Stat label="주간 예상 비용" value={stats.totalPrice.toLocaleString()} unit="원" />
+              </div>
+            </div>
+            <MacroGrid
+              values={{ protein: stats.avgProtein, carbs: stats.avgCarbs, fat: stats.avgFat, sodium: stats.avgSodium }}
+              targets={{ protein: 80, carbs: 260, fat: 60, sodium: 2000 }}
+            />
+          </Card>
+        )}
+
         {/* ── 서비스 구성 ── */}
         {stats.products > 0 && stats.serviceMix.length > 0 && (
-          <Card className="mt-5">
+          <Card className="mt-3">
             <p className="text-label font-bold text-ink mb-3">서비스 구성</p>
             <div className="flex flex-col gap-2.5">
               {stats.serviceMix.map(svc => (
@@ -669,6 +597,81 @@ export default function WeeklyBoxPage() {
               <Price value={stats.monthlyEstimate} className="text-label" />
             </div>
           </Card>
+        )}
+      </section>
+
+      {/* ══════════ 내 식단 리스트 ══════════ */}
+      <section className="mt-8 border-t border-line pt-6">
+        <SectionHeader
+          title="내 식단 리스트"
+          description="카드를 누르면 위 편집기로 불러와요"
+          action={savedPlans.length > 0 ? <TextLink href="/community">커뮤니티에서 따라하기</TextLink> : undefined}
+        />
+
+        {savedPlans.length > 0 ? (
+          <div className="flex flex-col gap-2">
+            {savedPlans.map(p => {
+              const isActive = planId === p.id;
+              const isEditing = editingTitle === p.id;
+              return (
+                <Card key={p.id} padding="md" className={cn(isActive && "border-brand")}>
+                  <div
+                    role={isEditing ? undefined : "button"}
+                    tabIndex={isEditing ? undefined : 0}
+                    onClick={() => !isEditing && loadPlan(p.id)}
+                    onKeyDown={(e) => { if (!isEditing && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); loadPlan(p.id); } }}
+                    className={cn(!isEditing && "cursor-pointer")}
+                  >
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      {isEditing ? (
+                        <form
+                          className="flex gap-2 flex-1"
+                          onClick={e => e.stopPropagation()}
+                          onSubmit={(e) => { e.preventDefault(); renamePlan(p.id); }}
+                        >
+                          <Input value={editTitleValue} onChange={e => setEditTitleValue(e.target.value)}
+                            onKeyDown={e => { if (e.key === "Escape") setEditingTitle(null); }}
+                            aria-label="식단 이름" autoFocus />
+                          <Button type="submit" size="sm" className="h-11">저장하기</Button>
+                        </form>
+                      ) : (
+                        <h3 className="text-body font-bold text-ink flex-1 min-w-0 line-clamp-1">{p.title}</h3>
+                      )}
+                      {!isEditing && (
+                        <Badge tone={p.source === "community_copy" ? "brand" : "neutral"}>
+                          {p.source === "community_copy" ? "따라하기" : "AI 생성"}
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-caption text-ink-2">
+                      <span><span className="num font-bold text-ink">{p.product_count}</span>개</span>
+                      {p.avg_daily_calories > 0 && <Kcal value={p.avg_daily_calories} className="text-caption" />}
+                      {p.total_price > 0 && <Price value={p.total_price} className="text-caption" />}
+                      <span className="ml-auto">{relativeTime(p.updated_at)}</span>
+                    </div>
+                  </div>
+                  <CardActions>
+                    <Button size="sm" variant="ghost" icon="edit"
+                      onClick={() => { setEditingTitle(p.id); setEditTitleValue(p.title); }}>이름 바꾸기</Button>
+                    <Button size="sm" variant="ghost" icon="refresh" onClick={() => loadPlan(p.id)}>불러오기</Button>
+                    <Button size="sm" variant="ghost" icon="trash" className="ml-auto" onClick={() => setDeleteTarget(p)}>삭제하기</Button>
+                  </CardActions>
+                </Card>
+              );
+            })}
+          </div>
+        ) : plansError ? (
+          <EmptyState
+            title="식단 리스트를 불러오지 못했어요"
+            description="연결이 잠깐 끊겼을 수 있어요"
+            action={<Button size="sm" variant="secondary" icon="refresh" onClick={() => loadPlans()}>다시 불러오기</Button>}
+          />
+        ) : (
+          <EmptyState
+            title="아직 저장한 식단이 없어요"
+            description="위에서 AI 추천으로 채우거나, 커뮤니티에서 따라하기 해 보세요"
+            action={<LinkButton href="/community" size="sm" variant="secondary">커뮤니티 보기</LinkButton>}
+          />
         )}
       </section>
 
