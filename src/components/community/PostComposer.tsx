@@ -39,10 +39,12 @@ export default function PostComposer({ isOpen, onClose, userId, nickname, ageGro
   const [selectedMeals, setSelectedMeals] = useState<DiaryEntry[]>([]);
   const [posting, setPosting] = useState(false);
 
-  // Load recent diary entries
+  // 오늘 식단 기록 불러오기 — 식단 기록 화면과 같은 날짜 기준.
+  // (recent=true 는 id 없이 { recent } 를 돌려줘서 목록이 늘 비어 보였음)
   useEffect(() => {
     if (!isOpen || mode !== "meal") return;
-    fetch(`/api/diary?user_id=${userId}&recent=true`)
+    const today = new Date().toISOString().slice(0, 10);
+    fetch(`/api/diary?user_id=${encodeURIComponent(userId)}&date=${today}`)
       .then(r => r.json())
       .then(data => setRecentMeals(data.entries || []))
       .catch(() => {});

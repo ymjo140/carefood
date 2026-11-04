@@ -6,6 +6,7 @@
  *   npm run ds:audit                       # 기본 http://localhost:3100
  *   npm run ds:audit -- --base=https://carefood-iota.vercel.app
  *   npm run ds:audit -- --only=/diary,/weekly-box
+ *   npm run ds:audit -- --ignore="cdn\\.011st\\.com"   # 검사 환경에서만 막히는 외부 요청 제외
  *
  * 잡는 것
  *   - 화면 오류: 콘솔 에러, 페이지 예외, 실패한 요청(4xx/5xx)
@@ -35,6 +36,9 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const arg = (k, d) => (process.argv.find((a) => a.startsWith(`--${k}=`)) || "").split("=").slice(1).join("=") || d;
 const BASE = arg("base", process.env.DS_AUDIT_BASE || "http://localhost:3100").replace(/\/$/, "");
 const ONLY = arg("only", "").split(",").filter(Boolean);
+// 검사 환경 탓에 막히는 외부 요청(예: 클라우드 프록시가 막는 쇼핑몰 이미지 CDN)은 --ignore=정규식 으로 제외. 리포트에 표시됨
+const IGNORE = arg("ignore", process.env.DS_AUDIT_IGNORE || "");
+const IGNORE_RE = IGNORE ? new RegExp(IGNORE) : null;
 const OUT = join(ROOT, "ds-audit", "report");
 const SHOTS = join(OUT, "shots");
 const MAX_SHOT_H = 6000;
@@ -230,7 +234,8 @@ function inPageChecks() {
   if (vw < 600) {
     for (const el of document.querySelectorAll("a[href],button,[role=button],input:not([type=hidden]),select")) {
       if (!visible(el) || el.closest("p,li,td") && el.tagName === "A") continue;
-      const r = el.getBoundingClientRect();
+      const hit = (el.type === "checkbox" || el.type === "radio") && el.closest("label") ? el.closest("label") : el;
+      const r = hit.getBoundingClientRect();
       if (r.height < 32 || r.width < 32) push("touch-target", el, `${Math.round(r.width)}×${Math.round(r.height)}px`);
     }
   }
@@ -285,8 +290,8 @@ async function main() {
       const page = await ctx.newPage();
       const errors = [];
       page.on("pageerror", (e) => errors.push(`예외: ${e.message.slice(0, 160)}`));
-      page.on("console", (m) => { if (m.type() === "error") errors.push(`콘솔: ${m.text().slice(0, 160)}`); });
-      page.on("response", (r) => { if (r.status() >= 400 && !r.url().includes("favicon")) errors.push(`요청 ${r.status()}: ${r.url().replace(BASE, "").slice(0, 120)}`); });
+      page.on("console", (m) => { if (m.type() === "error" && !(IGNORE_RE && /Failed to load resource/.test(m.text()))) errors.push(`콘솔: ${m.text().slice(0, 160)}`); });
+      page.on("response", (r) => { if (IGNORE_RE && IGNORE_RE.test(r.url())) return; if (r.status() >= 400 && !r.url().includes("favicon")) errors.push(`요청 ${r.status()}: ${r.url().replace(BASE, "").slice(0, 120)}`); });
       const t0 = Date.now();
       let finalUrl = url, data = { issues: [], docHeight: 0 };
       try {
@@ -314,7 +319,7 @@ async function main() {
   for (const r of results) for (const i of r.issues) totals[i.type]++;
   const blocking = Object.entries(totals).filter(([k]) => k !== "touch-target").reduce((s, [, n]) => s + n, 0);
   const summary = {
-    auditedAt: new Date().toISOString(), base: BASE, pages: list.length, variants: VARIANTS.map((v) => v.label),
+    auditedAt: new Date().toISOString(), base: BASE, ignored: IGNORE || null, pages: list.length, variants: VARIANTS.map((v) => v.label),
     screenshots: results.length, seconds: Math.round((Date.now() - started) / 1000), totals, blocking,
     byPage: list.map(({ route, url }) => ({ route, url, issues: results.filter((r) => r.url === url).reduce((s, r) => s + r.issues.filter((i) => i.type !== "touch-target").length, 0) })),
   };
@@ -398,7 +403,7 @@ body.only-issues .page.clean{display:none}
 </style>
 <div class="wrap">
   <h1>케어푸드 화면 검사</h1>
-  <p class="lead">${esc(new Date(summary.auditedAt).toLocaleString("ko-KR"))} · ${esc(summary.base)} · 페이지 ${summary.pages}개 × ${esc(summary.variants.join(" / "))} = 스크린샷 ${summary.screenshots}장 · ${summary.seconds}초</p>
+  <p class="lead">${esc(new Date(summary.auditedAt).toLocaleString("ko-KR"))} · ${esc(summary.base)} · 페이지 ${summary.pages}개 × ${esc(summary.variants.join(" / "))} = 스크린샷 ${summary.screenshots}장 · ${summary.seconds}초${summary.ignored ? ` · 제외한 요청: <code>${esc(summary.ignored)}</code> (검사 환경 네트워크에서만 막힘)` : ""}</p>
   <div class="hero">
     <div><div class="big"><span>${summary.blocking}</span></div><div class="sub">고쳐야 할 문제 (터치 영역 경고 제외)</div></div>
     <div class="tots">${totalsRows}</div>

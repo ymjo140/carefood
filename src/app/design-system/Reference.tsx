@@ -6,6 +6,7 @@ import {
   Input, Kcal, LinkButton, ListRow, MacroGrid, MacroInline, MealSlot, MealTag, Notice, Page, PageHeader, Price,
   ProgressBar, SearchField, SectionHeader, Select, Sheet, Spinner, Stat, Steps, Tabs, Textarea, TextLink, Thumb,
   Avatar, useToast, cn, type BadgeTone,
+  ChoiceCard, ChoiceList, LinkTabs, RatingStars, RatingInput, ScaleInput, PostAuthor, PostAction, PostActions, PostTags,
 } from "@/components/ui";
 
 /* ════════════════════════════════════════════════════════════
@@ -245,6 +246,11 @@ export default function Reference({ status }: { status: DsStatus }) {
   const [chips, setChips] = useState<string[]>(["고단백"]);
   const [q, setQ] = useState("");
   const [range, setRange] = useState(6);
+  const [goal, setGoal] = useState("muscle");
+  const [ate, setAte] = useState<string | null>("all");
+  const [stars, setStars] = useState(4);
+  const [scale, setScale] = useState(3);
+  const [liked, setLiked] = useState(false);
   const toast = useToast();
 
   useEffect(() => {
@@ -559,6 +565,9 @@ export default function Reference({ status }: { status: DsStatus }) {
             <Tabs variant="line" value={tabB} onChange={setTabB} items={[{ value: "search", label: "검색" }, { value: "fav", label: "즐겨찾기", count: 4 }, { value: "list", label: "식단 리스트", count: 2 }, { value: "manual", label: "직접 입력" }]} />
             <p className="p-4 text-label text-ink-2">선택한 탭: {tabB}</p>
           </Demo>
+          <Demo label="링크 탭 — 페이지 사이 이동 (관리자 메뉴)" code="<LinkTabs items current />">
+            <LinkTabs current="#labels" items={[{ href: "#labels", label: "데이터 현황" }, { href: "#labels-2", label: "시장 인사이트" }, { href: "#labels-3", label: "발주 관리" }]} />
+          </Demo>
         </div>
       </Section>
 
@@ -582,7 +591,28 @@ export default function Reference({ status }: { status: DsStatus }) {
             <div className="flex flex-col gap-3">
               <div className="flex justify-between text-label"><span className="text-ink">매운맛</span><span className="text-ink-2"><span className="num font-bold text-ink">{range}</span> · 라면 정도</span></div>
               <input type="range" min={1} max={10} value={range} onChange={(e) => setRange(Number(e.target.value))} className="ds-range" aria-label="매운맛" />
-              <label className="flex items-center gap-2 text-body text-ink"><input type="checkbox" className="ds-check" defaultChecked /> 알레르기 성분 제외</label>
+              <label className="flex items-center gap-2 min-h-11 text-body text-ink"><input type="checkbox" className="ds-check" defaultChecked /> 알레르기 성분 제외</label>
+            </div>
+          </Demo>
+          <Demo label="선택 카드 — 칩보다 큰 선택지 (온보딩 목표·성별·끼니 수)" code="<ChoiceCard selected title description />">
+            <div className="grid gap-2">
+              {[["muscle", "근력강화", "고단백 식단"], ["weight", "체중관리", "건강한 다이어트"], ["gut", "장건강", "소화가 편한 식품"]].map(([v, t, d]) => (
+                <ChoiceCard key={v} selected={goal === v} onClick={() => setGoal(v)} title={t} description={d} />
+              ))}
+            </div>
+          </Demo>
+          <Demo label="세로 선택 목록 — 한 질문에 하나 고르기" code="<ChoiceList options value onChange />">
+            <ChoiceList label="다 드셨나요?" value={ate} onChange={setAte} options={[
+              { value: "all", label: "다 먹었어요", tone: "positive" },
+              { value: "half", label: "반쯤 먹었어요", tone: "caution" },
+              { value: "little", label: "조금만 먹었어요", tone: "danger" },
+            ]} />
+          </Demo>
+          <Demo label="별점 · 단계 입력 — 별 문자(★) 대신 SVG" code="<RatingInput/> <ScaleInput/> <RatingStars/>">
+            <div className="flex flex-col gap-3">
+              <RatingInput value={stars} onChange={setStars} />
+              <ScaleInput label="짠맛 체감" value={scale} onChange={setScale} />
+              <div className="flex items-center gap-2 text-label text-ink-2"><RatingStars value={4.2} /> <span className="num font-bold text-ink">4.2</span> · 리뷰 <span className="num">18</span></div>
             </div>
           </Demo>
         </div>
@@ -619,6 +649,18 @@ export default function Reference({ status }: { status: DsStatus }) {
               </div>
               <Button size="sm" variant="secondary" className="ml-auto">팔로우</Button>
             </div>
+          </Demo>
+          <Demo label="커뮤니티 글 — 작성자 줄 · 태그 · 동작 줄" code="<PostAuthor/> <PostTags/> <PostActions><PostAction/></PostActions>" className="p-0 overflow-hidden">
+            <div className="p-4 flex flex-col gap-3">
+              <PostAuthor nickname="건강한사자12" ageGroup="30s" concerns={["muscle"]} right={<span className="text-caption text-ink-3 shrink-0">2시간 전</span>} onFollow={() => toast.show("팔로우했어요")} />
+              <p className="text-body text-ink">운동 후라 단백질 위주로 챙겼어요</p>
+              <PostTags tags={["고단백", "간편식"]} />
+            </div>
+            <PostActions>
+              <PostAction icon="heart" label="좋아요" count={liked ? 25 : 24} active={liked} onClick={() => setLiked((v) => !v)} />
+              <PostAction icon="message" label="댓글" count={3} />
+              <PostAction icon="copy" label="따라하기" count={4} onClick={() => toast.show("식단 리스트에 담았어요", { action: { label: "보기", href: "#cards" } })} />
+            </PostActions>
           </Demo>
         </div>
       </Section>
@@ -781,7 +823,7 @@ function ColorTable() {
               {g.note && <p className="text-caption text-ink-2">{g.note}</p>}
             </div>
             <div className="overflow-x-auto rounded-lg border border-line bg-surface">
-              <table className="w-full min-w-[640px] text-label">
+              <table className="w-full min-w-[760px] text-label whitespace-nowrap">
                 <thead>
                   <tr className="text-caption text-ink-2 text-left border-b border-line">
                     <th className="px-3 py-2 font-medium">이름</th>
@@ -803,7 +845,7 @@ function ColorTable() {
                       </td>
                       {(["light", "dark"] as const).map((mode) => (
                         <td key={mode} className="px-3 py-2.5">
-                          <div data-theme={mode} className="inline-flex items-center gap-2 rounded-md p-1 pr-2 bg-canvas border border-line">
+                          <div data-theme={mode} className="inline-flex items-center gap-2 rounded-md p-1 pr-2 bg-canvas border border-line whitespace-nowrap">
                             <span className={cn("size-7 rounded-sm border border-line", BG[it.token])} />
                             {it.on && (
                               <span className={cn("h-7 px-2 inline-flex items-center rounded-sm text-caption font-bold", BG[it.on], TX[it.token])}>가나 12</span>
@@ -812,7 +854,7 @@ function ColorTable() {
                           </div>
                         </td>
                       ))}
-                      <td className="px-3 py-2.5 text-ink-2">{it.usage}</td>
+                      <td className="px-3 py-2.5 text-ink-2 min-w-36 whitespace-normal">{it.usage}</td>
                       <td className="px-3 py-2.5">{ratioCell(it, "light")}</td>
                       <td className="px-3 py-2.5">{ratioCell(it, "dark")}</td>
                     </tr>

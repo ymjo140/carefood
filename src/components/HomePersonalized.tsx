@@ -9,6 +9,12 @@ const CONCERN_LABELS: Record<string, string> = {
   skin: "피부건강",
   weight: "체중관리",
   energy: "활력충전",
+  balanced: "균형식단",
+  weight_loss: "체중관리",
+  muscle: "근력강화",
+  diabetes: "당뇨 관심",
+  blood_pressure: "혈압 관심",
+  kidney: "신장 관심",
 };
 
 type QuickProduct = {

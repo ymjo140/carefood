@@ -292,7 +292,7 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
           )}
           {product.category_large === "건강식단서비스" && originalProductUrl && (
             <TrackableLink href={originalProductUrl} productId={product.id} platform={product.manufacturer || "health_meal"}
-              className="inline-flex items-center gap-1 mt-1 text-label font-medium text-brand-ink hover:underline underline-offset-4">
+              className="inline-flex items-center gap-1 min-h-8 text-label font-medium text-brand-ink hover:underline underline-offset-4">
               원본 상품 페이지 <Icon name="external" size={16} />
             </TrackableLink>
           )}

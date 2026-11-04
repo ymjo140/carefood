@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-const LINK = "text-caption text-ink-2 hover:text-ink transition-colors";
+const LINK = "inline-flex items-center min-h-8 text-caption text-ink-2 hover:text-ink transition-colors";
 
 export default function Footer() {
   return (
@@ -16,7 +16,7 @@ export default function Footer() {
           <div className="flex flex-wrap gap-8 sm:gap-12">
             <div>
               <p className="text-caption font-bold text-ink mb-2">서비스</p>
-              <div className="flex flex-col gap-1.5">
+              <div className="flex flex-col">
                 <Link href="/products" className={LINK}>제품 탐색</Link>
                 <Link href="/weekly-box" className={LINK}>식단 리스트</Link>
                 <Link href="/community" className={LINK}>커뮤니티</Link>
@@ -24,7 +24,7 @@ export default function Footer() {
             </div>
             <div>
               <p className="text-caption font-bold text-ink mb-2">비즈니스</p>
-              <div className="flex flex-col gap-1.5">
+              <div className="flex flex-col">
                 <Link href="/vendor/apply" className={LINK}>입점 문의</Link>
                 <a href="mailto:support@carefood.kr" className={LINK}>제휴 제안</a>
                 <a href="mailto:support@carefood.kr" className={LINK}>광고 문의</a>
@@ -32,7 +32,7 @@ export default function Footer() {
             </div>
             <div>
               <p className="text-caption font-bold text-ink mb-2">정책</p>
-              <div className="flex flex-col gap-1.5">
+              <div className="flex flex-col">
                 <Link href="/terms" className={LINK}>이용약관</Link>
                 <Link href="/privacy" className={LINK}>개인정보처리방침</Link>
               </div>

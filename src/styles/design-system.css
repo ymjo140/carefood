@@ -44,7 +44,7 @@
   --ds-protein-soft: #EFF4FA;
   --ds-carbs: #936200;
   --ds-carbs-soft: #FBF5E6;
-  --ds-fat: #B2501F;
+  --ds-fat: #A84B1C;
   --ds-fat-soft: #FCF1EB;
   --ds-sodium: #7A5CB3;
   --ds-sodium-soft: #F3EFF9;
@@ -280,7 +280,7 @@
 @layer components {
   .ds-range {
     width: 100%;
-    height: 28px;
+    height: 32px;
     accent-color: var(--ds-brand);
     cursor: pointer;
   }

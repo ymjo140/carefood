@@ -54,7 +54,7 @@ export function PostAuthor({
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 min-w-0">
           {onAuthorClick ? (
-            <button type="button" onClick={onAuthorClick} className="text-label font-bold text-ink hover:underline underline-offset-4 truncate">{nickname}</button>
+            <button type="button" onClick={onAuthorClick} className="block py-1.5 text-label font-bold text-ink hover:underline underline-offset-4 truncate">{nickname}</button>
           ) : (
             <span className="text-label font-bold text-ink truncate">{nickname}</span>
           )}

@@ -73,6 +73,7 @@ export function measure() {
     // ── 글자 크기 ──
     for (const m of src.matchAll(/\btext-\[(\d+(?:\.\d+)?(?:px|rem|em))\]/g)) add(fontSizes, m[1]);
     for (const m of src.matchAll(/\btext-(xs|sm|base|lg|xl|[2-9]xl)\b/g)) add(fontSizes, "tw:" + m[1]);
+    for (const m of src.matchAll(/(?<![\w-])text-(caption|label|body|title|display)(?![\w-])/g)) add(fontSizes, "ds:" + m[1]);
     for (const m of src.matchAll(/fontSize\s*:\s*["']?([\d.]+(?:px|rem|em)?)/g)) add(fontSizes, m[1].endsWith("px") ? m[1] : m[1] + "px");
 
     // ── 모서리 둥글기 ──
