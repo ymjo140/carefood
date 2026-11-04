@@ -305,3 +305,30 @@ export const HEALTH_GOAL_LABELS: Record<HealthGoal, { label: string; desc: strin
   blood_pressure: { label: "혈압 관심", desc: "저나트륨 식품이 궁금한 분", emoji: "❤️" },
   kidney: { label: "신장 관심", desc: "저단백·저염 식품이 궁금한 분", emoji: "🫘" },
 };
+
+// ── 제품 영양 기준 환산 ──
+// DB 의 제품 영양값은 nutrient_base_g(보통 100g) 기준이다. 식단 칸·추천처럼 "한 번 먹는 양"이 필요한 곳은
+// 제품 상세와 같은 기준(serving_size_g = 1회 제공량)으로 바꿔 쓴다.
+type ServingBasis = {
+  serving_size_g?: number | string | null;
+  nutrient_base_g?: number | string | null;
+};
+const NUTRIENT_KEYS = ["calories", "protein_g", "carbs_g", "fat_g", "sodium_mg", "sugar_g", "fiber_g", "saturated_fat_g", "cholesterol_mg"] as const;
+
+export function servingRatio(p: ServingBasis): number {
+  const base = Number(p.nutrient_base_g) || 100;
+  const serving = Number(p.serving_size_g) || base;
+  return base > 0 && serving > 0 ? serving / base : 1;
+}
+
+/** 영양값을 1회 제공량 기준으로 바꾼 복사본 (이미 1회 기준이면 그대로) */
+export function perServing<T extends ServingBasis & Partial<Record<(typeof NUTRIENT_KEYS)[number], number | string | null>>>(p: T): T {
+  const r = servingRatio(p);
+  if (r === 1) return p;
+  const out = { ...p };
+  for (const k of NUTRIENT_KEYS) {
+    const v = p[k];
+    if (v != null && v !== "") (out as Record<string, unknown>)[k] = Math.round(Number(v) * r * 10) / 10;
+  }
+  return out;
+}

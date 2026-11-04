@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef, type ReactNode } from "react";
+import Link from "next/link";
+import { perServing } from "@/lib/nutrition";
 import {
   Badge, BottomBar, Button, Card, CardActions, ConfirmSheet, EmptyState, Input, Kcal, LinkButton, ListRow,
   MacroGrid, MacroInline, MealSlot, Page, PageLoading, Price, ProgressBar, SearchField, SectionHeader, Sheet, SkeletonList,
@@ -101,18 +103,22 @@ function relativeTime(dateStr: string): string {
 
 /* ───── 제품 고르기 시트 ───── */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function ProductRow({ p, onSelect }: { p: any; onSelect: (cell: CellData) => void }) {
+function ProductRow({ p: raw, onSelect }: { p: any; onSelect: (cell: CellData) => void }) {
+  // DB 영양값은 100g 기준 → 식단 칸에는 제품 상세와 같은 1회 제공량 기준으로 넣는다
+  const p = perServing(raw);
   const prices = p.product_prices?.filter((pp: { price: number }) => pp.price > 0) || [];
   const best = prices[0];
+  const servingG = Number(p.serving_size_g) || 0;
   return (
     <ListRow
       onClick={() => onSelect({
-        product_id: p.id, name: p.name, calories: p.calories, protein_g: p.protein_g,
+        product_id: p.id, name: p.name, calories: Math.round(p.calories || 0), protein_g: p.protein_g,
+        carbs_g: p.carbs_g ?? undefined, fat_g: p.fat_g ?? undefined, sodium_mg: p.sodium_mg ?? undefined,
         price: best?.price, platform: best?.platform, url: best?.url, type: "product",
       })}
       leading={<Thumb src={best?.image_url || p.image_url} size={44} />}
       title={p.name}
-      meta={<><Kcal value={p.calories || 0} className="text-caption" /> · 단백질 <span className="num">{Math.round(p.protein_g || 0)}</span>g</>}
+      meta={<>{servingG > 0 && <>1회 <span className="num">{Math.round(servingG)}</span>g · </>}<Kcal value={Math.round(p.calories || 0)} className="text-caption" /> · 단백질 <span className="num">{Math.round(p.protein_g || 0)}</span>g</>}
       trailing={best ? <Price value={best.price} className="text-label" /> : undefined}
     />
   );
@@ -178,8 +184,10 @@ function ProductSearchSheet({ open, onSelect, onClose, onEatingOut }: {
   const loadFavorites = useCallback(async () => {
     try {
       const data = await getJson("/api/favorites?user_id=");
-      setFavorites({ status: "done", data: (data.favorites || []).map((f: { product_id: string; name: string; calories?: number; protein_g?: number; best_price?: number; image_url?: string }) => ({
-        id: f.product_id, name: f.name, calories: f.calories, protein_g: f.protein_g,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      setFavorites({ status: "done", data: (data.favorites || []).map((f: any) => ({
+        id: f.product_id, name: f.name, calories: f.calories, protein_g: f.protein_g, carbs_g: f.carbs_g, fat_g: f.fat_g,
+        sodium_mg: f.sodium_mg, serving_size_g: f.serving_size_g, nutrient_base_g: f.nutrient_base_g,
         product_prices: f.best_price ? [{ price: f.best_price, platform: "", url: "", image_url: f.image_url }] : [],
       })) });
     } catch { setFavorites({ status: "error", data: [] }); }
@@ -383,6 +391,18 @@ function ProductSearchSheet({ open, onSelect, onClose, onEatingOut }: {
   );
 }
 
+/** 식단 칸의 제품 이름 — 누르면 제품 상세 (편집 중인 식단은 임시 저장돼 돌아와도 그대로) */
+function FoodLink({ id, children }: { id: string; children: ReactNode }) {
+  return (
+    <Link href={`/products/${id}`}
+      className="underline decoration-line-strong underline-offset-4 hover:decoration-ink transition-colors">
+      {children}
+    </Link>
+  );
+}
+
+const DRAFT_KEY = "carefood_weekly_draft";
+
 /* ───── 끌어서 놓기 조각 ───── */
 const dayLabel = (k: string) => DAYS.find(d => d.key === k)?.label || "";
 const mealLabel = (k: string) => MEALS.find(m => m.key === k)?.label || "";
@@ -483,6 +503,26 @@ export default function WeeklyBoxPage() {
 
   useEffect(() => { loadPlans().finally(() => setLoading(false)); }, [loadPlans]);
 
+  // 편집 중인 식단 임시 저장 — 제품 상세에 다녀와도 그대로 (저장하기 전 내용)
+  const restored = useRef(false);
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(DRAFT_KEY);
+      if (raw) {
+        const d = JSON.parse(raw);
+        if (d?.grid) {
+          setGrid(d.grid); setPlanTitle(d.planTitle || "새 식단"); setPlanId(d.planId || null);
+          if (d.activeDay) setActiveDay(d.activeDay);
+        }
+      }
+    } catch { /* */ } // ds-allow: 임시 저장본이 깨졌으면 새로 시작
+    restored.current = true;
+  }, []);
+  useEffect(() => {
+    if (!restored.current) return;
+    try { localStorage.setItem(DRAFT_KEY, JSON.stringify({ grid, planTitle, planId, activeDay })); } catch { /* */ } // ds-allow: 저장 공간이 없으면 임시 저장만 건너뜀
+  }, [grid, planTitle, planId, activeDay]);
+
   const fetchAndBuildGrid = async (): Promise<{ grid: GridData; title: string } | null> => {
     const profileRaw = localStorage.getItem("carefood_profile");
     if (!profileRaw) return null;
@@ -513,8 +553,8 @@ export default function WeeklyBoxPage() {
       for (const m of (dayData.meals || [])) {
         const slot = m.slot_type || "lunch";
         newGrid[dayKey][slot] = {
-          product_id: m.product_id, name: m.name, calories: m.calories,
-          protein_g: m.protein_g, price: m.best_price,
+          product_id: m.product_id, name: m.name, calories: Math.round(m.calories || 0),
+          protein_g: m.protein_g, carbs_g: m.carbs_g, fat_g: m.fat_g, sodium_mg: m.sodium_mg, price: m.best_price,
           platform: m.health_source || m.prices?.[0]?.platform, url: m.prices?.[0]?.url, type: "product",
         };
       }
@@ -522,8 +562,8 @@ export default function WeeklyBoxPage() {
       if (supplements.length > 0) {
         const s = supplements[0];
         newGrid[dayKey].supplement = {
-          product_id: s.product_id, name: s.name, calories: s.calories,
-          protein_g: s.protein_g, price: s.best_price,
+          product_id: s.product_id, name: s.name, calories: Math.round(s.calories || 0),
+          protein_g: s.protein_g, carbs_g: s.carbs_g, fat_g: s.fat_g, sodium_mg: s.sodium_mg, price: s.best_price,
           platform: s.prices?.[0]?.platform, url: s.prices?.[0]?.url, type: "product",
         };
       }
@@ -786,7 +826,7 @@ export default function WeeklyBoxPage() {
             const cell = activeDayMeals[meal.key];
             const isEatingOut = cell?.type === "eating_out";
             const isEmpty = !isEatingOut && (!cell || (!cell.product_id && !cell.name));
-            const foods = cell?._foods as { name: string; calories?: number }[] | undefined;
+            const foods = cell?._foods as { name: string; calories?: number; product_id?: string }[] | undefined;
             const name = isEatingOut ? (cell?.name || "외식") : foods && foods.length > 1 ? `${foods[0].name} 외 ${foods.length - 1}개` : cell?.name || "";
 
             return (
@@ -815,9 +855,13 @@ export default function WeeklyBoxPage() {
                     {foods && foods.length > 1 ? (
                       <ul className="flex flex-col gap-0.5">
                         {foods.map((f, i) => (
-                          <li key={i} className="text-body text-ink">{f.name}</li>
+                          <li key={i} className="text-body text-ink">
+                            {f.product_id ? <FoodLink id={f.product_id}>{f.name}</FoodLink> : f.name}
+                          </li>
                         ))}
                       </ul>
+                    ) : cell?.product_id ? (
+                      <p className="text-body font-medium text-ink"><FoodLink id={cell.product_id}>{cell?.name}</FoodLink></p>
                     ) : (
                       <p className="text-body font-medium text-ink">{cell?.name}</p>
                     )}

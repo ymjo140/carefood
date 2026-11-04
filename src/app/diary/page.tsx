@@ -953,7 +953,11 @@ export default function DiaryPage() {
                         {entries.map((e) => (
                           <div key={e.id} className="flex items-center gap-3 pl-4 pr-2 py-2.5">
                             <div className="flex-1 min-w-0">
-                              <p className="text-body font-medium text-ink line-clamp-1">{e.food_name}</p>
+                              <p className="text-body font-medium text-ink line-clamp-1">
+                                {e.product_id
+                                  ? <Link href={`/products/${e.product_id}`} className="underline decoration-line-strong underline-offset-4 hover:decoration-ink transition-colors">{e.food_name}</Link>
+                                  : e.food_name}
+                              </p>
                               <div className="flex flex-wrap gap-x-2 text-caption text-ink-2 mt-0.5">
                                 {e.serving_multiplier != null && e.serving_multiplier !== 1 && <span className="font-bold text-brand-ink"><span className="num">{e.serving_multiplier}</span>인분</span>}
                                 {e.serving_g != null && <span><span className="num">{e.serving_g}</span>g</span>}

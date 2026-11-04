@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
+import { perServing } from "@/lib/nutrition";
 
 /**
  * 주간 식단 추천 API v3 — 영양사 방식
@@ -226,20 +227,21 @@ export async function POST(request: NextRequest) {
     let mealProducts: any[] = [];
     {
       let query = supabase.from("products")
-        .select("id, name, manufacturer, calories, protein_g, fat_g, sugar_g, sodium_mg, fiber_g, functional_tags, dish_category, health_score")
+        .select("id, name, manufacturer, calories, protein_g, carbs_g, fat_g, sugar_g, sodium_mg, fiber_g, functional_tags, dish_category, health_score, serving_size_g, nutrient_base_g")
         .eq("is_active", true).eq("category_large", "상용제품")
         .eq("is_purchasable", true).eq("is_meal", true);
 
       // 관심사 기반 영양 제외 필터 적용
       if (nutritionExclusions.sodium_max) query = query.lte("sodium_mg", nutritionExclusions.sodium_max);
       if (nutritionExclusions.sugar_max) query = query.lte("sugar_g", nutritionExclusions.sugar_max);
-      if (nutritionExclusions.calories_max) query = query.lte("calories", nutritionExclusions.calories_max);
+      // 칼로리 상한은 1회 제공량으로 바꾼 뒤 아래에서 거른다 (DB 값은 100g 기준)
 
       // health_score 높은 순으로 로드
       query = query.order("health_score", { ascending: false, nullsFirst: false }).limit(800);
 
       const { data } = await query;
-      if (data) mealProducts = data;
+      // 영양값을 1회 제공량 기준으로 (식단 칸·제품 상세와 같은 기준)
+      if (data) mealProducts = data.map(perServing);
     }
 
     // 건강 식단 서비스 제품 (식스밀, 그리팅 등) — 높은 우선순위로 추가
@@ -282,12 +284,12 @@ export async function POST(request: NextRequest) {
     let supplementProducts: any[] = [];
     {
       const { data } = await supabase.from("products")
-        .select("id, name, manufacturer, calories, protein_g, fat_g, sugar_g, sodium_mg, fiber_g, functional_tags, dish_category")
+        .select("id, name, manufacturer, calories, protein_g, carbs_g, fat_g, sugar_g, sodium_mg, fiber_g, functional_tags, dish_category, serving_size_g, nutrient_base_g")
         .eq("is_active", true).eq("category_large", "상용제품").eq("is_purchasable", true)
         .gt("calories", 0)
         .or("name.ilike.%유산균%,name.ilike.%프로바이오%,name.ilike.%요거트%,name.ilike.%요구르트%,name.ilike.%비타민%,name.ilike.%프로틴%,name.ilike.%단백질바%,name.ilike.%에너지바%,name.ilike.%그래놀라%,name.ilike.%오트밀%,name.ilike.%시리얼%,name.ilike.%두유%,name.ilike.%스무디%")
         .limit(200);
-      if (data) supplementProducts = data;
+      if (data) supplementProducts = data.map(perServing);
     }
 
     if (mealProducts.length === 0) {
@@ -589,6 +591,7 @@ export async function POST(request: NextRequest) {
       manufacturer: item.manufacturer,
       calories: item.calories,
       protein_g: item.protein_g,
+      carbs_g: item.carbs_g,
       fat_g: item.fat_g,
       sugar_g: item.sugar_g,
       sodium_mg: item.sodium_mg,

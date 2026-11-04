@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
   const productIds = favs.map((f: { product_id: string }) => f.product_id);
   const { data: products } = await sb
     .from("products")
-    .select("id, name, manufacturer, calories, protein_g, sugar_g, sodium_mg, functional_tags, dish_category")
+    .select("id, name, manufacturer, calories, protein_g, carbs_g, fat_g, sugar_g, sodium_mg, functional_tags, dish_category, serving_size_g, nutrient_base_g")
     .in("id", productIds);
 
   // 가격 정보 로드
@@ -65,7 +65,12 @@ export async function GET(request: NextRequest) {
       manufacturer: product?.manufacturer,
       calories: product?.calories,
       protein_g: product?.protein_g,
+      carbs_g: product?.carbs_g,
+      fat_g: product?.fat_g,
       sugar_g: product?.sugar_g,
+      // 영양값은 nutrient_base_g(보통 100g) 기준 — 1회 제공량은 serving_size_g
+      serving_size_g: product?.serving_size_g,
+      nutrient_base_g: product?.nutrient_base_g,
       sodium_mg: product?.sodium_mg,
       functional_tags: product?.functional_tags || [],
       dish_category: product?.dish_category,
