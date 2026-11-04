@@ -3,7 +3,7 @@ import { connection } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 
 /**
- * GET  /api/meal-plans?user_id=xxx — 저장된 식단 목록
+ * GET  /api/meal-plans?user_id=xxx[&include=grid] — 저장된 식단 목록 (+ filled_days, 요청 시 grid)
  * POST /api/meal-plans — 식단 저장/수정
  * PATCH /api/meal-plans — 이름 변경
  * DELETE /api/meal-plans?id=xxx&user_id=xxx — 식단 삭제 (soft)
@@ -17,16 +17,25 @@ export async function GET(request: NextRequest) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sb = createServiceRoleClient() as any;
 
+  const withGrid = request.nextUrl.searchParams.get("include") === "grid";
   const { data: plans, error } = await sb
     .from("saved_meal_plans")
-    .select("id, title, tags, total_price, avg_daily_calories, avg_daily_protein, product_count, eating_out_count, source, updated_at, created_at")
+    .select("id, title, tags, total_price, avg_daily_calories, avg_daily_protein, product_count, eating_out_count, source, updated_at, created_at, grid")
     .eq("user_id", userId)
     .eq("is_active", true)
     .order("updated_at", { ascending: false })
     .limit(50);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ plans: plans || [] });
+
+  // filled_days: 음식이 들어 있는 요일 — 한 끼·하루짜리(따라하기 등)는 원하는 요일에 넣고, 여러 날은 통째로 불러온다
+  const DAY_KEYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const out = (plans || []).map(({ grid, ...p }: { grid: Record<string, Record<string, any>> | null } & Record<string, unknown>) => {
+    const filled_days = DAY_KEYS.filter(d => Object.values(grid?.[d] || {}).some(c => c && (c.product_id || c.name || c.type === "eating_out")));
+    return withGrid ? { ...p, filled_days, grid } : { ...p, filled_days };
+  });
+  return NextResponse.json({ plans: out });
 }
 
 export async function POST(request: NextRequest) {

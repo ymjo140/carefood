@@ -26,22 +26,29 @@ export function MealTag({ meal, className }: { meal: string; className?: string 
 }
 
 /** 끼니 칸 — 끼니 이름 + 내용. 비어 있으면 점선 + 추가 동작 */
-export function MealSlot({ meal, right, children, empty = false, onAdd, addLabel = "음식 추가하기" }: {
+export function MealSlot({ meal, right, children, empty = false, onAdd, addLabel = "음식 추가하기", handle, dropping = false }: {
   meal: string; right?: ReactNode; children?: ReactNode; empty?: boolean; onAdd?: () => void; addLabel?: string;
+  /** 끌어서 옮길 때 손잡이 (DragHandle) */
+  handle?: ReactNode;
+  /** 끌고 있는 항목이 이 칸 위에 있을 때 */
+  dropping?: boolean;
 }) {
   if (empty) {
     return (
       <button type="button" onClick={onAdd}
-        className="press w-full flex items-center justify-between gap-3 rounded-lg border border-dashed border-line px-4 h-14 text-left hover:border-line-strong">
+        className={cn(
+          "press w-full flex items-center justify-between gap-3 rounded-lg border border-dashed px-4 h-14 text-left transition-colors",
+          dropping ? "border-brand bg-brand-soft" : "border-line hover:border-line-strong",
+        )}>
         <MealTag meal={meal} />
-        <span className="text-label text-ink-3">+ {addLabel}</span>
+        <span className="text-label text-ink-3">{dropping ? "여기에 놓기" : `+ ${addLabel}`}</span>
       </button>
     );
   }
   return (
-    <div className="rounded-lg border border-line bg-surface px-4 py-3">
+    <div className={cn("rounded-lg border px-4 py-3 transition-colors", dropping ? "border-brand bg-brand-soft" : "border-line bg-surface")}>
       <div className="flex items-center justify-between gap-3 mb-1.5">
-        <MealTag meal={meal} />
+        <div className="flex items-center gap-1 min-w-0">{handle}<MealTag meal={meal} /></div>
         {right}
       </div>
       {children}

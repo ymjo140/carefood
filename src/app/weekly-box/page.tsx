@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef, type ReactNode } from "react";
 import {
-  Badge, BottomBar, Button, Card, CardActions, ConfirmSheet, EmptyState, IconButton, Input, Kcal, LinkButton, ListRow,
-  MacroGrid, MacroInline, MealSlot, Page, PageLoading, Price, ProgressBar, SearchField, SectionHeader, Sheet, Spinner,
+  Badge, BottomBar, Button, Card, CardActions, ConfirmSheet, EmptyState, Input, Kcal, LinkButton, ListRow,
+  MacroGrid, MacroInline, MealSlot, Page, PageLoading, Price, ProgressBar, SearchField, SectionHeader, Sheet, SkeletonList,
   Stat, Tabs, TextLink, Thumb, cn, useToast,
+  DragArea, DragGhost, DragHandle, useDragItem, useDropTarget, type DragData,
 } from "@/components/ui";
 
 /* ───── 타입 ───── */
@@ -37,6 +38,8 @@ type SavedPlan = {
   eating_out_count: number;
   source?: string;
   updated_at: string;
+  /** 음식이 든 요일 — 하루 이하면 원하는 요일에 넣고, 여러 날이면 통째로 불러온다 */
+  filled_days?: string[];
 };
 
 const DAYS = [
@@ -66,6 +69,15 @@ const SERVICE_NAMES: Record<string, string> = {
 
 function getUserId(): string | null {
   try { return localStorage.getItem("carefood_anon_id") || null; } catch { return null; }
+}
+
+/** 사용자 id 를 붙여 JSON 을 받는다. 익명 id 가 없으면 빈 결과 (항상 비동기) */
+async function getJson(urlWithUserIdAtEnd: string) {
+  const userId = getUserId();
+  if (!userId) return {};
+  const res = await fetch(urlWithUserIdAtEnd + encodeURIComponent(userId));
+  if (!res.ok) throw new Error(String(res.status));
+  return res.json();
 }
 
 function emptyGrid(): GridData {
@@ -105,7 +117,26 @@ function ProductRow({ p, onSelect }: { p: any; onSelect: (cell: CellData) => voi
   );
 }
 
-type PickTab = "favorites" | "recent" | "search";
+type PickTab = "favorites" | "recent" | "plans";
+type LoadState<T> = { status: "idle" | "loading" | "error" | "done"; data: T[] };
+type PlanWithGrid = SavedPlan & { grid: GridData };
+
+/** 내 식단 탭 한 줄 — 저장한 식단 안의 끼니 하나 */
+function PlanMealRow({ day, meal, cell, multiDay, onSelect }: {
+  day: string; meal: string; cell: NonNullable<CellData>; multiDay: boolean; onSelect: (cell: CellData) => void;
+}) {
+  const foods = (cell._foods || []) as { name: string }[];
+  const name = foods.length > 1 ? `${foods[0].name} 외 ${foods.length - 1}개` : cell.name || "";
+  const where = `${multiDay ? `${DAYS.find(d => d.key === day)?.label}요일 ` : ""}${MEALS.find(m => m.key === meal)?.label}`;
+  return (
+    <ListRow
+      onClick={() => onSelect({ ...cell })}
+      title={name}
+      meta={<>{where} · <Kcal value={cell.calories || 0} className="text-caption" /></>}
+      trailing={cell.price ? <Price value={cell.price} className="text-label" /> : undefined}
+    />
+  );
+}
 
 function ProductSearchSheet({ open, onSelect, onClose, onEatingOut }: {
   open: boolean;
@@ -116,79 +147,138 @@ function ProductSearchSheet({ open, onSelect, onClose, onEatingOut }: {
   const toast = useToast();
   const [tab, setTab] = useState<PickTab>("favorites");
   const [query, setQuery] = useState("");
+  const [searched, setSearched] = useState("");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [results, setResults] = useState<any[]>([]);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [recentProducts, setRecentProducts] = useState<any[]>([]);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [favoriteProducts, setFavoriteProducts] = useState<any[]>([]);
   const [searching, setSearching] = useState(false);
-  const [loadingRecent, setLoadingRecent] = useState(true);
-  const [loadingFavorites, setLoadingFavorites] = useState(true);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [favorites, setFavorites] = useState<LoadState<any>>({ status: "idle", data: [] });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [recent, setRecent] = useState<LoadState<any>>({ status: "idle", data: [] });
+  const [plans, setPlans] = useState<LoadState<PlanWithGrid>>({ status: "idle", data: [] });
 
-  useEffect(() => {
-    if (!open) return;
-    const loadFavs = async () => {
-      const userId = getUserId();
-      if (!userId) { setLoadingFavorites(false); return; }
-      try {
-        const res = await fetch(`/api/favorites?user_id=${userId}`);
-        const data = await res.json();
-        setFavoriteProducts((data.favorites || []).map((f: { product_id: string; name: string; calories?: number; protein_g?: number; best_price?: number; image_url?: string }) => ({
-          id: f.product_id, name: f.name, calories: f.calories, protein_g: f.protein_g,
-          product_prices: f.best_price ? [{ price: f.best_price, platform: "", url: "", image_url: f.image_url }] : [],
-        })));
-      } catch { /* */ } // ds-allow: 보조 탭(즐겨찾기) 불러오기
-      finally { setLoadingFavorites(false); }
-    };
-    loadFavs();
-  }, [open]);
+  // 시트를 열 때마다 새로 불러온다 (그사이 저장·즐겨찾기가 바뀌었을 수 있다)
+  const [prevOpen, setPrevOpen] = useState(open);
+  if (open !== prevOpen) {
+    setPrevOpen(open);
+    if (open) {
+      setFavorites({ status: "idle", data: [] }); setRecent({ status: "idle", data: [] }); setPlans({ status: "idle", data: [] });
+      setQuery(""); setSearched(""); setResults([]);
+    }
+  }
 
+  const loadFavorites = useCallback(async () => {
+    try {
+      const data = await getJson("/api/favorites?user_id=");
+      setFavorites({ status: "done", data: (data.favorites || []).map((f: { product_id: string; name: string; calories?: number; protein_g?: number; best_price?: number; image_url?: string }) => ({
+        id: f.product_id, name: f.name, calories: f.calories, protein_g: f.protein_g,
+        product_prices: f.best_price ? [{ price: f.best_price, platform: "", url: "", image_url: f.image_url }] : [],
+      })) });
+    } catch { setFavorites({ status: "error", data: [] }); }
+  }, []);
+
+  const loadRecent = useCallback(async () => {
+    try {
+      const data = await getJson("/api/products/recent?user_id=");
+      setRecent({ status: "done", data: data.products || [] });
+    } catch { setRecent({ status: "error", data: [] }); }
+  }, []);
+
+  const loadPlans = useCallback(async () => {
+    try {
+      const data = await getJson("/api/meal-plans?include=grid&user_id=");
+      setPlans({ status: "done", data: data.plans || [] });
+    } catch { setPlans({ status: "error", data: [] }); }
+  }, []);
+
+  // 보고 있는 탭만, 시트를 연 뒤 처음 볼 때 불러온다
+  const requested = useRef(new Set<PickTab>());
   useEffect(() => {
-    if (!open) return;
-    const loadRecent = async () => {
-      const userId = getUserId();
-      if (!userId) { setLoadingRecent(false); return; }
-      try {
-        const res = await fetch(`/api/interactions?user_id=${userId}`);
-        const data = await res.json();
-        const allIds = [...new Set([...(data.clicked_product_ids || []), ...(data.viewed_product_ids || [])])].slice(0, 20);
-        if (allIds.length === 0) { setLoadingRecent(false); return; }
-        const productRes = await fetch(`/api/products?limit=20&hasPrice=1`);
-        const productData = await productRes.json();
-        const productMap = new Map((productData.products || []).map((p: { id: string }) => [p.id, p]));
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const recent: any[] = [];
-        for (const id of allIds) { const p = productMap.get(id); if (p) recent.push(p); }
-        setRecentProducts(recent.length < 5 ? productData.products?.slice(0, 10) || [] : recent);
-      } catch { /* */ } // ds-allow: 보조 탭(최근 본) 불러오기
-      finally { setLoadingRecent(false); }
-    };
-    loadRecent();
-  }, [open]);
+    if (!open) { requested.current.clear(); return; }
+    if (requested.current.has(tab)) return;
+    requested.current.add(tab);
+    if (tab === "favorites") loadFavorites();
+    if (tab === "recent") loadRecent();
+    if (tab === "plans") loadPlans();
+  }, [open, tab, loadFavorites, loadRecent, loadPlans]);
+  const retry = (tabKey: PickTab) => {
+    if (tabKey === "favorites") { setFavorites({ status: "loading", data: [] }); loadFavorites(); }
+    if (tabKey === "recent") { setRecent({ status: "loading", data: [] }); loadRecent(); }
+    if (tabKey === "plans") { setPlans({ status: "loading", data: [] }); loadPlans(); }
+  };
 
   const search = async () => {
-    if (!query.trim()) return;
-    setSearching(true); setTab("search");
+    const q = query.trim();
+    if (!q) return;
+    setSearching(true); setSearched(q);
     try {
-      const res = await fetch(`/api/products?q=${encodeURIComponent(query)}&hasPrice=1&limit=15`);
+      const res = await fetch(`/api/products?q=${encodeURIComponent(q)}&hasPrice=1&limit=15`);
       if (!res.ok) throw new Error(String(res.status));
       const data = await res.json();
       setResults(data.products || []);
     } catch {
+      setResults([]);
       toast.show("검색하지 못했어요. 다시 시도해 주세요", { tone: "danger" });
     }
     finally { setSearching(false); }
   };
+  const inSearch = searched !== "" && query.trim() === searched;
 
-  const displayProducts = tab === "search" ? results : tab === "favorites" ? favoriteProducts : recentProducts;
-  const isLoading = tab === "search" ? searching : tab === "favorites" ? loadingFavorites : loadingRecent;
+  // 내 식단 → 끼니 목록 (음식이 든 칸만)
+  const planGroups = plans.data.map(plan => {
+    const multiDay = (plan.filled_days?.length || 0) > 1;
+    const rows: { day: string; meal: string; cell: NonNullable<CellData> }[] = [];
+    for (const d of DAYS) for (const m of MEALS) {
+      const cell = plan.grid?.[d.key]?.[m.key];
+      if (cell && cell.type !== "eating_out" && (cell.product_id || cell.name)) rows.push({ day: d.key, meal: m.key, cell });
+    }
+    return { plan, multiDay, rows };
+  }).filter(g => g.rows.length > 0);
 
   const tabs: { value: PickTab; label: string; count?: number }[] = [
-    { value: "favorites", label: "즐겨찾기", count: favoriteProducts.length },
+    { value: "favorites", label: "즐겨찾기", count: favorites.status === "done" ? favorites.data.length : undefined },
     { value: "recent", label: "최근 본" },
-    ...(results.length > 0 ? [{ value: "search" as const, label: "검색 결과", count: results.length }] : []),
+    { value: "plans", label: "내 식단", count: plans.status === "done" ? planGroups.length : undefined },
   ];
+
+  const failed = (what: string, retry: () => void) => (
+    <EmptyState className="mx-2" title={`${what}을 불러오지 못했어요`} description="연결이 잠깐 끊겼을 수 있어요"
+      action={<Button size="sm" variant="secondary" icon="refresh" onClick={retry}>다시 불러오기</Button>} />
+  );
+  const loadingList = <SkeletonList rows={4} className="px-2 pt-2" />;
+
+  let body: ReactNode;
+  if (inSearch) {
+    body = searching ? loadingList
+      : results.length > 0 ? results.map(p => <ProductRow key={p.id} p={p} onSelect={onSelect} />)
+      : <EmptyState className="mx-2" title={`"${searched}" 검색 결과가 없어요`} description="다른 이름으로 찾아보세요" />;
+  } else if (tab === "favorites") {
+    body = favorites.status === "error" ? failed("즐겨찾기", () => retry("favorites"))
+      : favorites.status !== "done" ? loadingList
+      : favorites.data.length > 0 ? favorites.data.map(p => <ProductRow key={p.id} p={p} onSelect={onSelect} />)
+      : <EmptyState className="mx-2" title="즐겨찾기한 제품이 없어요" description="제품 상세에서 하트를 누르면 여기 모여요" />;
+  } else if (tab === "recent") {
+    body = recent.status === "error" ? failed("최근 본 제품", () => retry("recent"))
+      : recent.status !== "done" ? loadingList
+      : recent.data.length > 0 ? recent.data.map(p => <ProductRow key={p.id} p={p} onSelect={onSelect} />)
+      : <EmptyState className="mx-2" title="최근 30일에 본 제품이 없어요" description="위에서 이름으로 찾아보세요" />;
+  } else {
+    body = plans.status === "error" ? failed("내 식단", () => retry("plans"))
+      : plans.status !== "done" ? loadingList
+      : planGroups.length > 0 ? (
+        <div className="flex flex-col gap-4">
+          {planGroups.map(g => (
+            <section key={g.plan.id} aria-label={g.plan.title}>
+              <p className="px-3 pb-1 text-caption font-bold text-ink-2">{g.plan.title}</p>
+              {g.rows.map(r => (
+                <PlanMealRow key={`${r.day}-${r.meal}`} day={r.day} meal={r.meal} cell={r.cell} multiDay={g.multiDay} onSelect={onSelect} />
+              ))}
+            </section>
+          ))}
+        </div>
+      )
+      : <EmptyState className="mx-2" title="저장한 식단이 없어요" description="커뮤니티에서 따라하기 하거나 이 화면에서 저장하면 여기 나와요" />;
+  }
 
   return (
     <Sheet
@@ -198,19 +288,78 @@ function ProductSearchSheet({ open, onSelect, onClose, onEatingOut }: {
       footer={<Button variant="secondary" block icon="cart" onClick={onEatingOut}>외식으로 표시하기</Button>}
     >
       <SearchField value={query} onChange={setQuery} onSubmit={search} placeholder="제품 이름 검색" />
-      <Tabs variant="line" className="mt-3" value={tab} onChange={setTab} items={tabs} label="고르는 방법" />
-      <div className="mt-2 -mx-2">
-        {isLoading ? (
-          <div className="flex justify-center py-8"><Spinner /></div>
-        ) : displayProducts.length > 0 ? (
-          displayProducts.map((p) => <ProductRow key={p.id} p={p} onSelect={onSelect} />)
-        ) : (
-          <p className="text-label text-ink-2 text-center py-8">
-            {tab === "favorites" ? "즐겨찾기한 제품이 없어요" : tab === "recent" ? "최근 본 제품이 없어요" : "검색 결과가 없어요"}
-          </p>
-        )}
-      </div>
+      {inSearch ? (
+        <div className="flex items-center justify-between mt-4 mb-1">
+          <p className="text-label font-bold text-ink">검색 결과 {!searching && <span className="num text-ink-2">{results.length}</span>}</p>
+          <Button size="sm" variant="ghost" onClick={() => { setQuery(""); setSearched(""); }}>목록으로</Button>
+        </div>
+      ) : (
+        <Tabs variant="line" className="mt-3" value={tab} onChange={setTab} items={tabs} label="고르는 곳" />
+      )}
+      <div className="mt-2 -mx-2">{body}</div>
     </Sheet>
+  );
+}
+
+/* ───── 끌어서 놓기 조각 ───── */
+const dayLabel = (k: string) => DAYS.find(d => d.key === k)?.label || "";
+const mealLabel = (k: string) => MEALS.find(m => m.key === k)?.label || "";
+
+function hasFood(c: CellData | undefined) {
+  return !!c && (!!c.product_id || !!c.name || c.type === "eating_out");
+}
+
+/** 요일 탭 — 끼니나 저장 식단을 놓을 수 있는 자리 */
+function DayTab({ dayKey, label, cal, active, onClick }: { dayKey: string; label: string; cal: number; active: boolean; onClick: () => void }) {
+  const { setNodeRef, isOver, isDragging } = useDropTarget(`day:${dayKey}`, { kind: "day", day: dayKey, label: `${label}요일` });
+  return (
+    <button
+      ref={setNodeRef}
+      type="button"
+      role="tab"
+      aria-selected={active}
+      onClick={onClick}
+      className={cn(
+        "flex flex-col items-center justify-center gap-0.5 h-14 rounded-md border transition-colors",
+        isOver ? "bg-brand-soft border-brand text-brand-ink"
+          : active ? "bg-brand-soft border-brand text-brand-ink"
+          : isDragging ? "border-dashed border-line-strong text-ink-2"
+          : "border-transparent text-ink-2 hover:bg-sunken",
+      )}
+    >
+      <span className="text-label font-bold">{label}</span>
+      <span className="num text-caption">{cal > 0 ? cal.toLocaleString() : "–"}</span>
+    </button>
+  );
+}
+
+/** 끼니 칸 — 놓을 자리이면서, 음식이 있으면 끌 수 있다 */
+function SlotDnd({ day, meal, label, filled, children }: {
+  day: string; meal: string; label: string; filled: boolean;
+  children: (p: { dropping: boolean; handle?: ReactNode }) => ReactNode;
+}) {
+  const { setNodeRef: dropRef, isOver } = useDropTarget(`slot:${day}:${meal}`, { kind: "slot", day, meal, label: `${dayLabel(day)}요일 ${mealLabel(meal)}` });
+  const { setNodeRef: dragRef, isDragging, itemClass, handle } = useDragItem(`cell:${day}:${meal}`, { kind: "cell", day, meal, label }, !filled);
+  return (
+    <div ref={dropRef}>
+      <div ref={dragRef} className={itemClass}>
+        {children({
+          dropping: isOver && !isDragging,
+          handle: filled ? <DragHandle {...handle} label={`${label} 옮기기`} /> : undefined,
+        })}
+      </div>
+    </div>
+  );
+}
+
+/** 저장 식단 카드 손잡이 — 하루 이하 식단만 요일로 끌 수 있다 */
+function PlanDrag({ plan, children }: { plan: SavedPlan; children: (p: { handle?: ReactNode; itemClass: string }) => ReactNode }) {
+  const single = (plan.filled_days?.length || 0) <= 1;
+  const { setNodeRef, itemClass, handle } = useDragItem(`plan:${plan.id}`, { kind: "plan", plan, label: plan.title }, !single);
+  return (
+    <div ref={setNodeRef}>
+      {children({ handle: single ? <DragHandle {...handle} label={`${plan.title} 요일로 끌기`} /> : undefined, itemClass })}
+    </div>
   );
 }
 
@@ -230,6 +379,7 @@ export default function WeeklyBoxPage() {
   const [editingTitle, setEditingTitle] = useState<string | null>(null);
   const [editTitleValue, setEditTitleValue] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<SavedPlan | null>(null);
+  const [placeTarget, setPlaceTarget] = useState<SavedPlan | null>(null);
   const toast = useToast();
   const showToast = toast.show; // 안정된 함수 — effect 의존성에 toast 객체를 넣지 않는다
   const [plansError, setPlansError] = useState(false);
@@ -368,6 +518,67 @@ export default function WeeklyBoxPage() {
     setGrid(prev => ({ ...prev, [day]: { ...prev[day], [meal]: cell } }));
   };
 
+  const showDay = (day: string) => {
+    setActiveDay(day);
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    window.scrollTo({ top: 0, behavior: reduce ? "auto" : "smooth" });
+  };
+
+  /* ── 한 끼·하루 식단을 고른 요일(·끼니)에 넣기 — 다른 요일은 그대로 둔다 ── */
+  const placePlan = async (plan: SavedPlan, day: string, meal?: string) => {
+    const userId = getUserId(); if (!userId) return;
+    try {
+      const res = await fetch(`/api/meal-plans/load?id=${plan.id}&user_id=${userId}`);
+      const data = await res.json();
+      if (!res.ok || !data.plan) throw new Error(String(res.status));
+      const src: GridData = data.plan.grid || {};
+      const srcDay = DAYS.map(d => d.key).find(k => MEALS.some(m => hasFood(src[k]?.[m.key])));
+      if (!srcDay) { toast.show("이 식단에는 넣을 음식이 없어요", { tone: "danger" }); return; }
+      const cells = MEALS.filter(m => hasFood(src[srcDay][m.key])).map(m => [m.key, src[srcDay][m.key]] as const);
+      const oneMeal = !!meal && cells.length === 1;
+      setGrid(prev => {
+        const next = { ...prev, [day]: { ...prev[day] } };
+        if (oneMeal) next[day][meal] = { ...cells[0][1] };
+        else for (const [k, c] of cells) next[day][k] = c ? { ...c } : null;
+        return next;
+      });
+      showDay(day);
+      toast.show(`"${plan.title}" 을 ${dayLabel(day)}요일${oneMeal ? ` ${mealLabel(meal)}` : ""}에 넣었어요`);
+    } catch {
+      toast.show("식단을 넣지 못했어요. 다시 시도해 주세요", { tone: "danger" });
+    }
+  };
+
+  /* ── 끼니 옮기기 — 놓은 자리에 음식이 있으면 서로 바꾼다 ── */
+  const moveCell = (from: { day: string; meal: string }, to: { day: string; meal: string }) => {
+    if (from.day === to.day && from.meal === to.meal) return;
+    const a = grid[from.day]?.[from.meal] ?? null;
+    const b = grid[to.day]?.[to.meal] ?? null;
+    if (!hasFood(a)) return;
+    setGrid(prev => {
+      const next = { ...prev, [from.day]: { ...prev[from.day] } };
+      next[to.day] = { ...next[to.day] };
+      next[to.day][to.meal] = a;
+      next[from.day][from.meal] = hasFood(b) ? b : null;
+      return next;
+    });
+    const where = `${to.day === from.day ? "" : `${dayLabel(to.day)}요일 `}${mealLabel(to.meal)}`;
+    toast.show(hasFood(b) ? `${where}과 자리를 바꿨어요` : `${where}으로 옮겼어요`);
+  };
+
+  const onDrop = (drag: DragData, drop: DragData) => {
+    const day = drop.day as string;
+    if (drag.kind === "cell") {
+      const from = { day: drag.day as string, meal: drag.meal as string };
+      if (drop.kind === "slot") moveCell(from, { day, meal: drop.meal as string });
+      else if (drop.kind === "day") moveCell(from, { day, meal: from.meal });
+    } else if (drag.kind === "plan") {
+      const plan = drag.plan as SavedPlan;
+      if (drop.kind === "slot") placePlan(plan, day, drop.meal as string);
+      else if (drop.kind === "day") placePlan(plan, day);
+    }
+  };
+
   /* ── 이름 변경 ── */
   const renamePlan = async (id: string) => {
     const userId = getUserId();
@@ -457,33 +668,22 @@ export default function WeeklyBoxPage() {
 
   return (
     <Page width="narrow">
+    <DragArea
+      onDrop={onDrop}
+      describe={(d) => String(d?.label || "항목")}
+      renderOverlay={(d) => <DragGhost>{String(d.label || "")}</DragGhost>}
+    >
 
       {/* ══════════ 7일 식단 편집기 ══════════ */}
-      <section>
-        {/* ── 요일 고르기 ── */}
-        <div role="tablist" aria-label="요일" className="grid grid-cols-7 gap-1 mb-4">
-          {DAYS.map(d => {
-            const dayCal = stats.perDay[d.key] || 0;
-            const isActive = d.key === activeDay;
-            return (
-              <button
-                key={d.key}
-                type="button"
-                role="tab"
-                aria-selected={isActive}
-                onClick={() => setActiveDay(d.key)}
-                className={cn(
-                  "flex flex-col items-center justify-center gap-0.5 h-14 rounded-md border transition-colors",
-                  isActive ? "bg-brand-soft border-brand text-brand-ink" : "border-transparent text-ink-2 hover:bg-sunken",
-                )}
-              >
-                <span className="text-label font-bold">{d.label}</span>
-                <span className="num text-caption">{dayCal > 0 ? dayCal.toLocaleString() : "–"}</span>
-              </button>
-            );
-          })}
-        </div>
+      {/* ── 요일 고르기 — 스크롤해도 머리 아래 붙어 있어 아래 리스트에서 끌어 올 수 있다 ── */}
+      <div role="tablist" aria-label="요일" className="sticky top-14 z-10 bg-canvas grid grid-cols-7 gap-1 py-2 mb-2">
+        {DAYS.map(d => (
+          <DayTab key={d.key} dayKey={d.key} label={d.label} cal={stats.perDay[d.key] || 0}
+            active={d.key === activeDay} onClick={() => setActiveDay(d.key)} />
+        ))}
+      </div>
 
+      <section>
         <div className="flex items-center justify-between mb-3">
           <span className="text-body font-bold text-ink">{activeDayLabel}요일 식단</span>
           <span className="text-caption text-ink-2">
@@ -492,49 +692,48 @@ export default function WeeklyBoxPage() {
           </span>
         </div>
 
-        {/* ── 끼니 ── */}
+        {/* ── 끼니 — 손잡이를 끌어 다른 끼니·요일로 옮긴다 ── */}
         <div className="flex flex-col gap-2">
           {MEALS.map(meal => {
             const cell = activeDayMeals[meal.key];
             const isEatingOut = cell?.type === "eating_out";
             const isEmpty = !isEatingOut && (!cell || (!cell.product_id && !cell.name));
             const foods = cell?._foods as { name: string; calories?: number }[] | undefined;
+            const name = isEatingOut ? "외식" : foods && foods.length > 1 ? `${foods[0].name} 외 ${foods.length - 1}개` : cell?.name || "";
 
-            if (isEmpty) {
-              return (
-                <MealSlot key={meal.key} meal={meal.key} empty
-                  onAdd={() => setSearchModal({ day: activeDay, meal: meal.key })} />
-              );
-            }
-            if (isEatingOut) {
-              return (
-                <MealSlot key={meal.key} meal={meal.key}
-                  right={<Button size="sm" variant="ghost" onClick={() => updateCell(activeDay, meal.key, null)}>취소</Button>}>
-                  <p className="text-label text-ink-2">외식</p>
-                </MealSlot>
-              );
-            }
             return (
-              <MealSlot key={meal.key} meal={meal.key} right={<Kcal value={cell?.calories || 0} className="text-label" />}>
-                {foods && foods.length > 1 ? (
-                  <ul className="flex flex-col gap-0.5">
-                    {foods.map((f, i) => (
-                      <li key={i} className="text-body text-ink">{f.name}</li>
-                    ))}
-                  </ul>
+              <SlotDnd key={meal.key} day={activeDay} meal={meal.key} label={`${meal.label} ${name}`} filled={!isEmpty}>
+                {({ dropping, handle }) => isEmpty ? (
+                  <MealSlot meal={meal.key} empty dropping={dropping}
+                    onAdd={() => setSearchModal({ day: activeDay, meal: meal.key })} />
+                ) : isEatingOut ? (
+                  <MealSlot meal={meal.key} dropping={dropping} handle={handle}
+                    right={<Button size="sm" variant="ghost" onClick={() => updateCell(activeDay, meal.key, null)}>취소</Button>}>
+                    <p className="text-label text-ink-2">외식</p>
+                  </MealSlot>
                 ) : (
-                  <p className="text-body font-medium text-ink">{cell?.name}</p>
+                  <MealSlot meal={meal.key} dropping={dropping} handle={handle} right={<Kcal value={cell?.calories || 0} className="text-label" />}>
+                    {foods && foods.length > 1 ? (
+                      <ul className="flex flex-col gap-0.5">
+                        {foods.map((f, i) => (
+                          <li key={i} className="text-body text-ink">{f.name}</li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-body font-medium text-ink">{cell?.name}</p>
+                    )}
+                    <div className="flex flex-wrap items-center gap-2 mt-1">
+                      {cell?.platform && SERVICE_NAMES[cell.platform] && <Badge tone="brand">{SERVICE_NAMES[cell.platform]}</Badge>}
+                      {cell?.price ? <Price value={cell.price} className="text-caption" /> : null}
+                    </div>
+                    <MacroInline className="mt-1.5" values={{ protein: cell?.protein_g, carbs: cell?.carbs_g, fat: cell?.fat_g, sodium: cell?.sodium_mg }} />
+                    <div className="flex gap-1 mt-2 -ml-3">
+                      <Button size="sm" variant="ghost" icon="refresh" onClick={() => setSearchModal({ day: activeDay, meal: meal.key })}>바꾸기</Button>
+                      <Button size="sm" variant="ghost" icon="trash" onClick={() => updateCell(activeDay, meal.key, null)}>빼기</Button>
+                    </div>
+                  </MealSlot>
                 )}
-                <div className="flex flex-wrap items-center gap-2 mt-1">
-                  {cell?.platform && SERVICE_NAMES[cell.platform] && <Badge tone="brand">{SERVICE_NAMES[cell.platform]}</Badge>}
-                  {cell?.price ? <Price value={cell.price} className="text-caption" /> : null}
-                </div>
-                <MacroInline className="mt-1.5" values={{ protein: cell?.protein_g, carbs: cell?.carbs_g, fat: cell?.fat_g, sodium: cell?.sodium_mg }} />
-                <div className="flex gap-1 mt-2 -ml-3">
-                  <Button size="sm" variant="ghost" icon="refresh" onClick={() => setSearchModal({ day: activeDay, meal: meal.key })}>바꾸기</Button>
-                  <Button size="sm" variant="ghost" icon="trash" onClick={() => updateCell(activeDay, meal.key, null)}>빼기</Button>
-                </div>
-              </MealSlot>
+              </SlotDnd>
             );
           })}
         </div>
@@ -604,7 +803,7 @@ export default function WeeklyBoxPage() {
       <section className="mt-8 border-t border-line pt-6">
         <SectionHeader
           title="내 식단 리스트"
-          description="카드를 누르면 위 편집기로 불러와요"
+          description="한 끼·하루 식단은 원하는 요일에 넣고, 일주일 식단은 통째로 불러와요"
           action={savedPlans.length > 0 ? <TextLink href="/community">커뮤니티에서 따라하기</TextLink> : undefined}
         />
 
@@ -613,14 +812,21 @@ export default function WeeklyBoxPage() {
             {savedPlans.map(p => {
               const isActive = planId === p.id;
               const isEditing = editingTitle === p.id;
+              // 한 끼·하루짜리(따라하기 등)는 원하는 요일에 넣고, 여러 날 식단은 통째로 불러온다
+              const single = (p.filled_days?.length || 0) <= 1;
+              const open = () => (single ? setPlaceTarget(p) : loadPlan(p.id));
               return (
-                <Card key={p.id} padding="md" className={cn(isActive && "border-brand")}>
+                <PlanDrag key={p.id} plan={p}>
+                  {({ handle, itemClass }) => (
+                <Card padding="md" className={cn(itemClass, isActive && "border-brand")}>
+                  <div className="flex items-start gap-1">
+                  {handle && !isEditing && <div className="pt-1">{handle}</div>}
                   <div
                     role={isEditing ? undefined : "button"}
                     tabIndex={isEditing ? undefined : 0}
-                    onClick={() => !isEditing && loadPlan(p.id)}
-                    onKeyDown={(e) => { if (!isEditing && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); loadPlan(p.id); } }}
-                    className={cn(!isEditing && "cursor-pointer")}
+                    onClick={() => !isEditing && open()}
+                    onKeyDown={(e) => { if (!isEditing && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); open(); } }}
+                    className={cn("flex-1 min-w-0", !isEditing && "cursor-pointer")}
                   >
                     <div className="flex items-center justify-between gap-2 mb-1">
                       {isEditing ? (
@@ -639,7 +845,7 @@ export default function WeeklyBoxPage() {
                       )}
                       {!isEditing && (
                         <Badge tone={p.source === "community_copy" ? "brand" : "neutral"}>
-                          {p.source === "community_copy" ? "따라하기" : "AI 생성"}
+                          {p.source === "community_copy" ? "따라하기" : single ? "하루" : `${p.filled_days?.length || 0}일`}
                         </Badge>
                       )}
                     </div>
@@ -650,13 +856,18 @@ export default function WeeklyBoxPage() {
                       <span className="ml-auto">{relativeTime(p.updated_at)}</span>
                     </div>
                   </div>
+                  </div>
                   <CardActions>
                     <Button size="sm" variant="ghost" icon="edit"
                       onClick={() => { setEditingTitle(p.id); setEditTitleValue(p.title); }}>이름 바꾸기</Button>
-                    <Button size="sm" variant="ghost" icon="refresh" onClick={() => loadPlan(p.id)}>불러오기</Button>
+                    {single
+                      ? <Button size="sm" variant="ghost" icon="calendar" onClick={() => setPlaceTarget(p)}>요일에 넣기</Button>
+                      : <Button size="sm" variant="ghost" icon="refresh" onClick={() => loadPlan(p.id)}>불러오기</Button>}
                     <Button size="sm" variant="ghost" icon="trash" className="ml-auto" onClick={() => setDeleteTarget(p)}>삭제하기</Button>
                   </CardActions>
                 </Card>
+                  )}
+                </PlanDrag>
               );
             })}
           </div>
@@ -674,6 +885,8 @@ export default function WeeklyBoxPage() {
           />
         )}
       </section>
+
+    </DragArea>
 
       {/* ── 하단 주문 ── */}
       {stats.products > 0 && (
@@ -705,6 +918,29 @@ export default function WeeklyBoxPage() {
         onClose={() => setSearchModal(null)}
         onEatingOut={() => { if (searchModal) updateCell(searchModal.day, searchModal.meal, { type: "eating_out" }); setSearchModal(null); }}
       />
+
+      {/* ── 요일에 넣기 ── */}
+      <Sheet
+        open={!!placeTarget}
+        onClose={() => setPlaceTarget(null)}
+        title="어느 요일에 넣을까요?"
+        description={placeTarget ? `"${placeTarget.title}" 을 고른 요일의 같은 끼니에 넣어요. 그 끼니에 있던 음식은 바뀌어요` : undefined}
+      >
+        <div className="grid grid-cols-7 gap-1">
+          {DAYS.map(d => {
+            const cal = stats.perDay[d.key] || 0;
+            return (
+              <button key={d.key} type="button"
+                onClick={() => { const t = placeTarget; setPlaceTarget(null); if (t) placePlan(t, d.key); }}
+                className="press flex flex-col items-center justify-center gap-0.5 h-16 rounded-md border border-line hover:border-brand hover:bg-brand-soft transition-colors">
+                <span className="text-label font-bold text-ink">{d.label}</span>
+                <span className="num text-caption text-ink-2">{cal > 0 ? cal.toLocaleString() : "–"}</span>
+              </button>
+            );
+          })}
+        </div>
+        <p className="text-caption text-ink-2 mt-3">카드의 손잡이를 위쪽 요일로 끌어 놓아도 돼요</p>
+      </Sheet>
 
       <ConfirmSheet
         open={!!deleteTarget}

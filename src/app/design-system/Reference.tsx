@@ -6,7 +6,7 @@ import {
   Input, Kcal, LinkButton, ListRow, MacroGrid, MacroInline, MealSlot, MealTag, Notice, Page, PageHeader, Price,
   ProgressBar, SearchField, SectionHeader, Select, Sheet, Spinner, Stat, Steps, Tabs, Textarea, TextLink, Thumb,
   Avatar, useToast, cn, type BadgeTone,
-  BottomNavItems, SkeletonList, ChoiceCard, ChoiceList, LinkTabs, RatingStars, RatingInput, ScaleInput, PostAuthor, PostAction, PostActions, PostTags,
+  BottomNavItems, SkeletonList, DragArea, DragGhost, DragHandle, useDragItem, useDropTarget, type DragData, ChoiceCard, ChoiceList, LinkTabs, RatingStars, RatingInput, ScaleInput, PostAuthor, PostAction, PostActions, PostTags,
 } from "@/components/ui";
 
 // 서버(UTC)와 브라우저 시간대가 달라도 같은 글자가 나오도록 한국 시간으로 고정
@@ -185,7 +185,7 @@ function contrast(a: string, b: string) {
 const SECTIONS = [
   ["status", "검사 현황"], ["colors", "색"], ["type", "글자"], ["shape", "모양"], ["motion", "모션"], ["buttons", "버튼"],
   ["icons", "아이콘"], ["labels", "배지·칩·탭"], ["inputs", "입력"], ["cards", "카드·목록"],
-  ["nutrition", "영양"], ["meals", "끼니"], ["feedback", "안내·빈 상태"], ["bottom-nav", "탭 바"], ["overlays", "시트·알림"], ["rules", "규칙"],
+  ["nutrition", "영양"], ["meals", "끼니"], ["drag", "끌어서 놓기"], ["feedback", "안내·빈 상태"], ["bottom-nav", "탭 바"], ["overlays", "시트·알림"], ["rules", "규칙"],
 ] as const;
 
 function Section({ id, title, description, children }: { id: string; title: string; description?: ReactNode; children: ReactNode }) {
@@ -773,6 +773,14 @@ export default function Reference({ status }: { status: DsStatus }) {
         </div>
       </Section>
 
+      {/* ───────────── 끌어서 놓기 ───────────── */}
+      <Section id="drag" title="끌어서 놓기" description="손잡이로만 끕니다(휴대폰 스크롤과 겹치지 않게). 마우스·터치·키보드(스페이스→화살표→스페이스) 모두. 같은 일을 버튼으로도 할 수 있게 둡니다">
+        <DragDemo />
+        <p className="text-caption text-ink-2 mt-3">
+          <Code>{"<DragArea onDrop renderOverlay>"}</Code> · <Code>useDragItem(id, data)</Code> → <Code>{"<DragHandle {...handle} label />"}</Code> · <Code>useDropTarget(id, data)</Code> → <Code>isOver</Code> · <Code>{"<MealSlot handle dropping />"}</Code>
+        </p>
+      </Section>
+
       {/* ───────────── 안내 · 빈 상태 ───────────── */}
       <Section id="feedback" title="안내 · 빈 상태 · 로딩">
         <div className="grid gap-4 md:grid-cols-2">
@@ -940,5 +948,48 @@ function ColorTable() {
         ))}
       </div>
     </>
+  );
+}
+
+/* ── 끌어서 놓기 데모 ── */
+const DEMO_DAYS = ["월", "화", "수"];
+function DemoDay({ day, count }: { day: string; count: number }) {
+  const { setNodeRef, isOver, isDragging } = useDropTarget(`demo-day:${day}`, { day, label: `${day}요일` });
+  return (
+    <div ref={setNodeRef} className={cn("flex flex-col items-center justify-center gap-0.5 h-14 rounded-md border transition-colors",
+      isOver ? "border-brand bg-brand-soft text-brand-ink" : isDragging ? "border-dashed border-line-strong text-ink-2" : "border-line text-ink-2")}>
+      <span className="text-label font-bold">{day}</span>
+      <span className="num text-caption">{count}끼</span>
+    </div>
+  );
+}
+function DemoMeal({ id, name }: { id: string; name: string }) {
+  const { setNodeRef, itemClass, handle } = useDragItem(`demo-meal:${id}`, { id, label: name });
+  return (
+    <div ref={setNodeRef} className={itemClass}>
+      <MealSlot meal="lunch" handle={<DragHandle {...handle} label={`${name} 옮기기`} />} right={<Kcal value={412} className="text-label" />}>
+        <p className="text-body font-medium text-ink">{name}</p>
+      </MealSlot>
+    </div>
+  );
+}
+function DragDemo() {
+  const toast = useToast();
+  const [counts, setCounts] = useState<Record<string, number>>({ 월: 1, 화: 0, 수: 2 });
+  return (
+    <DragArea
+      onDrop={(drag: DragData, drop: DragData) => {
+        const day = String(drop.day);
+        setCounts((c) => ({ ...c, [day]: (c[day] || 0) + 1 }));
+        toast.show(`${drag.label} 을 ${day}요일 점심으로 옮겼어요`);
+      }}
+      describe={(d) => String(d?.label || "항목")}
+      renderOverlay={(d) => <DragGhost>{String(d.label)}</DragGhost>}
+    >
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid grid-cols-3 gap-1 self-start">{DEMO_DAYS.map((d) => <DemoDay key={d} day={d} count={counts[d] || 0} />)}</div>
+        <DemoMeal id="a" name="닭가슴살 샐러드" />
+      </div>
+    </DragArea>
   );
 }

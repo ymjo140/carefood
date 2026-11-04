@@ -35,6 +35,7 @@ const PATHS = {
   list: "M9 6.5h11M9 12h11M9 17.5h11M4.5 6.5h.01M4.5 12h.01M4.5 17.5h.01",
   notebook: "M6 4h12v16H6zM9.5 8.5h5M9.5 12h5M4 8h3M4 12h3M4 16h3",
   feed: "M4.5 5h15v5h-15zM4.5 14h15v5h-15z",
+  grip: "M8.75 6h.5M14.75 6h.5M8.75 12h.5M14.75 12h.5M8.75 18h.5M14.75 18h.5",
 } as const;
 
 export type IconName = keyof typeof PATHS;
