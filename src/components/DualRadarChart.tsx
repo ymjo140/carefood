@@ -1,5 +1,7 @@
 "use client";
 
+import { Badge, cn, type BadgeTone } from "@/components/ui";
+
 /**
  * DualRadarChart — 맛 프로필 + 영양 프로필 이중 오각형 레이더 차트
  *
@@ -35,7 +37,7 @@ type DualRadarChartProps = {
   userNutrition?: NutritionProfile;
   /** 종합 매칭 점수 (0~100) */
   matchScore?: number;
-  /** 차트 크기 */
+  /** (호환용) 예전 크기 지정 — 이제 라벨이 12px 실제 크기로 보이도록 고정 크기로 그림 */
   size?: number;
   /** 모드: taste만 / nutrition만 / 둘 다 */
   mode?: "taste" | "nutrition" | "dual";
@@ -68,89 +70,84 @@ function makePolygonPoints(
     .join(" ");
 }
 
-function RadarGrid({
-  cx,
-  cy,
-  radius,
-  levels,
-  labels,
-  sides,
-}: {
-  cx: number;
-  cy: number;
-  radius: number;
-  levels: number;
-  labels: string[];
-  sides: number;
-}) {
-  const gridLines = [];
-  // 동심 다각형
-  for (let lv = 1; lv <= levels; lv++) {
-    const r = (radius / levels) * lv;
+/* ── 계열 색: 토큰 클래스 (SVG fill/stroke) ── */
+const SERIES = {
+  taste: { stroke: "stroke-brand", fill: "fill-brand", dot: "bg-brand" },
+  nutrition: { stroke: "stroke-positive", fill: "fill-positive", dot: "bg-positive" },
+  user: { stroke: "stroke-protein", fill: "fill-protein" },
+} as const;
+
+/* 한 장의 오각형 — 라벨 12px 가 실제 크기로 보이도록 viewBox 를 1:1 로 그린다 */
+const VB_W = 224;
+const VB_H = 172;
+const R = 56;
+const CX = VB_W / 2;
+const CY = 88;
+
+function RadarGrid({ labels }: { labels: string[] }) {
+  const sides = labels.length;
+  const rings = [1, 2, 3, 4, 5].map((lv) => {
+    const r = (R / 5) * lv;
     const pts = Array.from({ length: sides }, (_, i) => {
-      const angle = (360 / sides) * i;
-      const { x, y } = polarToCartesian(cx, cy, r, angle);
+      const { x, y } = polarToCartesian(CX, CY, r, (360 / sides) * i);
       return `${x},${y}`;
     }).join(" ");
-    gridLines.push(
-      <polygon
-        key={`grid-${lv}`}
-        points={pts}
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="0.5"
-        opacity={0.15}
-      />
-    );
-  }
-  // 축 선 + 라벨
+    return <polygon key={lv} points={pts} fill="none" className="stroke-line" strokeWidth="1" />;
+  });
   const axes = labels.map((label, i) => {
     const angle = (360 / sides) * i;
-    const outer = polarToCartesian(cx, cy, radius, angle);
-    const labelPos = polarToCartesian(cx, cy, radius + 14, angle);
-    // 위치에 따른 text-anchor 결정
-    const dx = labelPos.x - cx;
-    const dy = labelPos.y - cy;
-    let anchor: "start" | "middle" | "end" = "middle";
-    let offsetX = 0;
-    if (dx < -5) { anchor = "end"; offsetX = -2; }
-    else if (dx > 5) { anchor = "start"; offsetX = 2; }
-    // 상단/하단 라벨은 위/아래로 더 밀기
-    let offsetY = 0;
-    if (dy < -5) offsetY = -4;
-    else if (dy > 5) offsetY = 6;
+    const outer = polarToCartesian(CX, CY, R, angle);
+    const pos = polarToCartesian(CX, CY, R + 12, angle);
+    const dx = pos.x - CX;
+    const dy = pos.y - CY;
+    const anchor: "start" | "middle" | "end" = dx < -5 ? "end" : dx > 5 ? "start" : "middle";
+    const offsetX = dx < -5 ? -2 : dx > 5 ? 2 : 0;
+    const offsetY = dy < -5 ? -6 : dy > 5 ? 8 : 0;
     return (
-      <g key={`axis-${i}`}>
-        <line
-          x1={cx}
-          y1={cy}
-          x2={outer.x}
-          y2={outer.y}
-          stroke="currentColor"
-          strokeWidth="0.5"
-          opacity={0.2}
-        />
-        <text
-          x={labelPos.x + offsetX}
-          y={labelPos.y + offsetY}
-          textAnchor={anchor}
-          dominantBaseline="middle"
-          fontSize="8"
-          fill="currentColor"
-          opacity={0.6}
-          fontWeight="500"
-        >
+      <g key={label}>
+        <line x1={CX} y1={CY} x2={outer.x} y2={outer.y} className="stroke-line" strokeWidth="1" />
+        <text x={pos.x + offsetX} y={pos.y + offsetY} textAnchor={anchor} dominantBaseline="middle"
+          fontSize="12" fontWeight="500" className="fill-ink-2">
           {label}
         </text>
       </g>
     );
   });
+  return <>{rings}{axes}</>;
+}
+
+function RadarPanel({ title, labels, values, userValues, series }: {
+  title: string;
+  labels: string[];
+  values: number[];
+  userValues?: number[] | null;
+  series: "taste" | "nutrition";
+}) {
+  const s = SERIES[series];
   return (
-    <>
-      {gridLines}
-      {axes}
-    </>
+    <figure className="flex flex-col items-center gap-1 m-0">
+      <figcaption className="text-label font-bold text-ink">{title}</figcaption>
+      <svg viewBox={`0 0 ${VB_W} ${VB_H}`} width={VB_W} className="max-w-full h-auto" role="img"
+        aria-label={`${title}: ${labels.map((l, i) => `${l} ${values[i]}`).join(", ")}`}>
+        <RadarGrid labels={labels} />
+        {userValues && (
+          <polygon points={makePolygonPoints(CX, CY, userValues, 5, R)}
+            className={cn(SERIES.user.fill, SERIES.user.stroke)} fillOpacity={0.12} strokeWidth="1.5" strokeDasharray="4 3" />
+        )}
+        <polygon points={makePolygonPoints(CX, CY, values, 5, R)}
+          className={cn(s.fill, s.stroke)} fillOpacity={0.22} strokeWidth="2" />
+        {values.map((v, i) => {
+          const { x, y } = polarToCartesian(CX, CY, (v / 5) * R, (360 / values.length) * i);
+          return <circle key={i} cx={x} cy={y} r="3" className={s.fill} />;
+        })}
+      </svg>
+    </figure>
   );
+}
+
+function MatchBadge({ score }: { score: number }) {
+  const tone: BadgeTone = score >= 80 ? "positive" : score >= 50 ? "brand" : "neutral";
+  return <Badge tone={tone} className="font-bold">매칭 <span className="num">{score}</span>점</Badge>;
 }
 
 export default function DualRadarChart({
@@ -159,17 +156,9 @@ export default function DualRadarChart({
   nutrition,
   userNutrition,
   matchScore,
-  size = 240,
   mode = "dual",
 }: DualRadarChartProps) {
   const showTaste = mode === "taste" || mode === "dual";
-  const showNutrition = mode === "nutrition" || mode === "dual";
-
-  const padding = 36;
-  const svgSize = size + padding * 2;
-  const cx = svgSize / 2;
-  const cy = svgSize / 2;
-  const radius = size / 2;
 
   const tasteValues = [taste.salty, taste.sweet, taste.savory, taste.light, taste.spicy];
   const userTasteValues = userTaste
@@ -183,165 +172,52 @@ export default function DualRadarChart({
     ? [userNutrition.protein, userNutrition.carbs, userNutrition.fat, userNutrition.fiber, userNutrition.vitamins]
     : null;
 
-  // 듀얼 모드: 좌우로 두 오각형 나란히
+  // 듀얼 모드: 두 오각형 나란히 (좁으면 위아래)
   if (mode === "dual" && nutritionValues) {
-    const pad = 70; // 라벨 잘림 방지 여백
-    const halfW = size / 2 + pad;
-    const dualSvgW = halfW * 2 + 20;
-    const smallR = size * 0.22;
-    const cx1 = halfW / 2 + 10;
-    const cx2 = halfW + halfW / 2 + 10;
-    const dualCy = halfW / 2 + 18;
-
     return (
       <div className="flex flex-col items-center gap-3">
-        {matchScore !== undefined && (
-          <div className="flex items-center gap-2">
-            <div
-              className="text-xs font-bold px-2.5 py-1 rounded-full"
-              style={{
-                background: matchScore >= 80 ? "#D4A843" : matchScore >= 50 ? "#E06030" : "#6E7A8A",
-                color: matchScore >= 80 ? "#0C1117" : "#ECEBE6",
-              }}
-            >
-              매칭 {matchScore}점
-            </div>
-          </div>
-        )}
-        <svg
-          viewBox={`0 0 ${dualSvgW} ${halfW + 36}`}
-          width={dualSvgW}
-          style={{ maxWidth: "100%" }}
-        >
-          {/* 맛 프로필 */}
-          <text x={cx1} y={12} textAnchor="middle" fontSize="9" fontWeight="700" fill="currentColor" opacity={0.8}>
-            맛 프로필
-          </text>
-          <g>
-            <RadarGrid cx={cx1} cy={dualCy} radius={smallR} levels={5} labels={TASTE_LABELS} sides={5} />
-            {userTasteValues && (
-              <polygon
-                points={makePolygonPoints(cx1, dualCy, userTasteValues, 5, smallR)}
-                fill="rgba(106,163,232,0.15)"
-                stroke="#6BA3E8"
-                strokeWidth="1.5"
-                strokeDasharray="4 2"
-              />
-            )}
-            <polygon
-              points={makePolygonPoints(cx1, dualCy, tasteValues, 5, smallR)}
-              fill="rgba(212,168,67,0.25)"
-              stroke="#D4A843"
-              strokeWidth="2"
-            />
-            {/* 꼭짓점 점 */}
-            {tasteValues.map((v, i) => {
-              const angle = (360 / 5) * i;
-              const r = (v / 5) * smallR;
-              const { x, y } = polarToCartesian(cx1, dualCy, r, angle);
-              return <circle key={i} cx={x} cy={y} r="3" fill="#D4A843" />;
-            })}
-          </g>
-
-          {/* 영양 프로필 */}
-          <text x={cx2} y={12} textAnchor="middle" fontSize="9" fontWeight="700" fill="currentColor" opacity={0.8}>
-            영양 프로필
-          </text>
-          <g>
-            <RadarGrid cx={cx2} cy={dualCy} radius={smallR} levels={5} labels={NUTRITION_LABELS} sides={5} />
-            {userNutritionValues && (
-              <polygon
-                points={makePolygonPoints(cx2, dualCy, userNutritionValues, 5, smallR)}
-                fill="rgba(106,163,232,0.15)"
-                stroke="#6BA3E8"
-                strokeWidth="1.5"
-                strokeDasharray="4 2"
-              />
-            )}
-            <polygon
-              points={makePolygonPoints(cx2, dualCy, nutritionValues, 5, smallR)}
-              fill="rgba(224,96,48,0.25)"
-              stroke="#E06030"
-              strokeWidth="2"
-            />
-            {nutritionValues.map((v, i) => {
-              const angle = (360 / 5) * i;
-              const r = (v / 5) * smallR;
-              const { x, y } = polarToCartesian(cx2, dualCy, r, angle);
-              return <circle key={i} cx={x} cy={y} r="3" fill="#E06030" />;
-            })}
-          </g>
-        </svg>
-        {/* 범례 */}
-        <div className="flex gap-4 text-[10px] text-muted">
-          <span className="flex items-center gap-1">
-            <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ background: "#D4A843" }} />
-            제품
-          </span>
-          {(userTasteValues || userNutritionValues) && (
-            <span className="flex items-center gap-1">
-              <span className="inline-block w-2.5 h-2.5 rounded-full border border-dashed" style={{ borderColor: "#6BA3E8" }} />
-              내 선호
-            </span>
-          )}
-          {nutritionValues && (
-            <span className="flex items-center gap-1">
-              <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ background: "#E06030" }} />
-              영양 충족
-            </span>
-          )}
+        {matchScore !== undefined && <MatchBadge score={matchScore} />}
+        <div className="flex flex-wrap justify-center gap-x-6 gap-y-4">
+          <RadarPanel title="맛 프로필" labels={TASTE_LABELS} values={tasteValues} userValues={userTasteValues} series="taste" />
+          <RadarPanel title="영양 프로필" labels={NUTRITION_LABELS} values={nutritionValues} userValues={userNutritionValues} series="nutrition" />
         </div>
+        <Legend showUser={!!(userTasteValues || userNutritionValues)} showNutrition />
       </div>
     );
   }
 
   // 단일 모드 (맛 or 영양)
   const values = showTaste ? tasteValues : (nutritionValues || [0, 0, 0, 0, 0]);
-  const maxVal = 5;
-  const labels = showTaste ? TASTE_LABELS : NUTRITION_LABELS;
-  const color = showTaste ? "#D4A843" : "#E06030";
   const bgValues = showTaste ? userTasteValues : userNutritionValues;
 
   return (
     <div className="flex flex-col items-center gap-3">
-      {matchScore !== undefined && (
-        <div
-          className="text-xs font-bold px-2.5 py-1 rounded-full"
-          style={{
-            background: matchScore >= 80 ? "#D4A843" : matchScore >= 50 ? "#E06030" : "#6E7A8A",
-            color: matchScore >= 80 ? "#0C1117" : "#ECEBE6",
-          }}
-        >
-          매칭 {matchScore}점
-        </div>
+      {matchScore !== undefined && <MatchBadge score={matchScore} />}
+      <RadarPanel title={showTaste ? "맛 프로필" : "영양 프로필"} labels={showTaste ? TASTE_LABELS : NUTRITION_LABELS}
+        values={values} userValues={bgValues} series={showTaste ? "taste" : "nutrition"} />
+      {bgValues && <Legend showUser showNutrition={!showTaste} showTaste={showTaste} />}
+    </div>
+  );
+}
+
+function Legend({ showUser, showNutrition, showTaste = true }: { showUser: boolean; showNutrition: boolean; showTaste?: boolean }) {
+  return (
+    <div className="flex flex-wrap justify-center gap-x-4 gap-y-1 text-caption text-ink-2">
+      {showTaste && (
+        <span className="inline-flex items-center gap-1.5">
+          <span className={cn("size-2.5 rounded-full", SERIES.taste.dot)} aria-hidden="true" />제품 맛
+        </span>
       )}
-      <svg viewBox={`0 0 ${svgSize} ${svgSize}`} width={svgSize} style={{ maxWidth: "100%" }}>
-        <RadarGrid cx={cx} cy={cy} radius={radius} levels={5} labels={labels} sides={5} />
-        {bgValues && (
-          <polygon
-            points={makePolygonPoints(cx, cy, bgValues, maxVal, radius)}
-            fill="rgba(106,163,232,0.15)"
-            stroke="#6BA3E8"
-            strokeWidth="1.5"
-            strokeDasharray="4 2"
-          />
-        )}
-        <polygon
-          points={makePolygonPoints(cx, cy, values, maxVal, radius)}
-          fill={`${color}40`}
-          stroke={color}
-          strokeWidth="2"
-        />
-        {values.map((v, i) => {
-          const angle = (360 / 5) * i;
-          const r = (v / maxVal) * radius;
-          const { x, y } = polarToCartesian(cx, cy, r, angle);
-          return <circle key={i} cx={x} cy={y} r="3.5" fill={color} />;
-        })}
-      </svg>
-      <p className="text-[10px] text-muted text-center">
-        {showTaste ? "맛 프로필" : "영양 프로필"}
-      </p>
+      {showNutrition && (
+        <span className="inline-flex items-center gap-1.5">
+          <span className={cn("size-2.5 rounded-full", SERIES.nutrition.dot)} aria-hidden="true" />영양 충족
+        </span>
+      )}
+      {showUser && (
+        <span className="inline-flex items-center gap-1.5">
+          <span className="size-2.5 rounded-full border border-dashed border-protein" aria-hidden="true" />내 선호
+        </span>
+      )}
     </div>
   );
 }

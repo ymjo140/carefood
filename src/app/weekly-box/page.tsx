@@ -515,7 +515,7 @@ export default function WeeklyBoxPage() {
               onChange={e => setPlanTitle(e.target.value)}
               placeholder="식단 이름"
               aria-label="식단 이름"
-              className="text-title font-bold"
+              className="font-bold"
             />
             <p className="text-caption text-ink-2 mt-1.5">영양 밸런스를 맞춰 7일을 구성해요</p>
           </div>
@@ -633,7 +633,7 @@ export default function WeeklyBoxPage() {
               {stats.serviceMix.map(svc => (
                 <div key={svc.key} className="grid grid-cols-[72px_minmax(0,1fr)_auto] items-center gap-3">
                   <span className="text-caption font-medium text-ink truncate">{svc.name}</span>
-                  <ProgressBar value={svc.count} max={stats.products} tone={svc.isHealth ? "brand" : "positive"} label={`${svc.name} 비중`} />
+                  <ProgressBar value={svc.count} max={stats.products} tone="brand" label={`${svc.name} 비중`} />
                   <span className="text-caption text-ink-2 text-right">
                     <span className="num">{svc.count}</span>끼 · <span className="num">{svc.cost.toLocaleString()}</span>원
                   </span>

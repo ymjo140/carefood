@@ -306,7 +306,7 @@ function OnboardingContent() {
   const canSkip = currentStepKey === "body" || currentStepKey === "allergies" || currentStepKey === "pattern";
 
   return (
-    <Page width="narrow" className="pt-0">
+    <Page width="narrow">
       {/* ── 진행 표시 ── */}
       {!isResultStep && (
         <div className="sticky top-14 z-30 -mx-4 px-4 pt-4 pb-3 mb-6 bg-canvas border-b border-line">

@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import Link from "next/link";
 import {
-  Badge, Button, Card, Chip, ChipRow, ConfirmSheet, EmptyState, Field, Icon, IconButton, Input, Kcal,
+  Badge, Button, Card, Chip, ConfirmSheet, EmptyState, Field, Icon, IconButton, Input, Kcal,
   LinkButton, ListRow, MacroGrid, MealSlot, Page, PageHeader, PageLoading, SectionHeader, Spinner, Tabs,
   buttonClass, cn, useToast,
 } from "@/components/ui";
@@ -665,14 +665,14 @@ export default function DiaryPage() {
         {recentMeals.length > 0 && addTab === "search" && !searchQuery && (
           <div>
             <GroupLabel>최근 기록</GroupLabel>
-            <ChipRow className="mx-0 px-0">
+            <div className="flex gap-2 scroll-row">
               {recentMeals.slice(0, 5).map((m, i) => (
                 <Chip key={i} onClick={() => addFromRecent(m)}>
                   <span className="max-w-[120px] line-clamp-1">{m.food_name}</span>
                   {m.calories != null && <span className="num text-ink-3">{m.calories}kcal</span>}
                 </Chip>
               ))}
-            </ChipRow>
+            </div>
           </div>
         )}
 
