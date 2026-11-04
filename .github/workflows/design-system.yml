@@ -65,6 +65,8 @@ jobs:
         env:
           DS_AUDIT_BASE: ${{ github.event.inputs.base || 'https://carefood-iota.vercel.app' }}
           DS_AUDIT_COMMIT: ${{ github.event.deployment.sha || github.sha }}
+          # 11번가 이미지 CDN 은 해외(검사 서버)에서 451 로 막힌다 — 국내 사용자와 무관해 검사에서 뺀다 (리포트에 표시됨)
+          DS_AUDIT_IGNORE: 'cdn\.011st\.com'
         run: node scripts/ds/audit.mjs
       - name: 리포트 올리기
         if: always()

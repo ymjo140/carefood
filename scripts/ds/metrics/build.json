@@ -1,7 +1,7 @@
 {
-  "builtAt": "2026-11-04T08:34:56.533Z",
-  "sha": "fedac951e1bfdd089b1506da12e0178a967d8343",
-  "message": "refactor: 전 화면을 디자인 시스템으로 이전",
+  "builtAt": "2026-11-04T08:59:30.999Z",
+  "sha": "c0a521c2f4d0beb8ec0a04ebee1fbd6a3e992272",
+  "message": "fix(ci): 화면 검사는 운영 주소로 — 배포별 주소는 Vercel 보호로 로그인 창이 찍힘",
   "branch": "main",
   "env": "local"
 }

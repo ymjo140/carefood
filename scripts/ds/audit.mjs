@@ -21,7 +21,7 @@
  * 필요: playwright (없으면 `npm i -D playwright && npx playwright install chromium`)
  */
 import { createRequire } from "node:module";
-import { mkdirSync, writeFileSync, readdirSync, statSync, rmSync, existsSync } from "node:fs";
+import { mkdirSync, writeFileSync, readFileSync, readdirSync, statSync, rmSync, existsSync } from "node:fs";
 import { join, dirname, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -44,6 +44,9 @@ const COMMIT = process.env.DS_AUDIT_COMMIT || (() => { try { return require("nod
 const OUT = join(ROOT, "ds-audit", "report");
 const SHOTS = join(OUT, "shots");
 const MAX_SHOT_H = 6000;
+// 허용 색 = 디자인 토큰. 계산된 스타일을 하나씩 꺼내 읽는 방식은 Chromium 버전에 따라 비어 나와서 파일에서 직접 읽는다
+const TOKEN_NAMES = [...new Set((readFileSync(join(ROOT, "src/styles/design-system.css"), "utf8").match(/--ds-[\w-]+(?=\s*:)/g) || []))]
+  .filter((n) => !n.includes("shadow"));
 
 const VARIANTS = [
   { id: "desktop", label: "데스크톱", viewport: { width: 1280, height: 860 }, scheme: "light", mobile: false },
@@ -83,7 +86,7 @@ async function resolveDynamic(route) {
 }
 
 /* ── 페이지 안에서 도는 검사 ── */
-function inPageChecks() {
+function inPageChecks(names) {
   const vw = window.innerWidth;
   const issues = [];
   const push = (type, el, detail) => {
@@ -100,9 +103,6 @@ function inPageChecks() {
   const probe = document.createElement("div");
   document.body.appendChild(probe);
   const tokenRGB = new Set();
-  const names = [];
-  const rootStyle = getComputedStyle(document.documentElement);
-  for (let i = 0; i < rootStyle.length; i++) { const n = rootStyle[i]; if (n.startsWith("--ds-") && !n.includes("shadow")) names.push(n); }
   for (const theme of ["light", "dark"]) {
     const holder = document.createElement("div");
     holder.setAttribute("data-theme", theme);
@@ -297,10 +297,11 @@ async function main() {
       const t0 = Date.now();
       let finalUrl = url, data = { issues: [], docHeight: 0 };
       try {
-        await page.goto(BASE + url, { waitUntil: "networkidle", timeout: 30000 });
+        await page.goto(BASE + url, { waitUntil: "load", timeout: 45000 });
+        await page.waitForLoadState("networkidle", { timeout: 10000 }).catch(() => {}); // ds-allow: 요청이 계속 오가도 검사는 진행
         await page.waitForTimeout(600);
         finalUrl = page.url().replace(BASE, "");
-        data = await page.evaluate(inPageChecks);
+        data = await page.evaluate(inPageChecks, TOKEN_NAMES);
       } catch (e) { errors.push(`열기 실패: ${String(e.message || e).slice(0, 160)}`); }
       const shot = `${v.id}${url.replace(/[^a-z0-9]+/gi, "_")}.jpg`;
       try {

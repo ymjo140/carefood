@@ -9,6 +9,14 @@ import {
   BottomNavItems, SkeletonList, ChoiceCard, ChoiceList, LinkTabs, RatingStars, RatingInput, ScaleInput, PostAuthor, PostAction, PostActions, PostTags,
 } from "@/components/ui";
 
+// 서버(UTC)와 브라우저 시간대가 달라도 같은 글자가 나오도록 한국 시간으로 고정
+function kst(at: string | number, dateOnly = false) {
+  const opts: Intl.DateTimeFormatOptions = dateOnly
+    ? { timeZone: "Asia/Seoul", dateStyle: "medium" }
+    : { timeZone: "Asia/Seoul", dateStyle: "medium", timeStyle: "short" };
+  return new Intl.DateTimeFormat("ko-KR", opts).format(new Date(at));
+}
+
 /* ════════════════════════════════════════════════════════════
    기준 페이지 — 사람에게는 리뷰 화면, AI 에게는 카탈로그.
    여기 그려지지 않은 컴포넌트·값은 화면에서 쓰지 않습니다.
@@ -255,17 +263,17 @@ export default function Reference({ status }: { status: DsStatus }) {
 
       {/* ───────────── 검사 현황 ───────────── */}
       <Section id="status" title="기준 지키기 현황"
-        description={<>배포할 때마다 <Code>scripts/ds/lint.mjs</Code> 와 <Code>measure.mjs</Code> 가 다시 셉니다 · 마지막 검사 {new Date(status.checkedAt).toLocaleString("ko-KR")}</>}>
+        description={<>배포할 때마다 <Code>scripts/ds/lint.mjs</Code> 와 <Code>measure.mjs</Code> 가 다시 셉니다 · 마지막 검사 {kst(status.checkedAt)}</>}>
         <Card className="mb-4">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <p className="text-label font-bold text-ink">이 페이지가 보여 주는 배포</p>
             <Badge tone={status.build.env === "production" ? "brand" : "neutral"}>{status.build.env === "production" ? "운영" : status.build.env === "preview" ? "미리보기" : "로컬"}</Badge>
           </div>
-          <p className="text-label text-ink mt-1 break-all">
+          <p className="text-label text-ink mt-1">
             <a href={`${REPO}/commit/${status.build.sha}`} target="_blank" rel="noreferrer" className="font-mono text-brand-ink underline-offset-4 hover:underline">{status.build.sha.slice(0, 7)}</a>
             {" "}{status.build.message}
           </p>
-          <p className="text-caption text-ink-2 mt-0.5">{status.build.branch} · {new Date(status.build.builtAt).toLocaleString("ko-KR")} 빌드</p>
+          <p className="text-caption text-ink-2 mt-0.5">{status.build.branch} · {kst(status.build.builtAt)} 빌드</p>
           <p className="text-caption text-ink-3 mt-2">코드를 바꿔 배포하면 이 커밋과 아래 숫자가 바뀝니다. 숫자가 그대로면 아직 배포가 끝나지 않은 겁니다.</p>
         </Card>
         <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
@@ -313,7 +321,7 @@ export default function Reference({ status }: { status: DsStatus }) {
                 </tbody>
               </table>
             </div>
-            <p className="text-caption text-ink-3 mt-3">개편 전 측정 {new Date(status.baselineAt).toLocaleDateString("ko-KR")} · 디자인 시스템 파일(src/components/ui, 이 페이지)은 제외</p>
+            <p className="text-caption text-ink-3 mt-3">개편 전 측정 {kst(status.baselineAt, true)} · 디자인 시스템 파일(src/components/ui, 이 페이지)은 제외</p>
           </Card>
         </div>
 
@@ -362,7 +370,7 @@ export default function Reference({ status }: { status: DsStatus }) {
             <Badge tone={status.audit.blocking === 0 ? "positive" : "danger"}>{status.audit.blocking === 0 ? "통과" : `문제 ${status.audit.blocking}건`}</Badge>
           </div>
           <p className="text-caption text-ink-2 mb-1">
-            {new Date(status.audit.auditedAt).toLocaleString("ko-KR")} · 페이지 {status.audit.pages}개 × {status.audit.variants.join(" / ")} = 스크린샷 {status.audit.screenshots}장
+            {kst(status.audit.auditedAt)} · 페이지 {status.audit.pages}개 × {status.audit.variants.join(" / ")} = 스크린샷 {status.audit.screenshots}장
             {status.audit.commit && <> · 커밋 <span className="font-mono">{status.audit.commit.slice(0, 7)}</span></>}
           </p>
           {status.audit.commit && status.audit.commit !== status.build.sha && (
