@@ -113,6 +113,7 @@ function ProductSearchSheet({ open, onSelect, onClose, onEatingOut }: {
   onClose: () => void;
   onEatingOut: () => void;
 }) {
+  const toast = useToast();
   const [tab, setTab] = useState<PickTab>("favorites");
   const [query, setQuery] = useState("");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -137,7 +138,7 @@ function ProductSearchSheet({ open, onSelect, onClose, onEatingOut }: {
           id: f.product_id, name: f.name, calories: f.calories, protein_g: f.protein_g,
           product_prices: f.best_price ? [{ price: f.best_price, platform: "", url: "", image_url: f.image_url }] : [],
         })));
-      } catch { /* */ }
+      } catch { /* */ } // ds-allow: 보조 탭(즐겨찾기) 불러오기
       finally { setLoadingFavorites(false); }
     };
     loadFavs();
@@ -160,7 +161,7 @@ function ProductSearchSheet({ open, onSelect, onClose, onEatingOut }: {
         const recent: any[] = [];
         for (const id of allIds) { const p = productMap.get(id); if (p) recent.push(p); }
         setRecentProducts(recent.length < 5 ? productData.products?.slice(0, 10) || [] : recent);
-      } catch { /* */ }
+      } catch { /* */ } // ds-allow: 보조 탭(최근 본) 불러오기
       finally { setLoadingRecent(false); }
     };
     loadRecent();
@@ -171,9 +172,12 @@ function ProductSearchSheet({ open, onSelect, onClose, onEatingOut }: {
     setSearching(true); setTab("search");
     try {
       const res = await fetch(`/api/products?q=${encodeURIComponent(query)}&hasPrice=1&limit=15`);
+      if (!res.ok) throw new Error(String(res.status));
       const data = await res.json();
       setResults(data.products || []);
-    } catch { /* */ }
+    } catch {
+      toast.show("검색하지 못했어요. 다시 시도해 주세요", { tone: "danger" });
+    }
     finally { setSearching(false); }
   };
 
@@ -227,16 +231,23 @@ export default function WeeklyBoxPage() {
   const [editTitleValue, setEditTitleValue] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<SavedPlan | null>(null);
   const toast = useToast();
+  const showToast = toast.show; // 안정된 함수 — effect 의존성에 toast 객체를 넣지 않는다
+  const [plansError, setPlansError] = useState(false);
 
   const loadPlans = useCallback(async () => {
     const userId = getUserId();
     if (!userId) return;
+    setPlansError(false);
     try {
       const res = await fetch(`/api/meal-plans?user_id=${userId}`);
+      if (!res.ok) throw new Error(String(res.status));
       const data = await res.json();
       setSavedPlans(data.plans || []);
-    } catch { /* */ }
-  }, []);
+    } catch {
+      setPlansError(true);
+      showToast("식단 리스트를 불러오지 못했어요", { tone: "danger" });
+    }
+  }, [showToast]);
 
   useEffect(() => { loadPlans().finally(() => setLoading(false)); }, [loadPlans]);
 
@@ -245,7 +256,7 @@ export default function WeeklyBoxPage() {
     if (!profileRaw) return null;
     const profile = JSON.parse(profileRaw);
     let healthConditions: string[] = [];
-    try { const h = localStorage.getItem("carefood_health"); if (h) healthConditions = JSON.parse(h).conditions || []; } catch { /* */ }
+    try { const h = localStorage.getItem("carefood_health"); if (h) healthConditions = JSON.parse(h).conditions || []; } catch { /* */ } // ds-allow: 로컬 검진 정보 읽기
 
     const res = await fetch("/api/weekly-box", {
       method: "POST", headers: { "Content-Type": "application/json" },
@@ -297,7 +308,7 @@ export default function WeeklyBoxPage() {
       try {
         const result = await fetchAndBuildGrid();
         if (result) setPrecomputed(result);
-      } catch { /* */ }
+      } catch { /* */ } // ds-allow: 미리 계산은 실패하면 버튼 눌렀을 때 다시
       finally { setPreloading(false); }
     };
     preload();
@@ -342,11 +353,12 @@ export default function WeeklyBoxPage() {
     try {
       const res = await fetch(`/api/meal-plans/load?id=${id}&user_id=${userId}`);
       const data = await res.json();
-      if (data.plan) {
-        setGrid(data.plan.grid || emptyGrid()); setPlanTitle(data.plan.title); setPlanId(data.plan.id);
-        toast.show(`"${data.plan.title}" 을 불러왔어요`);
-      }
-    } catch { /* */ }
+      if (!res.ok || !data.plan) throw new Error(String(res.status));
+      setGrid(data.plan.grid || emptyGrid()); setPlanTitle(data.plan.title); setPlanId(data.plan.id);
+      toast.show(`"${data.plan.title}" 을 불러왔어요`);
+    } catch {
+      toast.show("식단을 불러오지 못했어요. 다시 시도해 주세요", { tone: "danger" });
+    }
   };
 
   const updateCell = (day: string, meal: string, cell: CellData) => {
@@ -358,14 +370,17 @@ export default function WeeklyBoxPage() {
     const userId = getUserId();
     if (!userId || !editTitleValue.trim()) return;
     try {
-      await fetch("/api/meal-plans", {
+      const res = await fetch("/api/meal-plans", {
         method: "PATCH", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id, user_id: userId, title: editTitleValue.trim() }),
       });
+      if (!res.ok) throw new Error(String(res.status));
       setSavedPlans(prev => prev.map(p => p.id === id ? { ...p, title: editTitleValue.trim() } : p));
       if (planId === id) setPlanTitle(editTitleValue.trim());
       toast.show("이름을 바꿨어요");
-    } catch { /* */ }
+    } catch {
+      toast.show("이름을 바꾸지 못했어요. 다시 시도해 주세요", { tone: "danger" });
+    }
     setEditingTitle(null);
   };
 
@@ -373,11 +388,14 @@ export default function WeeklyBoxPage() {
   const deletePlan = async (id: string) => {
     const userId = getUserId(); if (!userId) return;
     try {
-      await fetch(`/api/meal-plans?id=${id}&user_id=${userId}`, { method: "DELETE" });
+      const res = await fetch(`/api/meal-plans?id=${id}&user_id=${userId}`, { method: "DELETE" });
+      if (!res.ok) throw new Error(String(res.status));
       setSavedPlans(prev => prev.filter(p => p.id !== id));
       if (planId === id) { setGrid(emptyGrid()); setPlanId(null); setPlanTitle("새 식단"); }
       toast.show("식단을 삭제했어요");
-    } catch { /* */ }
+    } catch {
+      toast.show("식단을 삭제하지 못했어요. 다시 시도해 주세요", { tone: "danger" });
+    }
   };
 
   // ── 통계 계산 ──
@@ -442,7 +460,7 @@ export default function WeeklyBoxPage() {
         <SectionHeader
           title="내 식단 리스트"
           description="카드를 누르면 아래 편집기로 불러와요"
-          action={<TextLink href="/community">커뮤니티에서 따라하기</TextLink>}
+          action={savedPlans.length > 0 ? <TextLink href="/community">커뮤니티에서 따라하기</TextLink> : undefined}
         />
 
         {savedPlans.length > 0 ? (
@@ -497,6 +515,12 @@ export default function WeeklyBoxPage() {
               );
             })}
           </div>
+        ) : plansError ? (
+          <EmptyState
+            title="식단 리스트를 불러오지 못했어요"
+            description="연결이 잠깐 끊겼을 수 있어요"
+            action={<Button size="sm" variant="secondary" icon="refresh" onClick={() => loadPlans()}>다시 불러오기</Button>}
+          />
         ) : (
           <EmptyState
             title="아직 저장한 식단이 없어요"

@@ -13,7 +13,7 @@ export function Chip({
       type="button"
       aria-pressed={selected}
       className={cn(
-        "inline-flex items-center justify-center gap-1 rounded-full border whitespace-nowrap transition-colors shrink-0",
+        "press inline-flex items-center justify-center gap-1 rounded-full border whitespace-nowrap shrink-0",
         size === "sm" ? "h-8 px-3 text-caption" : "h-9 px-3.5 text-label",
         selected
           ? "border-brand bg-brand-soft text-brand-ink font-bold"

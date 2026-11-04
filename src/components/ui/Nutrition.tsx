@@ -6,11 +6,12 @@ import { cn } from "./cn";
  */
 export type Macro = "protein" | "carbs" | "fat" | "sodium";
 
+/** 영양소 색은 숫자·막대·점에만. 타일 바탕은 늘 회색(sunken) */
 export const MACRO_META: Record<Macro, { label: string; unit: string; text: string; bg: string; fill: string }> = {
-  protein: { label: "단백질", unit: "g", text: "text-protein", bg: "bg-protein-soft", fill: "bg-protein" },
-  carbs: { label: "탄수화물", unit: "g", text: "text-carbs", bg: "bg-carbs-soft", fill: "bg-carbs" },
-  fat: { label: "지방", unit: "g", text: "text-fat", bg: "bg-fat-soft", fill: "bg-fat" },
-  sodium: { label: "나트륨", unit: "mg", text: "text-sodium", bg: "bg-sodium-soft", fill: "bg-sodium" },
+  protein: { label: "단백질", unit: "g", text: "text-protein", bg: "bg-sunken", fill: "bg-protein" },
+  carbs: { label: "탄수화물", unit: "g", text: "text-carbs", bg: "bg-sunken", fill: "bg-carbs" },
+  fat: { label: "지방", unit: "g", text: "text-fat", bg: "bg-sunken", fill: "bg-fat" },
+  sodium: { label: "나트륨", unit: "mg", text: "text-sodium", bg: "bg-sunken", fill: "bg-sodium" },
 };
 
 function fmt(v: number | null | undefined, digits = 0) {
@@ -25,11 +26,11 @@ export function ProgressBar({ value, max = 100, tone = "brand", className, label
 }) {
   const pct = Math.max(0, Math.min(100, max > 0 ? (value / max) * 100 : 0));
   const fill = tone in MACRO_META ? MACRO_META[tone as Macro].fill
-    : tone === "positive" ? "bg-positive" : tone === "caution" ? "bg-caution" : tone === "danger" ? "bg-danger" : "bg-brand";
+    : tone === "positive" ? "bg-positive" : tone === "caution" ? "bg-ink-2" : tone === "danger" ? "bg-danger" : "bg-brand";
   return (
     <div className={cn("h-1.5 w-full rounded-full bg-sunken overflow-hidden", className)}
       role="progressbar" aria-valuenow={Math.round(pct)} aria-valuemin={0} aria-valuemax={100} aria-label={label}>
-      <div className={cn("h-full rounded-full transition-[width] duration-500", fill)} style={{ width: `${pct}%` }} />
+      <div className={cn("h-full w-full rounded-full origin-left transition-transform duration-420 ease-out", fill)} style={{ transform: `scaleX(${pct / 100})` }} />
     </div>
   );
 }

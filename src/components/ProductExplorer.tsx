@@ -5,10 +5,7 @@ import Link from "next/link";
 import type { ProductWithPrices, TasteLevel, DishCategory } from "@/types/database";
 import { DISH_CATEGORY_LABELS } from "@/types/database";
 import { useFavorites } from "@/hooks/useFavorites";
-import {
-  Badge, Button, Card, Chip, EmptyState, IconButton, Input, Kcal, MACRO_META, Notice, Price, ProgressBar,
-  SearchField, Sheet, Spinner, Tabs, TextLink, cn, type BadgeTone, type Macro,
-} from "@/components/ui";
+import { Badge, Button, Card, Chip, cn, EmptyState, IconButton, Input, Kcal, MACRO_META, Notice, Price, ProgressBar, SearchField, Sheet, SkeletonList, Spinner, Tabs, TextLink, type BadgeTone, type Macro } from "@/components/ui";
 
 /* ───── 타입 ───── */
 type TasteFilters = {
@@ -219,7 +216,7 @@ function HealthBadge({ score }: { score: number | null }) {
     <div className="relative size-10 shrink-0" title={`건강점수 ${score}`}>
       <svg viewBox="0 0 36 36" className="size-10" aria-hidden="true">
         <circle cx="18" cy="18" r={r} className="fill-sunken" />
-        <circle cx="18" cy="18" r={r} fill="none" className={cn(tone.stroke, "transition-[stroke-dashoffset] duration-500")} strokeWidth="2.5"
+        <circle cx="18" cy="18" r={r} fill="none" className={cn(tone.stroke, "transition-[stroke-dashoffset] duration-420 ease-out")} strokeWidth="2.5"
           strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round" transform="rotate(-90 18 18)" />
       </svg>
       <span className={cn("absolute inset-0 flex items-center justify-center num text-caption font-bold", tone.text)}>{score}</span>
@@ -534,7 +531,7 @@ export default function ProductExplorer() {
         const p = JSON.parse(raw);
         setProfile(p);
       }
-    } catch { /* */ }
+    } catch { /* */ } // ds-allow: 로컬 프로필 읽기
     setProfileLoaded(true);
   }, []);
 
@@ -724,10 +721,7 @@ export default function ProductExplorer() {
           </p>
 
           {loading && !data ? (
-            <div className="flex flex-col items-center gap-3 py-16">
-              <Spinner />
-              <p className="text-label text-ink-2">제품을 불러오는 중이에요</p>
-            </div>
+            <SkeletonList rows={5} />
           ) : data?.products?.length ? (
             <>
               <div className="flex flex-col gap-3">

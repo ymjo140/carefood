@@ -13,7 +13,7 @@ export type ChoiceTone = "positive" | "caution" | "danger" | "neutral";
 
 const DOT: Record<ChoiceTone, string> = {
   positive: "bg-positive",
-  caution: "bg-caution",
+  caution: "bg-brand",
   danger: "bg-danger",
   neutral: "bg-line-strong",
 };
@@ -31,7 +31,7 @@ export function ChoiceList<T extends string | number>({ options, value, onChange
         return (
           <button key={String(opt.value)} type="button" role="radio" aria-checked={on} onClick={() => onChange(opt.value)}
             className={cn(
-              "w-full flex items-center gap-3 min-h-12 px-4 py-2 rounded-md border text-left transition-colors",
+              "press w-full flex items-center gap-3 min-h-12 px-4 py-2 rounded-md border text-left",
               on ? "border-brand bg-brand-soft" : "border-line bg-surface hover:border-line-strong",
             )}>
             {opt.tone && <span className={cn("size-2.5 rounded-full shrink-0", DOT[opt.tone])} aria-hidden="true" />}

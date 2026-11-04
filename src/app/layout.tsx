@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono, Noto_Sans_KR, Outfit } from "next/font/google";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import { ToastProvider } from "@/components/ui";
+import { BottomNav, ToastProvider } from "@/components/ui";
 import "./globals.css";
 
 const notoSansKR = Noto_Sans_KR({
@@ -87,11 +87,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Header />
         <script
           dangerouslySetInnerHTML={{
-            __html: `if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(()=>{})}`,
+            __html: `if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(()=>{})}`, // ds-allow: 서비스 워커 등록 실패는 화면에 영향 없음
           }}
         />
         <main className="flex-1">{children}</main>
         <Footer />
+        <BottomNav />
         </ToastProvider>
       </body>
     </html>

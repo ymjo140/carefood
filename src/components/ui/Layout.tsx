@@ -81,14 +81,7 @@ export function PageLoading() {
   return <div className="min-h-[50vh] flex items-center justify-center"><Spinner /></div>;
 }
 
-/** 하단 고정 행동 줄 — 합계 + 주 버튼 */
-export function BottomBar({ children }: { children: ReactNode }) {
-  return (
-    <div className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-canvas pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]">
-      <div className="mx-auto max-w-[430px] flex items-center gap-3">{children}</div>
-    </div>
-  );
-}
+export { BottomBar } from "./BottomBar";
 
 export function Divider({ className }: { className?: string }) {
   return <hr className={cn("border-0 border-t border-line my-4", className)} />;

@@ -39,6 +39,8 @@ const ONLY = arg("only", "").split(",").filter(Boolean);
 // 검사 환경 탓에 막히는 외부 요청(예: 클라우드 프록시가 막는 쇼핑몰 이미지 CDN)은 --ignore=정규식 으로 제외. 리포트에 표시됨
 const IGNORE = arg("ignore", process.env.DS_AUDIT_IGNORE || "");
 const IGNORE_RE = IGNORE ? new RegExp(IGNORE) : null;
+// 어느 커밋을 검사했는지 (Actions 는 DS_AUDIT_COMMIT, 로컬은 git HEAD)
+const COMMIT = process.env.DS_AUDIT_COMMIT || (() => { try { return require("node:child_process").execSync("git rev-parse HEAD", { cwd: ROOT, encoding: "utf8" }).trim(); } catch { return null; } })();
 const OUT = join(ROOT, "ds-audit", "report");
 const SHOTS = join(OUT, "shots");
 const MAX_SHOT_H = 6000;
@@ -319,7 +321,7 @@ async function main() {
   for (const r of results) for (const i of r.issues) totals[i.type]++;
   const blocking = Object.entries(totals).filter(([k]) => k !== "touch-target").reduce((s, [, n]) => s + n, 0);
   const summary = {
-    auditedAt: new Date().toISOString(), base: BASE, ignored: IGNORE || null, pages: list.length, variants: VARIANTS.map((v) => v.label),
+    auditedAt: new Date().toISOString(), base: BASE, commit: COMMIT, ignored: IGNORE || null, pages: list.length, variants: VARIANTS.map((v) => v.label),
     screenshots: results.length, seconds: Math.round((Date.now() - started) / 1000), totals, blocking,
     byPage: list.map(({ route, url }) => ({ route, url, issues: results.filter((r) => r.url === url).reduce((s, r) => s + r.issues.filter((i) => i.type !== "touch-target").length, 0) })),
   };

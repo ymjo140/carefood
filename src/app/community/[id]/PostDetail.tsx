@@ -68,7 +68,10 @@ export default function PostDetail() {
   const [commentText, setCommentText] = useState("");
   const [sending, setSending] = useState(false);
   const [following, setFollowing] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
   const toast = useToast();
+  const showToast = toast.show; // 안정된 함수 — effect 의존성에 toast 객체를 넣지 않는다
   const userId = useRef("");
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -79,6 +82,7 @@ export default function PostDetail() {
     if (!id) return;
     (async () => {
       setLoading(true);
+      setLoadError(false);
       try {
         const uid = getUserId();
         // 단일 게시글 조회 API
@@ -86,6 +90,7 @@ export default function PostDetail() {
           fetch(`/api/community/feed?id=${id}&user_id=${uid}`),
           fetch(`/api/community/comment?post_id=${id}`),
         ]);
+        if (!postRes.ok) throw new Error(String(postRes.status));
         const postData = await postRes.json();
         if (postData.post) {
           setPost(postData.post);
@@ -93,10 +98,13 @@ export default function PostDetail() {
         }
         const cData = await cRes.json();
         setComments(cData.comments || []);
-      } catch { /* */ }
+      } catch {
+        setLoadError(true);
+        showToast("글을 불러오지 못했어요", { tone: "danger" });
+      }
       finally { setLoading(false); }
     })();
-  }, [id]);
+  }, [id, reloadKey, showToast]);
 
   /* ── Actions ── */
   const handleLike = async () => {
@@ -123,7 +131,7 @@ export default function PostDetail() {
     if (res.ok) {
       const data = await res.json();
       setPost((p: FeedPost) => ({ ...p, copy_count: (p.copy_count || 0) + 1 }));
-      toast.show(`"${data.title || "식단"}" 식단 리스트에 담았어요`, { action: { label: "보기", href: "/weekly-box" } });
+      toast.show(`"${data.title || "식단"}" 식단 리스트에 담았어요`);
     } else {
       toast.show("식단 리스트에 담지 못했어요. 다시 시도해 주세요", { tone: "danger" });
     }
@@ -158,18 +166,31 @@ export default function PostDetail() {
         }),
       });
       const data = await res.json();
-      if (data.comment) {
-        setComments(prev => [...prev, data.comment]);
-        setPost((p: FeedPost) => ({ ...p, comment_count: (p.comment_count || 0) + 1 }));
-        setCommentText("");
-      }
-    } catch { /* */ }
+      if (!res.ok || !data.comment) throw new Error(String(res.status));
+      setComments(prev => [...prev, data.comment]);
+      setPost((p: FeedPost) => ({ ...p, comment_count: (p.comment_count || 0) + 1 }));
+      setCommentText("");
+    } catch {
+      toast.show("댓글을 남기지 못했어요. 다시 시도해 주세요", { tone: "danger" });
+    }
     finally { setSending(false); }
   };
 
 
 
   if (loading) return <PageLoading />;
+
+  if (!post && loadError) {
+    return (
+      <Page width="narrow">
+        <EmptyState
+          title="글을 불러오지 못했어요"
+          description="연결이 잠깐 끊겼을 수 있어요"
+          action={<Button size="sm" variant="secondary" icon="refresh" onClick={() => setReloadKey(k => k + 1)}>다시 불러오기</Button>}
+        />
+      </Page>
+    );
+  }
 
   if (!post) {
     return (

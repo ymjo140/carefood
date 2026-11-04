@@ -49,12 +49,12 @@ export default function AdminOrdersPage() {
   const fetchData = () => {
     setLoading(true);
     fetch(`/api/orders/purchase-orders?status=${statusFilter}`)
-      .then(r => r.json())
+      .then(r => { if (!r.ok) throw new Error(String(r.status)); return r.json(); })
       .then(data => {
         setPos(data.purchase_orders || []);
         setSummary(data.summary || {});
       })
-      .catch(() => {})
+      .catch(() => toast.show("발주 목록을 불러오지 못했어요", { tone: "danger" }))
       .finally(() => setLoading(false));
   };
 

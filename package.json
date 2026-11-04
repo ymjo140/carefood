@@ -4,13 +4,14 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "prebuild": "node scripts/ds/measure.mjs --save latest && node scripts/ds/lint.mjs --save",
+    "prebuild": "node scripts/ds/build-info.mjs && node scripts/ds/measure.mjs --save latest && node scripts/ds/lint.mjs --save",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
     "ds:lint": "node scripts/ds/lint.mjs",
     "ds:measure": "node scripts/ds/measure.mjs",
-    "ds:audit": "node scripts/ds/audit.mjs"
+    "ds:audit": "node scripts/ds/audit.mjs",
+    "ds:wiring": "node scripts/ds/wiring.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",

@@ -4,59 +4,50 @@
    새 화면은 여기 있는 값만 씁니다. 없는 게 필요하면 여기에 먼저
    추가하고, /design-system 기준 페이지에도 같이 그려 두세요.
 
-   Tailwind 기본 팔레트·그림자·글자 크기·둥글기·굵기·블러는
-   아래 @theme 에서 전부 비웠습니다. 그래서 bg-blue-500, shadow-lg,
-   text-sm, rounded-2xl 같은 기본값은 써도 화면에 칠해지지 않습니다.
+   Tailwind 기본 팔레트·그림자·글자 크기·둥글기·굵기·블러·이징·
+   애니메이션은 아래 @theme 에서 전부 비웠습니다. bg-blue-500,
+   shadow-lg, text-sm, rounded-2xl, ease-in 같은 기본값은 써도
+   화면에 나오지 않습니다.
+
+   색 원칙 (suta 기준): UI 유채색은 강조색(앰버) 하나 + 오류 빨강.
+   완료 초록은 글자로만. 영양소 4색은 데이터의 의미 색이라 따로 세고
+   숫자·막대에만 칠한다. 옅은 색 바탕은 고른 상태(brand-soft)에만.
    ════════════════════════════════════════════════════════════════ */
 
 /* ── 1. 원본 값 (라이트) ── */
 :root,
 [data-theme="light"] {
-  /* 바탕·면 — 쌀종이 톤의 따뜻한 무채색 */
+  /* 바탕·면 — 강조색 쪽으로 아주 살짝 기운 무채색 */
   --ds-canvas: #FBF8F3;
   --ds-surface: #FFFFFF;
   --ds-sunken: #F3EEE6;
   --ds-line: #E7E0D5;
   --ds-line-strong: #CFC5B6;
 
-  /* 글자 */
+  /* 글자 3단계 — 모두 흰 면·옅은 바탕 4.5 이상 */
   --ds-ink: #1F1A14;
   --ds-ink-2: #6B6157;
   --ds-ink-3: #756A5E;
 
-  /* 브랜드 — 앰버. 채운 면 위의 글자는 흰색이 아니라 먹색(on-brand) */
-  --ds-brand: #C4870A;
-  --ds-brand-hover: #B87F09;
-  --ds-brand-soft: #FAF1DC;
-  --ds-brand-ink: #8A5A00;
+  /* 브랜드 — 맑은 앰버 (OKLCH 0.74 / 0.16 / 70). 채운 면 위 글자는 먹색 */
+  --ds-brand: #EA9602;
+  --ds-brand-hover: #D98B09;
+  --ds-brand-soft: #FEF2DD;   /* 고른 칩·탭·행 바탕에만 */
+  --ds-brand-ink: #8B5500;    /* 링크·고른 상태 글자·포커스 링 */
   --ds-on-brand: #1C1305;
 
-  /* 상태 */
+  /* 상태 — 글자·아이콘으로만 (바탕 알약 없음) */
   --ds-positive: #2A7349;
-  --ds-positive-soft: #E8F3EC;
-  --ds-caution: #A34A09;
-  --ds-caution-soft: #FCEFE3;
   --ds-danger: #B83228;
-  --ds-danger-soft: #FBE9E6;
 
-  /* 영양소 — 글자로 써도 대비 4.5 이상 */
+  /* 영양소 — 데이터 의미 색. 숫자·막대·점에만 */
   --ds-protein: #2F6DAE;
-  --ds-protein-soft: #EFF4FA;
   --ds-carbs: #936200;
-  --ds-carbs-soft: #FBF5E6;
   --ds-fat: #A84B1C;
-  --ds-fat-soft: #FCF1EB;
   --ds-sodium: #7A5CB3;
-  --ds-sodium-soft: #F3EFF9;
-
-  /* 끼니 — 점·세로줄 표시 전용 (글자 색으로 쓰지 않음) */
-  --ds-meal-breakfast: #E0A030;
-  --ds-meal-lunch: #D47040;
-  --ds-meal-dinner: #6870C8;
-  --ds-meal-snack: #48A870;
 
   /* 장식 — 형광펜 하나 */
-  --ds-highlight: #F8DE8F;
+  --ds-highlight: #FFE29A;
 
   /* 겹침 */
   --ds-scrim: rgb(20 16 12 / 0.48);
@@ -74,30 +65,18 @@
     --ds-ink: #F2EBE0;
     --ds-ink-2: #B5A894;
     --ds-ink-3: #9C8F7C;
-    --ds-brand: #E8AD3F;
-    --ds-brand-hover: #F2BE5C;
-    --ds-brand-soft: #3A2E17;
-    --ds-brand-ink: #F0BD5E;
+    --ds-brand: #FCAA2B;
+    --ds-brand-hover: #FFBC5D;
+    --ds-brand-soft: #3F2C11;
+    --ds-brand-ink: #F9BA5F;
     --ds-on-brand: #1C1305;
     --ds-positive: #5CC98A;
-    --ds-positive-soft: #1F2E24;
-    --ds-caution: #F0A04B;
-    --ds-caution-soft: #3A2A17;
     --ds-danger: #F07A6E;
-    --ds-danger-soft: #3A1E1B;
     --ds-protein: #6AACF0;
-    --ds-protein-soft: #1A2633;
     --ds-carbs: #E8B840;
-    --ds-carbs-soft: #332A12;
     --ds-fat: #E88060;
-    --ds-fat-soft: #33201A;
     --ds-sodium: #A890D8;
-    --ds-sodium-soft: #262033;
-    --ds-meal-breakfast: #E8B048;
-    --ds-meal-lunch: #E08058;
-    --ds-meal-dinner: #8890E0;
-    --ds-meal-snack: #60C088;
-    --ds-highlight: #5C4714;
+    --ds-highlight: #64470E;
     --ds-scrim: rgb(0 0 0 / 0.6);
     --ds-overlay-shadow: 0 12px 32px rgb(0 0 0 / 0.5), 0 2px 6px rgb(0 0 0 / 0.3);
     color-scheme: dark;
@@ -113,30 +92,18 @@
   --ds-ink: #F2EBE0;
   --ds-ink-2: #B5A894;
   --ds-ink-3: #9C8F7C;
-  --ds-brand: #E8AD3F;
-  --ds-brand-hover: #F2BE5C;
-  --ds-brand-soft: #3A2E17;
-  --ds-brand-ink: #F0BD5E;
+  --ds-brand: #FCAA2B;
+  --ds-brand-hover: #FFBC5D;
+  --ds-brand-soft: #3F2C11;
+  --ds-brand-ink: #F9BA5F;
   --ds-on-brand: #1C1305;
   --ds-positive: #5CC98A;
-  --ds-positive-soft: #1F2E24;
-  --ds-caution: #F0A04B;
-  --ds-caution-soft: #3A2A17;
   --ds-danger: #F07A6E;
-  --ds-danger-soft: #3A1E1B;
   --ds-protein: #6AACF0;
-  --ds-protein-soft: #1A2633;
   --ds-carbs: #E8B840;
-  --ds-carbs-soft: #332A12;
   --ds-fat: #E88060;
-  --ds-fat-soft: #33201A;
   --ds-sodium: #A890D8;
-  --ds-sodium-soft: #262033;
-  --ds-meal-breakfast: #E8B048;
-  --ds-meal-lunch: #E08058;
-  --ds-meal-dinner: #8890E0;
-  --ds-meal-snack: #60C088;
-  --ds-highlight: #5C4714;
+  --ds-highlight: #64470E;
   --ds-scrim: rgb(0 0 0 / 0.6);
   --ds-overlay-shadow: 0 12px 32px rgb(0 0 0 / 0.5), 0 2px 6px rgb(0 0 0 / 0.3);
   color-scheme: dark;
@@ -154,6 +121,8 @@
   --radius-*: initial;
   --font-*: initial;
   --blur-*: initial;
+  --ease-*: initial;
+  --animate-*: initial;
 
   /* 글자 크기 5종 — caption 12 / label 14 / body 16 / title 20 / display 32 */
   --text-caption: 0.75rem;
@@ -180,6 +149,39 @@
 
   /* 그림자 1종 — 화면 위에 뜨는 것(모달·시트·토스트·메뉴)만 */
   --shadow-overlay: var(--ds-overlay-shadow);
+
+  /* ── 모션 ──────────────────────────────────────────
+     시간은 5단계만 (duration-100 / 150 / 250 / 350 / 420)
+       100  색·불투명도 상태 변화 (hover·누름·포커스)
+       150  작은 요소 등장·퇴장 (체크·토글·툴팁)
+       250  컴포넌트 전환 (탭·드롭다운·토스트)
+       350  화면 크기 이동 (시트·모달)
+       420  화면 전환·카드 확장
+     퇴장은 진입의 3/4. 움직이는 속성은 transform·opacity 뿐. */
+  --default-transition-duration: 100ms;
+  --default-transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);        /* 기본 — 들어오고 나가는 것 */
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);     /* 시트·모달 */
+  --ease-inout: cubic-bezier(0.65, 0, 0.35, 1);      /* 한 자리에서 다른 자리로 */
+  --ease-overshoot: cubic-bezier(0.34, 1.56, 0.64, 1); /* 좋아요·체크 팝 */
+
+  --animate-spin: ds-spin 0.8s linear infinite;               /* 진행에 비례 → linear 허용 */
+  --animate-skeleton: ds-skeleton 1.4s ease-in-out infinite;
+  --animate-sheet-in: ds-sheet-in 350ms var(--ease-drawer) both;
+  --animate-sheet-out: ds-sheet-out 260ms var(--ease-out) both;
+  --animate-fade-in: ds-fade-in 250ms var(--ease-out) both;
+  --animate-fade-out: ds-fade-out 190ms var(--ease-out) both;
+  --animate-rise-in: ds-rise-in 250ms var(--ease-out) both;
+  --animate-pop: ds-pop 250ms var(--ease-overshoot);
+
+  @keyframes ds-spin { to { transform: rotate(360deg); } }
+  @keyframes ds-skeleton { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+  @keyframes ds-sheet-in { from { transform: translateY(100%); } to { transform: translateY(0); } }
+  @keyframes ds-sheet-out { from { transform: translateY(0); } to { transform: translateY(100%); } }
+  @keyframes ds-fade-in { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes ds-fade-out { from { opacity: 1; } to { opacity: 0; } }
+  @keyframes ds-rise-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes ds-pop { 0% { transform: scale(1); } 45% { transform: scale(1.25); } 100% { transform: scale(1); } }
 }
 
 @theme inline {
@@ -201,23 +203,11 @@
   --color-brand-ink: var(--ds-brand-ink);
   --color-on-brand: var(--ds-on-brand);
   --color-positive: var(--ds-positive);
-  --color-positive-soft: var(--ds-positive-soft);
-  --color-caution: var(--ds-caution);
-  --color-caution-soft: var(--ds-caution-soft);
   --color-danger: var(--ds-danger);
-  --color-danger-soft: var(--ds-danger-soft);
   --color-protein: var(--ds-protein);
-  --color-protein-soft: var(--ds-protein-soft);
   --color-carbs: var(--ds-carbs);
-  --color-carbs-soft: var(--ds-carbs-soft);
   --color-fat: var(--ds-fat);
-  --color-fat-soft: var(--ds-fat-soft);
   --color-sodium: var(--ds-sodium);
-  --color-sodium-soft: var(--ds-sodium-soft);
-  --color-meal-breakfast: var(--ds-meal-breakfast);
-  --color-meal-lunch: var(--ds-meal-lunch);
-  --color-meal-dinner: var(--ds-meal-dinner);
-  --color-meal-snack: var(--ds-meal-snack);
   --color-highlight: var(--ds-highlight);
   --color-scrim: var(--ds-scrim);
 }
@@ -245,9 +235,26 @@
   &::-webkit-scrollbar { display: none; }
 }
 
+/* 누름 반응 — 누르는 순간 살짝 줄었다 놓으면 돌아온다 (suta press-feedback) */
+@utility press {
+  transition-property: transform, background-color, border-color, color, opacity;
+  transition-duration: 100ms;
+  transition-timing-function: var(--ease-out);
+  &:active:not(:disabled) { transform: scale(0.97); }
+}
+
+/* 하단 탭 바 위로 띄우기 — 떠 있는 버튼·알림 */
+:root { --ds-nav-h: 0px; }
+@media (max-width: 639.98px) {
+  html[data-bottom-nav] { --ds-nav-h: calc(56px + env(safe-area-inset-bottom)); }
+}
+@utility above-nav {
+  bottom: calc(var(--ds-nav-h, 0px) + max(1.5rem, env(safe-area-inset-bottom)));
+}
+
 /* ── 5. 기본 요소 ── */
 @layer base {
-  html { background: var(--ds-canvas); }
+  html { background: var(--ds-canvas); overflow-x: clip; }
   body {
     background: var(--ds-canvas);
     color: var(--ds-ink);
@@ -255,12 +262,15 @@
     font-size: 1rem;
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
+    overflow-x: clip;
     /* 한국어: 단어 중간에서 줄을 바꾸지 않는다 ("김하/늘" 방지) */
     word-break: keep-all;
     overflow-wrap: anywhere;
   }
+  h1, h2, h3 { text-wrap: balance; }
+  p { text-wrap: pretty; }
   :focus-visible {
-    outline: 2px solid var(--ds-brand);
+    outline: 2px solid var(--ds-brand-ink);
     outline-offset: 2px;
   }
   ::placeholder { color: var(--ds-ink-3); opacity: 1; }
@@ -268,15 +278,20 @@
   button { cursor: pointer; }
   button:disabled { cursor: not-allowed; }
 
+  /* 동작 줄이기 — 이동·확대는 끄고 짧은 페이드만 (0ms 는 transitionend 가 안 와서 1ms) */
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after {
-      animation-duration: 0.01ms !important;
-      transition-duration: 0.01ms !important;
+      transition-duration: 1ms !important;
+      scroll-behavior: auto !important;
     }
+    .animate-sheet-in, .animate-rise-in { animation: ds-fade-in 120ms ease-out both !important; }
+    .animate-sheet-out { animation: ds-fade-out 80ms ease-out both !important; }
+    .animate-pop, .animate-skeleton { animation: none !important; }
+    .press:active:not(:disabled) { transform: none; }
   }
 }
 
-/* ── 6. 네이티브 슬라이더 (맛 선호·필터) ── */
+/* ── 6. 네이티브 슬라이더·체크 (맛 선호·필터) ── */
 @layer components {
   .ds-range {
     width: 100%;

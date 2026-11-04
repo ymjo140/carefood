@@ -47,11 +47,11 @@ export default function HomeTodayWidget() {
     // 병렬로 데이터 가져오기
     Promise.all([
       // 오늘 식단
-      fetch(`/api/diary?date=${today}&user_id=${userId}`).then(r => r.json()).catch(() => null),
+      fetch(`/api/diary?date=${today}&user_id=${userId}`).then(r => r.json()).catch(() => null), // ds-allow: 위젯 일부는 없으면 숨김
       // 공구 수
-      fetch("/api/community/group-buy?status=recruiting").then(r => r.json()).catch(() => null),
+      fetch("/api/community/group-buy?status=recruiting").then(r => r.json()).catch(() => null), // ds-allow: 위젯 일부는 없으면 숨김
       // 주간 리포트 (점수만)
-      fetch(`/api/diary/report?user_id=${userId}`).then(r => r.json()).catch(() => null),
+      fetch(`/api/diary/report?user_id=${userId}`).then(r => r.json()).catch(() => null), // ds-allow: 위젯 일부는 없으면 숨김
     ]).then(([diary, groupBuys, report]) => {
       const todayEntries = diary?.entries?.length || 0;
       const todayTotals = diary?.totals || { calories: 0, protein_g: 0 };
@@ -77,7 +77,7 @@ export default function HomeTodayWidget() {
 
   const hasRecords = data.today && data.today.entries > 0;
   const score = data.weeklyScore;
-  const scoreTone = score === null ? "" : score >= 80 ? "text-positive" : score >= 40 ? "text-caution" : "text-danger";
+  const scoreTone = score === null ? "" : score >= 80 ? "text-positive" : score >= 40 ? "text-brand-ink" : "text-danger";
 
   return (
     <section className="pb-6">

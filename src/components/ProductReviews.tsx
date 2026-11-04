@@ -50,16 +50,23 @@ export default function ProductReviews({ productId }: { productId: string }) {
   });
   const [submitting, setSubmitting] = useState(false);
   const toast = useToast();
+  const showToast = toast.show; // 안정된 함수 — effect 의존성에 toast 객체를 넣지 않는다
+  const [loadError, setLoadError] = useState(false);
 
   const fetchReviews = useCallback(async () => {
+    setLoadError(false);
     try {
       const res = await fetch(`/api/reviews?product_id=${productId}`);
+      if (!res.ok) throw new Error(String(res.status));
       const data = await res.json();
       setReviews(data.reviews || []);
       setStats(data.stats || null);
-    } catch { /* silent */ }
+    } catch {
+      setLoadError(true);
+      showToast("리뷰를 불러오지 못했어요", { tone: "danger" });
+    }
     finally { setLoading(false); }
-  }, [productId]);
+  }, [productId, showToast]);
 
   useEffect(() => { fetchReviews(); }, [fetchReviews]);
 
@@ -73,9 +80,9 @@ export default function ProductReviews({ productId }: { productId: string }) {
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
       userId = user?.id || null;
-    } catch { /* */ }
+    } catch { /* */ } // ds-allow: 비로그인은 정상
     if (!userId) {
-      try { userId = localStorage.getItem("carefood_anon_id"); } catch { /* */ }
+      try { userId = localStorage.getItem("carefood_anon_id"); } catch { /* */ } // ds-allow: 로컬 ID 읽기
     }
     if (!userId) { setSubmitting(false); return; }
 
@@ -247,6 +254,9 @@ export default function ProductReviews({ productId }: { productId: string }) {
             </Card>
           ))}
         </div>
+      ) : loadError ? (
+        <EmptyState title="리뷰를 불러오지 못했어요" description="연결이 잠깐 끊겼을 수 있어요"
+          action={<Button size="sm" variant="secondary" icon="refresh" onClick={() => fetchReviews()}>다시 불러오기</Button>} />
       ) : (
         <EmptyState title="아직 리뷰가 없어요" description="이 제품을 드셔 봤다면 첫 리뷰를 남겨 주세요" />
       )}

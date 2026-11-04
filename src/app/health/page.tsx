@@ -164,7 +164,7 @@ export default function HealthPage() {
     // localStorage에도 저장 (비로그인 + 빠른 복원)
     try {
       localStorage.setItem("carefood_health", JSON.stringify({ ...numericData, conditions }));
-    } catch { /* silent */ }
+    } catch { /* silent */ } // ds-allow: 로컬 저장
 
     setSaving(false);
     router.push("/health/report");

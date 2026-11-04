@@ -31,6 +31,10 @@ const PATHS = {
   cart: "M4 5h2l2 10h10l2-7H7.2M10 19.5h.01M17 19.5h.01",
   refresh: "M19 12a7 7 0 1 1-2-4.9M19 4.5V8h-3.5",
   external: "M14 5h5v5M19 5l-8 8M17 14v5H5V7h5",
+  home: "M4 10.5L12 4l8 6.5V20h-5.5v-6h-5v6H4z",
+  list: "M9 6.5h11M9 12h11M9 17.5h11M4.5 6.5h.01M4.5 12h.01M4.5 17.5h.01",
+  notebook: "M6 4h12v16H6zM9.5 8.5h5M9.5 12h5M4 8h3M4 12h3M4 16h3",
+  feed: "M4.5 5h15v5h-15zM4.5 14h15v5h-15z",
 } as const;
 
 export type IconName = keyof typeof PATHS;

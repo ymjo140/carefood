@@ -25,7 +25,7 @@ export default function MealLogButton({ productId, productName }: { productId: s
       }
       const anonId = localStorage.getItem("carefood_anon_id");
       if (anonId) setUserId(anonId);
-    } catch { /* */ }
+    } catch { /* */ } // ds-allow: 로컬 ID 읽기
   }, []);
 
   const handleLog = async (mealType: string) => {
@@ -47,7 +47,7 @@ export default function MealLogButton({ productId, productName }: { productId: s
       if (res.ok) {
         setLogged(true);
         setShowMenu(false);
-        toast.show("식단에 기록했어요", { action: { label: "보기", href: "/diary" } });
+        toast.show("오늘 식단 기록에 넣었어요");
         setTimeout(() => setLogged(false), 3000);
       } else {
         toast.show("기록하지 못했어요. 다시 시도해 주세요", { tone: "danger" });

@@ -85,11 +85,11 @@ export function PostAction({
       aria-pressed={active}
       aria-label={count ? `${label} ${count}` : label}
       className={cn(
-        "inline-flex items-center gap-1.5 h-10 px-2.5 rounded-md text-label transition-colors",
+        "press inline-flex items-center gap-1.5 h-10 px-2.5 rounded-md text-label",
         active ? "text-brand-ink font-bold" : "text-ink-2 font-medium hover:text-ink hover:bg-sunken",
       )}
     >
-      <Icon name={icon} size={18} filled={active && icon === "heart"} />
+      <Icon key={active ? "on" : "off"} name={icon} size={18} filled={active && icon === "heart"} className={active && icon === "heart" ? "animate-pop" : undefined} />
       <span>{label}</span>
       {!!count && <span className="num">{count}</span>}
     </button>

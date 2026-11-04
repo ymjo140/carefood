@@ -3,7 +3,7 @@ import { cn } from "./cn";
 
 /**
  * 카드 — 흰 면 + 얇은 테두리. 그림자는 쓰지 않습니다.
- * 강조가 필요하면 tone="brand"(옅은 앰버 면) 하나만.
+ * 강조가 필요하면 tone="brand"(앰버 테두리) 한 곳만. 옅은 색 면은 쓰지 않습니다.
  */
 export function Card({
   padding = "md", tone = "default", interactive = false, className, children, ...rest
@@ -19,10 +19,10 @@ export function Card({
         "rounded-lg border",
         tone === "default" && "bg-surface border-line",
         tone === "sunken" && "bg-sunken border-transparent",
-        tone === "brand" && "bg-brand-soft border-transparent",
+        tone === "brand" && "bg-surface border-brand",
         padding === "sm" && "p-3",
         padding === "md" && "p-4",
-        interactive && "transition-colors hover:border-line-strong cursor-pointer",
+        interactive && "press hover:border-line-strong cursor-pointer",
         className,
       )}
       {...rest}

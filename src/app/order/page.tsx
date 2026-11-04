@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Button, Card, EmptyState, Field, Icon, Input, LinkButton, Page, PageHeader, PageLoading, Price, TextLink } from "@/components/ui";
+import { Button, Card, EmptyState, Field, Icon, Input, LinkButton, Page, PageHeader, PageLoading, Price, TextLink, useToast } from "@/components/ui";
 
 /**
  * 주문 요약 페이지
@@ -57,6 +57,7 @@ function getUserId(): string {
 }
 
 export default function OrderPage() {
+  const toast = useToast();
   const [items, setItems] = useState<BoxItem[]>([]);
   const [groups, setGroups] = useState<ServiceGroup[]>([]);
   const [loading, setLoading] = useState(true);
@@ -99,7 +100,7 @@ export default function OrderPage() {
 
         setGroups(grouped);
       }
-    } catch { /* */ }
+    } catch { /* */ } // ds-allow: 로컬 주문 목록 읽기
     setLoading(false);
   }, []);
 
@@ -132,11 +133,12 @@ export default function OrderPage() {
         }),
       });
       const data = await res.json();
-      if (data.order) {
-        setOrderResult(data.order);
-        localStorage.removeItem("carefood_order_items");
-      }
-    } catch { /* */ }
+      if (!res.ok || !data.order) throw new Error(String(res.status));
+      setOrderResult(data.order);
+      localStorage.removeItem("carefood_order_items");
+    } catch {
+      toast.show("주문을 접수하지 못했어요. 다시 시도해 주세요", { tone: "danger" });
+    }
     finally { setOrdering(false); }
   };
 
@@ -147,7 +149,7 @@ export default function OrderPage() {
     return (
       <Page width="narrow">
         <div className="min-h-[50vh] flex flex-col items-center justify-center text-center gap-2">
-          <span className="size-12 rounded-full bg-positive-soft text-positive flex items-center justify-center mb-2">
+          <span className="size-12 rounded-full bg-sunken text-positive flex items-center justify-center mb-2">
             <Icon name="check" size={24} />
           </span>
           <h1 className="text-title font-bold text-ink">주문을 접수했어요</h1>

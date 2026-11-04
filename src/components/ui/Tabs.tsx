@@ -35,7 +35,7 @@ export function Tabs<T extends string>({
             aria-selected={active}
             onClick={() => onChange(it.value)}
             className={cn(
-              "inline-flex items-center justify-center gap-1 whitespace-nowrap transition-colors shrink-0",
+              "press inline-flex items-center justify-center gap-1 whitespace-nowrap shrink-0",
               variant === "pill" && "h-9 px-4 rounded-full text-label",
               variant === "pill" && (active ? "bg-ink text-canvas font-bold" : "text-ink-2 font-medium hover:bg-sunken hover:text-ink"),
               variant === "line" && "flex-1 h-11 px-2 text-label border-b-2 -mb-px",

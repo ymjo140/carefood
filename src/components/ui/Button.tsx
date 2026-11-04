@@ -13,14 +13,14 @@ export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
 export type ButtonSize = "sm" | "md";
 
 const base =
-  "inline-flex items-center justify-center gap-1.5 rounded-md font-bold whitespace-nowrap transition-colors " +
+  "press inline-flex items-center justify-center gap-1.5 rounded-md font-bold whitespace-nowrap " +
   "disabled:opacity-40 disabled:pointer-events-none select-none";
 
 const variants: Record<ButtonVariant, string> = {
   primary: "bg-brand text-on-brand hover:bg-brand-hover",
   secondary: "bg-surface text-ink border border-line hover:border-line-strong",
   ghost: "text-ink-2 hover:text-ink hover:bg-sunken",
-  danger: "bg-danger-soft text-danger hover:bg-danger hover:text-surface",
+  danger: "bg-surface text-danger border border-line hover:border-danger",
 };
 
 const sizes: Record<ButtonSize, string> = {
@@ -93,7 +93,7 @@ export function IconButton({
       aria-label={label}
       title={label}
       className={cn(
-        "inline-flex items-center justify-center rounded-full transition-colors shrink-0",
+        "press inline-flex items-center justify-center rounded-full shrink-0",
         size === "sm" ? "size-9" : "size-11",
         tone === "secondary" ? "bg-surface border border-line" : "",
         active ? "text-brand-ink" : "text-ink-2 hover:text-ink hover:bg-sunken",
@@ -101,7 +101,8 @@ export function IconButton({
       )}
       {...rest}
     >
-      <Icon name={icon} size={size === "sm" ? 18 : 20} filled={active && (icon === "heart" || icon === "bookmark")} />
+      <Icon key={active ? "on" : "off"} name={icon} size={size === "sm" ? 18 : 20} filled={active && (icon === "heart" || icon === "bookmark")}
+        className={active && icon === "heart" ? "animate-pop" : undefined} />
     </button>
   );
 }

@@ -6,7 +6,7 @@ import {
   Input, Kcal, LinkButton, ListRow, MacroGrid, MacroInline, MealSlot, MealTag, Notice, Page, PageHeader, Price,
   ProgressBar, SearchField, SectionHeader, Select, Sheet, Spinner, Stat, Steps, Tabs, Textarea, TextLink, Thumb,
   Avatar, useToast, cn, type BadgeTone,
-  ChoiceCard, ChoiceList, LinkTabs, RatingStars, RatingInput, ScaleInput, PostAuthor, PostAction, PostActions, PostTags,
+  BottomNavItems, SkeletonList, ChoiceCard, ChoiceList, LinkTabs, RatingStars, RatingInput, ScaleInput, PostAuthor, PostAction, PostActions, PostTags,
 } from "@/components/ui";
 
 /* ════════════════════════════════════════════════════════════
@@ -19,18 +19,23 @@ export type DsStatus = {
   measuredAt: string;
   baselineAt: string;
   files: number;
+  build: { builtAt: string; sha: string; message: string; branch: string; env: string };
   total: number;
+  warnTotal: number;
   allowedCount: number;
-  rules: { id: string; message: string; count: number }[];
+  rules: { id: string; level?: string; message: string; count: number }[];
   topFiles: [string, number][];
-  sample: { file: string; line: number; rule: string; match: string }[];
+  sample: { file: string; line: number; rule: string; level?: string; match: string }[];
   allowed: { file: string; line: number; rule: string; snippet: string }[];
   metrics: { label: string; before: number; after: number }[];
   audit: {
-    auditedAt: string; base: string; pages: number; variants: string[]; screenshots: number; blocking: number;
+    auditedAt: string; base: string; commit: string | null; pages: number; variants: string[]; screenshots: number; blocking: number;
     totals: Record<string, number>; byPage: { route: string; url: string; issues: number }[];
   };
 };
+
+const REPO = "https://github.com/ymjo140/carefood";
+const AUDIT_RUNS = `${REPO}/actions/workflows/design-system.yml`;
 
 const AUDIT_LABELS: Record<string, string> = {
   error: "화면 오류·실패 요청", overflow: "가로 넘침", "off-color": "기준 밖 색", contrast: "흐린 글자",
@@ -42,17 +47,18 @@ type ColorSpec = { token: string; usage: string; on?: string; kind?: "text" | "f
 const COLOR_GROUPS: { title: string; note?: string; items: ColorSpec[] }[] = [
   {
     title: "바탕 · 면",
+    note: "면은 두 단계(흰 면 + 옅은 바탕). 앰버 쪽으로 아주 살짝 기운 무채색",
     items: [
       { token: "canvas", usage: "페이지 바탕", kind: "fill" },
       { token: "surface", usage: "카드 · 시트 · 입력창", kind: "fill" },
-      { token: "sunken", usage: "칩 · 빈 칸 · 옅은 구역", kind: "fill" },
+      { token: "sunken", usage: "칩 · 빈 칸 · 안내 상자 · 영양 타일", kind: "fill" },
       { token: "line", usage: "테두리 · 구분선", kind: "fill" },
       { token: "line-strong", usage: "마우스를 올린 테두리", kind: "fill" },
     ],
   },
   {
     title: "글자",
-    note: "본문 대비 4.5 이상. 회색 글자도 예외 없음",
+    note: "세 단계만. 모두 대비 4.5 이상",
     items: [
       { token: "ink", usage: "제목 · 본문", on: "surface" },
       { token: "ink-2", usage: "보조 설명", on: "surface" },
@@ -60,43 +66,32 @@ const COLOR_GROUPS: { title: string; note?: string; items: ColorSpec[] }[] = [
     ],
   },
   {
-    title: "브랜드 (앰버)",
-    note: "채운 앰버 위 글자는 흰색이 아니라 먹색(on-brand). 흰 글자는 대비 3.1로 미달",
+    title: "강조색 (맑은 앰버)",
+    note: "OKLCH 밝기 0.74 · 채도 0.16. 채운 면은 주 버튼 한 곳, 같은 색을 고른 상태·링크·핵심 숫자에 약하게 이어 씀. 앰버 위 글자는 먹색",
     items: [
-      { token: "brand", usage: "주 버튼 면 · 진행 막대 · 선택 테두리", kind: "fill" },
+      { token: "brand", usage: "주 버튼 면 · 진행 막대 · 고른 테두리", kind: "fill" },
       { token: "brand-hover", usage: "주 버튼에 마우스를 올렸을 때", kind: "fill" },
-      { token: "brand-soft", usage: "고른 칩 바탕 · 강조 카드", kind: "fill" },
-      { token: "brand-ink", usage: "링크 · 앰버 색 글자", on: "surface" },
+      { token: "brand-soft", usage: "고른 칩·탭·선택지 바탕 (옅은 색 면은 여기만)", kind: "fill" },
+      { token: "brand-ink", usage: "링크 · 고른 상태 글자 · 포커스 링", on: "surface" },
       { token: "on-brand", usage: "주 버튼 글자", on: "brand" },
     ],
   },
   {
     title: "상태",
-    note: "같은 의미는 어느 화면에서든 같은 색",
+    note: "글자·아이콘으로만. 색 알약·색 상자 없음. 주의는 색 대신 경고 아이콘 모양으로",
     items: [
-      { token: "positive", usage: "적합 · 완료 · 목표 달성", on: "positive-soft" },
-      { token: "caution", usage: "주의 · 확인 필요 · 대기", on: "caution-soft" },
-      { token: "danger", usage: "알레르기 경고 · 삭제 · 오류", on: "danger-soft" },
+      { token: "positive", usage: "적합 · 완료 · 목표 달성", on: "surface" },
+      { token: "danger", usage: "알레르기 경고 · 삭제 · 오류", on: "sunken" },
     ],
   },
   {
-    title: "영양소",
-    note: "단백질·탄수화물·지방·나트륨은 전 화면 같은 색. 옅은 바탕 위 글자로도 대비 4.5 이상",
+    title: "영양소 (데이터 색)",
+    note: "UI 색과 따로 센다. 숫자 · 막대 · 점에만 칠하고 바탕에는 쓰지 않음",
     items: [
-      { token: "protein", usage: "단백질", on: "protein-soft" },
-      { token: "carbs", usage: "탄수화물", on: "carbs-soft" },
-      { token: "fat", usage: "지방", on: "fat-soft" },
-      { token: "sodium", usage: "나트륨", on: "sodium-soft" },
-    ],
-  },
-  {
-    title: "끼니",
-    note: "점 · 왼쪽 세로줄 전용. 끼니 이름 글자와 항상 같이 써서 색에만 의존하지 않음",
-    items: [
-      { token: "meal-breakfast", usage: "아침", kind: "deco" },
-      { token: "meal-lunch", usage: "점심", kind: "deco" },
-      { token: "meal-dinner", usage: "저녁", kind: "deco" },
-      { token: "meal-snack", usage: "간식", kind: "deco" },
+      { token: "protein", usage: "단백질", on: "sunken" },
+      { token: "carbs", usage: "탄수화물", on: "sunken" },
+      { token: "fat", usage: "지방", on: "sunken" },
+      { token: "sodium", usage: "나트륨", on: "sunken" },
     ],
   },
   {
@@ -123,23 +118,11 @@ const BG: Record<string, string> = {
   "brand-ink": "bg-brand-ink",
   "on-brand": "bg-on-brand",
   "positive": "bg-positive",
-  "positive-soft": "bg-positive-soft",
-  "caution": "bg-caution",
-  "caution-soft": "bg-caution-soft",
   "danger": "bg-danger",
-  "danger-soft": "bg-danger-soft",
   "protein": "bg-protein",
-  "protein-soft": "bg-protein-soft",
   "carbs": "bg-carbs",
-  "carbs-soft": "bg-carbs-soft",
   "fat": "bg-fat",
-  "fat-soft": "bg-fat-soft",
   "sodium": "bg-sodium",
-  "sodium-soft": "bg-sodium-soft",
-  "meal-breakfast": "bg-meal-breakfast",
-  "meal-lunch": "bg-meal-lunch",
-  "meal-dinner": "bg-meal-dinner",
-  "meal-snack": "bg-meal-snack",
   "highlight": "bg-highlight",
   "scrim": "bg-scrim",
 };
@@ -158,27 +141,15 @@ const TX: Record<string, string> = {
   "brand-ink": "text-brand-ink",
   "on-brand": "text-on-brand",
   "positive": "text-positive",
-  "positive-soft": "text-positive-soft",
-  "caution": "text-caution",
-  "caution-soft": "text-caution-soft",
   "danger": "text-danger",
-  "danger-soft": "text-danger-soft",
   "protein": "text-protein",
-  "protein-soft": "text-protein-soft",
   "carbs": "text-carbs",
-  "carbs-soft": "text-carbs-soft",
   "fat": "text-fat",
-  "fat-soft": "text-fat-soft",
   "sodium": "text-sodium",
-  "sodium-soft": "text-sodium-soft",
-  "meal-breakfast": "text-meal-breakfast",
-  "meal-lunch": "text-meal-lunch",
-  "meal-dinner": "text-meal-dinner",
-  "meal-snack": "text-meal-snack",
   "highlight": "text-highlight",
   "scrim": "text-scrim",
 };
-const ALL_TOKENS = COLOR_GROUPS.flatMap((g) => g.items.map((i) => i.token)).concat(["protein-soft", "carbs-soft", "fat-soft", "sodium-soft", "positive-soft", "caution-soft", "danger-soft"]);
+const ALL_TOKENS = COLOR_GROUPS.flatMap((g) => g.items.map((i) => i.token));
 
 /* ── 대비 계산 ── */
 function parseColor(v: string): [number, number, number] | null {
@@ -204,9 +175,9 @@ function contrast(a: string, b: string) {
 
 /* ── 섹션 ── */
 const SECTIONS = [
-  ["status", "검사 현황"], ["colors", "색"], ["type", "글자"], ["shape", "모양"], ["buttons", "버튼"],
+  ["status", "검사 현황"], ["colors", "색"], ["type", "글자"], ["shape", "모양"], ["motion", "모션"], ["buttons", "버튼"],
   ["icons", "아이콘"], ["labels", "배지·칩·탭"], ["inputs", "입력"], ["cards", "카드·목록"],
-  ["nutrition", "영양"], ["meals", "끼니"], ["feedback", "안내·빈 상태"], ["overlays", "시트·알림"], ["rules", "규칙"],
+  ["nutrition", "영양"], ["meals", "끼니"], ["feedback", "안내·빈 상태"], ["bottom-nav", "탭 바"], ["overlays", "시트·알림"], ["rules", "규칙"],
 ] as const;
 
 function Section({ id, title, description, children }: { id: string; title: string; description?: ReactNode; children: ReactNode }) {
@@ -284,23 +255,40 @@ export default function Reference({ status }: { status: DsStatus }) {
 
       {/* ───────────── 검사 현황 ───────────── */}
       <Section id="status" title="기준 지키기 현황"
-        description={<>빌드할 때마다 <Code>scripts/ds/lint.mjs</Code> 와 <Code>measure.mjs</Code> 가 다시 셉니다 · 마지막 검사 {new Date(status.checkedAt).toLocaleString("ko-KR")}</>}>
+        description={<>배포할 때마다 <Code>scripts/ds/lint.mjs</Code> 와 <Code>measure.mjs</Code> 가 다시 셉니다 · 마지막 검사 {new Date(status.checkedAt).toLocaleString("ko-KR")}</>}>
+        <Card className="mb-4">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <p className="text-label font-bold text-ink">이 페이지가 보여 주는 배포</p>
+            <Badge tone={status.build.env === "production" ? "brand" : "neutral"}>{status.build.env === "production" ? "운영" : status.build.env === "preview" ? "미리보기" : "로컬"}</Badge>
+          </div>
+          <p className="text-label text-ink mt-1 break-all">
+            <a href={`${REPO}/commit/${status.build.sha}`} target="_blank" rel="noreferrer" className="font-mono text-brand-ink underline-offset-4 hover:underline">{status.build.sha.slice(0, 7)}</a>
+            {" "}{status.build.message}
+          </p>
+          <p className="text-caption text-ink-2 mt-0.5">{status.build.branch} · {new Date(status.build.builtAt).toLocaleString("ko-KR")} 빌드</p>
+          <p className="text-caption text-ink-3 mt-2">코드를 바꿔 배포하면 이 커밋과 아래 숫자가 바뀝니다. 숫자가 그대로면 아직 배포가 끝나지 않은 겁니다.</p>
+        </Card>
         <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
           <Card tone={passed ? "default" : "default"}>
             <div className="flex items-center gap-2 mb-3">
               <Badge tone={passed ? "positive" : "danger"}>{passed ? "통과" : "위반 있음"}</Badge>
               <span className="text-caption text-ink-2">화면 코드 {status.files}개 파일</span>
             </div>
-            <Stat size="lg" emphasis label="기준 밖 값 (정적 검사 위반)" value={status.total.toLocaleString()} unit="건" />
-            <p className="text-caption text-ink-2 mt-2">예외로 허용한 줄(<Code>ds-allow</Code>) {status.allowedCount}건</p>
-            <div className="mt-4 flex flex-col gap-1.5">
-              {status.rules.map((r) => (
-                <div key={r.id} className="flex items-center justify-between gap-3 text-caption">
-                  <span className={cn("min-w-0", r.count ? "text-ink" : "text-ink-3")}>{r.message.split(" →")[0]}</span>
-                  <span className={cn("num font-bold shrink-0", r.count ? "text-danger" : "text-positive")}>{r.count}</span>
+            <Stat size="lg" emphasis label="기준 밖 값 (정적 검사 오류)" value={status.total.toLocaleString()} unit="건" />
+            <p className="text-caption text-ink-2 mt-2">경고 {status.warnTotal}건 · 예외로 허용한 줄(<Code>ds-allow</Code>) {status.allowedCount}건</p>
+            {(["error", "warn"] as const).map((lvl) => (
+              <div key={lvl} className="mt-4">
+                <p className="text-caption font-bold text-ink-2 mb-1.5">{lvl === "error" ? "오류 — 고쳐야 배포" : "경고 — 판단이 필요한 것"}</p>
+                <div className="flex flex-col gap-1.5">
+                  {status.rules.filter((r) => (r.level ?? "error") === lvl).map((r) => (
+                    <div key={r.id} className="flex items-center justify-between gap-3 text-caption">
+                      <span className={cn("min-w-0", r.count ? "text-ink" : "text-ink-3")}>{r.message.split(" →")[0]}</span>
+                      <span className={cn("num font-bold shrink-0", !r.count ? "text-positive" : lvl === "error" ? "text-danger" : "text-ink")}>{r.count}</span>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              </div>
+            ))}
           </Card>
 
           <Card>
@@ -329,7 +317,7 @@ export default function Reference({ status }: { status: DsStatus }) {
           </Card>
         </div>
 
-        {!passed && (
+        {(!passed || status.warnTotal > 0) && (
           <div className="grid gap-4 md:grid-cols-2 mt-4">
             <Card>
               <p className="text-label font-bold text-ink mb-2">위반이 많은 파일</p>
@@ -345,7 +333,7 @@ export default function Reference({ status }: { status: DsStatus }) {
               {status.sample.map((v, i) => (
                 <div key={i} className="py-1 text-caption">
                   <span className="font-mono text-ink-2 break-all">{v.file}:{v.line}</span>{" "}
-                  <Badge tone="danger">{v.rule}</Badge> <Code>{v.match}</Code>
+                  <Badge tone={v.level === "warn" ? "caution" : "danger"}>{v.rule}</Badge> <Code>{v.match}</Code>
                 </div>
               ))}
             </Card>
@@ -354,13 +342,17 @@ export default function Reference({ status }: { status: DsStatus }) {
 
         {status.allowed.length > 0 && (
           <Card className="mt-4">
-            <p className="text-label font-bold text-ink mb-2">예외로 허용한 줄</p>
-            {status.allowed.map((v, i) => (
-              <div key={i} className="py-1 text-caption">
-                <span className="font-mono text-ink-2 break-all">{v.file}:{v.line}</span> <Badge>{v.rule}</Badge>
-                <div className="font-mono text-ink-3 break-all">{v.snippet}</div>
+            <details>
+              <summary className="cursor-pointer text-label font-bold text-ink">예외로 허용한 줄 <span className="num">{status.allowedCount}</span>건 — 줄마다 이유가 적혀 있어요</summary>
+              <div className="mt-2">
+                {status.allowed.map((v, i) => (
+                  <div key={i} className="py-1.5 text-caption border-b border-line last:border-0">
+                    <span className="font-mono text-ink-2 break-all">{v.file}:{v.line}</span> <Badge>{v.rule}</Badge>
+                    <div className="font-mono text-ink-3 whitespace-pre overflow-x-auto mt-0.5">{v.snippet}</div>
+                  </div>
+                ))}
               </div>
-            ))}
+            </details>
           </Card>
         )}
 
@@ -369,15 +361,22 @@ export default function Reference({ status }: { status: DsStatus }) {
             <p className="text-label font-bold text-ink">화면 자동 검사</p>
             <Badge tone={status.audit.blocking === 0 ? "positive" : "danger"}>{status.audit.blocking === 0 ? "통과" : `문제 ${status.audit.blocking}건`}</Badge>
           </div>
-          <p className="text-caption text-ink-2 mb-3">
-            {new Date(status.audit.auditedAt).toLocaleString("ko-KR")} · 페이지 {status.audit.pages}개 × {status.audit.variants.join(" / ")} = 스크린샷 {status.audit.screenshots}장 · {status.audit.base}
+          <p className="text-caption text-ink-2 mb-1">
+            {new Date(status.audit.auditedAt).toLocaleString("ko-KR")} · 페이지 {status.audit.pages}개 × {status.audit.variants.join(" / ")} = 스크린샷 {status.audit.screenshots}장
+            {status.audit.commit && <> · 커밋 <span className="font-mono">{status.audit.commit.slice(0, 7)}</span></>}
           </p>
+          {status.audit.commit && status.audit.commit !== status.build.sha && (
+            <p className="text-caption text-ink-2 mb-3 flex items-center gap-1"><Icon name="info" size={14} />이 숫자는 이전 커밋 기준이에요. 이번 배포의 화면 검사는 아래 리포트에서 확인하세요.</p>
+          )}
+          <div className="mb-3">
+            <LinkButton href={AUDIT_RUNS} target="_blank" rel="noreferrer" size="sm" variant="secondary" iconRight="external">배포별 화면 검사 리포트 보기</LinkButton>
+          </div>
           <div className="grid gap-2 grid-cols-2 sm:grid-cols-4 lg:grid-cols-7">
             {Object.entries(AUDIT_LABELS).map(([k, label]) => {
               const n = status.audit.totals[k] || 0;
               return (
                 <div key={k} className="rounded-md bg-sunken p-2.5 flex flex-col gap-0.5 min-w-0">
-                  <span className={cn("num text-title font-bold", n === 0 ? "text-positive" : k === "touch-target" ? "text-caution" : "text-danger")}>{n}</span>
+                  <span className={cn("num text-title font-bold", n === 0 ? "text-positive" : k === "touch-target" ? "text-ink" : "text-danger")}>{n}</span>
                   <span className="text-caption text-ink-2">{label}</span>
                 </div>
               );
@@ -391,7 +390,7 @@ export default function Reference({ status }: { status: DsStatus }) {
             </div>
           )}
           <p className="text-caption text-ink-3 mt-3">
-            <Code>npm run ds:audit</Code> 로 다시 검사하면 스크린샷이 든 리포트가 ds-audit/report 에 생깁니다. 배포가 끝날 때마다 GitHub Actions 에서도 돌아갑니다. 잴 수 없는 것(여백이 어색한지, 누를 수 있어 보이는지)은 스크린샷을 사람이 봐야 합니다.
+            배포가 끝나면 GitHub Actions 가 전 페이지를 데스크톱·모바일·모바일 다크로 찍어 검사하고, 실행 화면 아래 <b>ds-audit-report</b> 묶음에 스크린샷 리포트를 올립니다. 직접 돌리려면 <Code>npm run ds:audit</Code>. 잴 수 없는 것(여백이 어색한지, 누를 수 있어 보이는지)은 스크린샷을 사람이 봐야 합니다.
           </p>
         </Card>
       </Section>
@@ -466,6 +465,64 @@ export default function Reference({ status }: { status: DsStatus }) {
         </div>
       </Section>
 
+      {/* ───────────── 모션 ───────────── */}
+      <Section id="motion" title="모션" description="모션은 무슨 일이 일어났는지 알릴 때만. 움직이는 속성은 transform · opacity 뿐 (suta motion-principles)">
+        <div className="overflow-x-auto rounded-lg border border-line bg-surface mb-4">
+          <table className="w-full min-w-[620px] text-label">
+            <thead>
+              <tr className="text-caption text-ink-2 text-left border-b border-line">
+                <th className="px-3 py-2 font-medium">무엇이 움직이나</th>
+                <th className="px-3 py-2 font-medium">시간</th>
+                <th className="px-3 py-2 font-medium">이징</th>
+                <th className="px-3 py-2 font-medium">클래스</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[
+                ["색·불투명도 상태 변화 (마우스 올림·누름·포커스)", "100ms", "ease-out", "press · transition-colors"],
+                ["작은 요소 등장·퇴장 (체크·토글)", "150ms", "ease-out", "duration-150"],
+                ["컴포넌트 전환 (탭·토스트·드롭다운)", "250ms", "ease-out", "animate-rise-in · animate-fade-in"],
+                ["화면 크기 이동 (시트·모달)", "350ms · 나갈 때 260", "ease-drawer", "animate-sheet-in / -out"],
+                ["화면 전환·막대 채우기", "420ms", "ease-out", "duration-420"],
+                ["살짝 넘쳤다 돌아옴 (좋아요)", "250ms", "ease-overshoot", "animate-pop"],
+                ["불러오는 자리", "1.4s 반복", "ease-in-out", "animate-skeleton"],
+              ].map(([what, dur, ease, cls]) => (
+                <tr key={what} className="border-b border-line last:border-0">
+                  <td className="px-3 py-2.5 text-ink">{what}</td>
+                  <td className="px-3 py-2.5 num text-ink-2 whitespace-nowrap">{dur}</td>
+                  <td className="px-3 py-2.5 font-mono text-caption text-ink-2">{ease}</td>
+                  <td className="px-3 py-2.5"><Code>{cls}</Code></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="grid gap-4 md:grid-cols-3">
+          <Demo label="누름 반응 — 누르는 순간 0.97배" code='className="press"'>
+            <div className="flex gap-2 flex-wrap">
+              <Button>눌러 보기</Button>
+              <Chip>칩도 같음</Chip>
+            </div>
+          </Demo>
+          <Demo label="좋아요 — 한 번 튀고 멈춤" code="<IconButton active /> → animate-pop">
+            <div className="flex items-center gap-2">
+              <IconButton icon="heart" label={liked ? "좋아요 취소" : "좋아요"} active={liked} onClick={() => setLiked((v) => !v)} />
+              <span className="text-label text-ink-2">눌러 보세요</span>
+            </div>
+          </Demo>
+          <Demo label="불러오는 자리 — 스피너 대신 모양을 먼저" code="<SkeletonList rows />">
+            <SkeletonList rows={2} />
+          </Demo>
+        </div>
+        <Notice className="mt-4" title="동작 줄이기 설정을 켠 사람에게는">
+          이동·확대를 끄고 짧은 페이드만 남깁니다(시트는 0.12초 페이드, 좋아요·스켈레톤은 멈춤). 기기 설정에서 동작 줄이기를 켜고 이 페이지에서 시트를 열어 확인할 수 있어요.
+        </Notice>
+        <Card className="mt-4">
+          <p className="text-label font-bold text-ink mb-1">쓰지 않는 것</p>
+          <p className="text-label text-ink-2">transition-all · 크기(width·height·top·margin)를 움직이는 애니메이션 · 위 다섯 단계 밖의 시간 · ease-in · 장식용 무한 반복 · 목록을 하나씩 늦게 등장시키기</p>
+        </Card>
+      </Section>
+
       {/* ───────────── 버튼 ───────────── */}
       <Section id="buttons" title="버튼" description="문구는 동작으로. 한 화면에 주 버튼은 하나">
         <div className="grid gap-4 md:grid-cols-2">
@@ -537,11 +594,11 @@ export default function Reference({ status }: { status: DsStatus }) {
       {/* ───────────── 배지·칩·탭 ───────────── */}
       <Section id="labels" title="배지 · 칩 · 탭" description="배지는 누를 수 없는 라벨, 칩은 눌러서 고르는 것, 탭은 보기 전환">
         <div className="grid gap-4 md:grid-cols-2">
-          <Demo label="배지 — tone 은 의미로 고릅니다" code='<Badge tone="caution">'>
+          <Demo label="배지 — 색 알약 없이 옅은 테두리 + 글자색. 주의는 경고 아이콘으로" code='<Badge tone="caution">'>
             <div className="flex flex-col gap-2">
               {([
                 ["neutral", "분류", "간편식"], ["brand", "출처 · 우리 서비스", "따라하기"], ["positive", "적합 · 완료", "목표 달성"],
-                ["caution", "주의 · 대기", "나트륨 높음"], ["danger", "경고", "알레르기 성분"], ["protein", "영양소", "고단백"],
+                ["caution", "주의 · 대기 (아이콘)", "나트륨 높음"], ["danger", "경고", "알레르기 성분"], ["protein", "영양소", "고단백"],
               ] as [BadgeTone, string, string][]).map(([t, meaning, text]) => (
                 <div key={t} className="flex items-center gap-3">
                   <span className="w-24 shrink-0"><Badge tone={t}>{text}</Badge></span>
@@ -659,7 +716,7 @@ export default function Reference({ status }: { status: DsStatus }) {
             <PostActions>
               <PostAction icon="heart" label="좋아요" count={liked ? 25 : 24} active={liked} onClick={() => setLiked((v) => !v)} />
               <PostAction icon="message" label="댓글" count={3} />
-              <PostAction icon="copy" label="따라하기" count={4} onClick={() => toast.show("식단 리스트에 담았어요", { action: { label: "보기", href: "#cards" } })} />
+              <PostAction icon="copy" label="따라하기" count={4} onClick={() => toast.show("식단 리스트에 담았어요")} />
             </PostActions>
           </Demo>
         </div>
@@ -692,7 +749,7 @@ export default function Reference({ status }: { status: DsStatus }) {
       </Section>
 
       {/* ───────────── 끼니 ───────────── */}
-      <Section id="meals" title="끼니" description="색은 점과 세로줄로만. 비어 있는 칸은 점선">
+      <Section id="meals" title="끼니" description="색을 쓰지 않고 글자로 구분. 비어 있는 칸은 점선">
         <div className="grid gap-4 md:grid-cols-2">
           <Demo label="끼니 라벨" code='<MealTag meal="lunch" />'>
             <div className="flex flex-wrap gap-4">{["breakfast", "lunch", "dinner", "snack"].map((m) => <MealTag key={m} meal={m} />)}</div>
@@ -728,13 +785,22 @@ export default function Reference({ status }: { status: DsStatus }) {
         </div>
       </Section>
 
+      {/* ───────────── 하단 탭 바 ───────────── */}
+      <Section id="bottom-nav" title="하단 탭 바" description="휴대폰(640px 미만)에서 탭의 첫 화면에만. 상세·작성 화면과 하단 고정 바가 있는 화면에서는 숨김. 입력 중에도 숨김">
+        <div className="max-w-[390px] rounded-lg border border-line bg-surface overflow-hidden">
+          <div className="h-24 bg-canvas flex items-center justify-center text-caption text-ink-3">화면 내용</div>
+          <div className="border-t border-line"><BottomNavItems current="/weekly-box" /></div>
+        </div>
+        <p className="text-caption text-ink-2 mt-2"><Code>{"<BottomNav />"}</Code> 는 레이아웃에 한 번만 둡니다. 떠 있는 버튼·알림은 <Code>above-nav</Code> 로 탭 바 위에 뜹니다. 주 행동이 있는 화면은 <Code>{"<BottomBar>"}</Code> 를 쓰면 탭 바가 알아서 물러납니다.</p>
+      </Section>
+
       {/* ───────────── 시트·알림 ───────────── */}
       <Section id="overlays" title="시트 · 확인창 · 완료 알림" description="모달·확인창·알림은 이 세 가지로만. window.alert / confirm 쓰지 않음">
         <div className="flex flex-wrap gap-2">
           <Button variant="secondary" onClick={() => setSheetOpen(true)}>시트 열기</Button>
           <Button variant="secondary" onClick={() => setConfirmOpen(true)}>확인창 열기</Button>
           <Button variant="secondary" onClick={() => toast.show("식단을 저장했어요")}>완료 알림</Button>
-          <Button variant="secondary" onClick={() => toast.show("식단 리스트에 담았어요", { action: { label: "보기", href: "#overlays" } })}>이동 있는 알림</Button>
+          <Button variant="secondary" onClick={() => toast.show("식단 리스트에 담았어요. 아래 식단 탭에서 볼 수 있어요")}>어디로 갔는지 알리는 알림</Button>
           <Button variant="secondary" onClick={() => toast.show("저장하지 못했어요. 다시 시도해 주세요", { tone: "danger" })}>실패 알림</Button>
         </div>
         <Sheet open={sheetOpen} onClose={() => setSheetOpen(false)} title="어느 요일에 넣을까요?" description="건강한사자12의 점심 · 3가지 음식"
@@ -757,7 +823,7 @@ export default function Reference({ status }: { status: DsStatus }) {
                 "모든 페이지는 <Page> 로 감싼다 (넓은 화면에서 가운데 정렬)",
                 "숫자는 num, 핵심 숫자 하나에만 형광펜",
                 "버튼은 동작(저장하기), 완료 알림은 과거형(저장했어요)",
-                "같은 의미는 같은 색 — 주의는 caution, 경고는 danger",
+                "UI 유채색은 앰버 하나 + 오류 빨강. 완료 초록은 글자로만, 영양소 4색은 숫자·막대에만",
               ].map((t) => <li key={t} className="flex gap-2"><Icon name="check" size={16} className="text-positive shrink-0 mt-0.5" />{t}</li>)}
             </ul>
           </Card>

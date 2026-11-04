@@ -37,7 +37,7 @@ export default function AllergenWarning({ productName }: { productName: string }
         }
       }
       setWarnings(matched);
-    } catch { /* ignore */ }
+    } catch { /* ignore */ } // ds-allow: 로컬 프로필 읽기
   }, [productName]);
 
   if (warnings.length === 0) return null;

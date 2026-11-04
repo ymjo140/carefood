@@ -41,8 +41,8 @@ export default function TrackableLink({
         }),
         // keepalive로 페이지 이탈 후에도 전송 보장
         keepalive: true,
-      }).catch(() => { /* 트래킹 실패는 무시 */ });
-    } catch { /* */ }
+      }).catch(() => { /* 트래킹 실패는 무시 */ }); // ds-allow: 클릭 추적 실패는 알리지 않음
+    } catch { /* */ } // ds-allow: 클릭 추적 실패는 알리지 않음
   };
 
   return (

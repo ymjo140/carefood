@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import {
-  Badge, Card, EmptyState, Page, PageHeader, PageLoading, SectionHeader, cn,
+  Badge, Card, EmptyState, Page, PageHeader, PageLoading, SectionHeader, cn, useToast,
 } from "@/components/ui";
 import { LinkTabs, ADMIN_TABS } from "@/components/ui/LinkTabs";
 
@@ -71,13 +71,13 @@ function severity(pct: number): "danger" | "caution" | "neutral" {
   return "neutral";
 }
 const GAP_TILE: Record<"danger" | "caution" | "neutral", string> = {
-  danger: "bg-danger-soft",
-  caution: "bg-caution-soft",
+  danger: "bg-sunken",
+  caution: "bg-sunken",
   neutral: "bg-sunken",
 };
 const GAP_TEXT: Record<"danger" | "caution" | "neutral", string> = {
   danger: "text-danger",
-  caution: "text-caution",
+  caution: "text-brand-ink",
   neutral: "text-ink",
 };
 
@@ -102,14 +102,15 @@ function CountList({ title, data, labels }: { title: string; data: Record<string
 export default function OdmPage() {
   const [data, setData] = useState<OdmData | null>(null);
   const [loading, setLoading] = useState(true);
+  const { show: showToast } = useToast();
 
   useEffect(() => {
     fetch("/api/admin/odm")
-      .then(r => r.json())
+      .then(r => { if (!r.ok) throw new Error(String(r.status)); return r.json(); })
       .then(setData)
-      .catch(() => {})
+      .catch(() => showToast("ODM 데이터를 불러오지 못했어요", { tone: "danger" }))
       .finally(() => setLoading(false));
-  }, []);
+  }, [showToast]);
 
   if (loading) return <PageLoading />;
 
@@ -253,7 +254,7 @@ export default function OdmPage() {
           )}
           {data.nutritionGaps.low_fiber?.pct >= 50 && (
             <p>
-              <span className="font-bold text-caution">식이섬유 위기:</span>{" "}
+              <span className="font-bold text-danger">식이섬유 위기:</span>{" "}
               사용자의 {data.nutritionGaps.low_fiber.pct}%가 식이섬유 부족.
               고섬유 제품 라인업 확대 또는 식이섬유 강화 제품 개발 필요.
             </p>

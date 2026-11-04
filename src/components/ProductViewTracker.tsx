@@ -17,7 +17,7 @@ export default function ProductViewTracker({ productId }: { productId: string })
         const supabase = createClient();
         const { data: { user } } = await supabase.auth.getUser();
         if (user) userId = user.id;
-      } catch { /* not logged in */ }
+      } catch { /* not logged in */ } // ds-allow: 비로그인은 정상
 
       if (!userId) {
         // anonymous 유저: localStorage에 세션 ID 생성
@@ -38,7 +38,7 @@ export default function ProductViewTracker({ productId }: { productId: string })
         const lastView = localStorage.getItem(lastViewKey);
         if (lastView && Date.now() - Number(lastView) < 5 * 60 * 1000) return;
         localStorage.setItem(lastViewKey, String(Date.now()));
-      } catch { /* ignore */ }
+      } catch { /* ignore */ } // ds-allow: 로컬 저장
 
       // 이력 기록
       try {
@@ -51,7 +51,7 @@ export default function ProductViewTracker({ productId }: { productId: string })
             action: "view",
           }),
         });
-      } catch { /* silent fail */ }
+      } catch { /* silent fail */ } // ds-allow: 조회 추적 실패는 알리지 않음
     };
 
     trackView();

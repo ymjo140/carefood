@@ -152,7 +152,7 @@ function ReportContent() {
             return (
               <div key={i} className="flex-1 h-full flex flex-col items-center justify-end gap-1 min-w-0">
                 <span className="num text-caption text-ink-2">{d.calories}</span>
-                <div className="w-full rounded-t-sm bg-brand transition-all" style={{ height: `${Math.max(pct, 4)}%` }} />
+                <div className="w-full rounded-t-sm bg-brand" style={{ height: `${Math.max(pct, 4)}%` }} />
                 <span className="text-caption text-ink-2">{dayName}</span>
               </div>
             );

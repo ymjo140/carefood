@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Icon } from "@/components/ui";
+import { Icon, useToast } from "@/components/ui";
 
 /**
  * 범용 공유 버튼
@@ -25,6 +25,7 @@ export default function ShareButton({
   style?: React.CSSProperties;
 }) {
   const [copied, setCopied] = useState(false);
+  const toast = useToast();
 
   const handleShare = async () => {
     const shareUrl = url || (typeof window !== "undefined" ? window.location.href : "");
@@ -34,7 +35,7 @@ export default function ShareButton({
       try {
         await navigator.share({ title, text, url: shareUrl });
         return;
-      } catch {
+      } catch { // ds-allow: 공유 창을 닫은 경우는 정상
         // 사용자가 취소했거나 실패 → 클립보드로 폴백
       }
     }
@@ -46,7 +47,7 @@ export default function ShareButton({
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      // 클립보드도 안 되면 무시
+      toast.show("링크를 복사하지 못했어요. 주소창의 주소를 직접 복사해 주세요", { tone: "danger" });
     }
   };
 

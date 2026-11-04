@@ -26,7 +26,7 @@ export async function signup(
 
   if (error) {
     if (error.message.includes("already registered")) {
-      return { error: "이미 가입된 이메일입니다." };
+      return { error: "이미 가입된 이메일이에요." };
     }
     return { error: error.message };
   }
@@ -53,7 +53,7 @@ export async function login(
   const { error } = await supabase.auth.signInWithPassword({ email, password });
 
   if (error) {
-    return { error: "이메일 또는 비밀번호가 올바르지 않습니다." };
+    return { error: "이메일 또는 비밀번호가 맞지 않아요." };
   }
 
   // returnTo 파라미터가 있으면 그쪽으로, 없으면 홈
@@ -97,7 +97,7 @@ export async function saveProfile(profileJson: string): Promise<{ error: string 
 
   if (userErr) {
     console.error("Failed to save user profile:", userErr);
-    return { error: "프로필 저장에 실패했습니다." };
+    return { error: "프로필을 저장하지 못했어요." };
   }
 
   // user_health_profiles 업데이트

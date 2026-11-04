@@ -135,7 +135,7 @@ export default function ProductTasteSection({ productId, productName, nutrition,
       .then((d) => {
         if (d.taste_profile) setTaste(d.taste_profile);
       })
-      .catch(() => {});
+      .catch(() => {}); // ds-allow: 맛 예측은 없으면 숨김
   };
 
   useEffect(() => {
@@ -171,10 +171,10 @@ export default function ProductTasteSection({ productId, productName, nutrition,
                 });
               }
             }
-          } catch { /* silent */ }
+          } catch { /* silent */ } // ds-allow: 로컬 프로필 읽기
         }
       })
-      .catch(() => {});
+      .catch(() => {}); // ds-allow: 보조 정보 불러오기
   }, [productId]);
 
   // 맛 프로필: 영양성분 예측 + 리뷰 체감 보정
@@ -276,7 +276,7 @@ export default function ProductTasteSection({ productId, productName, nutrition,
 const SCORE_TEXT = {
   high: "text-positive",
   good: "text-brand-ink",
-  mid: "text-caution",
+  mid: "text-brand-ink",
   low: "text-ink-2",
 } as const;
 

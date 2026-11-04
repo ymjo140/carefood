@@ -1,92 +1,281 @@
 {
-  "checkedAt": "2026-11-04T07:58:36.500Z",
-  "files": 74,
+  "checkedAt": "2026-11-04T08:34:56.750Z",
+  "files": 77,
   "total": 0,
-  "allowedCount": 2,
+  "warnTotal": 0,
+  "allowedCount": 44,
   "rules": [
     {
       "id": "hex-color",
+      "level": "error",
       "message": "색을 직접 썼어요 → 디자인 토큰(text-ink, bg-surface 등)을 쓰세요",
       "count": 0
     },
     {
       "id": "rgb-color",
+      "level": "error",
       "message": "rgb()/rgba() 색을 직접 썼어요 → 디자인 토큰을 쓰세요",
       "count": 0
     },
     {
       "id": "tw-palette",
+      "level": "error",
       "message": "Tailwind 기본 팔레트예요 (화면에 칠해지지 않아요) → 디자인 토큰을 쓰세요",
       "count": 0
     },
     {
       "id": "old-token",
+      "level": "error",
       "message": "옛 토큰 이름이에요 → canvas/surface/sunken/line/ink/ink-2/brand 등 새 이름을 쓰세요",
       "count": 0
     },
     {
+      "id": "removed-token",
+      "level": "error",
+      "message": "색 수를 줄이며 지운 토큰이에요 → 상태는 글자색(positive·danger)·아이콘, 영양 바탕은 sunken, 끼니는 글자로",
+      "count": 0
+    },
+    {
       "id": "arbitrary-value",
+      "level": "error",
       "message": "임의 값([...])으로 색·글자·둥글기·그림자를 정했어요 → 디자인 시스템 값을 쓰세요",
       "count": 0
     },
     {
       "id": "font-size",
+      "level": "error",
       "message": "Tailwind 기본 글자 크기예요 → text-caption / text-label / text-body / text-title / text-display",
       "count": 0
     },
     {
       "id": "font-weight",
+      "level": "error",
       "message": "쓰지 않는 굵기예요 → font-regular / font-medium / font-bold",
       "count": 0
     },
     {
       "id": "radius",
+      "level": "error",
       "message": "쓰지 않는 둥글기예요 → rounded-sm / md / lg / xl / full",
       "count": 0
     },
     {
       "id": "shadow",
-      "message": "그림자는 화면 위에 뜨는 것(시트·토스트)에만 shadow-overlay 로 씁니다",
+      "level": "error",
+      "message": "그림자는 화면 위에 뜨는 것(시트·토스트·메뉴)에만 shadow-overlay 로 씁니다",
       "count": 0
     },
     {
       "id": "gradient",
+      "level": "error",
       "message": "그라데이션은 쓰지 않아요 (장식은 형광펜 .highlight 하나)",
       "count": 0
     },
     {
       "id": "blur",
+      "level": "error",
       "message": "흐림 장식은 쓰지 않아요",
       "count": 0
     },
     {
       "id": "uppercase",
+      "level": "error",
       "message": "대문자 라벨은 쓰지 않아요",
       "count": 0
     },
     {
       "id": "inline-visual-style",
-      "message": "style 로 색·글자·여백·테두리를 정했어요 → 클래스(디자인 토큰)로 옮기세요. style 은 너비·위치 같은 계산값에만",
+      "level": "error",
+      "message": "style 로 색·글자·여백·테두리·움직임을 정했어요 → 클래스로. style 은 너비·위치·transform 같은 계산값에만",
+      "count": 0
+    },
+    {
+      "id": "transition-all",
+      "level": "error",
+      "message": "transition-all 은 쓰지 않아요 → 움직일 속성을 이름으로 (transition-colors, press 등)",
+      "count": 0
+    },
+    {
+      "id": "animate-layout",
+      "level": "error",
+      "message": "크기·위치(width·height·top·margin)를 움직이지 않아요 → transform·opacity 만",
+      "count": 0
+    },
+    {
+      "id": "duration-scale",
+      "level": "error",
+      "message": "모션 시간은 100 / 150 / 250 / 350 / 420 다섯 단계만",
+      "count": 0
+    },
+    {
+      "id": "easing",
+      "level": "error",
+      "message": "쓰지 않는 이징이에요 → ease-out / ease-drawer / ease-inout / ease-overshoot",
+      "count": 0
+    },
+    {
+      "id": "ease-linear",
+      "level": "warn",
+      "message": "linear 는 진행률·스피너처럼 시간에 비례하는 것에만",
       "count": 0
     },
     {
       "id": "emoji",
+      "level": "error",
       "message": "이모지를 아이콘처럼 썼어요 → <Icon> 이나 글자로 바꾸세요",
       "count": 0
     },
     {
       "id": "native-dialog",
+      "level": "error",
       "message": "alert/confirm 대신 useToast / ConfirmSheet 를 쓰세요",
+      "count": 0
+    },
+    {
+      "id": "meta-copy",
+      "level": "error",
+      "message": "개발·데모용 문구가 화면에 남았어요 → 사용자가 볼 문구만",
+      "count": 0
+    },
+    {
+      "id": "silent-catch",
+      "level": "warn",
+      "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
+      "count": 0
+    },
+    {
+      "id": "mixed-tone",
+      "level": "warn",
+      "message": "해요체와 합쇼체가 섞였어요 → 해요체 하나로 (약관만 합쇼체)",
       "count": 0
     }
   ],
   "byFile": [],
+  "warnByFile": [],
   "violations": [],
   "allowed": [
+    {
+      "file": "src/app/community/[id]/MealPlanActions.tsx",
+      "line": 81,
+      "rule": "silent-catch",
+      "level": "warn",
+      "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
+      "match": "catch {       }",
+      "snippet": "} catch { /* */ } // ds-allow: 로컬 저장"
+    },
+    {
+      "file": "src/app/community/page.tsx",
+      "line": 57,
+      "rule": "silent-catch",
+      "level": "warn",
+      "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
+      "match": "catch {       }",
+      "snippet": "} catch { /* */ } // ds-allow: 로컬 프로필 저장"
+    },
+    {
+      "file": "src/app/diary/page.tsx",
+      "line": 300,
+      "rule": "silent-catch",
+      "level": "warn",
+      "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
+      "match": ".catch(() => {})",
+      "snippet": "}).catch(() => {}); // ds-allow: 목표 동기화는 다음 방문 때 다시 시도"
+    },
+    {
+      "file": "src/app/diary/page.tsx",
+      "line": 303,
+      "rule": "silent-catch",
+      "level": "warn",
+      "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
+      "match": "catch {       }",
+      "snippet": "} catch { /* */ } // ds-allow: 로컬 프로필 읽기"
+    },
+    {
+      "file": "src/app/diary/page.tsx",
+      "line": 337,
+      "rule": "silent-catch",
+      "level": "warn",
+      "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
+      "match": "catch {       }",
+      "snippet": "} catch { /* */ } // ds-allow: 보조 패널(즐겨찾기) 불러오기"
+    },
+    {
+      "file": "src/app/diary/page.tsx",
+      "line": 363,
+      "rule": "silent-catch",
+      "level": "warn",
+      "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
+      "match": "catch {       }",
+      "snippet": "} catch { /* */ } // ds-allow: 보조 패널(식단 리스트) 불러오기"
+    },
+    {
+      "file": "src/app/diary/page.tsx",
+      "line": 375,
+      "rule": "silent-catch",
+      "level": "warn",
+      "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
+      "match": "catch {       }",
+      "snippet": "} catch { /* */ } // ds-allow: 보조 패널(최근 기록) 불러오기"
+    },
+    {
+      "file": "src/app/diary/page.tsx",
+      "line": 386,
+      "rule": "silent-catch",
+      "level": "warn",
+      "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
+      "match": "catch {       }",
+      "snippet": "} catch { /* */ } // ds-allow: 보조 패널(주간 추이) 불러오기"
+    },
+    {
+      "file": "src/app/diary/page.tsx",
+      "line": 396,
+      "rule": "silent-catch",
+      "level": "warn",
+      "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
+      "match": ".catch(() => {})",
+      "snippet": ".catch(() => {}); // ds-allow: 공구 제안은 없으면 숨김"
+    },
+    {
+      "file": "src/app/health/page.tsx",
+      "line": 167,
+      "rule": "silent-catch",
+      "level": "warn",
+      "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
+      "match": "catch {              }",
+      "snippet": "} catch { /* silent */ } // ds-allow: 로컬 저장"
+    },
+    {
+      "file": "src/app/health/report/page.tsx",
+      "line": 217,
+      "rule": "silent-catch",
+      "level": "warn",
+      "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
+      "match": "catch {              }",
+      "snippet": "} catch { /* silent */ } // ds-allow: 로컬 검진 정보 읽기"
+    },
+    {
+      "file": "src/app/health/report/page.tsx",
+      "line": 237,
+      "rule": "silent-catch",
+      "level": "warn",
+      "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
+      "match": ".catch(() => {})",
+      "snippet": ".catch(() => {}); // ds-allow: 추천 제품은 없으면 숨김"
+    },
+    {
+      "file": "src/app/health/report/page.tsx",
+      "line": 239,
+      "rule": "silent-catch",
+      "level": "warn",
+      "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
+      "match": "catch {              }",
+      "snippet": "} catch { /* silent */ } // ds-allow: 로컬 프로필 읽기"
+    },
     {
       "file": "src/app/layout.tsx",
       "line": 82,
       "rule": "hex-color",
+      "level": "error",
       "message": "색을 직접 썼어요 → 디자인 토큰(text-ink, bg-surface 등)을 쓰세요",
       "match": "#FBF8F3",
       "snippet": "<meta name=\"theme-color\" content=\"#FBF8F3\" media=\"(prefers-color-scheme: light)\" />{/* ds-allow: 브라우저 theme-color 메타 */}"
@@ -95,9 +284,271 @@
       "file": "src/app/layout.tsx",
       "line": 83,
       "rule": "hex-color",
+      "level": "error",
       "message": "색을 직접 썼어요 → 디자인 토큰(text-ink, bg-surface 등)을 쓰세요",
       "match": "#141210",
       "snippet": "<meta name=\"theme-color\" content=\"#141210\" media=\"(prefers-color-scheme: dark)\" />{/* ds-allow: 브라우저 theme-color 메타 */}"
+    },
+    {
+      "file": "src/app/layout.tsx",
+      "line": 90,
+      "rule": "silent-catch",
+      "level": "warn",
+      "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
+      "match": ".catch(()=>{})",
+      "snippet": "__html: `if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(()=>{})}`, // ds-allow: 서비스 워커 등록 실패는 화면에 영향 없음"
+    },
+    {
+      "file": "src/app/onboarding/page.tsx",
+      "line": 260,
+      "rule": "silent-catch",
+      "level": "warn",
+      "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
+      "match": "catch {              }",
+      "snippet": "} catch { /* silent */ } // ds-allow: 로컬 저장"
+    },
+    {
+      "file": "src/app/onboarding/page.tsx",
+      "line": 297,
+      "rule": "silent-catch",
+      "level": "warn",
+      "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
+      "match": ".catch(() => {})",
+      "snippet": "}).catch(() => {}); // ds-allow: 로컬 저장이 있어 진행"
+    },
+    {
+      "file": "src/app/onboarding/page.tsx",
+      "line": 299,
+      "rule": "silent-catch",
+      "level": "warn",
+      "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
+      "match": "catch {                                       }",
+      "snippet": "} catch { /* DB 저장 실패해도 localStorage가 있으니 진행 */ } // ds-allow: 로컬 저장이 있어 진행"
+    },
+    {
+      "file": "src/app/order/page.tsx",
+      "line": 103,
+      "rule": "silent-catch",
+      "level": "warn",
+      "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
+      "match": "catch {       }",
+      "snippet": "} catch { /* */ } // ds-allow: 로컬 주문 목록 읽기"
+    },
+    {
+      "file": "src/app/weekly-box/page.tsx",
+      "line": 141,
+      "rule": "silent-catch",
+      "level": "warn",
+      "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
+      "match": "catch {       }",
+      "snippet": "} catch { /* */ } // ds-allow: 보조 탭(즐겨찾기) 불러오기"
+    },
+    {
+      "file": "src/app/weekly-box/page.tsx",
+      "line": 164,
+      "rule": "silent-catch",
+      "level": "warn",
+      "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
+      "match": "catch {       }",
+      "snippet": "} catch { /* */ } // ds-allow: 보조 탭(최근 본) 불러오기"
+    },
+    {
+      "file": "src/app/weekly-box/page.tsx",
+      "line": 259,
+      "rule": "silent-catch",
+      "level": "warn",
+      "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
+      "match": "catch {       }",
+      "snippet": "try { const h = localStorage.getItem(\"carefood_health\"); if (h) healthConditions = JSON.parse(h).conditions || []; } catch { /* */ } // ds-a"
+    },
+    {
+      "file": "src/app/weekly-box/page.tsx",
+      "line": 311,
+      "rule": "silent-catch",
+      "level": "warn",
+      "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
+      "match": "catch {       }",
+      "snippet": "} catch { /* */ } // ds-allow: 미리 계산은 실패하면 버튼 눌렀을 때 다시"
+    },
+    {
+      "file": "src/components/AllergenWarning.tsx",
+      "line": 40,
+      "rule": "silent-catch",
+      "level": "warn",
+      "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
+      "match": "catch {              }",
+      "snippet": "} catch { /* ignore */ } // ds-allow: 로컬 프로필 읽기"
+    },
+    {
+      "file": "src/components/FavoriteButton.tsx",
+      "line": 23,
+      "rule": "silent-catch",
+      "level": "warn",
+      "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
+      "match": ".catch(() => {})",
+      "snippet": ".catch(() => {}); // ds-allow: 초기 즐겨찾기 상태는 꺼진 채로 둠"
+    },
+    {
+      "file": "src/components/HomePersonalized.tsx",
+      "line": 67,
+      "rule": "silent-catch",
+      "level": "warn",
+      "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
+      "match": "catch {              }",
+      "snippet": "} catch { /* silent */ } // ds-allow: 로컬 프로필 읽기"
+    },
+    {
+      "file": "src/components/HomeTodayWidget.tsx",
+      "line": 50,
+      "rule": "silent-catch",
+      "level": "warn",
+      "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
+      "match": ".catch(() => null)",
+      "snippet": "fetch(`/api/diary?date=${today}&user_id=${userId}`).then(r => r.json()).catch(() => null), // ds-allow: 위젯 일부는 없으면 숨김"
+    },
+    {
+      "file": "src/components/HomeTodayWidget.tsx",
+      "line": 52,
+      "rule": "silent-catch",
+      "level": "warn",
+      "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
+      "match": ".catch(() => null)",
+      "snippet": "fetch(\"/api/community/group-buy?status=recruiting\").then(r => r.json()).catch(() => null), // ds-allow: 위젯 일부는 없으면 숨김"
+    },
+    {
+      "file": "src/components/HomeTodayWidget.tsx",
+      "line": 54,
+      "rule": "silent-catch",
+      "level": "warn",
+      "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
+      "match": ".catch(() => null)",
+      "snippet": "fetch(`/api/diary/report?user_id=${userId}`).then(r => r.json()).catch(() => null), // ds-allow: 위젯 일부는 없으면 숨김"
+    },
+    {
+      "file": "src/components/MealLogButton.tsx",
+      "line": 28,
+      "rule": "silent-catch",
+      "level": "warn",
+      "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
+      "match": "catch {       }",
+      "snippet": "} catch { /* */ } // ds-allow: 로컬 ID 읽기"
+    },
+    {
+      "file": "src/components/ProductExplorer.tsx",
+      "line": 534,
+      "rule": "silent-catch",
+      "level": "warn",
+      "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
+      "match": "catch {       }",
+      "snippet": "} catch { /* */ } // ds-allow: 로컬 프로필 읽기"
+    },
+    {
+      "file": "src/components/ProductReviews.tsx",
+      "line": 83,
+      "rule": "silent-catch",
+      "level": "warn",
+      "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
+      "match": "catch {       }",
+      "snippet": "} catch { /* */ } // ds-allow: 비로그인은 정상"
+    },
+    {
+      "file": "src/components/ProductReviews.tsx",
+      "line": 85,
+      "rule": "silent-catch",
+      "level": "warn",
+      "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
+      "match": "catch {       }",
+      "snippet": "try { userId = localStorage.getItem(\"carefood_anon_id\"); } catch { /* */ } // ds-allow: 로컬 ID 읽기"
+    },
+    {
+      "file": "src/components/ProductTasteSection.tsx",
+      "line": 138,
+      "rule": "silent-catch",
+      "level": "warn",
+      "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
+      "match": ".catch(() => {})",
+      "snippet": ".catch(() => {}); // ds-allow: 맛 예측은 없으면 숨김"
+    },
+    {
+      "file": "src/components/ProductTasteSection.tsx",
+      "line": 174,
+      "rule": "silent-catch",
+      "level": "warn",
+      "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
+      "match": "catch {              }",
+      "snippet": "} catch { /* silent */ } // ds-allow: 로컬 프로필 읽기"
+    },
+    {
+      "file": "src/components/ProductTasteSection.tsx",
+      "line": 177,
+      "rule": "silent-catch",
+      "level": "warn",
+      "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
+      "match": ".catch(() => {})",
+      "snippet": ".catch(() => {}); // ds-allow: 보조 정보 불러오기"
+    },
+    {
+      "file": "src/components/ProductViewTracker.tsx",
+      "line": 20,
+      "rule": "silent-catch",
+      "level": "warn",
+      "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
+      "match": "catch {                     }",
+      "snippet": "} catch { /* not logged in */ } // ds-allow: 비로그인은 정상"
+    },
+    {
+      "file": "src/components/ProductViewTracker.tsx",
+      "line": 41,
+      "rule": "silent-catch",
+      "level": "warn",
+      "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
+      "match": "catch {              }",
+      "snippet": "} catch { /* ignore */ } // ds-allow: 로컬 저장"
+    },
+    {
+      "file": "src/components/ProductViewTracker.tsx",
+      "line": 54,
+      "rule": "silent-catch",
+      "level": "warn",
+      "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
+      "match": "catch {                   }",
+      "snippet": "} catch { /* silent fail */ } // ds-allow: 조회 추적 실패는 알리지 않음"
+    },
+    {
+      "file": "src/components/ShareButton.tsx",
+      "line": 38,
+      "rule": "silent-catch",
+      "level": "warn",
+      "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
+      "match": "catch {                             \n                       ",
+      "snippet": "} catch { // ds-allow: 공유 창을 닫은 경우는 정상"
+    },
+    {
+      "file": "src/components/TrackableLink.tsx",
+      "line": 44,
+      "rule": "silent-catch",
+      "level": "warn",
+      "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
+      "match": ".catch(() => {                  })",
+      "snippet": "}).catch(() => { /* 트래킹 실패는 무시 */ }); // ds-allow: 클릭 추적 실패는 알리지 않음"
+    },
+    {
+      "file": "src/components/TrackableLink.tsx",
+      "line": 45,
+      "rule": "silent-catch",
+      "level": "warn",
+      "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
+      "match": "catch {       }",
+      "snippet": "} catch { /* */ } // ds-allow: 클릭 추적 실패는 알리지 않음"
+    },
+    {
+      "file": "src/components/community/PostComposer.tsx",
+      "line": 50,
+      "rule": "silent-catch",
+      "level": "warn",
+      "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
+      "match": ".catch(() => {})",
+      "snippet": ".catch(() => {}); // ds-allow: 보조 목록(오늘 기록)은 없으면 비움"
     }
   ]
 }

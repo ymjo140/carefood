@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import MealCard from "@/components/community/MealCard";
 import DailyCard from "@/components/community/DailyCard";
 import PostComposer from "@/components/community/PostComposer";
-import { Button, Chip, ChipRow, EmptyState, Page, PageHeader, Spinner, Tabs, useToast } from "@/components/ui";
+import { Button, Chip, ChipRow, EmptyState, Page, PageHeader, SkeletonPost, Spinner, Tabs, useToast } from "@/components/ui";
 
 /* ─── helpers ─── */
 function getUserId(): string {
@@ -54,7 +54,7 @@ function getUserProfile(): { nickname: string; ageGroup?: string; concerns?: str
     const nick = generateNickname();
     localStorage.setItem("carefood_profile", JSON.stringify({ nickname: nick }));
     return { nickname: nick };
-  } catch { /* */ }
+  } catch { /* */ } // ds-allow: 로컬 프로필 저장
   return { nickname: generateNickname() };
 }
 
@@ -74,10 +74,12 @@ export default function CommunityPage() {
   const [concernFilter, setConcernFilter] = useState("");
   const [posts, setPosts] = useState<FeedPost[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [composerOpen, setComposerOpen] = useState(false);
   const toast = useToast();
+  const showToast = toast.show; // 안정된 함수 — effect 의존성에 toast 객체를 넣지 않는다
   const sentinelRef = useRef<HTMLDivElement>(null);
   const userId = useRef("");
   const profile = useRef<{ nickname: string; ageGroup?: string; concerns?: string[]; goals?: string[] }>({ nickname: "익명" });
@@ -91,6 +93,7 @@ export default function CommunityPage() {
   /* ─── fetch feed ─── */
   const fetchFeed = useCallback(async (pg = 1, append = false) => {
     if (pg === 1) setLoading(true);
+    setLoadError(false);
     try {
       const params = new URLSearchParams({
         tab,
@@ -99,14 +102,18 @@ export default function CommunityPage() {
       });
       if (tab === "concern" && concernFilter) params.set("concern", concernFilter);
       const res = await fetch(`/api/community/feed?${params}`);
+      if (!res.ok) throw new Error(String(res.status));
       const data = await res.json();
       const incoming: FeedPost[] = data.posts || [];
       setPosts(prev => append ? [...prev, ...incoming] : incoming);
       setHasMore(data.hasMore ?? false);
       setPage(pg);
-    } catch { /* */ }
+    } catch {
+      setLoadError(true);
+      showToast("피드를 불러오지 못했어요", { tone: "danger" });
+    }
     finally { setLoading(false); }
-  }, [tab, concernFilter]);
+  }, [tab, concernFilter, showToast]);
 
   useEffect(() => { fetchFeed(1, false); }, [fetchFeed]);
 
@@ -149,7 +156,7 @@ export default function CommunityPage() {
         setPosts(prev => prev.map(p =>
           p.id === postId ? { ...p, copy_count: (p.copy_count || 0) + 1 } : p
         ));
-        toast.show(`"${data.title || "식단"}" 식단 리스트에 담았어요`, { action: { label: "보기", href: "/weekly-box" } });
+        toast.show(`"${data.title || "식단"}" 식단 리스트에 담았어요. 아래 식단 탭에서 볼 수 있어요`);
       } else {
         toast.show("식단 리스트에 담지 못했어요. 다시 시도해 주세요", { tone: "danger" });
       }
@@ -165,9 +172,12 @@ export default function CommunityPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ follower_id: userId.current, following_id: authorId }),
       });
+      if (!res.ok) throw new Error(String(res.status));
       const data = await res.json();
       toast.show(data.following ? "팔로우했어요" : "팔로우를 취소했어요");
-    } catch { /* */ }
+    } catch {
+      toast.show("팔로우하지 못했어요. 다시 시도해 주세요", { tone: "danger" });
+    }
   };
 
   const TABS: { key: Tab; label: string }[] = [
@@ -202,7 +212,13 @@ export default function CommunityPage() {
       {/* ── 피드 ── */}
       <div className="flex flex-col gap-3">
         {loading && posts.length === 0 ? (
-          <div className="flex justify-center py-16"><Spinner /></div>
+          <SkeletonPost count={3} />
+        ) : posts.length === 0 && loadError ? (
+          <EmptyState
+            title="피드를 불러오지 못했어요"
+            description="연결이 잠깐 끊겼을 수 있어요"
+            action={<Button size="sm" variant="secondary" icon="refresh" onClick={() => fetchFeed(1, false)}>다시 불러오기</Button>}
+          />
         ) : posts.length === 0 ? (
           <EmptyState
             title={tab === "following" ? "팔로잉한 사람이 아직 없어요" : "아직 게시글이 없어요"}
@@ -244,7 +260,7 @@ export default function CommunityPage() {
       <Button
         icon="edit"
         onClick={() => setComposerOpen(true)}
-        className="fixed z-40 rounded-full shadow-overlay right-[max(1rem,env(safe-area-inset-right))] bottom-[max(1.5rem,env(safe-area-inset-bottom))]"
+        className="fixed z-40 rounded-full shadow-overlay right-[max(1rem,env(safe-area-inset-right))] above-nav"
       >
         글 쓰기
       </Button>

@@ -47,9 +47,9 @@ function StatCard({ label, value, sub, emphasis, tone = "default" }: {
   label: string; value: number; sub?: string; emphasis?: boolean; tone?: "default" | "caution";
 }) {
   return (
-    <Card className={cn(tone === "caution" && "border-caution")}>
+    <Card className={cn(tone === "caution" && "border-line-strong")}>
       <Stat label={label} value={value.toLocaleString()} emphasis={emphasis} />
-      {sub && <p className={cn("text-caption mt-1", tone === "caution" ? "text-caution" : "text-ink-3")}>{sub}</p>}
+      {sub && <p className={cn("text-caption mt-1", tone === "caution" ? "text-danger" : "text-ink-3")}>{sub}</p>}
     </Card>
   );
 }

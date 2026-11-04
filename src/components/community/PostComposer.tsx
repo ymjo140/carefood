@@ -47,7 +47,7 @@ export default function PostComposer({ isOpen, onClose, userId, nickname, ageGro
     fetch(`/api/diary?user_id=${encodeURIComponent(userId)}&date=${today}`)
       .then(r => r.json())
       .then(data => setRecentMeals(data.entries || []))
-      .catch(() => {});
+      .catch(() => {}); // ds-allow: 보조 목록(오늘 기록)은 없으면 비움
   }, [isOpen, mode, userId]);
 
   const toggleMeal = (entry: DiaryEntry) => {

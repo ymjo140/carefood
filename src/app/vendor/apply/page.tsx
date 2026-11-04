@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Button, Card, Field, Icon, Input, LinkButton, Page, PageHeader, Textarea, TextLink, cn } from "@/components/ui";
+import { Button, Card, Field, Icon, Input, LinkButton, Page, PageHeader, Textarea, TextLink, cn, useToast } from "@/components/ui";
 
 const BUSINESS_TYPES = [
   { key: "meal_service", label: "건강식단 서비스", desc: "정기배송 도시락/밀프렙" },
@@ -24,6 +24,7 @@ export default function VendorApplyPage() {
   });
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const toast = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,9 +40,10 @@ export default function VendorApplyPage() {
           product_count: form.product_count ? parseInt(form.product_count) : null,
         }),
       });
-      if (res.ok) setSubmitted(true);
+      if (!res.ok) throw new Error(String(res.status));
+      setSubmitted(true);
     } catch {
-      /* */
+      toast.show("신청을 보내지 못했어요. 다시 시도해 주세요", { tone: "danger" });
     } finally {
       setSubmitting(false);
     }
@@ -51,7 +53,7 @@ export default function VendorApplyPage() {
     return (
       <Page width="narrow">
         <div className="min-h-[50vh] flex flex-col items-center justify-center text-center gap-2">
-          <span className="size-12 rounded-full bg-positive-soft text-positive flex items-center justify-center mb-2">
+          <span className="size-12 rounded-full bg-sunken text-positive flex items-center justify-center mb-2">
             <Icon name="check" size={24} />
           </span>
           <h1 className="text-title font-bold text-ink">입점 신청을 접수했어요</h1>

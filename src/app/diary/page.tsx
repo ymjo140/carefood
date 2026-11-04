@@ -3,9 +3,7 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import Link from "next/link";
 import {
-  Badge, Button, Card, Chip, ConfirmSheet, EmptyState, Field, Icon, IconButton, Input, Kcal,
-  LinkButton, ListRow, MacroGrid, MealSlot, Page, PageHeader, PageLoading, SectionHeader, Spinner, Tabs,
-  buttonClass, cn, useToast,
+  Badge, Button, Card, Chip, ConfirmSheet, EmptyState, Field, Icon, IconButton, Input, Kcal, LinkButton, ListRow, MacroGrid, MealSlot, Page, PageHeader, PageLoading, SectionHeader, Spinner, Tabs, buttonClass, cn, useToast, SkeletonList,
 } from "@/components/ui";
 
 /* ── 타입 ── */
@@ -93,7 +91,7 @@ const MEAL_TYPES = [
 ];
 
 /* 주간 스트립 막대 — 목표 대비 비율에 따른 고정 클래스 */
-const WEEK_BAR = { good: "bg-positive", mid: "bg-brand", low: "bg-caution" } as const;
+const WEEK_BAR = { good: "bg-positive", mid: "bg-brand", low: "bg-ink-3" } as const;
 
 /* 영양 갭 점 색 */
 function gapDot(nutrient: string) {
@@ -216,7 +214,7 @@ function CalorieRing({ consumed, goal }: { consumed: number; goal: number }) {
         <circle cx="100" cy="100" r={r} fill="none" strokeWidth="14" className="stroke-sunken" />
         <circle
           cx="100" cy="100" r={r} fill="none"
-          className={cn("transition-[stroke-dashoffset] duration-500", isOver ? "stroke-caution" : "stroke-brand")}
+          className={cn("transition-[stroke-dashoffset] duration-420 ease-out", isOver ? "stroke-danger" : "stroke-brand")}
           strokeWidth="14" strokeLinecap="round"
           strokeDasharray={circumference}
           strokeDashoffset={offset}
@@ -240,6 +238,7 @@ export default function DiaryPage() {
   const [date, setDate] = useState("");
   const [data, setData] = useState<DiaryData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [addingMeal, setAddingMeal] = useState<string | null>(null);
   const [addTab, setAddTab] = useState<"search" | "favorites" | "weekly" | "manual" | "photo">("search");
   const [searchQuery, setSearchQuery] = useState("");
@@ -262,6 +261,7 @@ export default function DiaryPage() {
   } | null>(null);
   const [userId, setUserId] = useState("");
   const toast = useToast();
+  const showToast = toast.show; // 안정된 함수 — effect 의존성에 toast 객체를 넣지 않는다
   const [favorites, setFavorites] = useState<SearchResult[]>([]);
   const [weeklyItems, setWeeklyItems] = useState<SearchResult[]>([]);
   const [weeklyTrend, setWeeklyTrend] = useState<{
@@ -297,23 +297,28 @@ export default function DiaryPage() {
               max_sodium_mg: p.nutrition_goals.maxSodiumMg,
               max_sugar_g: p.nutrition_goals.maxSugarG,
             }),
-          }).catch(() => {});
+          }).catch(() => {}); // ds-allow: 목표 동기화는 다음 방문 때 다시 시도
         }
       }
-    } catch { /* */ }
+    } catch { /* */ } // ds-allow: 로컬 프로필 읽기
   }, [userId]);
 
   /* ── 데이터 페칭 ── */
   const fetchDiary = useCallback(async () => {
     if (!userId || !date) return;
     setLoading(true);
+    setLoadError(false);
     try {
       const res = await fetch(`/api/diary?date=${date}&user_id=${userId}`);
+      if (!res.ok) throw new Error(String(res.status));
       const d = await res.json();
       setData(d);
-    } catch { /* */ }
+    } catch {
+      setLoadError(true);
+      showToast("식단 기록을 불러오지 못했어요", { tone: "danger" });
+    }
     setLoading(false);
-  }, [date, userId]);
+  }, [date, userId, showToast]);
 
   useEffect(() => { fetchDiary(); }, [fetchDiary]);
 
@@ -329,7 +334,7 @@ export default function DiaryPage() {
           calories: f.calories, protein_g: f.protein_g, serving_size_g: null,
         })));
       }
-    } catch { /* */ }
+    } catch { /* */ } // ds-allow: 보조 패널(즐겨찾기) 불러오기
   }, [userId]);
 
   useEffect(() => {
@@ -355,7 +360,7 @@ export default function DiaryPage() {
         }
         setWeeklyItems(items);
       }
-    } catch { /* */ }
+    } catch { /* */ } // ds-allow: 보조 패널(식단 리스트) 불러오기
   }, []);
 
   // 최근 기록 로드 (다시 먹기)
@@ -367,7 +372,7 @@ export default function DiaryPage() {
         const d = await res.json();
         setRecentMeals(d.recent || []);
       }
-    } catch { /* */ }
+    } catch { /* */ } // ds-allow: 보조 패널(최근 기록) 불러오기
   }, [userId]);
 
   useEffect(() => { if (addTab === "favorites") loadFavorites(); }, [addTab, loadFavorites]);
@@ -378,7 +383,7 @@ export default function DiaryPage() {
     try {
       const res = await fetch(`/api/diary/weekly?user_id=${userId}`);
       if (res.ok) setWeeklyTrend(await res.json());
-    } catch { /* */ }
+    } catch { /* */ } // ds-allow: 보조 패널(주간 추이) 불러오기
   }, [userId]);
 
   useEffect(() => { loadWeeklyTrend(); }, [loadWeeklyTrend]);
@@ -388,7 +393,7 @@ export default function DiaryPage() {
     fetch(`/api/community/group-buy/suggest?user_id=${userId}`)
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d) setGapSuggestions(d); })
-      .catch(() => {});
+      .catch(() => {}); // ds-allow: 공구 제안은 없으면 숨김
   }, [userId]);
 
   /* ── 액션 ── */
@@ -404,7 +409,9 @@ export default function DiaryPage() {
       const foodData = await foodRes.json();
       setSearchResults(prodData.products || []);
       setCommonFoods(foodData.foods || []);
-    } catch { /* */ }
+    } catch {
+      toast.show("검색하지 못했어요. 다시 시도해 주세요", { tone: "danger" });
+    }
     setSearching(false);
   };
 
@@ -838,6 +845,11 @@ export default function DiaryPage() {
     <Page width="narrow">
       <PageHeader title="식단 기록" description={isToday ? `오늘 · ${formatDate(date)}` : formatDate(date)} />
 
+      {loadError && (
+        <EmptyState className="mb-5" title="식단 기록을 불러오지 못했어요" description="아래 숫자는 비어 있는 상태예요"
+          action={<Button size="sm" variant="secondary" icon="refresh" onClick={fetchDiary}>다시 불러오기</Button>} />
+      )}
+
       {/* ━━ 주간 캘린더 스트립 ━━ */}
       <div className="flex items-center gap-1 mb-5">
         <IconButton icon="chevron-left" label="이전 주" size="sm" onClick={() => moveDate(-7)} />
@@ -862,7 +874,7 @@ export default function DiaryPage() {
                 <span className={cn("w-1.5 h-5 rounded-sm overflow-hidden flex flex-col-reverse", wd.isActive ? "bg-on-brand/20" : "bg-sunken")}>
                   {wd.count > 0 && (
                     <span
-                      className={cn("w-full rounded-sm transition-all", wd.isActive ? "bg-on-brand" : barClass)}
+                      className={cn("w-full rounded-sm transition-colors", wd.isActive ? "bg-on-brand" : barClass)}
                       style={{ height: `${Math.max(wd.ratio * 100, 15)}%` }}
                     />
                   )}
@@ -900,7 +912,7 @@ export default function DiaryPage() {
       />
 
       {loading ? (
-        <div className="flex justify-center py-12"><Spinner /></div>
+        <SkeletonList rows={4} thumb={false} />
       ) : (
         <div className="flex flex-col gap-3">
           {MEAL_TYPES.map((meal) => {

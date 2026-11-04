@@ -214,7 +214,7 @@ export default function HealthReportPage() {
         const result = analyzeHealth(healthData!);
         setReport(result);
       }
-    } catch { /* silent */ }
+    } catch { /* silent */ } // ds-allow: 로컬 검진 정보 읽기
 
     // 맞춤 추천 제품 5개 로드
     try {
@@ -234,9 +234,9 @@ export default function HealthReportPage() {
         })
           .then((r) => r.json())
           .then((data) => setTopProducts((data.recommendations || []).slice(0, 5)))
-          .catch(() => {});
+          .catch(() => {}); // ds-allow: 추천 제품은 없으면 숨김
       }
-    } catch { /* silent */ }
+    } catch { /* silent */ } // ds-allow: 로컬 프로필 읽기
 
     setLoading(false);
   }, []);

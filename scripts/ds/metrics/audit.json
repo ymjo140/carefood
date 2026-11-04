@@ -1,6 +1,7 @@
 {
-  "auditedAt": "2026-11-04T07:57:31.531Z",
+  "auditedAt": "2026-11-04T08:38:32.228Z",
   "base": "http://localhost:3100",
+  "commit": "fedac951e1bfdd089b1506da12e0178a967d8343",
   "ignored": "cdn\\.011st\\.com",
   "pages": 24,
   "variants": [
@@ -9,7 +10,7 @@
     "모바일 다크"
   ],
   "screenshots": 72,
-  "seconds": 200,
+  "seconds": 196,
   "totals": {
     "error": 0,
     "overflow": 0,

@@ -64,7 +64,7 @@ export default function HomePersonalized() {
         if (healthRaw) {
           healthData = JSON.parse(healthRaw);
         }
-      } catch { /* silent */ }
+      } catch { /* silent */ } // ds-allow: 로컬 프로필 읽기
 
       // v5: 프로필 + 건강검진 + user_id → 5축 복합 프로필 + 피드백 루프 반영 추천
       const anonId = (() => { try { return localStorage.getItem("carefood_anon_id") || ""; } catch { return ""; } })();

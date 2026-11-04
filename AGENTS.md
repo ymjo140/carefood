@@ -10,10 +10,11 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 ## 화면 작업 규칙 (디자인 시스템)
 
-화면(src/app, src/components)을 만들거나 고칠 때는 **반드시 `DESIGN.md` 를 먼저 읽는다.**
+화면(src/app, src/components)을 만들거나 고칠 때는 **`.claude/skills/carefood-design/SKILL.md` 의 절차를 따르고 `DESIGN.md` 를 먼저 읽는다.**
 
 - 새 화면은 `src/components/ui` 와 `src/styles/design-system.css` 에 있는 것만 쓴다. 없으면 거기에 먼저 추가하고 `/design-system` 기준 페이지에 그린다.
-- 색을 직접 쓰지 않는다(#hex, rgb, bg-blue-500, text-white). Tailwind 기본 팔레트는 지워져 있어 칠해지지 않는다.
-- 그라데이션·카드 그림자·blur·uppercase·이모지 아이콘·임의 값(text-[11px])·style 로 색/여백 정하기 금지.
-- 버튼은 동작("저장하기"), 완료 알림은 과거형("저장했어요"). alert/confirm 대신 useToast / ConfirmSheet.
-- 끝나면 `npm run ds:lint` 가 0건이어야 한다.
+- UI 유채색은 강조색(앰버) 하나 + 오류 빨강. 색 알약·옅은 색 바탕·이모지 아이콘·그라데이션·카드 그림자·임의 값·style 로 색/여백 정하기 금지.
+- 모션은 transform·opacity 만, 시간은 100/150/250/350/420.
+- 데이터 영역은 불러오는 중·비어 있음·실패·채워짐 네 상태. 오류를 삼키지 않는다.
+- 버튼은 동작("저장하기"), 완료 알림은 과거형("저장했어요"), 해요체 하나.
+- 끝나면 `npm run ds:lint` 오류 0, `npm run ds:wiring -- --base=<고치기 전 커밋>` 실패 0.

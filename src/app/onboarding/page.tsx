@@ -257,7 +257,7 @@ function OnboardingContent() {
 
     try {
       localStorage.setItem("carefood_profile", JSON.stringify(profile));
-    } catch { /* silent */ }
+    } catch { /* silent */ } // ds-allow: 로컬 저장
 
     try {
       let userId: string | null = null;
@@ -294,9 +294,9 @@ function OnboardingContent() {
             pref_umami: 3,
             pref_sour: 3,
           }),
-        }).catch(() => {});
+        }).catch(() => {}); // ds-allow: 로컬 저장이 있어 진행
       }
-    } catch { /* DB 저장 실패해도 localStorage가 있으니 진행 */ }
+    } catch { /* DB 저장 실패해도 localStorage가 있으니 진행 */ } // ds-allow: 로컬 저장이 있어 진행
 
     router.push("/products");
   };
@@ -596,7 +596,7 @@ function StepGoals({
               );
             })}
             {hasDiseaseGoal && (
-              <Notice tone="caution">의료 행위가 아닌, 성분 정보 기반 참고용입니다</Notice>
+              <Notice tone="caution">의료 행위가 아닌, 성분 정보 기반 참고용이에요</Notice>
             )}
           </div>
         )}
@@ -742,7 +742,7 @@ function BMIBar({ bmi }: { bmi: number }) {
       <div className="absolute inset-0 rounded-full overflow-hidden flex">
         <div className="flex-1 bg-protein" />
         <div className="flex-[1.8] bg-positive" />
-        <div className="flex-[0.8] bg-caution" />
+        <div className="flex-[0.8] bg-brand" />
         <div className="flex-[6] bg-danger" />
       </div>
       <div className="absolute top-0 h-full w-0.5 bg-ink" style={{ left: `${pct}%` }}>

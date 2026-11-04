@@ -20,7 +20,7 @@ export default function FavoriteButton({ productId, size = "md" }: { productId: 
         const ids = (data.favorites || []).map((f: { product_id: string }) => f.product_id);
         setIsFav(ids.includes(productId));
       })
-      .catch(() => {});
+      .catch(() => {}); // ds-allow: 초기 즐겨찾기 상태는 꺼진 채로 둠
   }, [productId]);
 
   const toggle = async () => {

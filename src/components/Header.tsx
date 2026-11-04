@@ -60,6 +60,12 @@ export default function Header() {
   const [user, setUser] = useState<{ email: string } | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  // 메뉴를 열 때 하단 탭 바가 떠 있는지 본다 (탭 첫 화면 + 휴대폰 폭)
+  const [bottomNavShown, setBottomNavShown] = useState(false);
+  const toggleMobileNav = () => {
+    if (!mobileNavOpen) setBottomNavShown(document.documentElement.hasAttribute("data-bottom-nav"));
+    setMobileNavOpen(!mobileNavOpen);
+  };
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
@@ -79,11 +85,13 @@ export default function Header() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // 페이지 이동 시 메뉴 닫기
-  useEffect(() => {
+  // 페이지 이동 시 메뉴 닫기 — 렌더 중에 경로가 바뀐 걸 보고 닫는다 (effect 안 setState 대신)
+  const [prevPath, setPrevPath] = useState(pathname);
+  if (pathname !== prevPath) {
+    setPrevPath(pathname);
     setMobileNavOpen(false);
     setMenuOpen(false);
-  }, [pathname]);
+  }
 
   const handleLogout = () => {
     setMenuOpen(false);
@@ -156,7 +164,7 @@ export default function Header() {
                         type="button"
                         onClick={handleLogout}
                         disabled={isPending}
-                        className="w-full flex items-center h-11 px-3 rounded-md text-label text-danger hover:bg-danger-soft transition-colors disabled:opacity-50"
+                        className="w-full flex items-center h-11 px-3 rounded-md text-label text-danger hover:bg-sunken transition-colors disabled:opacity-50"
                       >
                         {isPending ? "로그아웃하고 있어요" : "로그아웃"}
                       </button>
@@ -184,7 +192,7 @@ export default function Header() {
           <IconButton
             icon={mobileNavOpen ? "close" : "menu"}
             label={mobileNavOpen ? "메뉴 닫기" : "메뉴 열기"}
-            onClick={() => setMobileNavOpen(!mobileNavOpen)}
+            onClick={toggleMobileNav}
             aria-expanded={mobileNavOpen}
           />
         </div>
@@ -194,7 +202,8 @@ export default function Header() {
       {mobileNavOpen && (
         <div className="sm:hidden border-t border-line bg-canvas max-h-[calc(100dvh-3.5rem)] overflow-y-auto">
           <nav className="flex flex-col gap-0.5 py-2 pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]" aria-label="모바일 메뉴">
-            {NAV_ITEMS.map((item) => (
+            {/* 하단 탭 바가 떠 있으면 같은 메뉴를 되풀이하지 않는다 (suta: 같은 행동의 입구는 하나) */}
+            {!bottomNavShown && NAV_ITEMS.map((item) => (
               <MenuLink key={item.href} href={item.href} label={item.label} active={isActive(item.href)} />
             ))}
             <MenuLink href="/vendor/apply" label="입점 문의" active={isActive("/vendor/apply")} />
@@ -218,7 +227,7 @@ export default function Header() {
                     type="button"
                     onClick={handleLogout}
                     disabled={isPending}
-                    className="w-full flex items-center h-11 px-3 mt-1 rounded-md text-label text-danger hover:bg-danger-soft transition-colors disabled:opacity-50"
+                    className="w-full flex items-center h-11 px-3 mt-1 rounded-md text-label text-danger hover:bg-sunken transition-colors disabled:opacity-50"
                   >
                     {isPending ? "로그아웃하고 있어요" : "로그아웃"}
                   </button>

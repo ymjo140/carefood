@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { cn } from "./cn";
+import { Icon } from "./Icon";
 
 /** 프로필 동그라미 — 이름 첫 글자 */
 export function Avatar({ name, size = "md", className }: { name?: string | null; size?: "sm" | "md"; className?: string }) {
@@ -44,20 +45,24 @@ export function Thumb({ src, alt = "", size = 48, className }: { src?: string | 
   );
 }
 
-/** 안내 상자 — 의료 면책·알레르기 경고 등 */
+/**
+ * 안내 상자 — 의료 면책·알레르기 경고 등.
+ * 바탕은 늘 옅은 회색. 색 상자(분홍·살구)를 쓰지 않고 아이콘 + 제목 색으로 구분합니다.
+ *   danger  빨강 아이콘·제목 (알레르기 경고)    caution  회색 + 경고 아이콘
+ *   brand   앰버 글자 제목                      neutral  회색
+ */
 export function Notice({ tone = "neutral", title, children, className }: {
   tone?: "neutral" | "caution" | "danger" | "brand"; title?: ReactNode; children: ReactNode; className?: string;
 }) {
+  const icon = tone === "danger" || tone === "caution" ? "alert" : tone === "brand" ? "info" : null;
   return (
     <div role={tone === "danger" ? "alert" : undefined}
-      className={cn("rounded-md px-4 py-3 text-label",
-        tone === "neutral" && "bg-sunken text-ink-2",
-        tone === "caution" && "bg-caution-soft text-caution",
-        tone === "danger" && "bg-danger-soft text-danger",
-        tone === "brand" && "bg-brand-soft text-brand-ink",
-        className)}>
-      {title && <p className="font-bold mb-0.5">{title}</p>}
-      <div>{children}</div>
+      className={cn("flex gap-2.5 rounded-md bg-sunken px-4 py-3 text-label text-ink-2", className)}>
+      {icon && <Icon name={icon} size={18} className={cn("shrink-0 mt-px", tone === "danger" ? "text-danger" : tone === "brand" ? "text-brand-ink" : "text-ink-2")} />}
+      <div className="min-w-0">
+        {title && <p className={cn("font-bold mb-0.5", tone === "danger" ? "text-danger" : tone === "brand" ? "text-brand-ink" : "text-ink")}>{title}</p>}
+        <div>{children}</div>
+      </div>
     </div>
   );
 }

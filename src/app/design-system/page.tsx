@@ -3,6 +3,7 @@ import baseline from "../../../scripts/ds/metrics/baseline.json";
 import latest from "../../../scripts/ds/metrics/latest.json";
 import lintJson from "../../../scripts/ds/metrics/lint.json";
 import auditJson from "../../../scripts/ds/metrics/audit.json";
+import build from "../../../scripts/ds/metrics/build.json";
 import Reference, { type DsStatus } from "./Reference";
 
 export const metadata: Metadata = {
@@ -20,10 +21,10 @@ const METRIC_ROWS: Array<[keyof typeof baseline & keyof typeof latest, string]> 
   ["inlineStyles", "페이지 안에 직접 쓴 스타일"],
 ];
 
-type LintItem = { file: string; line: number; rule: string; match: string; snippet: string };
+type LintItem = { file: string; line: number; rule: string; level?: string; match: string; snippet: string };
 const lintResult = lintJson as unknown as {
-  checkedAt: string; files: number; total: number; allowedCount: number;
-  rules: { id: string; message: string; count: number }[];
+  checkedAt: string; files: number; total: number; warnTotal?: number; allowedCount: number;
+  rules: { id: string; level?: string; message: string; count: number }[];
   byFile: [string, number][]; violations: LintItem[]; allowed: LintItem[];
 };
 
@@ -33,14 +34,16 @@ export default function DesignSystemPage() {
     measuredAt: latest.measuredAt,
     baselineAt: baseline.measuredAt,
     files: lintResult.files,
+    build,
     total: lintResult.total,
+    warnTotal: lintResult.warnTotal ?? 0,
     allowedCount: lintResult.allowedCount,
     rules: lintResult.rules,
     topFiles: lintResult.byFile.slice(0, 12),
-    sample: lintResult.violations.slice(0, 30).map((v) => ({ file: v.file, line: v.line, rule: v.rule, match: v.match })),
-    allowed: lintResult.allowed.slice(0, 40).map((v) => ({ file: v.file, line: v.line, rule: v.rule, snippet: v.snippet })),
+    sample: lintResult.violations.slice(0, 30).map((v) => ({ file: v.file, line: v.line, rule: v.rule, level: v.level, match: v.match })),
+    allowed: lintResult.allowed.slice(0, 80).map((v) => ({ file: v.file, line: v.line, rule: v.rule, snippet: v.snippet })),
     audit: {
-      auditedAt: auditJson.auditedAt, base: auditJson.base, pages: auditJson.pages, variants: auditJson.variants,
+      auditedAt: auditJson.auditedAt, base: auditJson.base, commit: (auditJson as { commit?: string | null }).commit ?? null, pages: auditJson.pages, variants: auditJson.variants,
       screenshots: auditJson.screenshots, blocking: auditJson.blocking, totals: auditJson.totals as Record<string, number>,
       byPage: auditJson.byPage,
     },

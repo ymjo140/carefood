@@ -23,7 +23,7 @@ export function ChoiceCard({
       aria-pressed={selected}
       onClick={onClick}
       className={cn(
-        "w-full rounded-lg border transition-colors",
+        "press w-full rounded-lg border",
         selected ? "border-brand bg-brand-soft" : "border-line bg-surface hover:border-line-strong",
         align === "center" ? "flex flex-col items-center justify-center text-center" : "flex items-center gap-3 text-left",
         size === "sm" ? "min-h-11 px-3 py-2" : "min-h-14 px-4 py-3",

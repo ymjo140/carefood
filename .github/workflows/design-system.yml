@@ -23,10 +23,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
       - uses: actions/setup-node@v4
         with: { node-version: 22 }
-      - name: 디자인 시스템 정적 검사
+      - name: 디자인 시스템 정적 검사 (오류 0 이어야 통과)
         run: node scripts/ds/lint.mjs
+      - name: 연결 대조 (링크·API·입력 이름이 빠지지 않았는지)
+        if: always()
+        run: |
+          BASE="${{ github.event.pull_request.base.sha || github.event.before }}"
+          if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ]; then BASE="HEAD~1"; fi
+          node scripts/ds/wiring.mjs --base="$BASE"
       - name: 수치 측정
         if: always()
         run: node scripts/ds/measure.mjs
@@ -45,6 +52,7 @@ jobs:
       - name: 화면 검사
         env:
           DS_AUDIT_BASE: ${{ github.event.inputs.base || github.event.deployment_status.environment_url || github.event.deployment_status.target_url }}
+          DS_AUDIT_COMMIT: ${{ github.event.deployment.sha || github.sha }}
         run: node scripts/ds/audit.mjs
       - name: 리포트 올리기
         if: always()

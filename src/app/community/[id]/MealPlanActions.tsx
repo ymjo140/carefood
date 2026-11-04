@@ -57,32 +57,42 @@ export default function MealPlanActions({
   /* ── 좋아요 ── */
   const handleLike = async () => {
     const userId = getUserId();
-    setIsLiked(prev => !prev);
-    setLikeCount(prev => isLiked ? Math.max(prev - 1, 0) : prev + 1);
+    const wasLiked = isLiked;
+    setIsLiked(!wasLiked);
+    setLikeCount(prev => wasLiked ? Math.max(prev - 1, 0) : prev + 1);
     try {
-      await fetch("/api/community/like", {
+      const res = await fetch("/api/community/like", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ user_id: userId, plan_id: planId }),
       });
-    } catch { /* */ }
+      if (!res.ok) throw new Error(String(res.status));
+    } catch {
+      setIsLiked(wasLiked);
+      setLikeCount(prev => wasLiked ? prev + 1 : Math.max(prev - 1, 0));
+      toast.show("좋아요를 반영하지 못했어요. 다시 시도해 주세요", { tone: "danger" });
+    }
   };
 
   /* ── 식단 복사 ── */
   const handleCopy = async () => {
     try {
       localStorage.setItem("carefood_weekly_box", JSON.stringify({ days: planDays, source: authorName }));
-    } catch { /* */ }
+    } catch { /* */ } // ds-allow: 로컬 저장
     try {
-      await fetch("/api/community/copy", {
+      const res = await fetch("/api/community/copy", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ plan_id: planId }),
       });
-    } catch { /* */ }
+      if (!res.ok) throw new Error(String(res.status));
+    } catch {
+      toast.show("식단 리스트에 담지 못했어요. 다시 시도해 주세요", { tone: "danger" });
+      return;
+    }
     setCopyCount(prev => prev + 1);
     setCopied(true);
-    toast.show("식단 리스트에 담았어요", { action: { label: "보기", href: "/weekly-box" } });
+    toast.show("식단 리스트에 담았어요. 아래 식단 탭에서 볼 수 있어요");
   };
 
   /* ── 댓글 작성 ── */
@@ -102,11 +112,12 @@ export default function MealPlanActions({
         }),
       });
       const data = await res.json();
-      if (data.comment) {
-        setComments(prev => [...prev, data.comment]);
-        setNewComment("");
-      }
-    } catch { /* */ }
+      if (!res.ok || !data.comment) throw new Error(String(res.status));
+      setComments(prev => [...prev, data.comment]);
+      setNewComment("");
+    } catch {
+      toast.show("댓글을 남기지 못했어요. 다시 시도해 주세요", { tone: "danger" });
+    }
     finally { setSubmitting(false); }
   };
 

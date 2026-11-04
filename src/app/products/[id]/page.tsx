@@ -36,7 +36,7 @@ export async function generateMetadata(
   const product = await getProductMeta(id);
 
   if (!product) {
-    return { title: "제품을 찾을 수 없습니다" };
+    return { title: "제품을 찾을 수 없어요" };
   }
 
   const title = product.name;
@@ -378,7 +378,7 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
             <ul className="flex flex-col gap-2">
               {safetyNotes.map((note) => (
                 <li key={note.text} className="flex items-start gap-2 text-label text-ink">
-                  <span className={cn("size-2 rounded-full mt-1.5 shrink-0", note.type === "good" ? "bg-positive" : "bg-caution")} aria-hidden="true" />
+                  <span className={cn("size-2 rounded-full mt-1.5 shrink-0", note.type === "good" ? "bg-positive" : "bg-ink-3")} aria-hidden="true" />
                   <span>{note.text}</span>
                 </li>
               ))}
