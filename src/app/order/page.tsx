@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import Link from "next/link";
+import { Button, Card, EmptyState, Field, Icon, Input, LinkButton, Page, PageHeader, PageLoading, Price, TextLink } from "@/components/ui";
 
 /**
  * 주문 요약 페이지
@@ -33,8 +33,8 @@ type ServiceGroup = {
 };
 
 const SERVICE_LABELS: Record<string, string> = {
-  greating: "🥗 그리팅", yundiet: "💪 윤식단", designmeal: "🍱 디자인밀",
-  sixmeal: "🥩 식스밀", makesalad: "🥙 메이크샐러드", market: "🛒 시판 제품",
+  greating: "그리팅", yundiet: "윤식단", designmeal: "디자인밀",
+  sixmeal: "식스밀", makesalad: "메이크샐러드", market: "시판 제품",
 };
 
 const DAY_LABELS: Record<string, string> = {
@@ -140,140 +140,124 @@ export default function OrderPage() {
     finally { setOrdering(false); }
   };
 
-  if (loading) {
-    return (
-      <div className="max-w-2xl mx-auto px-4 py-12 text-center">
-        <div className="inline-block w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-      </div>
-    );
-  }
+  if (loading) return <PageLoading />;
 
   // 주문 완료
   if (orderResult) {
     return (
-      <div className="max-w-2xl mx-auto px-4 sm:px-6 py-12 text-center">
-        <p className="text-5xl mb-4">✅</p>
-        <h1 className="text-xl font-extrabold mb-2">주문이 접수되었습니다</h1>
-        <p className="text-sm text-muted mb-1">주문번호: {orderResult.id.slice(0, 8)}</p>
-        <p className="text-sm text-muted mb-6">서비스별 발주가 자동으로 처리됩니다</p>
-        <div className="flex gap-3 justify-center">
-          <Link href="/diary" className="bg-primary text-white px-6 py-3 rounded-xl text-sm font-bold">
-            식단 기록하기
-          </Link>
-          <Link href="/" className="border border-border px-6 py-3 rounded-xl text-sm font-medium">
-            홈으로
-          </Link>
+      <Page width="narrow">
+        <div className="min-h-[50vh] flex flex-col items-center justify-center text-center gap-2">
+          <span className="size-12 rounded-full bg-positive-soft text-positive flex items-center justify-center mb-2">
+            <Icon name="check" size={24} />
+          </span>
+          <h1 className="text-title font-bold text-ink">주문을 접수했어요</h1>
+          <p className="text-label text-ink-2">주문번호 <span className="num font-bold text-ink">{orderResult.id.slice(0, 8)}</span></p>
+          <p className="text-label text-ink-2 mb-4">서비스별 발주가 자동으로 처리돼요</p>
+          <div className="flex gap-2">
+            <LinkButton href="/diary">식단 기록하기</LinkButton>
+            <LinkButton href="/" variant="secondary">홈으로 가기</LinkButton>
+          </div>
         </div>
-      </div>
+      </Page>
     );
   }
 
   // 빈 상태
   if (items.length === 0) {
     return (
-      <div className="max-w-2xl mx-auto px-4 sm:px-6 py-12 text-center">
-        <p className="text-4xl mb-3">📦</p>
-        <h1 className="text-lg font-bold mb-2">주문할 식단이 없습니다</h1>
-        <p className="text-sm text-muted mb-6">식단 리스트에서 식단을 구성한 뒤 주문해주세요</p>
-        <Link href="/weekly-box" className="bg-primary text-white px-6 py-3 rounded-xl text-sm font-bold">
-          식단 리스트 만들기
-        </Link>
-      </div>
+      <Page width="narrow">
+        <EmptyState
+          className="mt-10"
+          title="주문할 식단이 없어요"
+          description="식단 리스트에서 식단을 구성한 뒤 주문해 주세요"
+          action={<LinkButton href="/weekly-box">식단 리스트로 가기</LinkButton>}
+        />
+      </Page>
     );
   }
 
+  const ADDRESS_FIELDS: { key: keyof typeof address; label: string; placeholder: string }[] = [
+    { key: "name", label: "받는 분", placeholder: "홍길동" },
+    { key: "phone", label: "연락처", placeholder: "010-0000-0000" },
+    { key: "addr1", label: "주소", placeholder: "도로명 주소" },
+    { key: "addr2", label: "상세 주소", placeholder: "동·호수" },
+    { key: "note", label: "배송 메모 (선택)", placeholder: "문 앞에 놓아 주세요" },
+  ];
+
   return (
-    <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6">
-      <Link href="/weekly-box" className="text-sm text-muted hover:text-foreground mb-4 inline-block">← 식단 리스트</Link>
-      <h1 className="text-xl font-extrabold mb-5">🛒 주문 확인</h1>
+    <Page>
+      <TextLink href="/weekly-box" className="mb-3"><Icon name="chevron-left" size={16} /> 식단 리스트</TextLink>
+      <PageHeader title="주문 확인" />
 
       {/* ── 서비스별 주문 ── */}
-      <div className="space-y-4 mb-6">
+      <div className="flex flex-col gap-4 mb-6">
         {groups.map(g => (
-          <div key={g.service} className="border border-border rounded-xl overflow-hidden">
-            <div className="bg-surface/50 px-4 py-2.5 border-b border-border flex items-center justify-between">
-              <span className="text-sm font-bold">{g.label}</span>
-              <span className="text-xs text-muted">{g.items.length}끼 · {g.deliveryDays.map(d => DAY_LABELS[d]).join("/")}요일</span>
+          <Card key={g.service} padding="none" className="overflow-hidden">
+            <div className="bg-sunken px-4 py-2.5 border-b border-line flex items-center justify-between gap-3">
+              <span className="text-label font-bold text-ink">{g.label}</span>
+              <span className="text-caption text-ink-2"><span className="num">{g.items.length}</span>끼 · {g.deliveryDays.map(d => DAY_LABELS[d]).join("/")}요일</span>
             </div>
-            <div className="divide-y divide-border/30">
+            <div className="divide-y divide-line">
               {g.items.map((it, i) => (
-                <div key={i} className="px-4 py-2.5 flex items-center justify-between">
+                <div key={i} className="px-4 py-2.5 flex items-center justify-between gap-3">
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm truncate">{it.product_name}</p>
-                    <p className="text-[10px] text-muted">
+                    <p className="text-label text-ink truncate">{it.product_name}</p>
+                    <p className="text-caption text-ink-2">
                       {DAY_LABELS[it.day]}요일 {SLOT_LABELS[it.slot]}
-                      {it.calories ? ` · ${it.calories}kcal` : ""}
+                      {it.calories ? <> · <span className="num">{it.calories}</span>kcal</> : ""}
                     </p>
                   </div>
-                  <span className="text-sm font-medium shrink-0 ml-3">
-                    {it.price ? `${it.price.toLocaleString()}원` : "-"}
-                  </span>
+                  {it.price ? <Price value={it.price} className="text-label shrink-0" /> : <span className="text-label text-ink-3 shrink-0">–</span>}
                 </div>
               ))}
             </div>
             {g.total > 0 && (
-              <div className="bg-surface/30 px-4 py-2 flex justify-between text-sm border-t border-border">
-                <span className="text-muted">소계</span>
-                <span className="font-bold">{g.total.toLocaleString()}원</span>
+              <div className="px-4 py-2.5 flex justify-between text-label border-t border-line">
+                <span className="text-ink-2">소계</span>
+                <Price value={g.total} />
               </div>
             )}
-          </div>
+          </Card>
         ))}
       </div>
 
       {/* ── 배송 정보 ── */}
-      <div className="border border-border rounded-xl p-4 mb-6">
-        <h2 className="text-sm font-bold mb-3">📍 배송 정보</h2>
-        <div className="space-y-2">
-          <input type="text" placeholder="받는 분" value={address.name}
-            onChange={e => setAddress(p => ({ ...p, name: e.target.value }))}
-            className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-primary"
-            style={{ minHeight: "36px" }} />
-          <input type="text" placeholder="연락처" value={address.phone}
-            onChange={e => setAddress(p => ({ ...p, phone: e.target.value }))}
-            className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-primary"
-            style={{ minHeight: "36px" }} />
-          <input type="text" placeholder="주소" value={address.addr1}
-            onChange={e => setAddress(p => ({ ...p, addr1: e.target.value }))}
-            className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-primary"
-            style={{ minHeight: "36px" }} />
-          <input type="text" placeholder="상세 주소" value={address.addr2}
-            onChange={e => setAddress(p => ({ ...p, addr2: e.target.value }))}
-            className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-primary"
-            style={{ minHeight: "36px" }} />
-          <input type="text" placeholder="배송 메모 (선택)" value={address.note}
-            onChange={e => setAddress(p => ({ ...p, note: e.target.value }))}
-            className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-primary"
-            style={{ minHeight: "36px" }} />
+      <Card className="mb-6">
+        <h2 className="text-body font-bold text-ink mb-3">배송 정보</h2>
+        <div className="flex flex-col gap-3">
+          {ADDRESS_FIELDS.map(f => (
+            <Field key={f.key} label={f.label}>
+              <Input type={f.key === "phone" ? "tel" : "text"} placeholder={f.placeholder} value={address[f.key]}
+                onChange={e => setAddress(p => ({ ...p, [f.key]: e.target.value }))} />
+            </Field>
+          ))}
         </div>
-      </div>
+      </Card>
 
       {/* ── 결제 요약 ── */}
-      <div className="bg-surface rounded-xl p-4 mb-6">
-        <div className="flex justify-between text-sm mb-2">
-          <span className="text-muted">총 {totalItems}끼</span>
-          <span>{totalPrice.toLocaleString()}원</span>
+      <Card tone="sunken" className="mb-6">
+        <div className="flex justify-between text-label mb-2">
+          <span className="text-ink-2">총 <span className="num">{totalItems}</span>끼</span>
+          <Price value={totalPrice} className="font-medium" />
         </div>
-        <div className="flex justify-between text-sm mb-2">
-          <span className="text-muted">배송비</span>
-          <span className="text-primary">무료</span>
+        <div className="flex justify-between text-label mb-2">
+          <span className="text-ink-2">배송비</span>
+          <span className="text-positive font-medium">무료</span>
         </div>
-        <div className="border-t border-border pt-2 flex justify-between">
-          <span className="font-bold">결제 금액</span>
-          <span className="text-lg font-extrabold text-primary">{totalPrice.toLocaleString()}원</span>
+        <div className="border-t border-line pt-2 flex justify-between items-baseline">
+          <span className="text-body font-bold text-ink">결제 금액</span>
+          <span className="num text-title font-bold text-ink highlight">{totalPrice.toLocaleString()}<span className="text-label font-medium text-ink-2 ml-0.5">원</span></span>
         </div>
-      </div>
+      </Card>
 
       {/* ── 주문 버튼 ── */}
-      <button onClick={handleOrder} disabled={ordering}
-        className="w-full bg-primary text-white py-4 rounded-xl text-sm font-bold disabled:opacity-50 transition-opacity"
-        style={{ minHeight: "48px" }}>
-        {ordering ? "주문 처리 중..." : `${totalPrice.toLocaleString()}원 주문하기`}
-      </button>
+      <Button block onClick={handleOrder} loading={ordering}>
+        {ordering ? "주문하는 중" : `${totalPrice.toLocaleString()}원 주문하기`}
+      </Button>
 
-      <p className="text-[10px] text-muted text-center mt-3">
-        * 각 서비스별로 자동 발주됩니다. 시판 제품은 별도 구매가 필요합니다.
+      <p className="text-caption text-ink-2 text-center mt-3">
+        각 서비스별로 자동 발주돼요. 시판 제품은 따로 구매해야 해요.
       </p>
-    </div>
+    </Page>
   );
 }

@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { Badge, Button, Card, Chip, EmptyState, Field, SectionHeader, Spinner, Textarea, useToast } from "@/components/ui";
+import { RatingInput, RatingStars, ScaleInput } from "@/components/ui/Rating";
 
 type Review = {
   id: string;
@@ -35,15 +37,6 @@ const GENDER_LABELS: Record<string, string> = {
   male: "남성", female: "여성",
 };
 
-function Stars({ rating, size = "sm" }: { rating: number; size?: "sm" | "lg" }) {
-  const sizeClass = size === "lg" ? "text-lg" : "text-sm";
-  return (
-    <span className={`${sizeClass} tracking-wider`} aria-label={`${rating}점`}>
-      {"★".repeat(rating)}{"☆".repeat(5 - rating)}
-    </span>
-  );
-}
-
 export default function ProductReviews({ productId }: { productId: string }) {
   const [reviews, setReviews] = useState<Review[]>([]);
   const [stats, setStats] = useState<ReviewStats | null>(null);
@@ -56,6 +49,7 @@ export default function ProductReviews({ productId }: { productId: string }) {
     comment: "",
   });
   const [submitting, setSubmitting] = useState(false);
+  const toast = useToast();
 
   const fetchReviews = useCallback(async () => {
     try {
@@ -102,195 +96,159 @@ export default function ProductReviews({ productId }: { productId: string }) {
       setShowForm(false);
       setFormData({ rating: 0, would_rebuy: null, taste_salty_feel: 0, taste_sweet_feel: 0, taste_spicy_feel: 0, taste_fatty_feel: 0, consumed_as: "", comment: "" });
       fetchReviews();
-    } catch { /* */ }
+      toast.show("리뷰를 남겼어요");
+    } catch {
+      toast.show("리뷰를 남기지 못했어요. 다시 시도해 주세요", { tone: "danger" });
+    }
     finally { setSubmitting(false); }
   };
 
   return (
     <section className="mb-8">
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="text-sm font-extrabold">리뷰</h2>
-        <button onClick={() => setShowForm(!showForm)}
-          className="text-xs text-primary hover:underline"
-          style={{ minHeight: "unset", minWidth: "unset" }}>
-          {showForm ? "닫기" : "리뷰 쓰기"}
-        </button>
-      </div>
+      <SectionHeader
+        title="리뷰"
+        action={
+          <Button size="sm" variant={showForm ? "ghost" : "secondary"} icon={showForm ? "close" : "edit"} onClick={() => setShowForm(!showForm)}>
+            {showForm ? "닫기" : "리뷰 쓰기"}
+          </Button>
+        }
+      />
 
       {/* 통계 */}
       {stats && stats.count > 0 && (
-        <div className="border border-border rounded-xl p-4 mb-3">
-          <div className="flex items-center gap-4 flex-wrap">
-            <div>
-              <span className="text-2xl font-extrabold text-primary">{stats.avgRating}</span>
-              <span className="text-sm text-muted ml-1">/ 5</span>
+        <Card className="mb-3">
+          <div className="flex items-center gap-x-6 gap-y-3 flex-wrap">
+            <div className="flex flex-col gap-1">
+              <span className="num text-title font-bold text-ink leading-none">
+                {stats.avgRating}<span className="text-label font-medium text-ink-2 ml-0.5">/ 5</span>
+              </span>
+              <RatingStars value={stats.avgRating} />
             </div>
-            <div className="text-xs text-muted space-y-0.5">
-              <p>리뷰 {stats.count}개</p>
-              <p>재구매 의향 {stats.rebuyRate}%</p>
+            <div className="flex flex-col gap-0.5 text-caption text-ink-2">
+              <span>리뷰 <span className="num font-bold text-ink">{stats.count}</span>개</span>
+              <span>재구매 의향 <span className="num font-bold text-ink">{stats.rebuyRate}</span>%</span>
             </div>
             {(stats.avgTaste.salty || stats.avgTaste.sweet || stats.avgTaste.spicy) && (
-              <div className="text-xs text-muted ml-auto space-y-0.5">
-                {stats.avgTaste.salty && <p>짠맛 체감 {stats.avgTaste.salty}/5</p>}
-                {stats.avgTaste.sweet && <p>단맛 체감 {stats.avgTaste.sweet}/5</p>}
-                {stats.avgTaste.spicy && <p>매운맛 체감 {stats.avgTaste.spicy}/5</p>}
+              <div className="flex flex-col gap-0.5 text-caption text-ink-2 sm:ml-auto">
+                {stats.avgTaste.salty && <span>짠맛 체감 <span className="num text-ink">{stats.avgTaste.salty}</span>/5</span>}
+                {stats.avgTaste.sweet && <span>단맛 체감 <span className="num text-ink">{stats.avgTaste.sweet}</span>/5</span>}
+                {stats.avgTaste.spicy && <span>매운맛 체감 <span className="num text-ink">{stats.avgTaste.spicy}</span>/5</span>}
               </div>
             )}
           </div>
-        </div>
+        </Card>
       )}
 
       {/* 리뷰 작성 폼 */}
       {showForm && (
-        <div className="border border-primary/30 rounded-xl p-4 mb-3 space-y-3">
-          {/* 별점 */}
-          <div>
-            <label className="text-xs font-medium mb-1 block">별점</label>
-            <div className="flex gap-1">
-              {[1, 2, 3, 4, 5].map(n => (
-                <button key={n} onClick={() => setFormData(f => ({ ...f, rating: n }))}
-                  className={`text-xl ${n <= formData.rating ? "text-primary" : "text-border"}`}
-                  style={{ minHeight: "32px", minWidth: "32px" }}>
-                  ★
-                </button>
-              ))}
+        <Card tone="default" className="mb-3 border-brand">
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-1.5">
+              <span className="text-label font-medium text-ink">별점</span>
+              <RatingInput value={formData.rating} onChange={(n) => setFormData(f => ({ ...f, rating: n }))} />
             </div>
-          </div>
 
-          {/* 재구매 */}
-          <div>
-            <label className="text-xs font-medium mb-1 block">다시 구매할 의향이 있나요?</label>
-            <div className="flex gap-2">
-              {[{ val: true, label: "네" }, { val: false, label: "아니요" }].map(opt => (
-                <button key={String(opt.val)} onClick={() => setFormData(f => ({ ...f, would_rebuy: opt.val }))}
-                  className={`text-xs px-3 py-1.5 rounded-full ${
-                    formData.would_rebuy === opt.val ? "bg-foreground text-card" : "bg-surface text-foreground/70"
-                  }`} style={{ minHeight: "28px", minWidth: "unset" }}>
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* 맛 체감 */}
-          <div className="grid grid-cols-2 gap-3">
-            {[
-              { key: "taste_salty_feel" as const, label: "짠맛" },
-              { key: "taste_sweet_feel" as const, label: "단맛" },
-              { key: "taste_spicy_feel" as const, label: "매운맛" },
-              { key: "taste_fatty_feel" as const, label: "고소함" },
-            ].map(t => (
-              <div key={t.key}>
-                <label className="text-[11px] text-muted block mb-1">{t.label} 체감</label>
-                <div className="flex gap-0.5">
-                  {[1, 2, 3, 4, 5].map(n => (
-                    <button key={n} onClick={() => setFormData(f => ({ ...f, [t.key]: n }))}
-                      className={`w-6 h-6 text-[10px] rounded ${
-                        n <= formData[t.key] ? "bg-primary text-white" : "bg-surface text-muted"
-                      }`} style={{ minHeight: "24px", minWidth: "24px" }}>
-                      {n}
-                    </button>
-                  ))}
-                </div>
+            <div className="flex flex-col gap-1.5">
+              <span className="text-label font-medium text-ink">다시 구매할 의향이 있나요?</span>
+              <div className="flex gap-2">
+                {[{ val: true, label: "네" }, { val: false, label: "아니요" }].map(opt => (
+                  <Chip key={String(opt.val)} selected={formData.would_rebuy === opt.val}
+                    onClick={() => setFormData(f => ({ ...f, would_rebuy: opt.val }))}>
+                    {opt.label}
+                  </Chip>
+                ))}
               </div>
-            ))}
-          </div>
+            </div>
 
-          {/* 섭취 맥락 */}
-          <div>
-            <label className="text-xs font-medium mb-1 block">어떤 상황에서 드셨나요?</label>
-            <div className="flex gap-1.5 flex-wrap">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {[
-                { val: "meal", label: "식사 대용" },
-                { val: "snack", label: "간식" },
-                { val: "post_workout", label: "운동 후" },
-                { val: "late_night", label: "야식" },
-              ].map(opt => (
-                <button key={opt.val} onClick={() => setFormData(f => ({ ...f, consumed_as: f.consumed_as === opt.val ? "" : opt.val }))}
-                  className={`text-[11px] px-2.5 py-1 rounded-full ${
-                    formData.consumed_as === opt.val ? "bg-foreground text-card" : "bg-surface text-foreground/70"
-                  }`} style={{ minHeight: "26px", minWidth: "unset" }}>
-                  {opt.label}
-                </button>
+                { key: "taste_salty_feel" as const, label: "짠맛" },
+                { key: "taste_sweet_feel" as const, label: "단맛" },
+                { key: "taste_spicy_feel" as const, label: "매운맛" },
+                { key: "taste_fatty_feel" as const, label: "고소함" },
+              ].map(t => (
+                <div key={t.key} className="flex flex-col gap-1.5">
+                  <span className="text-caption text-ink-2">{t.label} 체감</span>
+                  <ScaleInput label={`${t.label} 체감`} value={formData[t.key]} onChange={(n) => setFormData(f => ({ ...f, [t.key]: n }))} />
+                </div>
               ))}
             </div>
+
+            <div className="flex flex-col gap-1.5">
+              <span className="text-label font-medium text-ink">어떤 상황에서 드셨나요?</span>
+              <div className="flex gap-2 flex-wrap">
+                {[
+                  { val: "meal", label: "식사 대용" },
+                  { val: "snack", label: "간식" },
+                  { val: "post_workout", label: "운동 후" },
+                  { val: "late_night", label: "야식" },
+                ].map(opt => (
+                  <Chip key={opt.val} size="sm" selected={formData.consumed_as === opt.val}
+                    onClick={() => setFormData(f => ({ ...f, consumed_as: f.consumed_as === opt.val ? "" : opt.val }))}>
+                    {opt.label}
+                  </Chip>
+                ))}
+              </div>
+            </div>
+
+            <Field label="한마디 (선택)">
+              <Textarea
+                value={formData.comment}
+                onChange={e => setFormData(f => ({ ...f, comment: e.target.value }))}
+                placeholder="이 제품에 대한 의견을 남겨주세요"
+              />
+            </Field>
+
+            <Button block onClick={handleSubmit} disabled={formData.rating === 0} loading={submitting}>
+              {submitting ? "남기는 중" : "리뷰 남기기"}
+            </Button>
           </div>
-
-          {/* 코멘트 */}
-          <textarea
-            value={formData.comment}
-            onChange={e => setFormData(f => ({ ...f, comment: e.target.value }))}
-            placeholder="이 제품에 대한 의견을 남겨주세요 (선택)"
-            className="w-full px-3 py-2 rounded-lg border border-border text-sm resize-none focus:outline-none focus:border-primary"
-            rows={3}
-          />
-
-          <button onClick={handleSubmit} disabled={formData.rating === 0 || submitting}
-            className="w-full bg-primary text-white py-2 rounded-lg text-sm font-bold disabled:opacity-40">
-            {submitting ? "저장 중..." : "리뷰 등록"}
-          </button>
-        </div>
+        </Card>
       )}
 
       {/* 리뷰 목록 */}
       {loading ? (
-        <p className="text-sm text-muted">로딩 중...</p>
+        <div className="flex justify-center py-6"><Spinner /></div>
       ) : reviews.length > 0 ? (
-        <div className="space-y-2">
+        <div className="flex flex-col gap-2">
           {reviews.map(r => (
-            <div key={r.id} className="border border-border rounded-xl p-3">
-              <div className="flex items-center justify-between mb-1">
+            <Card key={r.id} padding="sm">
+              <div className="flex items-center justify-between gap-2 mb-1.5">
                 <div className="flex items-center gap-2">
-                  <Stars rating={r.rating} />
+                  <RatingStars value={r.rating} size={14} />
                   {r.would_rebuy !== null && (
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded ${r.would_rebuy ? "bg-green-50 text-green-600" : "bg-red-50 text-red-500"}`}
-                      style={{ minHeight: "unset", minWidth: "unset" }}>
-                      {r.would_rebuy ? "재구매 의향" : "재구매 ✕"}
-                    </span>
+                    <Badge tone={r.would_rebuy ? "positive" : "neutral"}>{r.would_rebuy ? "재구매 의향" : "재구매 안 함"}</Badge>
                   )}
                 </div>
-                <span className="text-[10px] text-muted">
+                <span className="text-caption text-ink-3 num">
                   {new Date(r.created_at).toLocaleDateString("ko-KR")}
                 </span>
               </div>
 
-              {/* 프로필 태그 */}
-              <div className="flex gap-1 flex-wrap mb-1">
-                {r.reviewer_age_group && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-surface text-muted"
-                    style={{ minHeight: "unset", minWidth: "unset" }}>
-                    {AGE_LABELS[r.reviewer_age_group] || r.reviewer_age_group}
-                  </span>
-                )}
-                {r.reviewer_gender && r.reviewer_gender !== "other" && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-surface text-muted"
-                    style={{ minHeight: "unset", minWidth: "unset" }}>
-                    {GENDER_LABELS[r.reviewer_gender] || r.reviewer_gender}
-                  </span>
-                )}
-                {r.reviewer_concerns?.slice(0, 2).map(c => (
-                  <span key={c} className="text-[10px] px-1.5 py-0.5 rounded bg-primary/8 text-primary/70"
-                    style={{ minHeight: "unset", minWidth: "unset" }}>
-                    {CONCERN_LABELS[c] || c}
-                  </span>
-                ))}
-              </div>
-
-              {r.comment && <p className="text-sm text-foreground/80 mt-1">{r.comment}</p>}
-
-              {/* 맛 체감 */}
-              {(r.taste_salty_feel || r.taste_sweet_feel || r.taste_spicy_feel) && (
-                <div className="flex gap-3 mt-1.5 text-[10px] text-muted">
-                  {r.taste_salty_feel && <span>짠맛 {r.taste_salty_feel}/5</span>}
-                  {r.taste_sweet_feel && <span>단맛 {r.taste_sweet_feel}/5</span>}
-                  {r.taste_spicy_feel && <span>매운맛 {r.taste_spicy_feel}/5</span>}
+              {(r.reviewer_age_group || (r.reviewer_gender && r.reviewer_gender !== "other") || r.reviewer_concerns?.length > 0) && (
+                <div className="flex gap-1 flex-wrap mb-1.5">
+                  {r.reviewer_age_group && <Badge>{AGE_LABELS[r.reviewer_age_group] || r.reviewer_age_group}</Badge>}
+                  {r.reviewer_gender && r.reviewer_gender !== "other" && <Badge>{GENDER_LABELS[r.reviewer_gender] || r.reviewer_gender}</Badge>}
+                  {r.reviewer_concerns?.slice(0, 2).map(c => (
+                    <Badge key={c} tone="brand">{CONCERN_LABELS[c] || c}</Badge>
+                  ))}
                 </div>
               )}
-            </div>
+
+              {r.comment && <p className="text-body text-ink">{r.comment}</p>}
+
+              {(r.taste_salty_feel || r.taste_sweet_feel || r.taste_spicy_feel) && (
+                <div className="flex gap-3 mt-1.5 text-caption text-ink-2">
+                  {r.taste_salty_feel && <span>짠맛 <span className="num">{r.taste_salty_feel}</span>/5</span>}
+                  {r.taste_sweet_feel && <span>단맛 <span className="num">{r.taste_sweet_feel}</span>/5</span>}
+                  {r.taste_spicy_feel && <span>매운맛 <span className="num">{r.taste_spicy_feel}</span>/5</span>}
+                </div>
+              )}
+            </Card>
           ))}
         </div>
       ) : (
-        <p className="text-sm text-muted py-4 text-center">아직 리뷰가 없습니다. 첫 리뷰를 남겨보세요!</p>
+        <EmptyState title="아직 리뷰가 없어요" description="이 제품을 드셔 봤다면 첫 리뷰를 남겨 주세요" />
       )}
     </section>
   );

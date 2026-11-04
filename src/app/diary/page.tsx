@@ -2,6 +2,11 @@
 
 import { useEffect, useState, useCallback, useMemo } from "react";
 import Link from "next/link";
+import {
+  Badge, Button, Card, Chip, ChipRow, ConfirmSheet, EmptyState, Field, Icon, IconButton, Input, Kcal,
+  LinkButton, ListRow, MacroGrid, MealSlot, Page, PageHeader, PageLoading, SectionHeader, Spinner, Tabs,
+  buttonClass, cn, useToast,
+} from "@/components/ui";
 
 /* ── 타입 ── */
 type DiaryEntry = {
@@ -81,11 +86,22 @@ type CommonFood = {
 
 /* ── 끼니 설정 ── */
 const MEAL_TYPES = [
-  { key: "breakfast", label: "아침", emoji: "☀️", icon: "sun", color: "var(--meal-breakfast)" },
-  { key: "lunch", label: "점심", emoji: "🌤️", icon: "noon", color: "var(--meal-lunch)" },
-  { key: "dinner", label: "저녁", emoji: "🌙", icon: "moon", color: "var(--meal-dinner)" },
-  { key: "snack", label: "간식", emoji: "🍪", icon: "snack", color: "var(--meal-snack)" },
+  { key: "breakfast", label: "아침" },
+  { key: "lunch", label: "점심" },
+  { key: "dinner", label: "저녁" },
+  { key: "snack", label: "간식" },
 ];
+
+/* 주간 스트립 막대 — 목표 대비 비율에 따른 고정 클래스 */
+const WEEK_BAR = { good: "bg-positive", mid: "bg-brand", low: "bg-caution" } as const;
+
+/* 영양 갭 점 색 */
+function gapDot(nutrient: string) {
+  if (nutrient.includes("protein")) return "bg-protein";
+  if (nutrient.includes("sodium")) return "bg-sodium";
+  if (nutrient.includes("fat")) return "bg-fat";
+  return "bg-carbs";
+}
 
 const DAY_NAMES = ["일", "월", "화", "수", "목", "금", "토"];
 
@@ -134,44 +150,58 @@ function getMealAlert(entries: DiaryEntry[]): { nutrient: string; label: string;
   return null;
 }
 
-/* ── SVG 아이콘 ── */
-function MealIcon({ type, color }: { type: string; color: string }) {
-  const props = { viewBox: "0 0 24 24", width: 20, height: 20, fill: "none", stroke: color, strokeWidth: 2, strokeLinecap: "round" as const };
-  switch (type) {
-    case "sun": return <svg {...props}><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32l1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41m11.32-11.32l1.41-1.41"/></svg>;
-    case "noon": return <svg {...props}><circle cx="12" cy="12" r="5"/><path d="M12 1v3m0 16v3"/></svg>;
-    case "moon": return <svg {...props}><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>;
-    case "snack": return <svg {...props}><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>;
-    default: return null;
-  }
-}
-
 /* ── 제품 리스트 (공통) ── */
 function ProductList({ items, onSelect }: { items: SearchResult[]; onSelect: (p: SearchResult) => void }) {
   return (
-    <div className="space-y-1 max-h-52 overflow-y-auto">
+    <div className="flex flex-col max-h-60 overflow-y-auto -mx-3">
       {items.map((p) => (
-        <button
+        <ListRow
           key={p.id}
           onClick={() => onSelect(p)}
-          className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-card transition-colors flex items-center justify-between gap-2"
-        >
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium truncate">{p.name}</p>
-            <div className="flex gap-2 text-[10px] text-muted">
+          title={p.name}
+          meta={
+            <span className="flex flex-wrap gap-x-2">
               {p.manufacturer && <span>{p.manufacturer}</span>}
-              {p.calories != null && <span>{p.calories}kcal</span>}
-              {p.protein_g != null && <span>단백질 {p.protein_g}g</span>}
-            </div>
-          </div>
-          <span className="text-primary text-xs shrink-0">+ 추가</span>
-        </button>
+              {p.calories != null && <span><span className="num">{p.calories}</span>kcal</span>}
+              {p.protein_g != null && <span>단백질 <span className="num">{p.protein_g}</span>g</span>}
+            </span>
+          }
+          trailing={<span className="text-label font-bold text-brand-ink">추가</span>}
+        />
       ))}
     </div>
   );
 }
 
-/* ── 칼로리 링 SVG ── */
+/* ── 일반 음식 리스트 ── */
+function CommonFoodList({ items, onSelect }: { items: CommonFood[]; onSelect: (f: CommonFood) => void }) {
+  return (
+    <div className="flex flex-col -mx-3">
+      {items.map((food) => (
+        <ListRow
+          key={food.id}
+          onClick={() => onSelect(food)}
+          leading={<span className="size-10 rounded-md bg-sunken flex items-center justify-center text-title" aria-hidden="true">{food.icon}</span>}
+          title={food.name}
+          meta={
+            <span className="flex flex-wrap gap-x-2">
+              <span>{food.serving_desc}</span>
+              {food.calories != null && <span><span className="num">{food.calories}</span>kcal</span>}
+              {food.protein_g != null && <span>단백질 <span className="num">{food.protein_g}</span>g</span>}
+            </span>
+          }
+          trailing={<span className="text-label font-bold text-brand-ink">기록</span>}
+        />
+      ))}
+    </div>
+  );
+}
+
+function GroupLabel({ children }: { children: React.ReactNode }) {
+  return <p className="text-caption font-bold text-ink-2 mb-1.5">{children}</p>;
+}
+
+/* ── 칼로리 링 ── */
 function CalorieRing({ consumed, goal }: { consumed: number; goal: number }) {
   const r = 84;
   const circumference = 2 * Math.PI * r;
@@ -181,33 +211,23 @@ function CalorieRing({ consumed, goal }: { consumed: number; goal: number }) {
   const isOver = consumed > goal;
 
   return (
-    <div className="relative" style={{ width: 200, height: 200 }}>
-      <svg viewBox="0 0 200 200" width="200" height="200">
-        <defs>
-          <linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor="var(--ring-start)" />
-            <stop offset="100%" stopColor="var(--ring-end)" />
-          </linearGradient>
-        </defs>
-        <circle cx="100" cy="100" r={r} fill="none" stroke="var(--ring-track)" strokeWidth="14" />
+    <div className="relative size-[200px]">
+      <svg viewBox="0 0 200 200" width="200" height="200" aria-hidden="true">
+        <circle cx="100" cy="100" r={r} fill="none" strokeWidth="14" className="stroke-sunken" />
         <circle
           cx="100" cy="100" r={r} fill="none"
-          stroke={isOver ? "var(--accent)" : "url(#ringGrad)"}
+          className={cn("transition-[stroke-dashoffset] duration-500", isOver ? "stroke-caution" : "stroke-brand")}
           strokeWidth="14" strokeLinecap="round"
           strokeDasharray={circumference}
           strokeDashoffset={offset}
           transform="rotate(-90 100 100)"
-          style={{ transition: "stroke-dashoffset 0.6s ease" }}
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span
-          className="leading-none tracking-tight"
-          style={{ fontFamily: "var(--font-outfit), sans-serif", fontSize: 44, fontWeight: 800, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.03em" }}
-        >
-          {isOver ? `+${consumed - goal}` : remaining}
+        <span className="num text-display font-bold text-ink leading-none">
+          <span className="highlight">{isOver ? `+${consumed - goal}` : remaining}</span>
         </span>
-        <span className="text-[13px] text-muted font-medium mt-0.5">
+        <span className="text-label text-ink-2 mt-1">
           {isOver ? "kcal 초과" : "kcal 남음"}
         </span>
       </div>
