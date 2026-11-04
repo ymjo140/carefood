@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { Badge, Button, Card, ProgressBar, SectionHeader, Steps, Textarea, TextLink, useToast } from "@/components/ui";
+import { Badge, Button, Card, Notice, ProgressBar, SectionHeader, Steps, Textarea, TextLink, useToast } from "@/components/ui";
 import { RatingInput, RatingStars } from "@/components/ui/Rating";
 import { ChoiceList, type ChoiceTone } from "@/components/ui/ChoiceList";
 
@@ -161,7 +161,6 @@ export default function TasteReview({ productId }: { productId: string }) {
 
       if (res.ok) {
         setSubmitted(true);
-        toast.show("맛평가를 저장했어요");
         setShowForm(false);
         // 리프레시
         const refreshRes = await fetch(`/api/reviews?productId=${productId}`);
@@ -183,8 +182,6 @@ export default function TasteReview({ productId }: { productId: string }) {
   const formSteps = ["consumption", "ease", "rating", "comment"];
   const currentFormStep = formSteps[formStep];
 
-  void submitted;
-
   return (
     <section className="mb-8">
       <SectionHeader
@@ -195,6 +192,10 @@ export default function TasteReview({ productId }: { productId: string }) {
           </Button>
         ) : undefined}
       />
+
+      {submitted && (
+        <Notice tone="brand" className="mb-3">맛평가를 저장했어요. 소중한 의견 고마워요</Notice>
+      )}
 
       {stats && <ReviewStatsCard stats={stats} />}
 
