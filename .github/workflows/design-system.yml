@@ -39,9 +39,10 @@ jobs:
         run: node scripts/ds/measure.mjs
 
   audit:
+    # 운영 배포만 검사한다. 미리보기·배포별 고유 주소는 Vercel 로그인으로 보호돼 있어 화면이 아니라 로그인 창이 찍힌다.
     if: >-
       github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'deployment_status' && github.event.deployment_status.state == 'success')
+      (github.event_name == 'deployment_status' && github.event.deployment_status.state == 'success' && github.event.deployment.environment == 'Production')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -49,9 +50,20 @@ jobs:
         with: { node-version: 22 }
       - name: Playwright 설치
         run: npm i --no-save playwright@1.49.1 && npx playwright install --with-deps chromium
+      - name: 운영 주소가 이 커밋으로 바뀔 때까지 기다리기
+        env:
+          BASE: ${{ github.event.inputs.base || 'https://carefood-iota.vercel.app' }}
+          SHA: ${{ github.event.deployment.sha || github.sha }}
+        run: |
+          SHORT="${SHA:0:7}"
+          for i in $(seq 1 30); do
+            if curl -fsS "$BASE/design-system" | grep -q "$SHORT"; then echo "운영 주소에 $SHORT 반영됨"; exit 0; fi
+            sleep 10
+          done
+          echo "운영 주소가 $SHORT 로 바뀌지 않았어요 — 지금 운영 중인 버전을 검사합니다"
       - name: 화면 검사
         env:
-          DS_AUDIT_BASE: ${{ github.event.inputs.base || github.event.deployment_status.environment_url || github.event.deployment_status.target_url }}
+          DS_AUDIT_BASE: ${{ github.event.inputs.base || 'https://carefood-iota.vercel.app' }}
           DS_AUDIT_COMMIT: ${{ github.event.deployment.sha || github.sha }}
         run: node scripts/ds/audit.mjs
       - name: 리포트 올리기
