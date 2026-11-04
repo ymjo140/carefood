@@ -327,7 +327,7 @@ async function main() {
     byPage: list.map(({ route, url }) => ({ route, url, issues: results.filter((r) => r.url === url).reduce((s, r) => s + r.issues.filter((i) => i.type !== "touch-target").length, 0) })),
   };
   mkdirSync(join(ROOT, "scripts/ds/metrics"), { recursive: true });
-  writeFileSync(join(ROOT, "scripts/ds/metrics/audit.json"), JSON.stringify(summary, null, 2));
+  if (!ONLY.length) writeFileSync(join(ROOT, "scripts/ds/metrics/audit.json"), JSON.stringify(summary, null, 2)); // 일부 페이지만 본 결과는 기준 페이지 숫자로 쓰지 않는다
   writeFileSync(join(OUT, "results.json"), JSON.stringify({ summary, results }, null, 2));
   writeFileSync(join(OUT, "index.html"), renderReport(summary, results, list));
   console.log(`\n[ds:audit] 페이지 ${list.length}개 × ${VARIANTS.length} = 스크린샷 ${results.length}장 · ${summary.seconds}초`);

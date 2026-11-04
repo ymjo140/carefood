@@ -1,35 +1,95 @@
 {
-  "auditedAt": "2026-11-04T08:59:02.909Z",
-  "base": "https://carefood-iota.vercel.app",
-  "commit": "c0a521c2f4d0beb8ec0a04ebee1fbd6a3e992272",
+  "auditedAt": "2026-11-04T08:38:32.228Z",
+  "base": "http://localhost:3100",
+  "commit": "fedac951e1bfdd089b1506da12e0178a967d8343",
   "ignored": "cdn\\.011st\\.com",
-  "pages": 4,
+  "pages": 24,
   "variants": [
     "데스크톱",
     "모바일",
     "모바일 다크"
   ],
-  "screenshots": 12,
-  "seconds": 69,
+  "screenshots": 72,
+  "seconds": 196,
   "totals": {
-    "error": 3,
+    "error": 0,
     "overflow": 0,
     "off-color": 0,
     "contrast": 0,
-    "word-break": 2,
+    "word-break": 0,
     "tiny-text": 0,
-    "touch-target": 0
+    "touch-target": 2
   },
-  "blocking": 5,
+  "blocking": 0,
   "byPage": [
+    {
+      "route": "/",
+      "url": "/",
+      "issues": 0
+    },
+    {
+      "route": "/admin",
+      "url": "/admin",
+      "issues": 0
+    },
+    {
+      "route": "/admin/insights",
+      "url": "/admin/insights",
+      "issues": 0
+    },
+    {
+      "route": "/admin/odm",
+      "url": "/admin/odm",
+      "issues": 0
+    },
+    {
+      "route": "/admin/orders",
+      "url": "/admin/orders",
+      "issues": 0
+    },
+    {
+      "route": "/community",
+      "url": "/community",
+      "issues": 0
+    },
+    {
+      "route": "/community/[id]",
+      "url": "/community/fc8c8e13-03c1-465f-a159-86fcf4749ce8",
+      "issues": 0
+    },
     {
       "route": "/design-system",
       "url": "/design-system",
-      "issues": 5
+      "issues": 0
     },
     {
       "route": "/diary",
       "url": "/diary",
+      "issues": 0
+    },
+    {
+      "route": "/diary/report",
+      "url": "/diary/report",
+      "issues": 0
+    },
+    {
+      "route": "/family",
+      "url": "/family",
+      "issues": 0
+    },
+    {
+      "route": "/health",
+      "url": "/health",
+      "issues": 0
+    },
+    {
+      "route": "/health/report",
+      "url": "/health/report",
+      "issues": 0
+    },
+    {
+      "route": "/login",
+      "url": "/login",
       "issues": 0
     },
     {
@@ -38,8 +98,48 @@
       "issues": 0
     },
     {
+      "route": "/onboarding",
+      "url": "/onboarding",
+      "issues": 0
+    },
+    {
+      "route": "/order",
+      "url": "/order",
+      "issues": 0
+    },
+    {
+      "route": "/privacy",
+      "url": "/privacy",
+      "issues": 0
+    },
+    {
+      "route": "/products",
+      "url": "/products",
+      "issues": 0
+    },
+    {
+      "route": "/products/[id]",
+      "url": "/products/14accb63-c5c7-4dc9-a35a-880307cc93a8",
+      "issues": 0
+    },
+    {
       "route": "/recommend",
       "url": "/recommend",
+      "issues": 0
+    },
+    {
+      "route": "/terms",
+      "url": "/terms",
+      "issues": 0
+    },
+    {
+      "route": "/vendor/apply",
+      "url": "/vendor/apply",
+      "issues": 0
+    },
+    {
+      "route": "/weekly-box",
+      "url": "/weekly-box",
       "issues": 0
     }
   ]
