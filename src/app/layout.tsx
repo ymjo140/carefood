@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono, Noto_Sans_KR, Outfit } from "next/font/google";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import { ToastProvider } from "@/components/ui";
 import "./globals.css";
 
 const notoSansKR = Noto_Sans_KR({
@@ -78,9 +79,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     >
       <head>
         <link rel="apple-touch-icon" href="/icons/icon-192.png" />
-        <meta name="theme-color" content="#C4870A" />
+        <meta name="theme-color" content="#FBF8F3" media="(prefers-color-scheme: light)" />
+        <meta name="theme-color" content="#141210" media="(prefers-color-scheme: dark)" />
       </head>
-      <body className="min-h-full flex flex-col bg-background text-foreground">
+      <body className="min-h-full flex flex-col bg-canvas text-ink">
+        <ToastProvider>
         <Header />
         <script
           dangerouslySetInnerHTML={{
@@ -89,6 +92,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
         <main className="flex-1">{children}</main>
         <Footer />
+        </ToastProvider>
       </body>
     </html>
   );

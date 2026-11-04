@@ -1,0 +1,39 @@
+{
+  "auditedAt": "2026-11-04T07:29:13.920Z",
+  "base": "http://localhost:3100",
+  "pages": 3,
+  "variants": [
+    "데스크톱",
+    "모바일",
+    "모바일 다크"
+  ],
+  "screenshots": 9,
+  "seconds": 27,
+  "totals": {
+    "error": 0,
+    "overflow": 0,
+    "off-color": 166,
+    "contrast": 151,
+    "word-break": 6,
+    "tiny-text": 240,
+    "touch-target": 106
+  },
+  "blocking": 563,
+  "byPage": [
+    {
+      "route": "/community",
+      "url": "/community",
+      "issues": 356
+    },
+    {
+      "route": "/design-system",
+      "url": "/design-system",
+      "issues": 150
+    },
+    {
+      "route": "/weekly-box",
+      "url": "/weekly-box",
+      "issues": 57
+    }
+  ]
+}

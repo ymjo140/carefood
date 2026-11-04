@@ -59,3 +59,6 @@ kurly_products.json
 kurly_products_full.json
 venv/
 .venv/
+
+# design system audit output
+ds-audit/

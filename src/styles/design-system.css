@@ -1,0 +1,298 @@
+/* ════════════════════════════════════════════════════════════════
+   케어푸드 디자인 시스템 — 토큰
+   ----------------------------------------------------------------
+   새 화면은 여기 있는 값만 씁니다. 없는 게 필요하면 여기에 먼저
+   추가하고, /design-system 기준 페이지에도 같이 그려 두세요.
+
+   Tailwind 기본 팔레트·그림자·글자 크기·둥글기·굵기·블러는
+   아래 @theme 에서 전부 비웠습니다. 그래서 bg-blue-500, shadow-lg,
+   text-sm, rounded-2xl 같은 기본값은 써도 화면에 칠해지지 않습니다.
+   ════════════════════════════════════════════════════════════════ */
+
+/* ── 1. 원본 값 (라이트) ── */
+:root,
+[data-theme="light"] {
+  /* 바탕·면 — 쌀종이 톤의 따뜻한 무채색 */
+  --ds-canvas: #FBF8F3;
+  --ds-surface: #FFFFFF;
+  --ds-sunken: #F3EEE6;
+  --ds-line: #E7E0D5;
+  --ds-line-strong: #CFC5B6;
+
+  /* 글자 */
+  --ds-ink: #1F1A14;
+  --ds-ink-2: #6B6157;
+  --ds-ink-3: #756A5E;
+
+  /* 브랜드 — 앰버. 채운 면 위의 글자는 흰색이 아니라 먹색(on-brand) */
+  --ds-brand: #C4870A;
+  --ds-brand-hover: #B87F09;
+  --ds-brand-soft: #FAF1DC;
+  --ds-brand-ink: #8A5A00;
+  --ds-on-brand: #1C1305;
+
+  /* 상태 */
+  --ds-positive: #2A7349;
+  --ds-positive-soft: #E8F3EC;
+  --ds-caution: #A34A09;
+  --ds-caution-soft: #FCEFE3;
+  --ds-danger: #B83228;
+  --ds-danger-soft: #FBE9E6;
+
+  /* 영양소 — 글자로 써도 대비 4.5 이상 */
+  --ds-protein: #2F6DAE;
+  --ds-protein-soft: #EFF4FA;
+  --ds-carbs: #936200;
+  --ds-carbs-soft: #FBF5E6;
+  --ds-fat: #B2501F;
+  --ds-fat-soft: #FCF1EB;
+  --ds-sodium: #7A5CB3;
+  --ds-sodium-soft: #F3EFF9;
+
+  /* 끼니 — 점·세로줄 표시 전용 (글자 색으로 쓰지 않음) */
+  --ds-meal-breakfast: #E0A030;
+  --ds-meal-lunch: #D47040;
+  --ds-meal-dinner: #6870C8;
+  --ds-meal-snack: #48A870;
+
+  /* 장식 — 형광펜 하나 */
+  --ds-highlight: #F8DE8F;
+
+  /* 겹침 */
+  --ds-scrim: rgb(20 16 12 / 0.48);
+  --ds-overlay-shadow: 0 12px 32px rgb(20 16 12 / 0.16), 0 2px 6px rgb(20 16 12 / 0.06);
+}
+
+/* ── 2. 원본 값 (다크) ── */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ds-canvas: #141210;
+    --ds-surface: #1E1A16;
+    --ds-sunken: #2A251F;
+    --ds-line: #3A332B;
+    --ds-line-strong: #52493E;
+    --ds-ink: #F2EBE0;
+    --ds-ink-2: #B5A894;
+    --ds-ink-3: #9C8F7C;
+    --ds-brand: #E8AD3F;
+    --ds-brand-hover: #F2BE5C;
+    --ds-brand-soft: #3A2E17;
+    --ds-brand-ink: #F0BD5E;
+    --ds-on-brand: #1C1305;
+    --ds-positive: #5CC98A;
+    --ds-positive-soft: #1F2E24;
+    --ds-caution: #F0A04B;
+    --ds-caution-soft: #3A2A17;
+    --ds-danger: #F07A6E;
+    --ds-danger-soft: #3A1E1B;
+    --ds-protein: #6AACF0;
+    --ds-protein-soft: #1A2633;
+    --ds-carbs: #E8B840;
+    --ds-carbs-soft: #332A12;
+    --ds-fat: #E88060;
+    --ds-fat-soft: #33201A;
+    --ds-sodium: #A890D8;
+    --ds-sodium-soft: #262033;
+    --ds-meal-breakfast: #E8B048;
+    --ds-meal-lunch: #E08058;
+    --ds-meal-dinner: #8890E0;
+    --ds-meal-snack: #60C088;
+    --ds-highlight: #5C4714;
+    --ds-scrim: rgb(0 0 0 / 0.6);
+    --ds-overlay-shadow: 0 12px 32px rgb(0 0 0 / 0.5), 0 2px 6px rgb(0 0 0 / 0.3);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"],
+[data-theme="dark"] {
+  --ds-canvas: #141210;
+  --ds-surface: #1E1A16;
+  --ds-sunken: #2A251F;
+  --ds-line: #3A332B;
+  --ds-line-strong: #52493E;
+  --ds-ink: #F2EBE0;
+  --ds-ink-2: #B5A894;
+  --ds-ink-3: #9C8F7C;
+  --ds-brand: #E8AD3F;
+  --ds-brand-hover: #F2BE5C;
+  --ds-brand-soft: #3A2E17;
+  --ds-brand-ink: #F0BD5E;
+  --ds-on-brand: #1C1305;
+  --ds-positive: #5CC98A;
+  --ds-positive-soft: #1F2E24;
+  --ds-caution: #F0A04B;
+  --ds-caution-soft: #3A2A17;
+  --ds-danger: #F07A6E;
+  --ds-danger-soft: #3A1E1B;
+  --ds-protein: #6AACF0;
+  --ds-protein-soft: #1A2633;
+  --ds-carbs: #E8B840;
+  --ds-carbs-soft: #332A12;
+  --ds-fat: #E88060;
+  --ds-fat-soft: #33201A;
+  --ds-sodium: #A890D8;
+  --ds-sodium-soft: #262033;
+  --ds-meal-breakfast: #E8B048;
+  --ds-meal-lunch: #E08058;
+  --ds-meal-dinner: #8890E0;
+  --ds-meal-snack: #60C088;
+  --ds-highlight: #5C4714;
+  --ds-scrim: rgb(0 0 0 / 0.6);
+  --ds-overlay-shadow: 0 12px 32px rgb(0 0 0 / 0.5), 0 2px 6px rgb(0 0 0 / 0.3);
+  color-scheme: dark;
+}
+[data-theme="light"] { color-scheme: light; }
+
+/* ── 3. Tailwind 기본값 비우기 + 케어푸드 값만 등록 ── */
+@theme {
+  --color-*: initial;
+  --shadow-*: initial;
+  --inset-shadow-*: initial;
+  --drop-shadow-*: initial;
+  --text-shadow-*: initial;
+  --text-*: initial;
+  --radius-*: initial;
+  --font-*: initial;
+  --blur-*: initial;
+
+  /* 글자 크기 5종 — caption 12 / label 14 / body 16 / title 20 / display 32 */
+  --text-caption: 0.75rem;
+  --text-caption--line-height: 1.125rem;
+  --text-label: 0.875rem;
+  --text-label--line-height: 1.25rem;
+  --text-body: 1rem;
+  --text-body--line-height: 1.5rem;
+  --text-title: 1.25rem;
+  --text-title--line-height: 1.75rem;
+  --text-display: 2rem;
+  --text-display--line-height: 2.375rem;
+
+  /* 굵기 3종 */
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-bold: 700;
+
+  /* 둥글기 4종 (+ rounded-full) */
+  --radius-sm: 6px;   /* 배지 */
+  --radius-md: 10px;  /* 버튼·입력·작은 타일 */
+  --radius-lg: 16px;  /* 카드 */
+  --radius-xl: 24px;  /* 시트·모달 */
+
+  /* 그림자 1종 — 화면 위에 뜨는 것(모달·시트·토스트·메뉴)만 */
+  --shadow-overlay: var(--ds-overlay-shadow);
+}
+
+@theme inline {
+  --font-sans: var(--font-noto-sans-kr), -apple-system, "Apple SD Gothic Neo", sans-serif;
+  --font-num: var(--font-outfit), var(--font-noto-sans-kr), sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
+  --color-canvas: var(--ds-canvas);
+  --color-surface: var(--ds-surface);
+  --color-sunken: var(--ds-sunken);
+  --color-line: var(--ds-line);
+  --color-line-strong: var(--ds-line-strong);
+  --color-ink: var(--ds-ink);
+  --color-ink-2: var(--ds-ink-2);
+  --color-ink-3: var(--ds-ink-3);
+  --color-brand: var(--ds-brand);
+  --color-brand-hover: var(--ds-brand-hover);
+  --color-brand-soft: var(--ds-brand-soft);
+  --color-brand-ink: var(--ds-brand-ink);
+  --color-on-brand: var(--ds-on-brand);
+  --color-positive: var(--ds-positive);
+  --color-positive-soft: var(--ds-positive-soft);
+  --color-caution: var(--ds-caution);
+  --color-caution-soft: var(--ds-caution-soft);
+  --color-danger: var(--ds-danger);
+  --color-danger-soft: var(--ds-danger-soft);
+  --color-protein: var(--ds-protein);
+  --color-protein-soft: var(--ds-protein-soft);
+  --color-carbs: var(--ds-carbs);
+  --color-carbs-soft: var(--ds-carbs-soft);
+  --color-fat: var(--ds-fat);
+  --color-fat-soft: var(--ds-fat-soft);
+  --color-sodium: var(--ds-sodium);
+  --color-sodium-soft: var(--ds-sodium-soft);
+  --color-meal-breakfast: var(--ds-meal-breakfast);
+  --color-meal-lunch: var(--ds-meal-lunch);
+  --color-meal-dinner: var(--ds-meal-dinner);
+  --color-meal-snack: var(--ds-meal-snack);
+  --color-highlight: var(--ds-highlight);
+  --color-scrim: var(--ds-scrim);
+}
+
+/* ── 4. 디자인 시스템 유틸리티 ── */
+
+/* 숫자 — 영양·가격·칼로리 */
+@utility num {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* 형광펜 — 한 화면에 핵심 숫자 하나에만. 디자인 시스템 유일의 그라데이션 */
+@utility highlight {
+  background-image: linear-gradient(transparent 58%, var(--ds-highlight) 58%);
+  padding-inline: 0.125em;
+}
+
+/* 가로 스크롤 줄 — 스크롤바 숨김 */
+@utility scroll-row {
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  &::-webkit-scrollbar { display: none; }
+}
+
+/* ── 5. 기본 요소 ── */
+@layer base {
+  html { background: var(--ds-canvas); }
+  body {
+    background: var(--ds-canvas);
+    color: var(--ds-ink);
+    font-family: var(--font-sans);
+    font-size: 1rem;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    /* 한국어: 단어 중간에서 줄을 바꾸지 않는다 ("김하/늘" 방지) */
+    word-break: keep-all;
+    overflow-wrap: anywhere;
+  }
+  :focus-visible {
+    outline: 2px solid var(--ds-brand);
+    outline-offset: 2px;
+  }
+  ::placeholder { color: var(--ds-ink-3); opacity: 1; }
+  ::selection { background: var(--ds-highlight); color: var(--ds-ink); }
+  button { cursor: pointer; }
+  button:disabled { cursor: not-allowed; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+/* ── 6. 네이티브 슬라이더 (맛 선호·필터) ── */
+@layer components {
+  .ds-range {
+    width: 100%;
+    height: 28px;
+    accent-color: var(--ds-brand);
+    cursor: pointer;
+  }
+  .ds-check {
+    width: 20px;
+    height: 20px;
+    accent-color: var(--ds-brand);
+    cursor: pointer;
+  }
+}
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border-width: 0;
+}
