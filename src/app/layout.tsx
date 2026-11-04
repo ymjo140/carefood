@@ -79,8 +79,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     >
       <head>
         <link rel="apple-touch-icon" href="/icons/icon-192.png" />
-        <meta name="theme-color" content="#FBF8F3" media="(prefers-color-scheme: light)" />
-        <meta name="theme-color" content="#141210" media="(prefers-color-scheme: dark)" />
+        <meta name="theme-color" content="#FBF8F3" media="(prefers-color-scheme: light)" />{/* ds-allow: 브라우저 theme-color 메타 */}
+        <meta name="theme-color" content="#141210" media="(prefers-color-scheme: dark)" />{/* ds-allow: 브라우저 theme-color 메타 */}
       </head>
       <body className="min-h-full flex flex-col bg-canvas text-ink">
         <ToastProvider>

@@ -2,7 +2,10 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
+import {
+  Badge, Button, Card, EmptyState, LinkButton, ListRow, Notice, Page, PageHeader, PageLoading, Price, ProgressBar,
+  SectionHeader, Stat, type BadgeTone,
+} from "@/components/ui";
 
 // ── 타입 ──
 type HealthData = {
@@ -177,11 +180,13 @@ function analyzeHealth(data: HealthData): ReportData {
   };
 }
 
-const STATUS_COLORS = {
-  good: { bg: "bg-emerald-50 dark:bg-emerald-900/20", text: "text-emerald-700 dark:text-emerald-400", border: "border-emerald-200 dark:border-emerald-800", dot: "bg-emerald-500" },
-  caution: { bg: "bg-amber-50 dark:bg-amber-900/20", text: "text-amber-700 dark:text-amber-400", border: "border-amber-200 dark:border-amber-800", dot: "bg-amber-500" },
-  warning: { bg: "bg-red-50 dark:bg-red-900/20", text: "text-red-700 dark:text-red-400", border: "border-red-200 dark:border-red-800", dot: "bg-red-500" },
+/* 상태 → 디자인 시스템 tone (같은 의미는 같은 색) */
+const STATUS_TONE: Record<NutrientAdvice["status"], { badge: BadgeTone; notice: "neutral" | "caution" | "danger"; label: string }> = {
+  good: { badge: "positive", notice: "neutral", label: "기준 범위" },
+  caution: { badge: "caution", notice: "caution", label: "확인 필요" },
+  warning: { badge: "danger", notice: "danger", label: "높음" },
 };
+const BMI_TONE: Record<string, BadgeTone> = { good: "positive", caution: "caution", warning: "danger" };
 
 type QuickProduct = {
   id: string;
@@ -236,188 +241,120 @@ export default function HealthReportPage() {
     setLoading(false);
   }, []);
 
-  if (loading) {
-    return (
-      <div className="min-h-[calc(100vh-3.5rem)] flex items-center justify-center">
-        <div className="inline-block w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-      </div>
-    );
-  }
+  if (loading) return <PageLoading />;
 
   if (!report) {
     return (
-      <div className="min-h-[calc(100vh-3.5rem)] flex items-center justify-center px-4">
-        <div className="text-center">
-          <p className="text-muted mb-4">건강검진 데이터가 없어요</p>
-          <Link
-            href="/health"
-            className="inline-block bg-primary text-white px-6 py-3 rounded-full font-bold"
-          >
-            건강검진 정보 입력하기
-          </Link>
-        </div>
-      </div>
+      <Page width="narrow">
+        <EmptyState
+          title="건강검진 데이터가 없어요"
+          description="검진 수치를 넣으면 성분 기준에 맞춘 리포트를 만들어 드려요"
+          action={<LinkButton href="/health">건강검진 정보 입력하기</LinkButton>}
+        />
+      </Page>
     );
   }
 
-  const scoreColor = report.overallScore >= 70 ? "text-emerald-600" : report.overallScore >= 50 ? "text-amber-600" : "text-red-600";
+  const scoreTone: "positive" | "caution" | "danger" = report.overallScore >= 70 ? "positive" : report.overallScore >= 50 ? "caution" : "danger";
   const scoreLabel = report.overallScore >= 80 ? "양호" : report.overallScore >= 60 ? "보통" : report.overallScore >= 40 ? "주의" : "관리 필요";
 
   return (
-    <div className="min-h-[calc(100vh-3.5rem)] px-4 py-8">
-      <div className="max-w-lg mx-auto">
-        {/* 헤더 */}
-        <div className="mb-8">
-          <h1 className="text-2xl font-extrabold mb-2">나의 영양 리포트</h1>
-          <p className="text-muted text-sm">
-            입력하신 건강검진 정보를 기반으로 분석한 결과예요.
-            <br />
-            <span className="text-xs">의학적 진단이 아닌 성분 매칭 참고 자료입니다</span>
-          </p>
+    <Page width="narrow">
+      <PageHeader
+        title="나의 영양 리포트"
+        description="입력한 건강검진 수치로 정리한 성분 매칭 참고 자료예요"
+      />
+
+      {/* 종합 점수 */}
+      <Card className="mb-3">
+        <div className="flex items-end justify-between gap-4">
+          <Stat size="lg" emphasis label="영양 균형 점수 (100점 기준)" value={report.overallScore} unit="점" />
+          <Badge tone={scoreTone}>{scoreLabel}</Badge>
         </div>
+        <ProgressBar value={report.overallScore} max={100} tone={scoreTone} className="mt-4" label="영양 균형 점수" />
+      </Card>
 
-        {/* 종합 점수 */}
-        <div className="bg-card border border-border rounded-2xl p-6 mb-6 text-center">
-          <p className="text-sm text-muted mb-2">영양 균형 점수</p>
-          <div className="flex items-center justify-center gap-3 mb-3">
-            <span className={`text-5xl font-extrabold ${scoreColor}`}>
-              {report.overallScore}
-            </span>
-            <span className="text-muted text-lg">/100</span>
+      {/* BMI */}
+      {report.bmi && (
+        <Card className="mb-6">
+          <div className="flex items-end justify-between gap-4">
+            <Stat label="BMI (체질량지수)" value={report.bmi.value} />
+            <Badge tone={BMI_TONE[report.bmi.status] || "neutral"}>{report.bmi.label}</Badge>
           </div>
-          <span className={`inline-block px-3 py-1 rounded-full text-sm font-medium ${
-            report.overallScore >= 70 ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400"
-            : report.overallScore >= 50 ? "bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400"
-            : "bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400"
-          }`}>
-            {scoreLabel}
-          </span>
-        </div>
+        </Card>
+      )}
 
-        {/* BMI */}
-        {report.bmi && (
-          <div className="bg-card border border-border rounded-2xl p-5 mb-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted mb-1">BMI (체질량지수)</p>
-                <p className="text-2xl font-bold">{report.bmi.value}</p>
-              </div>
-              <span className={`px-3 py-1.5 rounded-full text-sm font-medium ${
-                report.bmi.status === "good" ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400"
-                : report.bmi.status === "caution" ? "bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400"
-                : "bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400"
-              }`}>
-                {report.bmi.label}
-              </span>
-            </div>
-          </div>
-        )}
-
-        {/* 영양 분석 카드 */}
-        {report.advice.length > 0 && (
-          <div className="space-y-3 mb-6">
-            <h2 className="font-bold text-sm text-muted uppercase tracking-wide">영양 분석</h2>
+      {/* 영양 분석 카드 */}
+      {report.advice.length > 0 && (
+        <section className="mb-6">
+          <SectionHeader title="영양 분석" />
+          <div className="flex flex-col gap-2">
             {report.advice.map((item) => {
-              const colors = STATUS_COLORS[item.status];
+              const t = STATUS_TONE[item.status];
               return (
-                <div key={item.nutrient} className={`${colors.bg} border ${colors.border} rounded-2xl p-4`}>
-                  <div className="flex items-start gap-3">
-                    <div className={`w-2.5 h-2.5 rounded-full ${colors.dot} mt-1.5 shrink-0`} />
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className={`font-bold text-sm ${colors.text}`}>{item.label}</span>
-                      </div>
-                      <p className="text-sm text-foreground/80 mb-2">{item.detail}</p>
-                      <p className="text-xs text-muted">{item.recommendation}</p>
-                    </div>
+                <Card key={item.nutrient} padding="sm">
+                  <div className="flex items-center justify-between gap-3 mb-1">
+                    <span className="num text-body font-bold text-ink">{item.label}</span>
+                    <Badge tone={t.badge}>{t.label}</Badge>
                   </div>
-                </div>
+                  <p className="text-label text-ink">{item.detail}</p>
+                  <p className="text-caption text-ink-2 mt-1">{item.recommendation}</p>
+                </Card>
               );
             })}
           </div>
-        )}
+        </section>
+      )}
 
-        {/* 입력 수치 기반 영양 필터 */}
-        {report.autoConditions.length > 0 && (
-          <div className="bg-primary/5 border border-primary/20 rounded-2xl p-4 mb-6">
-            <p className="text-sm font-medium text-primary mb-2">입력 수치 기반 영양 필터</p>
-            <p className="text-xs text-muted leading-relaxed">
-              입력하신 수치를 기반으로 아래 성분 기준을 적용합니다:
-            </p>
-            <div className="flex flex-wrap gap-2 mt-2">
-              {report.autoConditions.map((c) => (
-                <span key={c} className="px-2.5 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary">
-                  {c === "diabetes" ? "당류 제한" : c === "hypertension" ? "나트륨 제한" : c === "hyperlipidemia" ? "지방 제한" : c}
-                </span>
-              ))}
-            </div>
+      {/* 입력 수치 기반 영양 필터 */}
+      {report.autoConditions.length > 0 && (
+        <Card tone="brand" className="mb-6">
+          <p className="text-label font-bold text-brand-ink mb-1">입력 수치 기반 영양 필터</p>
+          <p className="text-caption text-ink-2">입력한 수치에 맞춰 아래 성분 기준을 적용해요</p>
+          <div className="flex flex-wrap gap-2 mt-3">
+            {report.autoConditions.map((c) => (
+              <Badge key={c} tone="brand">
+                {c === "diabetes" ? "당류 제한" : c === "hypertension" ? "나트륨 제한" : c === "hyperlipidemia" ? "지방 제한" : c}
+              </Badge>
+            ))}
           </div>
-        )}
+        </Card>
+      )}
 
-        {/* 맞춤 추천 제품 Top 5 */}
-        {topProducts.length > 0 && (
-          <div className="mb-6">
-            <h2 className="font-bold text-sm text-muted uppercase tracking-wide mb-3">건강검진 맞춤 추천</h2>
-            <div className="space-y-2">
-              {topProducts.map((p, i) => {
-                const bestPrice = p.product_prices?.[0]?.price;
-                return (
-                  <Link
-                    key={p.id}
-                    href={`/products/${p.id}`}
-                    className="flex items-center gap-3 p-3 bg-card border border-border rounded-xl hover:border-primary/30 transition-colors"
-                  >
-                    <span className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center text-xs font-bold text-primary shrink-0">
-                      {i + 1}
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium leading-tight line-clamp-1">{p.name}</p>
-                      <p className="text-xs text-muted mt-0.5">
-                        {p.reasons.slice(0, 2).join(" · ")}
-                        {bestPrice ? ` · ${bestPrice.toLocaleString()}원` : ""}
-                      </p>
-                    </div>
-                    <span className="text-xs font-bold text-primary shrink-0">
-                      {p.match_score}점
-                    </span>
-                  </Link>
-                );
-              })}
-            </div>
-          </div>
-        )}
+      {/* 맞춤 추천 제품 Top 5 */}
+      {topProducts.length > 0 && (
+        <section className="mb-6">
+          <SectionHeader title="건강검진 맞춤 추천" />
+          <Card padding="none" className="p-1">
+            {topProducts.map((p, i) => {
+              const bestPrice = p.product_prices?.[0]?.price;
+              return (
+                <ListRow
+                  key={p.id}
+                  href={`/products/${p.id}`}
+                  leading={<span className="num size-8 rounded-md bg-sunken inline-flex items-center justify-center text-label font-bold text-ink-2">{i + 1}</span>}
+                  title={p.name}
+                  meta={<>{p.reasons.slice(0, 2).join(" · ")}{bestPrice ? <> · <Price value={bestPrice} className="text-caption" /></> : null}</>}
+                  trailing={<span className="num text-label font-bold text-brand-ink">{p.match_score}점</span>}
+                />
+              );
+            })}
+          </Card>
+        </section>
+      )}
 
-        {/* CTA 버튼 */}
-        <div className="space-y-3">
-          <Link
-            href="/products"
-            className="block w-full bg-primary text-white py-3.5 rounded-full font-bold text-center hover:bg-primary-dark transition-colors"
-          >
-            맞춤 추천 받기
-          </Link>
-          <div className="flex gap-3">
-            <Link
-              href="/health"
-              className="flex-1 border border-border py-3 rounded-full font-medium text-center hover:bg-card transition-colors"
-            >
-              정보 수정
-            </Link>
-            <button
-              onClick={() => router.push("/")}
-              className="flex-1 border border-border py-3 rounded-full font-medium hover:bg-card transition-colors"
-            >
-              홈으로
-            </button>
-          </div>
+      {/* 다음 행동 */}
+      <div className="flex flex-col gap-2">
+        <LinkButton href="/products" block>맞춤 추천 받기</LinkButton>
+        <div className="flex gap-2">
+          <LinkButton href="/health" variant="secondary" block>정보 수정하기</LinkButton>
+          <Button variant="secondary" block onClick={() => router.push("/")}>홈으로</Button>
         </div>
-
-        {/* 면책 조항 */}
-        <p className="text-center text-xs text-muted mt-8 leading-relaxed">
-          본 리포트는 식품 성분 매칭을 위한 참고 자료이며,
-          <br />
-          의학적 진단이나 처방을 대체하지 않습니다.
-        </p>
       </div>
-    </div>
+
+      <Notice className="mt-6">
+        이 리포트는 식품 성분 매칭을 위한 참고 자료이며, 의학적 진단이나 처방을 대신하지 않아요.
+      </Notice>
+    </Page>
   );
 }

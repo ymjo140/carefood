@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Icon } from "@/components/ui";
 
 /**
  * 범용 공유 버튼
@@ -55,7 +56,7 @@ export default function ShareButton({
       className={className}
       style={style}
     >
-      {copied ? "✓ 복사됨!" : children || "공유하기"}
+      {copied ? <span className="inline-flex items-center gap-1"><Icon name="check" size={16} />링크를 복사했어요</span> : children || "공유하기"}
     </button>
   );
 }

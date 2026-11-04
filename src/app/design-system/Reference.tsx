@@ -25,6 +25,15 @@ export type DsStatus = {
   sample: { file: string; line: number; rule: string; match: string }[];
   allowed: { file: string; line: number; rule: string; snippet: string }[];
   metrics: { label: string; before: number; after: number }[];
+  audit: {
+    auditedAt: string; base: string; pages: number; variants: string[]; screenshots: number; blocking: number;
+    totals: Record<string, number>; byPage: { route: string; url: string; issues: number }[];
+  };
+};
+
+const AUDIT_LABELS: Record<string, string> = {
+  error: "화면 오류·실패 요청", overflow: "가로 넘침", "off-color": "기준 밖 색", contrast: "흐린 글자",
+  "word-break": "한글 단어 쪼개짐", "tiny-text": "12px 미만 글자", "touch-target": "작은 터치 영역 (경고)",
 };
 
 /* ── 색 목록: 이름 · 용도 · 대비를 잴 바탕 ── */
@@ -349,9 +358,36 @@ export default function Reference({ status }: { status: DsStatus }) {
           </Card>
         )}
 
-        <Notice className="mt-4" title="화면 자동 검사">
-          <Code>npm run ds:audit</Code> 를 실행하면 전 페이지를 데스크톱·모바일로 띄워 스크린샷을 찍고 가로 넘침, 기준 밖 색, 흐린 글자, 한글 단어 쪼개짐, 콘솔 오류를 검사해 리포트를 만듭니다. 잴 수 없는 건(여백이 어색한지, 누를 수 있어 보이는지) 스크린샷을 사람이 봐야 합니다.
-        </Notice>
+        <Card className="mt-4">
+          <div className="flex flex-wrap items-center gap-2 mb-1">
+            <p className="text-label font-bold text-ink">화면 자동 검사</p>
+            <Badge tone={status.audit.blocking === 0 ? "positive" : "danger"}>{status.audit.blocking === 0 ? "통과" : `문제 ${status.audit.blocking}건`}</Badge>
+          </div>
+          <p className="text-caption text-ink-2 mb-3">
+            {new Date(status.audit.auditedAt).toLocaleString("ko-KR")} · 페이지 {status.audit.pages}개 × {status.audit.variants.join(" / ")} = 스크린샷 {status.audit.screenshots}장 · {status.audit.base}
+          </p>
+          <div className="grid gap-2 grid-cols-2 sm:grid-cols-4 lg:grid-cols-7">
+            {Object.entries(AUDIT_LABELS).map(([k, label]) => {
+              const n = status.audit.totals[k] || 0;
+              return (
+                <div key={k} className="rounded-md bg-sunken p-2.5 flex flex-col gap-0.5 min-w-0">
+                  <span className={cn("num text-title font-bold", n === 0 ? "text-positive" : k === "touch-target" ? "text-caution" : "text-danger")}>{n}</span>
+                  <span className="text-caption text-ink-2">{label}</span>
+                </div>
+              );
+            })}
+          </div>
+          {status.audit.byPage.some((p) => p.issues > 0) && (
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {status.audit.byPage.filter((p) => p.issues > 0).map((p) => (
+                <Badge key={p.url} tone="danger"><span className="font-mono">{p.route}</span> {p.issues}</Badge>
+              ))}
+            </div>
+          )}
+          <p className="text-caption text-ink-3 mt-3">
+            <Code>npm run ds:audit</Code> 로 다시 검사하면 스크린샷이 든 리포트가 ds-audit/report 에 생깁니다. 배포가 끝날 때마다 GitHub Actions 에서도 돌아갑니다. 잴 수 없는 것(여백이 어색한지, 누를 수 있어 보이는지)은 스크린샷을 사람이 봐야 합니다.
+          </p>
+        </Card>
       </Section>
 
       {/* ───────────── 색 ───────────── */}

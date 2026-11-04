@@ -1,6 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { Button, Sheet, MealTag, useToast } from "@/components/ui";
+
+const MEAL_OPTIONS = ["breakfast", "lunch", "dinner", "snack"] as const;
 
 /**
  * "먹었어요" 버튼 — 상품 상세 페이지에서 식사 기록 추가
@@ -11,6 +14,7 @@ export default function MealLogButton({ productId, productName }: { productId: s
   const [showMenu, setShowMenu] = useState(false);
   const [logged, setLogged] = useState(false);
   const [saving, setSaving] = useState(false);
+  const toast = useToast();
 
   useEffect(() => {
     try {
@@ -43,10 +47,14 @@ export default function MealLogButton({ productId, productName }: { productId: s
       if (res.ok) {
         setLogged(true);
         setShowMenu(false);
+        toast.show("식단에 기록했어요", { action: { label: "보기", href: "/diary" } });
         setTimeout(() => setLogged(false), 3000);
+      } else {
+        toast.show("기록하지 못했어요. 다시 시도해 주세요", { tone: "danger" });
       }
     } catch (e) {
       console.error(e);
+      toast.show("기록하지 못했어요. 다시 시도해 주세요", { tone: "danger" });
     }
     setSaving(false);
   };
@@ -55,46 +63,36 @@ export default function MealLogButton({ productId, productName }: { productId: s
   if (!userId) return null;
 
   return (
-    <div className="relative">
+    <>
       {logged ? (
-        <div className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 text-sm font-medium">
-          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
-          </svg>
-          기록됨
-        </div>
+        <Button variant="secondary" icon="check" disabled>기록했어요</Button>
       ) : (
-        <button
-          onClick={() => setShowMenu(!showMenu)}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-primary/10 text-primary text-sm font-bold hover:bg-primary/20 transition-colors"
-        >
-          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M8.1 13.34l2.83-2.83L3.91 3.5a4.008 4.008 0 000 5.66l4.19 4.18zm6.78-1.81c1.53.71 3.68.21 5.27-1.38 1.91-1.91 2.28-4.65.81-6.12-1.46-1.46-4.2-1.1-6.12.81-1.59 1.59-2.09 3.74-1.38 5.27L3.7 19.87l1.41 1.41L12 14.41l6.88 6.88 1.41-1.41L13.41 13l1.47-1.47z" />
-          </svg>
-          먹었어요
-        </button>
+        <Button variant="secondary" icon="plus" onClick={() => setShowMenu(true)}>먹었어요</Button>
       )}
 
-      {/* 끼니 선택 메뉴 */}
-      {showMenu && (
-        <div className="absolute right-0 top-full mt-2 bg-card border border-border rounded-xl shadow-lg overflow-hidden z-10 min-w-[120px]">
-          {[
-            { key: "breakfast", label: "아침" },
-            { key: "lunch", label: "점심" },
-            { key: "dinner", label: "저녁" },
-            { key: "snack", label: "간식" },
-          ].map((m) => (
+      {/* 끼니 선택 */}
+      <Sheet
+        open={showMenu}
+        onClose={() => setShowMenu(false)}
+        title="어느 끼니에 기록할까요?"
+        description={productName}
+        size="sm"
+      >
+        <div className="flex flex-col gap-2">
+          {MEAL_OPTIONS.map((key) => (
             <button
-              key={m.key}
-              onClick={() => handleLog(m.key)}
+              key={key}
+              type="button"
+              onClick={() => handleLog(key)}
               disabled={saving}
-              className="w-full text-left px-4 py-3 text-sm hover:bg-surface transition-colors disabled:opacity-50"
+              className="w-full flex items-center justify-between h-12 px-4 rounded-md border border-line bg-surface hover:border-line-strong transition-colors disabled:opacity-50"
             >
-              {m.label}
+              <MealTag meal={key} />
+              <span className="text-label text-brand-ink font-bold">기록하기</span>
             </button>
           ))}
         </div>
-      )}
-    </div>
+      </Sheet>
+    </>
   );
 }

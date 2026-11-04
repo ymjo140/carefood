@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { Icon, Notice } from "@/components/ui";
 
 const ALLERGEN_KEYWORDS: Record<string, { keywords: string[]; label: string }> = {
   egg: { keywords: ["계란", "달걀", "난류", "난백", "난황", "에그"], label: "계란" },
@@ -42,20 +43,12 @@ export default function AllergenWarning({ productName }: { productName: string }
   if (warnings.length === 0) return null;
 
   return (
-    <div
-      className="rounded-xl px-4 py-3 mb-4 flex items-start gap-2.5"
-      style={{ background: "rgba(220,38,38,0.08)", border: "1px solid rgba(220,38,38,0.25)" }}
+    <Notice
+      tone="danger"
+      className="mb-4"
+      title={<span className="inline-flex items-center gap-1.5"><Icon name="alert" size={16} />알레르기 성분이 들어 있을 수 있어요</span>}
     >
-      <span className="text-base mt-0.5">⚠️</span>
-      <div>
-        <p className="text-sm font-bold" style={{ color: "#DC2626" }}>
-          알레르기 주의
-        </p>
-        <p className="text-xs mt-0.5 text-muted">
-          이 제품에 <strong style={{ color: "#DC2626" }}>{warnings.join(", ")}</strong> 성분이 포함되어 있을 수 있습니다.
-          제품 라벨을 반드시 확인하세요.
-        </p>
-      </div>
-    </div>
+      <span className="font-bold">{warnings.join(", ")}</span> — 프로필에 등록한 알레르기와 겹쳐요. 제품 라벨을 꼭 확인하세요.
+    </Notice>
   );
 }

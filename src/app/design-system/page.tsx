@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import baseline from "../../../scripts/ds/metrics/baseline.json";
 import latest from "../../../scripts/ds/metrics/latest.json";
 import lintJson from "../../../scripts/ds/metrics/lint.json";
+import auditJson from "../../../scripts/ds/metrics/audit.json";
 import Reference, { type DsStatus } from "./Reference";
 
 export const metadata: Metadata = {
@@ -38,6 +39,11 @@ export default function DesignSystemPage() {
     topFiles: lintResult.byFile.slice(0, 12),
     sample: lintResult.violations.slice(0, 30).map((v) => ({ file: v.file, line: v.line, rule: v.rule, match: v.match })),
     allowed: lintResult.allowed.slice(0, 40).map((v) => ({ file: v.file, line: v.line, rule: v.rule, snippet: v.snippet })),
+    audit: {
+      auditedAt: auditJson.auditedAt, base: auditJson.base, pages: auditJson.pages, variants: auditJson.variants,
+      screenshots: auditJson.screenshots, blocking: auditJson.blocking, totals: auditJson.totals as Record<string, number>,
+      byPage: auditJson.byPage,
+    },
     metrics: METRIC_ROWS.map(([k, label]) => ({ label, before: Number(baseline[k]), after: Number(latest[k]) })),
   };
   return <Reference status={status} />;

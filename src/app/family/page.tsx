@@ -1,7 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import Link from "next/link";
+import {
+  Badge, Button, Card, Chip, ConfirmSheet, EmptyState, Field, Icon, Input, LinkButton, Notice, Page, PageHeader, PageLoading, Select, useToast,
+} from "@/components/ui";
 import { createClient } from "@/lib/supabase/client";
 
 type FamilyProfile = {
@@ -37,10 +39,10 @@ type NewProfile = {
 };
 
 const CONCERN_OPTIONS = [
-  { key: "gut_health", label: "장건강", emoji: "🌿" },
-  { key: "skin", label: "피부건강", emoji: "✨" },
-  { key: "weight", label: "체중관리", emoji: "🏃" },
-  { key: "energy", label: "활력충전", emoji: "⚡" },
+  { key: "gut_health", label: "장건강" },
+  { key: "skin", label: "피부건강" },
+  { key: "weight", label: "체중관리" },
+  { key: "energy", label: "활력충전" },
 ];
 
 const RELATIONSHIP_OPTIONS = [
@@ -74,6 +76,8 @@ export default function FamilyPage() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<NewProfile>({ ...emptyProfile });
   const [saving, setSaving] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<FamilyProfile | null>(null);
+  const toast = useToast();
 
   useEffect(() => {
     (async () => {
@@ -122,6 +126,7 @@ export default function FamilyPage() {
       setProfiles((prev) => [...prev, data.profile]);
       setForm({ ...emptyProfile });
       setShowForm(false);
+      toast.show(`${data.profile.nickname}님을 추가했어요`);
     }
     setSaving(false);
   };
@@ -134,120 +139,87 @@ export default function FamilyPage() {
       body: JSON.stringify({ id: profileId, userId }),
     });
     setProfiles((prev) => prev.filter((p) => p.id !== profileId));
+    toast.show("가족 정보를 삭제했어요");
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-[calc(100vh-3.5rem)] flex items-center justify-center">
-        <div className="inline-block w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-      </div>
-    );
-  }
+  if (loading) return <PageLoading />;
 
   if (!userId) {
     return (
-      <div className="min-h-[calc(100vh-3.5rem)] flex items-center justify-center px-4">
-        <div className="text-center">
-          <p className="text-muted mb-4">가족 관리는 로그인이 필요해요</p>
-          <Link href="/login?returnTo=/family" className="inline-block bg-primary text-white px-6 py-3 rounded-full font-bold">
-            로그인하기
-          </Link>
-        </div>
-      </div>
+      <Page width="narrow">
+        <EmptyState
+          title="가족 관리는 로그인이 필요해요"
+          description="로그인하면 가족 건강 정보를 등록하고 맞춤 추천을 대신 받아볼 수 있어요"
+          action={<LinkButton href="/login?returnTo=/family">로그인하기</LinkButton>}
+        />
+      </Page>
     );
   }
 
+  const setField = <K extends keyof NewProfile>(key: K, value: NewProfile[K]) => setForm((f) => ({ ...f, [key]: value }));
+
   return (
-    <div className="min-h-[calc(100vh-3.5rem)] px-4 py-6">
-      <div className="max-w-lg mx-auto">
-        {/* 헤더 */}
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-2xl font-extrabold">가족 건강 관리</h1>
-            <p className="text-sm text-muted">가족의 건강 정보를 등록하고 맞춤 추천을 받아보세요</p>
-          </div>
-          <button
-            onClick={() => setShowForm(!showForm)}
-            className="text-sm bg-primary text-white px-4 py-2 rounded-xl font-bold"
-          >
-            {showForm ? "취소" : "+ 추가"}
-          </button>
-        </div>
+    <Page width="narrow">
+      <PageHeader
+        title="가족 건강 관리"
+        description="가족의 건강 정보를 등록하고 맞춤 추천을 받아보세요"
+        actions={
+          <Button size="sm" variant={showForm ? "secondary" : "primary"} icon={showForm ? undefined : "plus"} onClick={() => setShowForm(!showForm)}>
+            {showForm ? "취소" : "가족 추가하기"}
+          </Button>
+        }
+      />
 
-        {/* 추가 폼 */}
-        {showForm && (
-          <div className="bg-card border border-border rounded-2xl p-5 mb-6 space-y-5">
-            <h2 className="font-bold">가족 정보 입력</h2>
-
-            {/* 기본 정보 */}
+      {/* 추가 폼 */}
+      {showForm && (
+        <Card className="mb-6">
+          <h2 className="text-body font-bold text-ink mb-4">가족 정보 입력</h2>
+          <div className="flex flex-col gap-4">
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-medium mb-1">이름/별칭</label>
-                <input
-                  type="text"
-                  value={form.nickname}
-                  onChange={(e) => setForm({ ...form, nickname: e.target.value })}
-                  placeholder="예: 어머니"
-                  className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-sm focus:border-primary outline-none"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium mb-1">관계</label>
-                <select
-                  value={form.relationship}
-                  onChange={(e) => setForm({ ...form, relationship: e.target.value })}
-                  className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-sm focus:border-primary outline-none"
-                >
+              <Field label="이름/별칭">
+                <Input type="text" value={form.nickname} onChange={(e) => setField("nickname", e.target.value)} placeholder="예: 어머니" />
+              </Field>
+              <Field label="관계">
+                <Select value={form.relationship} onChange={(e) => setField("relationship", e.target.value)}>
                   {RELATIONSHIP_OPTIONS.map((r) => (
                     <option key={r.key} value={r.key}>{r.label}</option>
                   ))}
-                </select>
-              </div>
+                </Select>
+              </Field>
             </div>
 
-            <div>
-              <label className="block text-xs font-medium mb-1">출생년도 (선택)</label>
-              <input
-                type="text"
-                inputMode="numeric"
-                value={form.birth_year}
-                onChange={(e) => setForm({ ...form, birth_year: e.target.value.replace(/\D/g, "") })}
-                placeholder="1960"
-                className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-sm focus:border-primary outline-none"
-              />
-            </div>
+            <Field label="출생년도 (선택)">
+              <Input type="text" inputMode="numeric" value={form.birth_year}
+                onChange={(e) => setField("birth_year", e.target.value.replace(/\D/g, ""))} placeholder="1960" />
+            </Field>
 
-            {/* 건강 관심사 */}
-            <div>
-              <label className="block text-xs font-medium mb-2">건강 관심사</label>
+            <div className="flex flex-col gap-1.5">
+              <span className="text-label font-medium text-ink">건강 관심사</span>
               <div className="flex flex-wrap gap-2">
                 {CONCERN_OPTIONS.map((c) => (
-                  <button
+                  <Chip
                     key={c.key}
+                    selected={form.concerns.includes(c.key)}
                     onClick={() => {
                       const next = form.concerns.includes(c.key)
                         ? form.concerns.filter((x) => x !== c.key)
                         : [...form.concerns, c.key];
-                      setForm({ ...form, concerns: next });
+                      setField("concerns", next);
                     }}
-                    className={`px-3 py-2 rounded-xl text-sm transition-all ${
-                      form.concerns.includes(c.key)
-                        ? "bg-primary/10 border-2 border-primary text-primary font-medium"
-                        : "bg-surface border-2 border-border"
-                    }`}
                   >
-                    {c.emoji} {c.label}
-                  </button>
+                    {c.label}
+                  </Chip>
                 ))}
               </div>
             </div>
 
             {/* 건강검진 수치 (접이식) */}
-            <details className="group">
-              <summary className="text-xs font-medium text-primary cursor-pointer">
-                건강검진 수치 입력 (선택) ▾
+            <details className="group rounded-md bg-sunken px-3 py-2">
+              <summary className="flex items-center justify-between gap-2 h-9 text-label font-medium text-ink cursor-pointer list-none">
+                건강검진 수치 입력 (선택)
+                <Icon name="chevron-down" size={18} className="text-ink-2 transition-transform group-open:rotate-180" />
               </summary>
-              <div className="mt-3 grid grid-cols-2 gap-3">
+              <div className="mt-2 mb-1 grid grid-cols-2 gap-3">
                 {[
                   { key: "height_cm" as const, label: "키 (cm)", ph: "170" },
                   { key: "weight_kg" as const, label: "체중 (kg)", ph: "65" },
@@ -256,117 +228,81 @@ export default function FamilyPage() {
                   { key: "total_cholesterol" as const, label: "총 콜레스테롤", ph: "200" },
                   { key: "ldl" as const, label: "LDL", ph: "130" },
                 ].map((f) => (
-                  <div key={f.key}>
-                    <label className="block text-xs text-muted mb-1">{f.label}</label>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      value={form[f.key]}
-                      onChange={(e) => setForm({ ...form, [f.key]: e.target.value })}
-                      placeholder={f.ph}
-                      className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:border-primary outline-none"
-                    />
-                  </div>
+                  <Field key={f.key} label={f.label}>
+                    <Input type="text" inputMode="decimal" value={form[f.key]}
+                      onChange={(e) => setField(f.key, e.target.value)} placeholder={f.ph} />
+                  </Field>
                 ))}
               </div>
             </details>
 
-            <button
-              onClick={handleSave}
-              disabled={!form.nickname.trim() || saving}
-              className="w-full bg-primary text-white py-3 rounded-full font-bold hover:bg-primary-dark transition-colors disabled:opacity-40"
-            >
-              {saving ? "저장 중..." : "가족 추가하기"}
-            </button>
+            <Button block onClick={handleSave} disabled={!form.nickname.trim()} loading={saving}>
+              {saving ? "저장 중" : "가족 추가하기"}
+            </Button>
           </div>
-        )}
+        </Card>
+      )}
 
-        {/* 가족 목록 */}
-        {profiles.length === 0 && !showForm ? (
-          <div className="text-center py-16 bg-card border border-border rounded-2xl">
-            <p className="text-3xl mb-3">👨‍👩‍👧‍👦</p>
-            <p className="font-bold mb-1">아직 등록된 가족이 없어요</p>
-            <p className="text-sm text-muted mb-4">가족을 추가하면 맞춤 식품 추천을 대신 받아줄 수 있어요</p>
-            <button
-              onClick={() => setShowForm(true)}
-              className="bg-primary text-white px-5 py-2.5 rounded-full text-sm font-bold"
-            >
-              가족 추가하기
-            </button>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {profiles.map((p) => {
-              const age = p.birth_year ? new Date().getFullYear() - p.birth_year : null;
-
-              return (
-                <div key={p.id} className="bg-card border border-border rounded-2xl p-4">
-                  <div className="flex items-start justify-between mb-3">
-                    <div>
-                      <h3 className="font-bold text-lg">{p.nickname}</h3>
-                      <p className="text-xs text-muted">
-                        {RELATIONSHIP_OPTIONS.find((r) => r.key === p.relationship)?.label || p.relationship}
-                        {age ? ` · ${age}세` : ""}
-                        {p.bmi ? ` · BMI ${p.bmi}` : ""}
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => handleDelete(p.id)}
-                      className="text-xs text-muted hover:text-red-500 transition-colors px-2 py-1"
-                    >
-                      삭제
-                    </button>
+      {/* 가족 목록 */}
+      {profiles.length === 0 && !showForm ? (
+        <EmptyState
+          title="아직 등록된 가족이 없어요"
+          description="가족을 추가하면 맞춤 식품 추천을 대신 받아볼 수 있어요"
+          action={<Button size="sm" icon="plus" onClick={() => setShowForm(true)}>가족 추가하기</Button>}
+        />
+      ) : (
+        <div className="flex flex-col gap-3">
+          {profiles.map((p) => {
+            const age = p.birth_year ? new Date().getFullYear() - p.birth_year : null;
+            return (
+              <Card key={p.id}>
+                <div className="flex items-start justify-between gap-3 mb-2">
+                  <div className="min-w-0">
+                    <h3 className="text-body font-bold text-ink">{p.nickname}</h3>
+                    <p className="text-caption text-ink-2">
+                      {RELATIONSHIP_OPTIONS.find((r) => r.key === p.relationship)?.label || p.relationship}
+                      {age ? <> · <span className="num">{age}</span>세</> : null}
+                      {p.bmi ? <> · BMI <span className="num">{p.bmi}</span></> : null}
+                    </p>
                   </div>
-
-                  {/* 관심사 태그 */}
-                  {p.concerns.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 mb-3">
-                      {p.concerns.map((c) => (
-                        <span key={c} className="text-xs px-2.5 py-1 rounded-full bg-primary/10 text-primary font-medium">
-                          {CONCERN_LABELS[c] || c}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* 자동 감지 조건 */}
-                  {p.conditions.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 mb-3">
-                      {p.conditions.map((c) => (
-                        <span key={c} className="text-xs px-2.5 py-1 rounded-full bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800">
-                          {CONDITION_LABELS[c] || c}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* 건강 수치 요약 */}
-                  <div className="flex gap-3 text-xs text-muted">
-                    {p.fasting_glucose && <span>혈당 {p.fasting_glucose}</span>}
-                    {p.bp_systolic && <span>혈압 {p.bp_systolic}</span>}
-                  </div>
-
-                  {/* 대리 추천 버튼 */}
-                  <Link
-                    href={`/recommend?family=${p.id}`}
-                    className="block mt-3 text-center py-2.5 rounded-xl bg-primary/5 text-primary text-sm font-medium hover:bg-primary/10 transition-colors"
-                  >
-                    {p.nickname}님 맞춤 추천 보기
-                  </Link>
+                  <Button size="sm" variant="ghost" icon="trash" onClick={() => setDeleteTarget(p)}>삭제하기</Button>
                 </div>
-              );
-            })}
-          </div>
-        )}
 
-        {/* 하단 안내 */}
-        <div className="mt-6 p-4 rounded-xl bg-surface border border-border">
-          <p className="text-xs text-muted leading-relaxed">
-            가족 정보는 식품 성분 매칭에만 사용되며, 의학적 진단이 아닙니다.
-            가족의 건강 정보는 보호자 본인만 열람할 수 있습니다.
-          </p>
+                {(p.concerns.length > 0 || p.conditions.length > 0) && (
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {p.concerns.map((c) => <Badge key={c} tone="brand">{CONCERN_LABELS[c] || c}</Badge>)}
+                    {p.conditions.map((c) => <Badge key={c} tone="caution">{CONDITION_LABELS[c] || c}</Badge>)}
+                  </div>
+                )}
+
+                {(p.fasting_glucose || p.bp_systolic) && (
+                  <div className="flex gap-3 text-caption text-ink-2">
+                    {p.fasting_glucose && <span>혈당 <span className="num font-bold text-ink">{p.fasting_glucose}</span></span>}
+                    {p.bp_systolic && <span>혈압 <span className="num font-bold text-ink">{p.bp_systolic}</span></span>}
+                  </div>
+                )}
+
+                <LinkButton href={`/recommend?family=${p.id}`} variant="secondary" size="sm" block className="mt-3" iconRight="chevron-right">
+                  {p.nickname}님 맞춤 추천 보기
+                </LinkButton>
+              </Card>
+            );
+          })}
         </div>
-      </div>
-    </div>
+      )}
+
+      <Notice className="mt-6">
+        가족 정보는 식품 성분 매칭에만 쓰이며 의학적 진단이 아니에요. 가족의 건강 정보는 보호자 본인만 볼 수 있어요.
+      </Notice>
+
+      <ConfirmSheet
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => { if (deleteTarget) handleDelete(deleteTarget.id); setDeleteTarget(null); }}
+        title={`${deleteTarget?.nickname || ""}님 정보를 삭제할까요?`}
+        description="등록한 건강 정보도 함께 지워지고 되돌릴 수 없어요"
+        confirmLabel="삭제하기"
+      />
+    </Page>
   );
 }

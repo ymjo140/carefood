@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { Badge, Card, Icon, Price, SectionHeader, TextLink } from "@/components/ui";
 
 const CONCERN_LABELS: Record<string, string> = {
   gut_health: "장건강",
@@ -99,98 +100,59 @@ export default function HomePersonalized() {
   })();
 
   return (
-    <section className="px-4 pb-8">
-      <div className="max-w-2xl mx-auto">
-        {/* 섹션 헤더 */}
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-extrabold">
-            {sectionLabel} 추천
-          </h2>
-          <div className="flex gap-2">
-            <Link
-              href="/products"
-              className="text-xs text-primary font-bold hover:underline"
-            >
-              전체 보기
-            </Link>
-          </div>
-        </div>
+    <section className="py-6">
+      <SectionHeader
+        title={`${sectionLabel} 추천`}
+        action={<TextLink href="/products">전체 보기 <Icon name="chevron-right" size={16} /></TextLink>}
+      />
 
-        {/* 건강검진 입력 유도 배너 */}
-        {!hasHealthData && (
-          <Link
-            href="/health"
-            className="block mb-4 p-4 rounded-2xl border border-primary/20 bg-primary/5 hover:bg-primary/10 transition-colors"
-          >
+      {/* 건강검진 입력 유도 */}
+      {!hasHealthData && (
+        <Link href="/health" className="block rounded-lg mb-4">
+          <Card tone="brand" interactive>
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-                <svg className="w-5 h-5 text-primary" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 3c1.93 0 3.5 1.57 3.5 3.5S13.93 13 12 13s-3.5-1.57-3.5-3.5S10.07 6 12 6zm7 13H5v-.23c0-.62.28-1.2.76-1.58C7.47 15.82 9.64 15 12 15s4.53.82 6.24 2.19c.48.38.76.97.76 1.58V19z" />
-                </svg>
+              <div className="flex-1 min-w-0">
+                <p className="text-label font-bold text-brand-ink">건강검진 정보 입력하기</p>
+                <p className="text-caption text-ink-2 mt-0.5">혈당·혈압·콜레스테롤을 입력하면 더 정확한 추천을 받아요</p>
               </div>
-              <div className="flex-1">
-                <p className="text-sm font-bold text-primary">건강검진 정보 입력하기</p>
-                <p className="text-xs text-muted">혈당·혈압·콜레스테롤 입력하면 더 정확한 추천을 받아요</p>
-              </div>
-              <svg className="w-5 h-5 text-primary/50 shrink-0" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6z" />
-              </svg>
+              <Icon name="chevron-right" size={20} className="text-brand-ink shrink-0" />
             </div>
-          </Link>
-        )}
+          </Card>
+        </Link>
+      )}
 
-        {/* 가로 스크롤 제품 카드 */}
-        {products.length > 0 && (
-          <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: "none" }}>
-            {products.map((p) => {
-              const prices = p.product_prices?.filter((pp) => pp.price > 0) || [];
-              const bestPrice = prices.length > 0 ? Math.min(...prices.map((pp) => pp.price)) : null;
-              const imageUrl = prices.find((pp) => pp.image_url)?.image_url;
-              const bestPlatform = prices[0]
-                ? PLATFORM_LABELS[prices[0].platform] || prices[0].platform
-                : null;
+      {/* 가로 스크롤 제품 카드 */}
+      {products.length > 0 && (
+        <div className="flex gap-3 scroll-row -mx-4 px-4 pb-2">
+          {products.map((p) => {
+            const prices = p.product_prices?.filter((pp) => pp.price > 0) || [];
+            const bestPrice = prices.length > 0 ? Math.min(...prices.map((pp) => pp.price)) : null;
+            const imageUrl = prices.find((pp) => pp.image_url)?.image_url;
+            const bestPlatform = prices[0]
+              ? PLATFORM_LABELS[prices[0].platform] || prices[0].platform
+              : null;
 
-              return (
-                <Link
-                  key={p.id}
-                  href={`/products/${p.id}`}
-                  className="min-w-[160px] max-w-[180px] bg-card rounded-2xl overflow-hidden shadow-[0_1px_3px_rgba(0,0,0,0.04)] hover:-translate-y-0.5 transition-transform flex-shrink-0 block"
-                >
-                  {/* 이미지 영역 */}
-                  <div className="h-[120px] bg-surface relative flex items-center justify-center">
-                    {imageUrl ? (
-                      <img src={imageUrl} alt="" className="w-full h-full object-cover" />
-                    ) : (
-                      <svg className="w-10 h-10 text-border" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M2 12c0 3.87 3.13 7 7 7h6c3.87 0 7-3.13 7-7H2zM12 4C7.58 4 4 6.69 4 10h16c0-3.31-3.58-6-8-6z" />
-                      </svg>
-                    )}
-                    {/* 적합도 배지 */}
-                    <div className="absolute top-2 left-2 bg-primary text-white text-[10px] font-bold px-2 py-0.5 rounded-md">
-                      적합도 {p.match_score}
-                    </div>
-                  </div>
-
-                  {/* 정보 */}
-                  <div className="p-3">
-                    <h3 className="text-xs font-semibold leading-tight line-clamp-2 mb-1.5">
-                      {p.name}
-                    </h3>
-                    {bestPrice && (
-                      <p className="text-base font-extrabold">
-                        {bestPrice.toLocaleString("ko-KR")}원
-                      </p>
-                    )}
-                    {bestPlatform && (
-                      <p className="text-[10px] text-muted">{bestPlatform} 외</p>
-                    )}
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
-        )}
-      </div>
+            return (
+              <Link
+                key={p.id}
+                href={`/products/${p.id}`}
+                className="block w-44 shrink-0 rounded-lg border border-line bg-surface overflow-hidden transition-colors hover:border-line-strong"
+              >
+                <div className="h-28 bg-sunken relative">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  {imageUrl && <img src={imageUrl} alt="" className="w-full h-full object-cover" loading="lazy" />}
+                  <Badge tone="brand" className="absolute top-2 left-2">적합도 <span className="num">{p.match_score}</span></Badge>
+                </div>
+                <div className="p-3">
+                  <h3 className="text-label font-medium text-ink line-clamp-2 mb-1.5">{p.name}</h3>
+                  {bestPrice && <Price value={bestPrice} className="text-body" />}
+                  {bestPlatform && <p className="text-caption text-ink-2">{bestPlatform} 외</p>}
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+      )}
     </section>
   );
 }

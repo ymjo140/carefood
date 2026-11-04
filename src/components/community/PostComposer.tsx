@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { Button, Chip, Field, Icon, Kcal, Sheet, Tabs, Textarea, cn } from "@/components/ui";
 
 const MEAL_TYPES = [
-  { key: "breakfast", label: "🌅 아침" },
-  { key: "lunch", label: "☀️ 점심" },
-  { key: "dinner", label: "🌙 저녁" },
-  { key: "snack", label: "🍪 간식" },
+  { key: "breakfast", label: "아침" },
+  { key: "lunch", label: "점심" },
+  { key: "dinner", label: "저녁" },
+  { key: "snack", label: "간식" },
 ];
 
 type DiaryEntry = {
@@ -110,112 +111,83 @@ export default function PostComposer({ isOpen, onClose, userId, nickname, ageGro
     }
   };
 
-  if (!isOpen) return null;
-
   const canPost = mode === "daily" ? content.trim().length > 0 : selectedMeals.length > 0;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center">
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/60" onClick={onClose} />
+    <Sheet
+      open={isOpen}
+      onClose={onClose}
+      title="새 글 쓰기"
+      footer={
+        <>
+          <Button variant="secondary" block onClick={onClose}>취소</Button>
+          <Button block onClick={handlePost} disabled={!canPost} loading={posting}>공유하기</Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-4">
+        <Tabs
+          label="글 종류"
+          value={mode}
+          onChange={setMode}
+          items={[{ value: "meal", label: "식단 공유" }, { value: "daily", label: "일상 · 질문" }]}
+        />
 
-      {/* Sheet */}
-      <div className="relative w-full max-w-lg rounded-t-2xl max-h-[85vh] overflow-y-auto"
-        style={{ background: "#161C24" }}>
-        {/* Header */}
-        <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-3 border-b"
-          style={{ background: "#161C24", borderColor: "#252C35" }}>
-          <button onClick={onClose} className="text-sm" style={{ color: "#8A919A" }}>취소</button>
-          <span className="text-sm font-bold" style={{ color: "#ECEBE6" }}>새 글 쓰기</span>
-          <button onClick={handlePost} disabled={!canPost || posting}
-            className="text-sm font-bold px-3 py-1 rounded-full disabled:opacity-40"
-            style={{ background: "#C4870A", color: "#0C1117" }}>
-            {posting ? "..." : "공유"}
-          </button>
-        </div>
-
-        {/* Mode tabs */}
-        <div className="flex gap-2 px-4 pt-3">
-          {[
-            { key: "meal" as const, label: "🍱 식단 공유" },
-            { key: "daily" as const, label: "💬 일상/질문" },
-          ].map(t => (
-            <button key={t.key} onClick={() => setMode(t.key)}
-              className="text-xs px-3 py-1.5 rounded-full font-medium"
-              style={{
-                background: mode === t.key ? "#C4870A" : "#252C35",
-                color: mode === t.key ? "#0C1117" : "#8A919A",
-              }}>
-              {t.label}
-            </button>
-          ))}
-        </div>
-
-        <div className="p-4 space-y-3">
-          {mode === "meal" && (
-            <>
-              {/* Meal type */}
-              <div className="flex gap-1.5">
+        {mode === "meal" && (
+          <>
+            <div className="flex flex-col gap-2">
+              <span className="text-label font-medium text-ink">끼니</span>
+              <div className="flex flex-wrap gap-2">
                 {MEAL_TYPES.map(mt => (
-                  <button key={mt.key} onClick={() => setMealType(mt.key)}
-                    className="text-[11px] px-2.5 py-1 rounded-full"
-                    style={{
-                      background: mealType === mt.key ? "#C4870A" : "#252C35",
-                      color: mealType === mt.key ? "#0C1117" : "#8A919A",
-                    }}>
-                    {mt.label}
-                  </button>
+                  <Chip key={mt.key} selected={mealType === mt.key} onClick={() => setMealType(mt.key)}>{mt.label}</Chip>
                 ))}
               </div>
+            </div>
 
-              {/* Recent meals to select */}
-              <div>
-                <p className="text-[11px] mb-2" style={{ color: "#8A919A" }}>
-                  오늘 기록에서 선택하세요 ({selectedMeals.length}개 선택)
-                </p>
-                {recentMeals.length > 0 ? (
-                  <div className="space-y-1.5">
-                    {recentMeals.map(entry => {
-                      const selected = selectedMeals.some(m => m.id === entry.id);
-                      return (
-                        <button key={entry.id} onClick={() => toggleMeal(entry)}
-                          className="w-full flex items-center justify-between rounded-lg px-3 py-2 text-left transition-colors"
-                          style={{
-                            background: selected ? "rgba(196,135,10,0.15)" : "#252C35",
-                            border: selected ? "1px solid rgba(196,135,10,0.4)" : "1px solid transparent",
-                          }}>
-                          <div>
-                            <span className="text-[12px] font-medium" style={{ color: "#ECEBE6" }}>
-                              {entry.food_name}
-                            </span>
-                          </div>
-                          <span className="text-[11px]" style={{ color: "#8A919A" }}>
-                            {entry.calories}kcal
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <p className="text-[11px] text-center py-4" style={{ color: "#8A919A" }}>
-                    오늘 기록된 식단이 없습니다
-                  </p>
-                )}
-              </div>
-            </>
-          )}
+            <div className="flex flex-col gap-2">
+              <span className="text-label font-medium text-ink">
+                오늘 기록에서 고르기 <span className="text-ink-2 font-regular">· <span className="num">{selectedMeals.length}</span>개 고름</span>
+              </span>
+              {recentMeals.length > 0 ? (
+                <div className="flex flex-col gap-1.5">
+                  {recentMeals.map(entry => {
+                    const selected = selectedMeals.some(m => m.id === entry.id);
+                    return (
+                      <button
+                        key={entry.id}
+                        type="button"
+                        onClick={() => toggleMeal(entry)}
+                        aria-pressed={selected}
+                        className={cn(
+                          "w-full flex items-center gap-3 rounded-md border px-3 h-12 text-left transition-colors",
+                          selected ? "border-brand bg-brand-soft" : "border-line bg-surface hover:border-line-strong",
+                        )}
+                      >
+                        <span className={cn("size-5 rounded-sm border flex items-center justify-center shrink-0", selected ? "border-brand bg-brand text-on-brand" : "border-line-strong")}>
+                          {selected && <Icon name="check" size={14} />}
+                        </span>
+                        <span className="flex-1 min-w-0 text-label font-medium text-ink truncate">{entry.food_name}</span>
+                        <Kcal value={entry.calories} className="text-caption shrink-0" />
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-label text-ink-2 text-center py-6 rounded-md bg-sunken">오늘 기록한 식단이 없어요</p>
+              )}
+            </div>
+          </>
+        )}
 
-          {/* Content */}
-          <textarea
+        <Field label={mode === "meal" ? "한 줄 코멘트 (선택)" : "내용"}>
+          <Textarea
             value={content}
             onChange={e => setContent(e.target.value)}
-            placeholder={mode === "meal" ? "한 줄 코멘트 (선택)" : "건강 팁, 후기, 질문을 공유해보세요"}
-            className="w-full rounded-lg px-3 py-2.5 text-[13px] resize-none focus:outline-none placeholder:text-[#8A919A]/60"
-            style={{ background: "#252C35", color: "#ECEBE6", minHeight: mode === "daily" ? "120px" : "60px" }}
+            placeholder={mode === "meal" ? "오늘 식단 어땠나요?" : "건강 팁, 후기, 질문을 공유해 보세요"}
             rows={mode === "daily" ? 5 : 2}
           />
-        </div>
+        </Field>
       </div>
-    </div>
+    </Sheet>
   );
 }

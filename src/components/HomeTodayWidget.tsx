@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { Card, Icon, ProgressBar } from "@/components/ui";
 
 /**
  * 홈 화면 개인화 위젯
@@ -74,81 +75,75 @@ export default function HomeTodayWidget() {
   // 프로필 없거나 로딩 중이면 렌더링 안 함
   if (loading || !data?.hasProfile) return null;
 
-  const calRatio = data.today ? Math.min(data.today.calories / data.today.goalCalories * 100, 100) : 0;
   const hasRecords = data.today && data.today.entries > 0;
+  const score = data.weeklyScore;
+  const scoreTone = score === null ? "" : score >= 80 ? "text-positive" : score >= 40 ? "text-caution" : "text-danger";
 
   return (
-    <section className="px-4 pb-6">
-      <div className="max-w-6xl mx-auto">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {/* 오늘의 영양 */}
-          <Link href="/diary"
-            className="border border-border rounded-xl p-4 hover:border-primary/30 transition-colors">
+    <section className="pb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {/* 오늘의 영양 */}
+        <Link href="/diary" className="block rounded-lg">
+          <Card interactive className="h-full">
             {hasRecords ? (
               <>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-bold">🍽️ 오늘의 영양</span>
-                  <span className="text-[10px] text-muted">{data.today!.entries}끼 기록</span>
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <span className="text-label font-bold text-ink">오늘의 영양</span>
+                  <span className="text-caption text-ink-2"><span className="num">{data.today!.entries}</span>끼 기록</span>
                 </div>
-                <div className="mb-2">
-                  <div className="flex justify-between text-xs mb-1">
-                    <span>{data.today!.calories} kcal</span>
-                    <span className="text-muted">/ {data.today!.goalCalories}</span>
-                  </div>
-                  <div className="h-2 bg-surface rounded-full overflow-hidden">
-                    <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${calRatio}%` }} />
-                  </div>
-                </div>
-                <p className="text-[10px] text-muted">단백질 {data.today!.protein_g}g</p>
+                <p className="text-label text-ink-2 mb-1.5">
+                  <span className="num text-title font-bold text-ink highlight">{data.today!.calories.toLocaleString("ko-KR")}</span>
+                  <span className="ml-0.5">kcal</span>
+                  <span className="num ml-1">/ {data.today!.goalCalories.toLocaleString("ko-KR")}</span>
+                </p>
+                <ProgressBar value={data.today!.calories} max={data.today!.goalCalories} label="오늘 칼로리 목표 대비" />
+                <p className="text-caption text-ink-2 mt-2">단백질 <span className="num font-bold text-protein">{data.today!.protein_g}g</span></p>
               </>
             ) : (
               <>
-                <p className="text-xs font-bold mb-1">🍽️ 오늘 식단을 기록해보세요</p>
-                <p className="text-[10px] text-muted mb-2">기록할수록 추천이 정확해져요</p>
-                <span className="text-[10px] text-primary font-bold">기록하기 →</span>
+                <p className="text-label font-bold text-ink mb-1">오늘 식단을 기록해 보세요</p>
+                <p className="text-caption text-ink-2 mb-2">기록할수록 추천이 정확해져요</p>
+                <span className="inline-flex items-center gap-0.5 text-label font-medium text-brand-ink">기록하기 <Icon name="chevron-right" size={16} /></span>
               </>
             )}
-          </Link>
+          </Card>
+        </Link>
 
-          {/* 주간 점수 */}
-          <Link href="/diary/report"
-            className="border border-border rounded-xl p-4 hover:border-primary/30 transition-colors">
-            {data.weeklyScore !== null ? (
+        {/* 주간 점수 */}
+        <Link href="/diary/report" className="block rounded-lg">
+          <Card interactive className="h-full">
+            {score !== null ? (
               <>
-                <p className="text-xs font-bold mb-1">📊 주간 영양 점수</p>
-                <div className="flex items-end gap-2">
-                  <span className={`text-2xl font-extrabold ${
-                    data.weeklyScore >= 80 ? "text-green-400" :
-                    data.weeklyScore >= 60 ? "text-yellow-400" :
-                    data.weeklyScore >= 40 ? "text-orange-400" : "text-red-400"
-                  }`}>{data.weeklyScore}</span>
-                  <span className="text-xs text-muted mb-1">/ 100</span>
-                </div>
-                <p className="text-[10px] text-primary font-bold mt-1">리포트 보기 →</p>
+                <p className="text-label font-bold text-ink mb-1">주간 영양 점수</p>
+                <p className="flex items-baseline gap-1">
+                  <span className={`num text-title font-bold ${scoreTone}`}>{score}</span>
+                  <span className="text-caption text-ink-2">/ 100</span>
+                </p>
+                <span className="inline-flex items-center gap-0.5 text-label font-medium text-brand-ink mt-1">리포트 보기 <Icon name="chevron-right" size={16} /></span>
               </>
             ) : (
               <>
-                <p className="text-xs font-bold mb-1">📊 주간 영양 리포트</p>
-                <p className="text-[10px] text-muted mb-2">2일 이상 기록하면 분석해드려요</p>
-                <span className="text-[10px] text-primary font-bold">시작하기 →</span>
+                <p className="text-label font-bold text-ink mb-1">주간 영양 리포트</p>
+                <p className="text-caption text-ink-2 mb-2">2일 이상 기록하면 분석해 드려요</p>
+                <span className="inline-flex items-center gap-0.5 text-label font-medium text-brand-ink">시작하기 <Icon name="chevron-right" size={16} /></span>
               </>
             )}
-          </Link>
+          </Card>
+        </Link>
 
-          {/* 공구 알림 */}
-          <Link href="/community"
-            className="border border-border rounded-xl p-4 hover:border-primary/30 transition-colors">
-            <p className="text-xs font-bold mb-1">🛒 진행 중인 공구</p>
+        {/* 공구 알림 */}
+        <Link href="/community" className="block rounded-lg">
+          <Card interactive className="h-full">
+            <p className="text-label font-bold text-ink mb-1">진행 중인 공구</p>
             {data.activeGroupBuys > 0 ? (
-              <>
-                <p className="text-2xl font-extrabold text-primary">{data.activeGroupBuys}</p>
-                <p className="text-[10px] text-muted mt-1">건의 공구가 모집 중이에요</p>
-              </>
+              <p className="text-caption text-ink-2">
+                <span className="num text-title font-bold text-ink mr-1">{data.activeGroupBuys}</span>건의 공구가 모집 중이에요
+              </p>
             ) : (
-              <p className="text-[10px] text-muted">현재 진행 중인 공구가 없습니다</p>
+              <p className="text-caption text-ink-2">지금 진행 중인 공구가 없어요</p>
             )}
-          </Link>
-        </div>
+          </Card>
+        </Link>
       </div>
     </section>
   );

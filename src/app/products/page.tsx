@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import ProductExplorer from "@/components/ProductExplorer";
+import { Page, PageHeader } from "@/components/ui";
 
 export const metadata: Metadata = {
   title: "제품 탐색",
@@ -12,9 +13,9 @@ export const metadata: Metadata = {
 
 export default function ProductsPage() {
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
-      <h1 className="text-xl font-extrabold mb-5">제품 탐색</h1>
+    <Page width="wide">
+      <PageHeader title="제품 탐색" />
       <ProductExplorer />
-    </div>
+    </Page>
   );
 }
