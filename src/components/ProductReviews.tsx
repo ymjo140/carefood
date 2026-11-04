@@ -141,7 +141,7 @@ export default function ProductReviews({ productId }: { productId: string }) {
 
       {/* 리뷰 작성 폼 */}
       {showForm && (
-        <Card tone="default" className="mb-3 border-brand">
+        <Card className="mb-3">
           <div className="flex flex-col gap-4">
             <div className="flex flex-col gap-1.5">
               <span className="text-label font-medium text-ink">별점</span>
