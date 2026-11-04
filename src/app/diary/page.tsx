@@ -2,6 +2,11 @@
 
 import { useEffect, useState, useCallback, useMemo } from "react";
 import Link from "next/link";
+import {
+  Badge, Button, Card, Chip, ConfirmSheet, EmptyState, Field, Icon, IconButton, Input, Kcal,
+  LinkButton, ListRow, MacroGrid, MealSlot, Page, PageHeader, PageLoading, SectionHeader, Spinner, Tabs,
+  buttonClass, cn, useToast,
+} from "@/components/ui";
 
 /* ── 타입 ── */
 type DiaryEntry = {
@@ -81,11 +86,22 @@ type CommonFood = {
 
 /* ── 끼니 설정 ── */
 const MEAL_TYPES = [
-  { key: "breakfast", label: "아침", emoji: "☀️", icon: "sun", color: "var(--meal-breakfast)" },
-  { key: "lunch", label: "점심", emoji: "🌤️", icon: "noon", color: "var(--meal-lunch)" },
-  { key: "dinner", label: "저녁", emoji: "🌙", icon: "moon", color: "var(--meal-dinner)" },
-  { key: "snack", label: "간식", emoji: "🍪", icon: "snack", color: "var(--meal-snack)" },
+  { key: "breakfast", label: "아침" },
+  { key: "lunch", label: "점심" },
+  { key: "dinner", label: "저녁" },
+  { key: "snack", label: "간식" },
 ];
+
+/* 주간 스트립 막대 — 목표 대비 비율에 따른 고정 클래스 */
+const WEEK_BAR = { good: "bg-positive", mid: "bg-brand", low: "bg-caution" } as const;
+
+/* 영양 갭 점 색 */
+function gapDot(nutrient: string) {
+  if (nutrient.includes("protein")) return "bg-protein";
+  if (nutrient.includes("sodium")) return "bg-sodium";
+  if (nutrient.includes("fat")) return "bg-fat";
+  return "bg-carbs";
+}
 
 const DAY_NAMES = ["일", "월", "화", "수", "목", "금", "토"];
 
@@ -134,44 +150,58 @@ function getMealAlert(entries: DiaryEntry[]): { nutrient: string; label: string;
   return null;
 }
 
-/* ── SVG 아이콘 ── */
-function MealIcon({ type, color }: { type: string; color: string }) {
-  const props = { viewBox: "0 0 24 24", width: 20, height: 20, fill: "none", stroke: color, strokeWidth: 2, strokeLinecap: "round" as const };
-  switch (type) {
-    case "sun": return <svg {...props}><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32l1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41m11.32-11.32l1.41-1.41"/></svg>;
-    case "noon": return <svg {...props}><circle cx="12" cy="12" r="5"/><path d="M12 1v3m0 16v3"/></svg>;
-    case "moon": return <svg {...props}><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>;
-    case "snack": return <svg {...props}><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>;
-    default: return null;
-  }
-}
-
 /* ── 제품 리스트 (공통) ── */
 function ProductList({ items, onSelect }: { items: SearchResult[]; onSelect: (p: SearchResult) => void }) {
   return (
-    <div className="space-y-1 max-h-52 overflow-y-auto">
+    <div className="flex flex-col max-h-60 overflow-y-auto -mx-3">
       {items.map((p) => (
-        <button
+        <ListRow
           key={p.id}
           onClick={() => onSelect(p)}
-          className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-card transition-colors flex items-center justify-between gap-2"
-        >
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium truncate">{p.name}</p>
-            <div className="flex gap-2 text-[10px] text-muted">
+          title={p.name}
+          meta={
+            <span className="flex flex-wrap gap-x-2">
               {p.manufacturer && <span>{p.manufacturer}</span>}
-              {p.calories != null && <span>{p.calories}kcal</span>}
-              {p.protein_g != null && <span>단백질 {p.protein_g}g</span>}
-            </div>
-          </div>
-          <span className="text-primary text-xs shrink-0">+ 추가</span>
-        </button>
+              {p.calories != null && <span><span className="num">{p.calories}</span>kcal</span>}
+              {p.protein_g != null && <span>단백질 <span className="num">{p.protein_g}</span>g</span>}
+            </span>
+          }
+          trailing={<span className="text-label font-bold text-brand-ink">추가</span>}
+        />
       ))}
     </div>
   );
 }
 
-/* ── 칼로리 링 SVG ── */
+/* ── 일반 음식 리스트 ── */
+function CommonFoodList({ items, onSelect }: { items: CommonFood[]; onSelect: (f: CommonFood) => void }) {
+  return (
+    <div className="flex flex-col -mx-3">
+      {items.map((food) => (
+        <ListRow
+          key={food.id}
+          onClick={() => onSelect(food)}
+          leading={<span className="size-10 rounded-md bg-sunken flex items-center justify-center text-title" aria-hidden="true">{food.icon}</span>}
+          title={food.name}
+          meta={
+            <span className="flex flex-wrap gap-x-2">
+              <span>{food.serving_desc}</span>
+              {food.calories != null && <span><span className="num">{food.calories}</span>kcal</span>}
+              {food.protein_g != null && <span>단백질 <span className="num">{food.protein_g}</span>g</span>}
+            </span>
+          }
+          trailing={<span className="text-label font-bold text-brand-ink">기록</span>}
+        />
+      ))}
+    </div>
+  );
+}
+
+function GroupLabel({ children }: { children: React.ReactNode }) {
+  return <p className="text-caption font-bold text-ink-2 mb-1.5">{children}</p>;
+}
+
+/* ── 칼로리 링 ── */
 function CalorieRing({ consumed, goal }: { consumed: number; goal: number }) {
   const r = 84;
   const circumference = 2 * Math.PI * r;
@@ -181,33 +211,23 @@ function CalorieRing({ consumed, goal }: { consumed: number; goal: number }) {
   const isOver = consumed > goal;
 
   return (
-    <div className="relative" style={{ width: 200, height: 200 }}>
-      <svg viewBox="0 0 200 200" width="200" height="200">
-        <defs>
-          <linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor="var(--ring-start)" />
-            <stop offset="100%" stopColor="var(--ring-end)" />
-          </linearGradient>
-        </defs>
-        <circle cx="100" cy="100" r={r} fill="none" stroke="var(--ring-track)" strokeWidth="14" />
+    <div className="relative size-[200px]">
+      <svg viewBox="0 0 200 200" width="200" height="200" aria-hidden="true">
+        <circle cx="100" cy="100" r={r} fill="none" strokeWidth="14" className="stroke-sunken" />
         <circle
           cx="100" cy="100" r={r} fill="none"
-          stroke={isOver ? "var(--accent)" : "url(#ringGrad)"}
+          className={cn("transition-[stroke-dashoffset] duration-500", isOver ? "stroke-caution" : "stroke-brand")}
           strokeWidth="14" strokeLinecap="round"
           strokeDasharray={circumference}
           strokeDashoffset={offset}
           transform="rotate(-90 100 100)"
-          style={{ transition: "stroke-dashoffset 0.6s ease" }}
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span
-          className="leading-none tracking-tight"
-          style={{ fontFamily: "var(--font-outfit), sans-serif", fontSize: 44, fontWeight: 800, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.03em" }}
-        >
-          {isOver ? `+${consumed - goal}` : remaining}
+        <span className="num text-display font-bold text-ink leading-none">
+          <span className="highlight">{isOver ? `+${consumed - goal}` : remaining}</span>
         </span>
-        <span className="text-[13px] text-muted font-medium mt-0.5">
+        <span className="text-label text-ink-2 mt-1">
           {isOver ? "kcal 초과" : "kcal 남음"}
         </span>
       </div>
@@ -241,6 +261,7 @@ export default function DiaryPage() {
     hasAI: boolean;
   } | null>(null);
   const [userId, setUserId] = useState("");
+  const toast = useToast();
   const [favorites, setFavorites] = useState<SearchResult[]>([]);
   const [weeklyItems, setWeeklyItems] = useState<SearchResult[]>([]);
   const [weeklyTrend, setWeeklyTrend] = useState<{
@@ -404,6 +425,7 @@ export default function DiaryPage() {
     setSearchResults([]);
     setCommonFoods([]);
     setServingMultiplier(1);
+    toast.show("식단에 기록했어요");
     fetchDiary();
     loadWeeklyTrend();
   };
@@ -432,6 +454,7 @@ export default function DiaryPage() {
     setSearchResults([]);
     setCommonFoods([]);
     setServingMultiplier(1);
+    toast.show("식단에 기록했어요");
     fetchDiary();
     loadWeeklyTrend();
   };
@@ -458,6 +481,7 @@ export default function DiaryPage() {
     });
     setAddingMeal(null);
     setServingMultiplier(1);
+    toast.show("식단에 기록했어요");
     fetchDiary();
     loadWeeklyTrend();
   };
@@ -478,6 +502,7 @@ export default function DiaryPage() {
     setAddingMeal(null);
     setAddTab("search");
     setManualForm({ food_name: "", calories: "", protein_g: "", serving_g: "" });
+    toast.show("식단에 기록했어요");
     fetchDiary();
     loadWeeklyTrend();
   };
@@ -546,6 +571,7 @@ export default function DiaryPage() {
   const deleteEntry = async (id: string) => {
     await fetch(`/api/diary?id=${id}&user_id=${userId}`, { method: "DELETE" });
     setDeleteConfirmId(null);
+    toast.show("기록을 삭제했어요");
     fetchDiary();
     loadWeeklyTrend();
   };
@@ -598,482 +624,365 @@ export default function DiaryPage() {
   const topGap = gapSuggestions?.gaps?.[0] || null;
 
   /* ══════════════════ RENDER ══════════════════ */
-  if (!date) {
-    return (
-      <div className="min-h-[60vh] flex items-center justify-center">
-        <div className="w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+  if (!date) return <PageLoading />;
+
+  const deleteTarget = deleteConfirmId && data
+    ? Object.values(data.byMeal).flat().find((e) => e.id === deleteConfirmId) || null
+    : null;
+  const streakDays = weeklyTrend ? weeklyTrend.days.filter(d => d.count > 0).length : 0;
+
+  /* 음식 추가 패널 (끼니 칸 안) */
+  const renderAddPanel = () => (
+    <div className="mt-3 -mx-4 -mb-3 border-t border-line">
+      <Tabs
+        variant="line"
+        label="음식 추가 방법"
+        value={addTab}
+        onChange={setAddTab}
+        items={[
+          { value: "search", label: "검색" },
+          { value: "photo", label: "사진" },
+          { value: "favorites", label: "즐겨찾기", count: favorites.length },
+          { value: "weekly", label: "식단 리스트", count: weeklyItems.length },
+          { value: "manual", label: "직접 입력" },
+        ]}
+        className="scroll-row"
+      />
+      <div className="p-4 bg-sunken rounded-b-lg flex flex-col gap-3">
+        {/* 섭취량 선택 (모든 탭 공통) */}
+        <div className="flex items-center gap-2">
+          <span className="text-caption text-ink-2 shrink-0">섭취량</span>
+          <div className="flex gap-1.5 scroll-row">
+            {[0.5, 1, 1.5, 2].map((m) => (
+              <Chip key={m} size="sm" selected={servingMultiplier === m} onClick={() => setServingMultiplier(m)}>
+                <span className="num">{m}</span>인분
+              </Chip>
+            ))}
+          </div>
+        </div>
+
+        {/* 다시 먹기 (최근 기록) */}
+        {recentMeals.length > 0 && addTab === "search" && !searchQuery && (
+          <div>
+            <GroupLabel>최근 기록</GroupLabel>
+            <div className="flex gap-2 scroll-row">
+              {recentMeals.slice(0, 5).map((m, i) => (
+                <Chip key={i} onClick={() => addFromRecent(m)}>
+                  <span className="max-w-[120px] line-clamp-1">{m.food_name}</span>
+                  {m.calories != null && <span className="num text-ink-3">{m.calories}kcal</span>}
+                </Chip>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {addTab === "search" && (
+          <>
+            <div className="relative">
+              <Input
+                value={searchQuery}
+                onChange={(e) => { setSearchQuery(e.target.value); searchProducts(e.target.value); }}
+                placeholder="제품명 검색 (예: 닭가슴살, 샐러드)"
+                aria-label="제품명 검색"
+                autoFocus
+                className="pr-10"
+              />
+              {searching && <Spinner size={16} className="absolute right-3 top-3.5" />}
+            </div>
+            {commonFoods.length > 0 && (
+              <div>
+                <GroupLabel>외식 · 일반 음식</GroupLabel>
+                <CommonFoodList items={commonFoods} onSelect={addFromCommonFood} />
+              </div>
+            )}
+            {searchResults.length > 0 && (
+              <div>
+                {commonFoods.length > 0 && <GroupLabel>제품</GroupLabel>}
+                <ProductList items={searchResults} onSelect={addFromProduct} />
+              </div>
+            )}
+            {searchQuery && searchResults.length === 0 && commonFoods.length === 0 && !searching && (
+              <p className="text-label text-ink-2 text-center py-3">검색 결과가 없어요</p>
+            )}
+          </>
+        )}
+
+        {addTab === "favorites" && (
+          favorites.length > 0 ? <ProductList items={favorites} onSelect={addFromProduct} /> : (
+            <EmptyState title="즐겨찾기한 제품이 없어요" description="제품 상세에서 하트를 누르면 여기서 바로 기록할 수 있어요" className="py-6" />
+          )
+        )}
+
+        {addTab === "weekly" && (
+          weeklyItems.length > 0 ? <ProductList items={weeklyItems} onSelect={addFromProduct} /> : (
+            <EmptyState
+              title="식단 리스트가 비어 있어요"
+              className="py-6"
+              action={<LinkButton href="/weekly-box" size="sm" variant="secondary">식단 리스트 만들기</LinkButton>}
+            />
+          )
+        )}
+
+        {addTab === "photo" && (
+          <div>
+            {!photoPreview ? (
+              <div className="flex flex-col items-center text-center py-4">
+                <span className="size-16 rounded-full bg-brand-soft text-brand-ink flex items-center justify-center mb-3">
+                  <Icon name="camera" size={28} />
+                </span>
+                <p className="text-body font-bold text-ink">음식 사진으로 기록하기</p>
+                <p className="text-label text-ink-2 mb-4">사진을 찍거나 갤러리에서 고르세요</p>
+                <div className="flex gap-2 justify-center">
+                  <label className={buttonClass({ variant: "primary", className: "cursor-pointer" })}>
+                    <Icon name="camera" size={18} />
+                    촬영하기
+                    <input type="file" accept="image/*" capture="environment" onChange={handlePhotoCapture} className="sr-only" />
+                  </label>
+                  <label className={buttonClass({ variant: "secondary", className: "cursor-pointer" })}>
+                    갤러리에서 고르기
+                    <input type="file" accept="image/*" onChange={handlePhotoCapture} className="sr-only" />
+                  </label>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3">
+                {/* 사진 미리보기 */}
+                <div className="relative">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={photoPreview} alt="음식 사진" className="w-full h-48 object-cover rounded-md" />
+                  <IconButton icon="close" label="사진 지우기" size="sm" tone="secondary" onClick={resetPhoto} className="absolute top-2 right-2" />
+                  {photoAnalyzing && (
+                    <div className="absolute inset-0 bg-scrim rounded-md flex items-center justify-center">
+                      <div className="bg-surface rounded-md px-4 py-3 flex items-center gap-2 shadow-overlay">
+                        <Spinner size={18} />
+                        <span className="text-label font-medium text-ink">음식을 분석하고 있어요</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* AI 인식 결과 */}
+                {photoResults && (
+                  <>
+                    {photoResults.recognized.length > 0 && (
+                      <p className="text-caption text-ink-2">
+                        <span className="font-bold text-brand-ink">AI 인식 결과</span>{" "}
+                        {photoResults.recognized.map((r) => r.name).join(", ")}
+                      </p>
+                    )}
+
+                    {photoResults.matched.commonFoods.length > 0 && (
+                      <div>
+                        <GroupLabel>찾은 음식</GroupLabel>
+                        <CommonFoodList items={photoResults.matched.commonFoods} onSelect={(food) => { addFromCommonFood(food); resetPhoto(); }} />
+                      </div>
+                    )}
+
+                    {photoResults.matched.products.length > 0 && (
+                      <div>
+                        <GroupLabel>찾은 제품</GroupLabel>
+                        <ProductList items={photoResults.matched.products} onSelect={(p) => { addFromProduct(p); resetPhoto(); }} />
+                      </div>
+                    )}
+
+                    {photoResults.matched.commonFoods.length === 0 && photoResults.matched.products.length === 0 && (
+                      <div className="flex flex-col items-center text-center gap-3 py-2">
+                        <p className="text-label text-ink-2">
+                          {photoResults.hasAI ? "맞는 음식을 찾지 못했어요" : "사진을 저장했어요. 음식을 골라 주세요"}
+                        </p>
+                        <div className="flex gap-2 justify-center">
+                          <Button size="sm" onClick={() => setAddTab("search")}>검색해서 추가하기</Button>
+                          <Button size="sm" variant="secondary" onClick={() => setAddTab("manual")}>직접 입력하기</Button>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {/* 다시 찍기 */}
+                {!photoAnalyzing && (
+                  <label className="cursor-pointer self-center text-label text-ink-2 hover:text-ink underline underline-offset-4">
+                    다른 사진으로 바꾸기
+                    <input type="file" accept="image/*" capture="environment" onChange={handlePhotoCapture} className="sr-only" />
+                  </label>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {addTab === "manual" && (
+          <div className="flex flex-col gap-3">
+            <Field label="음식 이름">
+              <Input value={manualForm.food_name} onChange={(e) => setManualForm({ ...manualForm, food_name: e.target.value })} placeholder="예: 김치볶음밥" autoFocus />
+            </Field>
+            <div className="grid grid-cols-3 gap-2">
+              <Field label="칼로리">
+                <Input type="number" inputMode="numeric" value={manualForm.calories} onChange={(e) => setManualForm({ ...manualForm, calories: e.target.value })} placeholder="kcal" className="text-center" />
+              </Field>
+              <Field label="단백질">
+                <Input type="number" inputMode="decimal" value={manualForm.protein_g} onChange={(e) => setManualForm({ ...manualForm, protein_g: e.target.value })} placeholder="g" className="text-center" />
+              </Field>
+              <Field label="양">
+                <Input type="number" inputMode="numeric" value={manualForm.serving_g} onChange={(e) => setManualForm({ ...manualForm, serving_g: e.target.value })} placeholder="g" className="text-center" />
+              </Field>
+            </div>
+            <Button block onClick={addManual} disabled={!manualForm.food_name}>기록하기</Button>
+          </div>
+        )}
       </div>
-    );
-  }
+    </div>
+  );
 
   return (
-    <div className="max-w-[430px] mx-auto px-4 py-3 pb-24">
+    <Page width="narrow">
+      <PageHeader title="식단 기록" description={isToday ? `오늘 · ${formatDate(date)}` : formatDate(date)} />
 
       {/* ━━ 주간 캘린더 스트립 ━━ */}
-      <div className="flex items-center gap-0.5 mb-5">
-        <button onClick={() => moveDate(-7)} className="w-7 h-7 rounded-full flex items-center justify-center text-muted hover:text-primary transition-colors shrink-0" aria-label="이전 주">
-          ‹
-        </button>
-        <div className="flex flex-1 gap-1">
+      <div className="flex items-center gap-1 mb-5">
+        <IconButton icon="chevron-left" label="이전 주" size="sm" onClick={() => moveDate(-7)} />
+        <div className="flex flex-1 gap-1 min-w-0">
           {weekDays.map((wd) => {
-            const barColor = wd.count === 0 ? "transparent" : wd.ratio > 0.9 ? "var(--success)" : wd.ratio > 0.5 ? "var(--primary)" : "var(--accent)";
+            const barClass = wd.ratio > 0.9 ? WEEK_BAR.good : wd.ratio > 0.5 ? WEEK_BAR.mid : WEEK_BAR.low;
             return (
               <button
                 key={wd.dateStr}
+                type="button"
                 onClick={() => setDate(wd.dateStr)}
-                className={`flex-1 flex flex-col items-center gap-1 py-2 rounded-2xl transition-all ${
-                  wd.isActive ? "bg-primary text-white" : wd.isFuture ? "opacity-50" : "hover:bg-primary/8"
-                }`}
+                aria-pressed={wd.isActive}
+                aria-label={`${wd.day}일 ${wd.dow}요일`}
+                className={cn(
+                  "flex-1 min-w-0 flex flex-col items-center gap-1 py-2 rounded-md transition-colors",
+                  wd.isActive ? "bg-brand text-on-brand" : "text-ink hover:bg-sunken",
+                  wd.isFuture && !wd.isActive && "opacity-50",
+                )}
               >
-                <span className={`text-[10px] font-medium ${wd.isActive ? "text-white/80" : "text-muted"}`} style={{ letterSpacing: "0.05em" }}>
-                  {wd.dow}
+                <span className={cn("text-caption", wd.isActive ? "text-on-brand" : "text-ink-2")}>{wd.dow}</span>
+                <span className="num text-body font-bold leading-none">{wd.day}</span>
+                <span className={cn("w-1.5 h-5 rounded-sm overflow-hidden flex flex-col-reverse", wd.isActive ? "bg-on-brand/20" : "bg-sunken")}>
+                  {wd.count > 0 && (
+                    <span
+                      className={cn("w-full rounded-sm transition-all", wd.isActive ? "bg-on-brand" : barClass)}
+                      style={{ height: `${Math.max(wd.ratio * 100, 15)}%` }}
+                    />
+                  )}
                 </span>
-                <span className="text-[15px] font-bold leading-none" style={{ fontFamily: "var(--font-outfit), sans-serif" }}>
-                  {wd.day}
-                </span>
-                <div className={`w-1.5 rounded-sm overflow-hidden flex flex-col-reverse ${wd.isActive ? "bg-white/25" : "bg-border"}`} style={{ height: 20 }}>
-                  <div className="w-full rounded-sm transition-all" style={{ height: `${Math.max(wd.ratio * 100, wd.count > 0 ? 15 : 0)}%`, background: wd.isActive && wd.count > 0 ? "#fff" : barColor }} />
-                </div>
               </button>
             );
           })}
         </div>
-        <button onClick={() => moveDate(7)} className="w-7 h-7 rounded-full flex items-center justify-center text-muted hover:text-primary transition-colors shrink-0" aria-label="다음 주">
-          ›
-        </button>
+        <IconButton icon="chevron-right" label="다음 주" size="sm" onClick={() => moveDate(7)} />
       </div>
 
-      {/* ━━ 대시보드 카드 (칼로리 링 + 매크로) ━━ */}
-      <div className="bg-card rounded-3xl p-6 shadow-[0_1px_4px_rgba(0,0,0,0.06)] mb-5">
+      {/* ━━ 오늘 합계 (칼로리 링 + 매크로) ━━ */}
+      <Card className="mb-6">
         <div className="flex flex-col items-center mb-5">
           <CalorieRing consumed={consumed} goal={goalCalories} />
-          <p className="text-xs text-muted mt-4" style={{ fontVariantNumeric: "tabular-nums" }}>
-            섭취 <b className="text-foreground font-bold">{consumed.toLocaleString()}</b> / 목표 <b className="text-foreground font-bold">{goalCalories.toLocaleString()}</b> kcal
+          <p className="text-label text-ink-2 mt-3">
+            섭취 <span className="num font-bold text-ink">{consumed.toLocaleString()}</span> / 목표 <span className="num font-bold text-ink">{goalCalories.toLocaleString()}</span> kcal
           </p>
         </div>
+        <MacroGrid
+          values={{
+            protein: data?.totals.protein_g || 0,
+            carbs: data?.totals.carbs_g || 0,
+            fat: data?.totals.fat_g || 0,
+            sodium: data?.totals.sodium_mg || 0,
+          }}
+          targets={{ protein: goalProtein, carbs: 300, fat: 65, sodium: maxSodium }}
+        />
+      </Card>
 
-        {/* 매크로 4종 */}
-        <div className="grid grid-cols-4 gap-2">
-          {[
-            { label: "단백질", value: data?.totals.protein_g || 0, unit: "g", goal: goalProtein, color: "var(--macro-protein)", bg: "var(--macro-protein-bg)" },
-            { label: "탄수화물", value: data?.totals.carbs_g || 0, unit: "g", goal: 300, color: "var(--macro-carbs)", bg: "var(--macro-carbs-bg)" },
-            { label: "지방", value: data?.totals.fat_g || 0, unit: "g", goal: 65, color: "var(--macro-fat)", bg: "var(--macro-fat-bg)" },
-            { label: "나트륨", value: data?.totals.sodium_mg || 0, unit: "mg", goal: maxSodium, color: "var(--macro-sodium)", bg: "var(--macro-sodium-bg)" },
-          ].map((m) => {
-            const pct = Math.min((m.value / m.goal) * 100, 100);
-            return (
-              <div key={m.label} className="flex flex-col items-center gap-1.5 p-2.5 rounded-2xl" style={{ background: m.bg }}>
-                <span className="font-bold leading-none" style={{ fontFamily: "var(--font-outfit), sans-serif", fontSize: 18, color: m.color, fontVariantNumeric: "tabular-nums" }}>
-                  {m.value}<span className="text-[11px] font-medium">{m.unit}</span>
-                </span>
-                <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ background: "var(--ring-track)" }}>
-                  <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, background: m.color }} />
-                </div>
-                <span className="text-[11px] text-muted font-medium">{m.label}</span>
-              </div>
-            );
-          })}
-        </div>
-      </div>
+      {/* ━━ 끼니별 기록 ━━ */}
+      <SectionHeader
+        title={isToday ? "오늘의 식사" : formatDate(date)}
+        action={<span className="text-caption text-ink-2"><span className="num font-bold text-ink">{filledCount}/4</span> 기록</span>}
+      />
 
-      {/* ━━ 섹션 라벨 ━━ */}
-      <div className="flex items-center justify-between mb-3 px-1">
-        <span className="text-[13px] font-bold text-foreground/70">
-          {isToday ? "오늘의 식사" : formatDate(date)}
-        </span>
-        <span className="text-[12px] text-muted font-semibold" style={{ fontFamily: "var(--font-outfit), sans-serif" }}>
-          {filledCount}/4 기록
-        </span>
-      </div>
-
-      {/* ━━ 끼니별 카드 ━━ */}
       {loading ? (
-        <div className="flex justify-center py-12">
-          <div className="w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-        </div>
+        <div className="flex justify-center py-12"><Spinner /></div>
       ) : (
-        <div className="space-y-2.5">
+        <div className="flex flex-col gap-3">
           {MEAL_TYPES.map((meal) => {
             const entries = data?.byMeal[meal.key] || [];
             const mealCal = entries.reduce((s, e) => s + (e.calories || 0), 0);
-            const alert = entries.length > 0 ? getMealAlert(entries) : null;
+            const mealAlert = entries.length > 0 ? getMealAlert(entries) : null;
             const isEmpty = entries.length === 0;
+            const isAdding = addingMeal === meal.key;
             const showSuggestion = isEmpty && meal.key === firstEmptySlot && topSuggestion;
-            const firstEntryTime = entries[0]?.memo; // placeholder
-
-            // 경고 스타일
-            const alertBg = alert ? `var(--macro-${alert.nutrient}-bg)` : undefined;
-            const alertBorder = alert ? `var(--macro-${alert.nutrient})` : "transparent";
+            const toggleAdd = () => {
+              setAddingMeal(isAdding ? null : meal.key);
+              setAddTab("search"); setSearchQuery(""); setSearchResults([]);
+            };
 
             return (
-              <div key={meal.key}>
-                <div
-                  className={`bg-card rounded-2xl overflow-hidden shadow-[0_1px_4px_rgba(0,0,0,0.06)] transition-all ${isEmpty && !showSuggestion ? "opacity-60" : ""}`}
-                  style={{
-                    borderLeft: `4px solid ${alertBorder}`,
-                    background: alertBg || "var(--card)",
-                  }}
-                >
-                  {/* 끼니 헤더 */}
-                  <div className="flex items-center gap-3 px-4 py-3">
-                    <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: `color-mix(in srgb, ${meal.color} 12%, transparent)` }}>
-                      <MealIcon type={meal.icon} color={meal.color} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-[15px] font-bold">{meal.label}</div>
-                      <div className="text-[11px] mt-0.5" style={{ color: alert ? `var(--macro-${alert.nutrient})` : "var(--muted)", fontWeight: alert ? 600 : 400 }}>
-                        {alert ? alert.label : isEmpty ? (showSuggestion ? "추천이 있어요" : "탭해서 기록하기") : formatDate(date).split(" ")[1]}
+              <div key={meal.key} className="flex flex-col gap-2">
+                {isEmpty && !isAdding ? (
+                  <MealSlot meal={meal.key} empty onAdd={toggleAdd} addLabel={`${meal.label} 기록하기`} />
+                ) : (
+                  <MealSlot
+                    meal={meal.key}
+                    right={
+                      <div className="flex items-center gap-2">
+                        {mealAlert && <Badge tone="caution">{mealAlert.label}</Badge>}
+                        {mealCal > 0 && <Kcal value={Math.round(mealCal)} className="text-label" />}
+                        <IconButton
+                          icon={isAdding ? "close" : "plus"}
+                          label={isAdding ? "추가 닫기" : `${meal.label}에 음식 추가하기`}
+                          size="sm"
+                          onClick={toggleAdd}
+                          className="-mr-2"
+                        />
                       </div>
-                    </div>
-                    {mealCal > 0 && (
-                      <span className="text-primary font-bold shrink-0" style={{ fontFamily: "var(--font-outfit), sans-serif", fontSize: 16, fontVariantNumeric: "tabular-nums" }}>
-                        {Math.round(mealCal)} <span className="text-[11px] font-medium text-muted">kcal</span>
-                      </span>
-                    )}
-                    <button
-                      onClick={() => {
-                        setAddingMeal(addingMeal === meal.key ? null : meal.key);
-                        setAddTab("search"); setSearchQuery(""); setSearchResults([]);
-                      }}
-                      className="w-8 h-8 rounded-full flex items-center justify-center text-primary hover:bg-primary/10 transition-colors text-lg font-bold shrink-0"
-                    >
-                      +
-                    </button>
-                  </div>
-
-                  {/* 기록된 음식 */}
-                  {entries.length > 0 && (
-                    <div className="border-t" style={{ borderColor: "var(--border)" }}>
-                      {entries.map((e) => (
-                        <div key={e.id} className="flex items-center gap-3 px-4 py-2.5 group" style={{ borderBottom: "1px solid var(--border)" }}>
-                          <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl shrink-0" style={{ background: "var(--surface)" }}>
-                            {meal.emoji}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-[13px] font-semibold truncate">{e.food_name}</p>
-                            <div className="flex gap-2 text-[11px] text-muted mt-0.5" style={{ fontVariantNumeric: "tabular-nums" }}>
-                              {e.serving_multiplier != null && e.serving_multiplier !== 1 && <span className="text-primary font-semibold">{e.serving_multiplier}인분</span>}
-                              {e.serving_g != null && <span>{e.serving_g}g</span>}
-                              {e.protein_g != null && <span>단백질 {e.protein_g}g</span>}
-                              {e.sodium_mg != null && e.sodium_mg > 600 && <span style={{ color: "var(--macro-sodium)", fontWeight: 600 }}>나트륨 {e.sodium_mg}mg</span>}
-                              {e.fat_g != null && e.fat_g > 15 && !e.sodium_mg && <span>지방 {e.fat_g}g</span>}
+                    }
+                  >
+                    {/* 기록된 음식 */}
+                    {entries.length > 0 && (
+                      <div className="-mx-4 divide-y divide-line border-t border-line mt-2">
+                        {entries.map((e) => (
+                          <div key={e.id} className="flex items-center gap-3 pl-4 pr-2 py-2.5">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-body font-medium text-ink line-clamp-1">{e.food_name}</p>
+                              <div className="flex flex-wrap gap-x-2 text-caption text-ink-2 mt-0.5">
+                                {e.serving_multiplier != null && e.serving_multiplier !== 1 && <span className="font-bold text-brand-ink"><span className="num">{e.serving_multiplier}</span>인분</span>}
+                                {e.serving_g != null && <span><span className="num">{e.serving_g}</span>g</span>}
+                                {e.protein_g != null && <span>단백질 <span className="num">{e.protein_g}</span>g</span>}
+                                {e.sodium_mg != null && e.sodium_mg > 600 && <span className="font-bold text-sodium">나트륨 <span className="num">{e.sodium_mg}</span>mg</span>}
+                                {e.fat_g != null && e.fat_g > 15 && !e.sodium_mg && <span>지방 <span className="num">{e.fat_g}</span>g</span>}
+                              </div>
                             </div>
+                            <span className="num text-label font-bold text-ink shrink-0">{e.calories || 0}</span>
+                            <IconButton icon="trash" label={`${e.food_name} 삭제하기`} size="sm" onClick={() => setDeleteConfirmId(e.id)} />
                           </div>
-                          <span className="text-[14px] font-semibold shrink-0" style={{ fontFamily: "var(--font-outfit), sans-serif", fontVariantNumeric: "tabular-nums" }}>
-                            {e.calories || 0}
-                          </span>
-                          {deleteConfirmId === e.id ? (
-                            <div className="flex gap-1 shrink-0">
-                              <button onClick={() => deleteEntry(e.id)} className="text-[10px] px-2 py-1 rounded-lg bg-accent/15 text-accent font-bold">삭제</button>
-                              <button onClick={() => setDeleteConfirmId(null)} className="text-[10px] px-2 py-1 rounded-lg bg-surface text-muted font-medium">취소</button>
-                            </div>
-                          ) : (
-                            <button onClick={() => setDeleteConfirmId(e.id)} className="text-muted hover:text-accent transition-all text-xs px-1.5 py-1 shrink-0 rounded-lg hover:bg-accent/10" title="삭제">
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14"/></svg>
-                            </button>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* 추가 모드 (탭) */}
-                  {addingMeal === meal.key && (
-                    <div className="border-t" style={{ borderColor: "var(--border)" }}>
-                      <div className="flex border-b" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
-                        {([
-                          { key: "search" as const, label: "검색" },
-                          { key: "photo" as const, label: "📷 사진" },
-                          { key: "favorites" as const, label: `즐겨찾기${favorites.length > 0 ? ` (${favorites.length})` : ""}` },
-                          { key: "weekly" as const, label: `식단 리스트${weeklyItems.length > 0 ? ` (${weeklyItems.length})` : ""}` },
-                          { key: "manual" as const, label: "직접 입력" },
-                        ]).map((tab) => (
-                          <button
-                            key={tab.key}
-                            onClick={() => setAddTab(tab.key)}
-                            className={`flex-1 py-2 text-[11px] font-medium transition-colors ${
-                              addTab === tab.key ? "text-primary border-b-2 border-primary" : "text-muted hover:text-foreground"
-                            }`}
-                          >
-                            {tab.label}
-                          </button>
                         ))}
                       </div>
-                      <div className="p-4" style={{ background: "color-mix(in srgb, var(--surface) 50%, transparent)" }}>
-                        {/* 섭취량 선택 (모든 탭 공통) */}
-                        <div className="flex items-center gap-2 mb-3">
-                          <span className="text-[11px] text-muted font-medium">섭취량</span>
-                          <div className="flex gap-1">
-                            {[0.5, 1, 1.5, 2].map((m) => (
-                              <button
-                                key={m}
-                                onClick={() => setServingMultiplier(m)}
-                                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all ${
-                                  servingMultiplier === m
-                                    ? "bg-primary text-white"
-                                    : "bg-surface text-muted hover:text-foreground"
-                                }`}
-                              >
-                                {m === 1 ? "1인분" : `${m}인분`}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
+                    )}
 
-                        {/* 다시 먹기 (최근 기록) */}
-                        {recentMeals.length > 0 && addTab === "search" && !searchQuery && (
-                          <div className="mb-3">
-                            <div className="text-[10px] font-bold text-muted uppercase tracking-wider px-1 mb-1.5">최근 기록</div>
-                            <div className="flex gap-1.5 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
-                              {recentMeals.slice(0, 5).map((m, i) => (
-                                <button
-                                  key={i}
-                                  onClick={() => addFromRecent(m)}
-                                  className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl bg-card border border-border hover:border-primary transition-all text-[11px]"
-                                >
-                                  <span className="font-semibold truncate max-w-[100px]">{m.food_name}</span>
-                                  {m.calories != null && <span className="text-muted">{m.calories}kcal</span>}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        )}
+                    {isAdding && renderAddPanel()}
+                  </MealSlot>
+                )}
 
-                        {addTab === "search" && (
-                          <>
-                            <div className="relative mb-3">
-                              <input
-                                type="text" value={searchQuery}
-                                onChange={(e) => { setSearchQuery(e.target.value); searchProducts(e.target.value); }}
-                                placeholder="제품명 검색 (예: 닭가슴살, 샐러드...)"
-                                className="w-full px-3 py-2.5 rounded-xl bg-background border border-border text-sm focus:border-primary focus:outline-none"
-                                autoFocus
-                              />
-                              {searching && <div className="absolute right-3 top-3"><div className="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin" /></div>}
-                            </div>
-                            {/* 일반 음식 결과 */}
-                            {commonFoods.length > 0 && (
-                              <div className="mb-3">
-                                <div className="text-[10px] font-bold text-muted uppercase tracking-wider px-1 mb-1.5">외식 · 일반 음식</div>
-                                <div className="space-y-1">
-                                  {commonFoods.map((food) => (
-                                    <button key={food.id} onClick={() => addFromCommonFood(food)}
-                                      className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-card transition-colors flex items-center gap-3">
-                                      <span className="text-xl shrink-0">{food.icon}</span>
-                                      <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-semibold">{food.name}</p>
-                                        <div className="flex gap-2 text-[10px] text-muted mt-0.5" style={{fontFamily: "'Outfit', sans-serif"}}>
-                                          <span>{food.serving_desc}</span>
-                                          {food.calories != null && <span>{food.calories}kcal</span>}
-                                          {food.protein_g != null && <span>단백질 {food.protein_g}g</span>}
-                                        </div>
-                                      </div>
-                                      <span className="text-xs text-primary font-bold shrink-0">+ 기록</span>
-                                    </button>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                            {/* 제품 결과 */}
-                            {searchResults.length > 0 && (
-                              <div>
-                                {commonFoods.length > 0 && <div className="text-[10px] font-bold text-muted uppercase tracking-wider px-1 mb-1.5">제품</div>}
-                                <ProductList items={searchResults} onSelect={addFromProduct} />
-                              </div>
-                            )}
-                            {searchQuery && searchResults.length === 0 && commonFoods.length === 0 && !searching && <p className="text-xs text-muted text-center py-3">검색 결과가 없어요</p>}
-                          </>
-                        )}
-                        {addTab === "favorites" && (
-                          favorites.length > 0 ? <ProductList items={favorites} onSelect={addFromProduct} /> : (
-                            <div className="text-center py-6"><p className="text-2xl mb-2">♡</p><p className="text-xs text-muted">즐겨찾기한 제품이 없어요</p></div>
-                          )
-                        )}
-                        {addTab === "weekly" && (
-                          weeklyItems.length > 0 ? <ProductList items={weeklyItems} onSelect={addFromProduct} /> : (
-                            <div className="text-center py-6"><p className="text-2xl mb-2">📋</p><p className="text-xs text-muted">식단 리스트가 비어있어요</p><Link href="/weekly-box" className="text-[10px] text-primary mt-1 inline-block">식단 리스트 만들기 →</Link></div>
-                          )
-                        )}
-                        {addTab === "photo" && (
-                          <div>
-                            {!photoPreview ? (
-                              <div className="text-center py-6">
-                                <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-primary/10 mb-4">
-                                  <svg className="w-10 h-10 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
-                                  </svg>
-                                </div>
-                                <p className="text-sm font-bold mb-1">음식 사진으로 기록하기</p>
-                                <p className="text-xs text-muted mb-4">사진을 찍거나 갤러리에서 선택하세요</p>
-                                <div className="flex gap-2 justify-center">
-                                  <label className="cursor-pointer px-4 py-2.5 bg-primary text-white rounded-xl text-sm font-bold hover:brightness-110 transition-all flex items-center gap-2">
-                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                      <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
-                                    </svg>
-                                    촬영
-                                    <input type="file" accept="image/*" capture="environment" onChange={handlePhotoCapture} className="hidden" />
-                                  </label>
-                                  <label className="cursor-pointer px-4 py-2.5 bg-card border border-border rounded-xl text-sm font-medium hover:bg-surface transition-all flex items-center gap-2">
-                                    <svg className="w-4 h-4 text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                      <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z" />
-                                    </svg>
-                                    갤러리
-                                    <input type="file" accept="image/*" onChange={handlePhotoCapture} className="hidden" />
-                                  </label>
-                                </div>
-                              </div>
-                            ) : (
-                              <div>
-                                {/* 사진 미리보기 */}
-                                <div className="relative mb-3">
-                                  <img src={photoPreview} alt="음식 사진" className="w-full h-48 object-cover rounded-xl" />
-                                  <button
-                                    onClick={resetPhoto}
-                                    className="absolute top-2 right-2 w-7 h-7 bg-black/50 text-white rounded-full flex items-center justify-center text-xs hover:bg-black/70"
-                                  >
-                                    ✕
-                                  </button>
-                                  {photoAnalyzing && (
-                                    <div className="absolute inset-0 bg-black/40 rounded-xl flex items-center justify-center">
-                                      <div className="bg-card rounded-xl px-4 py-3 flex items-center gap-2">
-                                        <div className="w-5 h-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-                                        <span className="text-sm font-medium">음식 분석 중...</span>
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-
-                                {/* AI 인식 결과 */}
-                                {photoResults && (
-                                  <div>
-                                    {photoResults.recognized.length > 0 && (
-                                      <div className="mb-3">
-                                        <div className="flex items-center gap-1.5 mb-2">
-                                          <span className="text-xs font-bold text-primary">AI 인식 결과</span>
-                                          <span className="text-[10px] text-muted">
-                                            {photoResults.recognized.map((r) => r.name).join(", ")}
-                                          </span>
-                                        </div>
-                                      </div>
-                                    )}
-
-                                    {/* 매칭된 일반 음식 */}
-                                    {photoResults.matched.commonFoods.length > 0 && (
-                                      <div className="mb-3">
-                                        <div className="text-[10px] font-bold text-muted uppercase tracking-wider px-1 mb-1.5">매칭된 음식</div>
-                                        <div className="space-y-1">
-                                          {photoResults.matched.commonFoods.map((food) => (
-                                            <button key={food.id} onClick={() => { addFromCommonFood(food); resetPhoto(); }}
-                                              className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-card transition-colors flex items-center gap-3">
-                                              <span className="text-xl shrink-0">{food.icon}</span>
-                                              <div className="flex-1 min-w-0">
-                                                <p className="text-sm font-semibold">{food.name}</p>
-                                                <div className="flex gap-2 text-[10px] text-muted mt-0.5" style={{ fontFamily: "'Outfit', sans-serif" }}>
-                                                  <span>{food.serving_desc}</span>
-                                                  {food.calories != null && <span>{food.calories}kcal</span>}
-                                                </div>
-                                              </div>
-                                              <span className="text-xs text-primary font-bold shrink-0">+ 기록</span>
-                                            </button>
-                                          ))}
-                                        </div>
-                                      </div>
-                                    )}
-
-                                    {/* 매칭된 제품 */}
-                                    {photoResults.matched.products.length > 0 && (
-                                      <div className="mb-3">
-                                        <div className="text-[10px] font-bold text-muted uppercase tracking-wider px-1 mb-1.5">매칭된 제품</div>
-                                        <ProductList items={photoResults.matched.products} onSelect={(p) => { addFromProduct(p); resetPhoto(); }} />
-                                      </div>
-                                    )}
-
-                                    {/* 결과 없음 / AI 없음 → 검색 or 직접 입력 유도 */}
-                                    {photoResults.matched.commonFoods.length === 0 && photoResults.matched.products.length === 0 && (
-                                      <div className="text-center py-4">
-                                        <p className="text-sm text-muted mb-3">
-                                          {photoResults.hasAI
-                                            ? "매칭되는 음식을 찾지 못했어요"
-                                            : "사진이 저장되었어요. 음식을 선택해주세요"}
-                                        </p>
-                                        <div className="flex gap-2 justify-center">
-                                          <button
-                                            onClick={() => setAddTab("search")}
-                                            className="px-4 py-2 bg-primary text-white rounded-xl text-sm font-bold"
-                                          >
-                                            검색으로 추가
-                                          </button>
-                                          <button
-                                            onClick={() => setAddTab("manual")}
-                                            className="px-4 py-2 bg-card border border-border rounded-xl text-sm font-medium"
-                                          >
-                                            직접 입력
-                                          </button>
-                                        </div>
-                                      </div>
-                                    )}
-                                  </div>
-                                )}
-
-                                {/* 다시 찍기 */}
-                                {!photoAnalyzing && (
-                                  <label className="cursor-pointer block text-center mt-3 text-xs text-muted hover:text-foreground transition-colors">
-                                    다른 사진으로 변경
-                                    <input type="file" accept="image/*" capture="environment" onChange={handlePhotoCapture} className="hidden" />
-                                  </label>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        )}
-                        {addTab === "manual" && (
-                          <>
-                            <div className="space-y-2 mb-3">
-                              <input type="text" value={manualForm.food_name} onChange={(e) => setManualForm({ ...manualForm, food_name: e.target.value })} placeholder="음식 이름" className="w-full px-3 py-2.5 rounded-xl bg-background border border-border text-sm focus:border-primary focus:outline-none" autoFocus />
-                              <div className="grid grid-cols-3 gap-2">
-                                <input type="number" value={manualForm.calories} onChange={(e) => setManualForm({ ...manualForm, calories: e.target.value })} placeholder="칼로리" className="px-2 py-2 rounded-lg bg-background border border-border text-xs focus:border-primary focus:outline-none text-center" />
-                                <input type="number" value={manualForm.protein_g} onChange={(e) => setManualForm({ ...manualForm, protein_g: e.target.value })} placeholder="단백질(g)" className="px-2 py-2 rounded-lg bg-background border border-border text-xs focus:border-primary focus:outline-none text-center" />
-                                <input type="number" value={manualForm.serving_g} onChange={(e) => setManualForm({ ...manualForm, serving_g: e.target.value })} placeholder="양(g)" className="px-2 py-2 rounded-lg bg-background border border-border text-xs focus:border-primary focus:outline-none text-center" />
-                              </div>
-                            </div>
-                            <button onClick={addManual} disabled={!manualForm.food_name} className="w-full py-2.5 rounded-xl bg-primary text-white text-sm font-bold hover:bg-primary-dark transition-colors disabled:opacity-40">추가</button>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* 빈 슬롯 추천 카드 */}
-                {showSuggestion && addingMeal !== meal.key && (
-                  <div
-                    className="mt-2 rounded-2xl p-4 cursor-pointer transition-all hover:shadow-lg"
-                    style={{ background: "linear-gradient(135deg, var(--primary-light), var(--card))", border: "1.5px solid var(--primary)" }}
-                    onClick={() => { setAddingMeal(meal.key); setAddTab("search"); }}
-                  >
-                    <div className="flex items-center gap-1.5 mb-2">
-                      <svg viewBox="0 0 24 24" width={14} height={14} fill="none" stroke="var(--primary)" strokeWidth={2.5} strokeLinecap="round">
-                        <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
-                      </svg>
-                      <span className="text-[10px] font-bold text-primary tracking-wider uppercase">{meal.label} 추천</span>
+                {/* 빈 끼니 추천 */}
+                {showSuggestion && !isAdding && (
+                  <Card tone="brand" interactive onClick={() => { setAddingMeal(meal.key); setAddTab("search"); }}>
+                    <div className="flex items-center gap-2 mb-2">
+                      <Badge tone="brand">{meal.label} 추천</Badge>
+                      {topGap?.label && <span className="text-caption text-brand-ink">{topGap.label} 보충</span>}
                     </div>
                     <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-xl bg-card shadow-sm flex items-center justify-center text-[10px] font-bold text-primary shrink-0">
-                        {topGap?.label?.slice(0, 3) || "추천"}
-                      </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-[14px] font-bold truncate">{topSuggestion.product_name}</p>
-                        <p className="text-[11px] text-foreground/60 mt-0.5 line-clamp-1">{topSuggestion.reason || `${topGap?.label || ""} 보충에 적합해요`}</p>
+                        <p className="text-body font-bold text-ink line-clamp-1">{topSuggestion.product_name}</p>
+                        <p className="text-caption text-ink-2 mt-0.5 line-clamp-1">{topSuggestion.reason || `${topGap?.label || ""} 보충에 적합해요`}</p>
                       </div>
-                      <button
+                      <Button
+                        size="sm"
+                        icon="plus"
                         onClick={(e) => { e.stopPropagation(); addFromProduct({ id: topSuggestion.product_id, name: topSuggestion.product_name, manufacturer: null, calories: null, protein_g: null, serving_size_g: null }); }}
-                        className="w-9 h-9 rounded-full bg-primary text-white flex items-center justify-center text-xl shrink-0 shadow-md"
                       >
-                        +
-                      </button>
+                        기록하기
+                      </Button>
                     </div>
-                  </div>
+                  </Card>
                 )}
               </div>
             );
@@ -1083,48 +992,42 @@ export default function DiaryPage() {
 
       {/* ━━ 영양 갭 알림 ━━ */}
       {topGap && (
-        <Link href="/products" className="flex items-center gap-3.5 px-4 py-4 mt-4 bg-card rounded-2xl shadow-[0_1px_4px_rgba(0,0,0,0.06)] hover:shadow-lg transition-all">
-          <div className="w-2 h-2 rounded-full shrink-0" style={{
-            background: topGap.nutrient.includes("protein") ? "var(--macro-protein)"
-              : topGap.nutrient.includes("sodium") ? "var(--macro-sodium)"
-              : topGap.nutrient.includes("fat") ? "var(--macro-fat)"
-              : "var(--macro-carbs)"
-          }} />
+        <Link href="/products" className="flex items-center gap-3 px-4 py-3.5 mt-4 rounded-lg border border-line bg-surface hover:border-line-strong transition-colors">
+          <span className={cn("size-2 rounded-full shrink-0", gapDot(topGap.nutrient))} aria-hidden="true" />
           <div className="flex-1 min-w-0">
-            <p className="text-[13px] font-bold">{topGap.label} {Math.round(topGap.target - topGap.current)}{topGap.nutrient.includes("sodium") ? "mg" : "g"} 더 채우면 목표 달성</p>
-            <p className="text-[11px] text-muted mt-0.5">탭해서 추천 제품 보기</p>
+            <p className="text-label font-bold text-ink">{topGap.label} <span className="num">{Math.round(topGap.target - topGap.current)}</span>{topGap.nutrient.includes("sodium") ? "mg" : "g"} 더 채우면 목표 달성</p>
+            <p className="text-caption text-ink-2 mt-0.5">추천 제품 보기</p>
           </div>
-          <span className="text-muted text-base shrink-0">›</span>
+          <Icon name="chevron-right" size={18} className="text-ink-3 shrink-0" />
         </Link>
       )}
 
-      {/* ━━ 주간 리포트 배너 ━━ */}
-      <Link href="/diary/report"
-        className="flex items-center justify-between bg-primary/8 border border-primary/20 rounded-2xl px-4 py-3 mt-4 hover:bg-primary/12 transition-colors">
-        <div className="flex items-center gap-2">
-          <span className="text-lg">📊</span>
-          <div>
-            <p className="text-sm font-bold">주간 영양 리포트</p>
-            <p className="text-[10px] text-muted">이번 주 영양 밸런스를 확인하세요</p>
-          </div>
+      {/* ━━ 주간 리포트 ━━ */}
+      <Link href="/diary/report" className="flex items-center justify-between gap-3 rounded-lg bg-brand-soft px-4 py-3.5 mt-3 hover:bg-brand-soft/70 transition-colors">
+        <div className="min-w-0">
+          <p className="text-label font-bold text-ink">주간 영양 리포트</p>
+          <p className="text-caption text-ink-2">이번 주 영양 밸런스를 확인하세요</p>
         </div>
-        <span className="text-xs text-primary font-bold">보기 →</span>
+        <span className="inline-flex items-center gap-0.5 text-label font-bold text-brand-ink shrink-0">보기 <Icon name="chevron-right" size={16} /></span>
       </Link>
 
-      {/* ━━ 스트릭 ━━ */}
-      {weeklyTrend && weeklyTrend.days.filter(d => d.count > 0).length > 0 && (
-        <div className="flex items-center justify-center gap-2 mt-5 py-2 px-5 rounded-full bg-primary/8 w-fit mx-auto">
-          <span className="text-[14px]" style={{ fontFamily: "var(--font-outfit), sans-serif", fontWeight: 700, color: "var(--primary)" }}>
-            🔥 {weeklyTrend.days.filter(d => d.count > 0).length}일
-          </span>
-          <span className="text-[12px] text-foreground/60">연속 기록</span>
-        </div>
+      {/* ━━ 기록한 날 ━━ */}
+      {streakDays > 0 && (
+        <p className="text-label text-ink-2 text-center mt-5">
+          이번 주 <span className="num font-bold text-brand-ink">{streakDays}일</span> 기록했어요
+        </p>
       )}
 
-      {/* ━━ 하단 안내 ━━ */}
-      <div className="mt-6 text-center">
-        <p className="text-xs text-muted">34만 식품 DB에서 검색하면 영양 정보가 자동으로 채워져요</p>
-      </div>
-    </div>
+      <p className="text-caption text-ink-3 text-center mt-4">34만 식품 DB에서 검색하면 영양 정보가 자동으로 채워져요</p>
+
+      <ConfirmSheet
+        open={!!deleteConfirmId}
+        onClose={() => setDeleteConfirmId(null)}
+        onConfirm={() => { if (deleteConfirmId) deleteEntry(deleteConfirmId); }}
+        title="이 기록을 삭제할까요?"
+        description={deleteTarget ? `${deleteTarget.food_name} 기록이 사라져요` : undefined}
+        confirmLabel="삭제하기"
+      />
+    </Page>
   );
 }

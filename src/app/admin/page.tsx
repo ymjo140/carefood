@@ -1,7 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import Link from "next/link";
+import {
+  Card, EmptyState, Page, PageHeader, PageLoading, ProgressBar, SectionHeader, Stat, TextLink, cn,
+} from "@/components/ui";
+import { LinkTabs, ADMIN_TABS } from "@/components/ui/LinkTabs";
 
 type DashboardData = {
   data: {
@@ -40,13 +43,14 @@ const DIET_LABELS: Record<string, string> = {
   normal: "일반", diet: "다이어트", exercise: "운동병행", vegetarian: "채식", pregnant: "임산부",
 };
 
-function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
+function StatCard({ label, value, sub, emphasis, tone = "default" }: {
+  label: string; value: number; sub?: string; emphasis?: boolean; tone?: "default" | "caution";
+}) {
   return (
-    <div className="border border-border rounded-xl p-4">
-      <p className="text-xs text-muted mb-1">{label}</p>
-      <p className="text-2xl font-extrabold tabular-nums">{typeof value === "number" ? value.toLocaleString() : value}</p>
-      {sub && <p className="text-[11px] text-muted mt-0.5">{sub}</p>}
-    </div>
+    <Card className={cn(tone === "caution" && "border-caution")}>
+      <Stat label={label} value={value.toLocaleString()} emphasis={emphasis} />
+      {sub && <p className={cn("text-caption mt-1", tone === "caution" ? "text-caution" : "text-ink-3")}>{sub}</p>}
+    </Card>
   );
 }
 
@@ -55,17 +59,28 @@ function BarChart({ data, labels }: { data: Record<string, number>; labels?: Rec
   const max = Math.max(...entries.map(([, v]) => v), 1);
 
   return (
-    <div className="space-y-2">
+    <div className="flex flex-col gap-2.5">
       {entries.map(([key, val]) => (
-        <div key={key} className="flex items-center gap-2">
-          <span className="text-xs text-foreground/70 w-16 shrink-0 truncate">{labels?.[key] || key}</span>
-          <div className="flex-1 h-5 bg-surface rounded overflow-hidden">
-            <div className="h-full bg-primary/60 rounded" style={{ width: `${(val / max) * 100}%` }} />
-          </div>
-          <span className="text-xs font-medium w-10 text-right tabular-nums">{val}</span>
+        <div key={key} className="flex items-center gap-3">
+          <span className="text-caption text-ink-2 w-16 shrink-0 truncate">{labels?.[key] || key}</span>
+          <ProgressBar value={val} max={max} label={labels?.[key] || key} className="flex-1" />
+          <span className="num text-caption font-bold text-ink w-10 text-right">{val}</span>
         </div>
       ))}
     </div>
+  );
+}
+
+function DistributionCard({ title, data, labels }: { title: string; data: Record<string, number>; labels: Record<string, string> }) {
+  return (
+    <Card>
+      <p className="text-label font-bold text-ink mb-3">{title}</p>
+      {Object.keys(data).length > 0 ? (
+        <BarChart data={data} labels={labels} />
+      ) : (
+        <p className="text-caption text-ink-3">아직 데이터가 없어요</p>
+      )}
+    </Card>
   );
 }
 
@@ -81,20 +96,13 @@ export default function AdminDashboard() {
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading) {
-    return (
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 text-center">
-        <div className="inline-block w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin mb-3" />
-        <p className="text-sm text-muted">대시보드 로딩 중...</p>
-      </div>
-    );
-  }
+  if (loading) return <PageLoading />;
 
   if (!data) {
     return (
-      <div className="max-w-6xl mx-auto px-4 py-8 text-center">
-        <p className="text-muted">데이터를 불러올 수 없습니다.</p>
-      </div>
+      <Page width="wide">
+        <EmptyState title="데이터를 불러오지 못했어요" description="잠시 후 다시 열어 주세요" />
+      </Page>
     );
   }
 
@@ -106,53 +114,30 @@ export default function AdminDashboard() {
   const ingredientMatchRate = d.food_reports.total > 0 ? Math.round(d.food_reports.matched / d.food_reports.total * 100 * 10) / 10 : 0;
 
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h1 className="text-xl font-extrabold">관리 대시보드</h1>
-          <p className="text-xs text-muted mt-0.5">
-            {new Date(data.generated_at).toLocaleString("ko-KR")} 기준
-          </p>
-        </div>
-        <Link href="/" className="text-xs text-muted hover:text-primary"
-          style={{ minHeight: "unset", minWidth: "unset" }}>
-          ← 홈으로
-        </Link>
-      </div>
+    <Page width="wide">
+      <PageHeader
+        title="관리 대시보드"
+        description={`${new Date(data.generated_at).toLocaleString("ko-KR")} 기준`}
+        actions={<TextLink href="/">홈으로</TextLink>}
+      />
 
-      {/* B2B 네비게이션 */}
-      <div className="flex gap-2 mb-6 overflow-x-auto no-scrollbar">
-        <span className="text-xs px-3 py-1.5 rounded-full bg-foreground text-card shrink-0"
-          style={{ minHeight: "unset", minWidth: "unset" }}>
-          📊 데이터 현황
-        </span>
-        <Link href="/admin/insights"
-          className="text-xs px-3 py-1.5 rounded-full bg-surface text-foreground/70 hover:bg-border shrink-0"
-          style={{ minHeight: "unset", minWidth: "unset" }}>
-          📈 시장 인사이트
-        </Link>
-        <Link href="/admin/odm"
-          className="text-xs px-3 py-1.5 rounded-full bg-surface text-foreground/70 hover:bg-border shrink-0"
-          style={{ minHeight: "unset", minWidth: "unset" }}>
-          🏭 ODM 수요 분석
-        </Link>
-      </div>
+      <LinkTabs items={ADMIN_TABS} current="/admin" label="관리자 메뉴" className="mb-6" />
 
       {/* ── 데이터 현황 ── */}
       <section className="mb-8">
-        <h2 className="text-sm font-bold mb-3">📊 데이터 현황</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-          <StatCard label="전체 제품" value={d.active_products} />
+        <SectionHeader title="데이터 현황" />
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
+          <StatCard label="전체 제품" value={d.active_products} emphasis />
           <StatCard label="구매 가능" value={d.purchasable} sub={`매칭률 ${matchRate}%`} />
           <StatCard label="카테고리 태깅" value={d.categorized} sub={`${categoryRate}%`} />
           <StatCard label="매운맛 태깅" value={d.spicy_tagged} />
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-          <StatCard label="컬리 매칭" value={d.platforms.kurly} />
-          <StatCard label="11번가 매칭" value={d.platforms["11st"]} />
-          <StatCard label="오아시스 매칭" value={d.platforms.oasis} />
-          <StatCard label="홈플러스 매칭" value={d.platforms.homeplus} />
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
+          <StatCard label="컬리 매칭" value={d.platforms.kurly ?? 0} />
+          <StatCard label="11번가 매칭" value={d.platforms["11st"] ?? 0} />
+          <StatCard label="오아시스 매칭" value={d.platforms.oasis ?? 0} />
+          <StatCard label="홈플러스 매칭" value={d.platforms.homeplus ?? 0} />
         </div>
 
         <div className="grid grid-cols-2 gap-3">
@@ -166,97 +151,66 @@ export default function AdminDashboard() {
 
       {/* ── 품질 관리 ── */}
       <section className="mb-8">
-        <h2 className="text-sm font-bold mb-3">⚠️ 품질 관리</h2>
-        <div className="grid grid-cols-3 gap-3">
-          <div className={`border rounded-xl p-4 ${q.low_score_matches > 1000 ? "border-orange-300 bg-orange-50" : "border-border"}`}>
-            <p className="text-xs text-muted mb-1">오매칭 의심 (low_score)</p>
-            <p className="text-2xl font-extrabold tabular-nums">{q.low_score_matches.toLocaleString()}</p>
-          </div>
-          <div className={`border rounded-xl p-4 ${q.no_nutrition > 500 ? "border-orange-300 bg-orange-50" : "border-border"}`}>
-            <p className="text-xs text-muted mb-1">영양정보 없음</p>
-            <p className="text-2xl font-extrabold tabular-nums">{q.no_nutrition.toLocaleString()}</p>
-          </div>
-          <div className="border border-border rounded-xl p-4">
-            <p className="text-xs text-muted mb-1">원재료 미연결</p>
-            <p className="text-2xl font-extrabold tabular-nums">{q.no_ingredients_linked.toLocaleString()}</p>
-          </div>
+        <SectionHeader title="품질 관리" description="기준을 넘으면 주의 색으로 표시돼요" />
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <StatCard label="오매칭 의심 (low_score)" value={q.low_score_matches}
+            tone={q.low_score_matches > 1000 ? "caution" : "default"}
+            sub={q.low_score_matches > 1000 ? "1,000건 초과 — 확인 필요" : undefined} />
+          <StatCard label="영양정보 없음" value={q.no_nutrition}
+            tone={q.no_nutrition > 500 ? "caution" : "default"}
+            sub={q.no_nutrition > 500 ? "500건 초과 — 확인 필요" : undefined} />
+          <StatCard label="원재료 미연결" value={q.no_ingredients_linked} />
         </div>
       </section>
 
       {/* ── 사용자 분석 ── */}
       <section className="mb-8">
-        <h2 className="text-sm font-bold mb-3">👥 사용자 분석</h2>
-        <div className="grid grid-cols-3 gap-3 mb-4">
+        <SectionHeader title="사용자 분석" />
+        <div className="grid grid-cols-3 gap-3 mb-3">
           <StatCard label="온보딩 완료" value={u.total_profiles} />
           <StatCard label="리뷰 수" value={u.total_reviews} />
           <StatCard label="행동 기록" value={u.total_interactions} />
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {/* 연령대 분포 */}
-          <div className="border border-border rounded-xl p-4">
-            <h3 className="text-xs font-bold mb-3">연령대</h3>
-            {Object.keys(u.age_distribution).length > 0 ? (
-              <BarChart data={u.age_distribution} labels={AGE_LABELS} />
-            ) : (
-              <p className="text-xs text-muted">데이터 없음</p>
-            )}
-          </div>
-
-          {/* 관심사 분포 */}
-          <div className="border border-border rounded-xl p-4">
-            <h3 className="text-xs font-bold mb-3">건강 관심사</h3>
-            {Object.keys(u.concern_distribution).length > 0 ? (
-              <BarChart data={u.concern_distribution} labels={CONCERN_LABELS} />
-            ) : (
-              <p className="text-xs text-muted">데이터 없음</p>
-            )}
-          </div>
-
-          {/* 식습관 분포 */}
-          <div className="border border-border rounded-xl p-4">
-            <h3 className="text-xs font-bold mb-3">식습관</h3>
-            {Object.keys(u.diet_distribution).length > 0 ? (
-              <BarChart data={u.diet_distribution} labels={DIET_LABELS} />
-            ) : (
-              <p className="text-xs text-muted">데이터 없음</p>
-            )}
-          </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <DistributionCard title="연령대" data={u.age_distribution} labels={AGE_LABELS} />
+          <DistributionCard title="건강 관심사" data={u.concern_distribution} labels={CONCERN_LABELS} />
+          <DistributionCard title="식습관" data={u.diet_distribution} labels={DIET_LABELS} />
         </div>
       </section>
 
       {/* ── 최근 7일 행동 추이 ── */}
       {Object.keys(u.daily_actions).length > 0 && (
         <section className="mb-8">
-          <h2 className="text-sm font-bold mb-3">📈 최근 7일 행동</h2>
-          <div className="border border-border rounded-xl overflow-hidden">
-            <table className="w-full text-sm">
+          <SectionHeader title="최근 7일 행동" />
+          <Card padding="none" className="overflow-x-auto">
+            <table className="w-full text-label">
               <thead>
-                <tr className="bg-surface/50 border-b border-border">
-                  <th className="text-left py-2 px-4 text-xs text-muted font-medium">날짜</th>
-                  <th className="text-right py-2 px-4 text-xs text-muted font-medium">조회</th>
-                  <th className="text-right py-2 px-4 text-xs text-muted font-medium">클릭</th>
-                  <th className="text-right py-2 px-4 text-xs text-muted font-medium">전환율</th>
+                <tr className="border-b border-line text-caption text-ink-2">
+                  <th className="text-left py-2.5 px-4 font-medium">날짜</th>
+                  <th className="text-right py-2.5 px-4 font-medium">조회</th>
+                  <th className="text-right py-2.5 px-4 font-medium">클릭</th>
+                  <th className="text-right py-2.5 px-4 font-medium">전환율</th>
                 </tr>
               </thead>
               <tbody>
                 {Object.entries(u.daily_actions)
                   .sort(([a], [b]) => b.localeCompare(a))
                   .map(([date, actions]) => (
-                    <tr key={date} className="border-b border-border last:border-0">
-                      <td className="py-2 px-4 text-xs">{date}</td>
-                      <td className="py-2 px-4 text-xs text-right tabular-nums">{actions.views}</td>
-                      <td className="py-2 px-4 text-xs text-right tabular-nums">{actions.clicks}</td>
-                      <td className="py-2 px-4 text-xs text-right tabular-nums text-primary font-medium">
+                    <tr key={date} className="border-b border-line last:border-0">
+                      <td className="py-2.5 px-4 num text-ink">{date}</td>
+                      <td className="py-2.5 px-4 text-right num text-ink-2">{actions.views}</td>
+                      <td className="py-2.5 px-4 text-right num text-ink-2">{actions.clicks}</td>
+                      <td className="py-2.5 px-4 text-right num font-bold text-brand-ink">
                         {actions.views > 0 ? Math.round(actions.clicks / actions.views * 100) : 0}%
                       </td>
                     </tr>
                   ))}
               </tbody>
             </table>
-          </div>
+          </Card>
         </section>
       )}
-    </div>
+    </Page>
   );
 }

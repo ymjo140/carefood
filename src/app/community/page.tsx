@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import MealCard from "@/components/community/MealCard";
 import DailyCard from "@/components/community/DailyCard";
 import PostComposer from "@/components/community/PostComposer";
+import { Button, Chip, ChipRow, EmptyState, Page, PageHeader, Spinner, Tabs, useToast } from "@/components/ui";
 
 /* ─── helpers ─── */
 function getUserId(): string {
@@ -57,7 +58,7 @@ function getUserProfile(): { nickname: string; ageGroup?: string; concerns?: str
   return { nickname: generateNickname() };
 }
 
-const CONCERN_LABELS: Record<string, string> = {
+const CONCERN_FILTERS: Record<string, string> = {
   gut_health: "장건강", skin: "피부", weight: "다이어트", energy: "활력",
   muscle: "근력", blood_pressure: "혈압", diabetes: "혈당", kidney: "신장",
 };
@@ -76,7 +77,7 @@ export default function CommunityPage() {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [composerOpen, setComposerOpen] = useState(false);
-  const [toast, setToast] = useState("");
+  const toast = useToast();
   const sentinelRef = useRef<HTMLDivElement>(null);
   const userId = useRef("");
   const profile = useRef<{ nickname: string; ageGroup?: string; concerns?: string[]; goals?: string[] }>({ nickname: "익명" });
@@ -148,10 +149,13 @@ export default function CommunityPage() {
         setPosts(prev => prev.map(p =>
           p.id === postId ? { ...p, copy_count: (p.copy_count || 0) + 1 } : p
         ));
-        setToast(`✅ "${data.title || "식단"}" 식단 리스트에 저장됨 · 보러가기 →`);
-        setTimeout(() => setToast(""), 4000);
+        toast.show(`"${data.title || "식단"}" 식단 리스트에 담았어요`, { action: { label: "보기", href: "/weekly-box" } });
+      } else {
+        toast.show("식단 리스트에 담지 못했어요. 다시 시도해 주세요", { tone: "danger" });
       }
-    } catch { /* */ }
+    } catch {
+      toast.show("식단 리스트에 담지 못했어요. 다시 시도해 주세요", { tone: "danger" });
+    }
   };
 
   const handleFollow = async (authorId: string) => {
@@ -162,12 +166,7 @@ export default function CommunityPage() {
         body: JSON.stringify({ follower_id: userId.current, following_id: authorId }),
       });
       const data = await res.json();
-      if (data.following) {
-        setToast("팔로우했어요!");
-      } else {
-        setToast("팔로우를 취소했어요");
-      }
-      setTimeout(() => setToast(""), 2000);
+      toast.show(data.following ? "팔로우했어요" : "팔로우를 취소했어요");
     } catch { /* */ }
   };
 
@@ -178,58 +177,38 @@ export default function CommunityPage() {
   ];
 
   return (
-    <div className="max-w-lg mx-auto pb-24" style={{ background: "#0C1117", minHeight: "100vh" }}>
-      {/* ── Header ── */}
-      <div className="sticky top-0 z-30 px-4 pt-4 pb-2" style={{ background: "#0C1117" }}>
-        <h1 className="text-lg font-extrabold mb-3" style={{ color: "#ECEBE6" }}>식단 피드</h1>
+    <Page width="narrow">
+      <PageHeader title="식단 피드" description="다른 사람의 식단을 보고 내 식단 리스트에 담아 보세요" />
 
-        {/* Tabs */}
-        <div className="flex gap-1.5 mb-2">
-          {TABS.map(t => (
-            <button key={t.key} onClick={() => { setTab(t.key); setConcernFilter(""); }}
-              className="text-[12px] px-3 py-1.5 rounded-full font-medium transition-colors"
-              style={{
-                background: tab === t.key ? "#C4870A" : "#252C35",
-                color: tab === t.key ? "#0C1117" : "#8A919A",
-              }}>
-              {t.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Concern chips (visible when concern tab active) */}
+      {/* ── 보기 전환 ── */}
+      <div className="sticky top-14 z-30 -mx-4 px-4 pt-1 pb-3 bg-canvas flex flex-col gap-2">
+        <Tabs
+          label="피드 보기"
+          value={tab}
+          onChange={(v) => { setTab(v); setConcernFilter(""); }}
+          items={TABS.map(t => ({ value: t.key, label: t.label }))}
+        />
         {tab === "concern" && (
-          <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-1">
-            {Object.entries(CONCERN_LABELS).map(([key, label]) => (
-              <button key={key} onClick={() => setConcernFilter(concernFilter === key ? "" : key)}
-                className="text-[11px] px-2.5 py-1 rounded-full shrink-0 transition-colors"
-                style={{
-                  background: concernFilter === key ? "rgba(196,135,10,0.2)" : "#252C35",
-                  color: concernFilter === key ? "#C4870A" : "#8A919A",
-                  border: concernFilter === key ? "1px solid rgba(196,135,10,0.3)" : "1px solid transparent",
-                }}>
+          <ChipRow>
+            {Object.entries(CONCERN_FILTERS).map(([key, label]) => (
+              <Chip key={key} size="sm" selected={concernFilter === key} onClick={() => setConcernFilter(concernFilter === key ? "" : key)}>
                 {label}
-              </button>
+              </Chip>
             ))}
-          </div>
+          </ChipRow>
         )}
       </div>
 
-      {/* ── Feed ── */}
-      <div className="px-4 space-y-3">
+      {/* ── 피드 ── */}
+      <div className="flex flex-col gap-3">
         {loading && posts.length === 0 ? (
-          <div className="flex justify-center py-16">
-            <div className="w-6 h-6 border-2 rounded-full animate-spin" style={{ borderColor: "#252C35", borderTopColor: "#C4870A" }} />
-          </div>
+          <div className="flex justify-center py-16"><Spinner /></div>
         ) : posts.length === 0 ? (
-          <div className="text-center py-16">
-            <p className="text-[14px] mb-1" style={{ color: "#ECEBE6" }}>
-              {tab === "following" ? "팔로잉한 사람이 아직 없어요" : "아직 게시글이 없어요"}
-            </p>
-            <p className="text-[12px]" style={{ color: "#8A919A" }}>
-              {tab === "following" ? "관심 있는 사람을 팔로우하면 여기에 나타나요" : "첫 번째 식단을 공유해보세요!"}
-            </p>
-          </div>
+          <EmptyState
+            title={tab === "following" ? "팔로잉한 사람이 아직 없어요" : "아직 게시글이 없어요"}
+            description={tab === "following" ? "관심 있는 사람을 팔로우하면 여기에 나타나요" : "첫 번째 식단을 공유해 보세요"}
+            action={tab === "following" ? undefined : <Button size="sm" icon="edit" onClick={() => setComposerOpen(true)}>글 쓰기</Button>}
+          />
         ) : (
           posts.map((post: FeedPost) =>
             post.post_type === "meal" ? (
@@ -256,33 +235,20 @@ export default function CommunityPage() {
           )
         )}
 
-        {/* Infinite scroll sentinel */}
+        {/* 무한 스크롤 감지 */}
         {hasMore && <div ref={sentinelRef} className="h-8" />}
-        {hasMore && (
-          <div className="flex justify-center py-4">
-            <div className="w-5 h-5 border-2 rounded-full animate-spin" style={{ borderColor: "#252C35", borderTopColor: "#C4870A" }} />
-          </div>
-        )}
+        {hasMore && <div className="flex justify-center py-4"><Spinner size={20} /></div>}
       </div>
 
-      {/* ── Toast ── */}
-      {toast && (
-        <div
-          onClick={() => { if (toast.includes("보러가기")) router.push("/weekly-box"); }}
-          className="fixed top-16 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-xl shadow-lg text-[13px] font-medium"
-          style={{ background: "#C4870A", color: "#0C1117", maxWidth: "90vw", cursor: toast.includes("보러가기") ? "pointer" : "default" }}>
-          {toast}
-        </div>
-      )}
+      {/* ── 글쓰기 버튼 ── */}
+      <Button
+        icon="edit"
+        onClick={() => setComposerOpen(true)}
+        className="fixed z-40 rounded-full shadow-overlay right-[max(1rem,env(safe-area-inset-right))] bottom-[max(1.5rem,env(safe-area-inset-bottom))]"
+      >
+        글 쓰기
+      </Button>
 
-      {/* ── FAB (글쓰기) ── */}
-      <button onClick={() => setComposerOpen(true)}
-        className="fixed bottom-20 right-4 w-12 h-12 rounded-full shadow-lg flex items-center justify-center text-lg z-40 transition-transform hover:scale-105 active:scale-95"
-        style={{ background: "#C4870A", color: "#0C1117" }}>
-        ✏️
-      </button>
-
-      {/* ── PostComposer ── */}
       <PostComposer
         isOpen={composerOpen}
         onClose={() => setComposerOpen(false)}
@@ -293,6 +259,6 @@ export default function CommunityPage() {
         goals={profile.current.goals}
         onPosted={() => fetchFeed(1, false)}
       />
-    </div>
+    </Page>
   );
 }

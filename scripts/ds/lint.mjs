@@ -15,7 +15,7 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SCAN = ["src/app", "src/components"];
-const EXCLUDE = [/^src\/app\/api\//, /^src\/app\/design-system\//, /^src\/components\/ui\//, /opengraph|\/icon\.|manifest\.ts|sitemap\.ts|robots\.ts/];
+const EXCLUDE = [/^src\/app\/api\//, /^src\/app\/design-system\//, /opengraph|\/icon\.|manifest\.ts|sitemap\.ts|robots\.ts/];
 
 const PALETTE = "slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose";
 const UTIL = "bg|text|border(?:-[trblxy])?|ring|from|to|via|fill|stroke|outline|divide|placeholder|accent|caret|decoration";

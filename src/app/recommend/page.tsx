@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { Spinner } from "@/components/ui";
 
 /**
  * /recommend → /products 리다이렉트
@@ -15,11 +16,9 @@ export default function RecommendRedirect() {
   }, [router]);
 
   return (
-    <div className="min-h-[calc(100vh-3.5rem)] flex items-center justify-center">
-      <div className="text-center">
-        <div className="inline-block w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin mb-3" />
-        <p className="text-sm text-muted">제품 페이지로 이동 중...</p>
-      </div>
+    <div className="min-h-[50vh] flex flex-col items-center justify-center gap-3">
+      <Spinner />
+      <p className="text-label text-ink-2">제품 페이지로 이동하고 있어요</p>
     </div>
   );
 }

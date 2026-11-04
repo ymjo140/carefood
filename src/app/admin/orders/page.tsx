@@ -1,7 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import Link from "next/link";
+import {
+  Badge, Button, Card, ConfirmSheet, EmptyState, Page, PageHeader, Spinner, Stat, Tabs, useToast,
+  type BadgeTone,
+} from "@/components/ui";
+import { LinkTabs, ADMIN_TABS } from "@/components/ui/LinkTabs";
 
 type PurchaseOrder = {
   id: string;
@@ -18,24 +22,29 @@ type PurchaseOrder = {
 type Summary = Record<string, { orders: number; items: number; amount: number; users: number }>;
 
 const SERVICE_LABELS: Record<string, string> = {
-  greating: "🥗 그리팅", yundiet: "💪 윤식단", designmeal: "🍱 디자인밀",
-  sixmeal: "🥩 식스밀", makesalad: "🥙 메이크샐러드",
+  greating: "그리팅", yundiet: "윤식단", designmeal: "디자인밀",
+  sixmeal: "식스밀", makesalad: "메이크샐러드",
 };
 
-const STATUS_LABELS: Record<string, { label: string; color: string }> = {
-  pending: { label: "발주 대기", color: "text-yellow-400" },
-  ordered: { label: "발주 완료", color: "text-blue-400" },
-  confirmed: { label: "확인됨", color: "text-green-400" },
-  shipped: { label: "출하", color: "text-primary" },
-  delivered: { label: "배송 완료", color: "text-green-500" },
-  cancelled: { label: "취소", color: "text-red-400" },
+/** 발주 상태 — 대기=caution, 완료=positive, 취소=danger, 진행 중=brand/neutral */
+const STATUS_LABELS: Record<string, { label: string; tone: BadgeTone }> = {
+  pending: { label: "발주 대기", tone: "caution" },
+  ordered: { label: "발주 완료", tone: "brand" },
+  confirmed: { label: "확인됨", tone: "neutral" },
+  shipped: { label: "출하", tone: "neutral" },
+  delivered: { label: "배송 완료", tone: "positive" },
+  cancelled: { label: "취소", tone: "danger" },
 };
+
+type StatusFilter = "all" | "pending" | "ordered" | "shipped" | "delivered";
 
 export default function AdminOrdersPage() {
   const [pos, setPos] = useState<PurchaseOrder[]>([]);
   const [summary, setSummary] = useState<Summary>({});
   const [loading, setLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [cancelTarget, setCancelTarget] = useState<string | null>(null);
+  const toast = useToast();
 
   const fetchData = () => {
     setLoading(true);
@@ -49,6 +58,7 @@ export default function AdminOrdersPage() {
       .finally(() => setLoading(false));
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { fetchData(); }, [statusFilter]);
 
   const updateStatus = async (poId: string, newStatus: string) => {
@@ -57,120 +67,109 @@ export default function AdminOrdersPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ po_id: poId, status: newStatus }),
     });
+    const done: Record<string, string> = { ordered: "발주했어요", shipped: "출하 처리했어요", cancelled: "발주를 취소했어요" };
+    if (done[newStatus]) toast.show(done[newStatus]);
     fetchData();
   };
 
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6">
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <Link href="/admin" className="text-xs text-muted hover:text-foreground mb-1 inline-block">← 관리자</Link>
-          <h1 className="text-xl font-extrabold">📦 발주 관리</h1>
-          <p className="text-xs text-muted mt-0.5">서비스별 발주 현황 및 배송 관리</p>
-        </div>
-      </div>
+    <Page width="wide">
+      <PageHeader title="발주 관리" description="서비스별 발주 현황 및 배송 관리" />
+
+      <LinkTabs items={ADMIN_TABS} current="/admin/orders" label="관리자 메뉴" className="mb-6" />
 
       {/* 상태 필터 */}
-      <div className="flex gap-1.5 mb-5 overflow-x-auto no-scrollbar">
-        {[
-          { key: "all", label: "전체" },
-          { key: "pending", label: "발주 대기" },
-          { key: "ordered", label: "발주 완료" },
-          { key: "shipped", label: "배송 중" },
-          { key: "delivered", label: "배송 완료" },
-        ].map(f => (
-          <button key={f.key} onClick={() => setStatusFilter(f.key)}
-            className={`text-xs px-3 py-1.5 rounded-full shrink-0 ${
-              statusFilter === f.key ? "bg-foreground text-card" : "bg-surface text-foreground/70 hover:bg-border"
-            }`} style={{ minHeight: "28px", minWidth: "unset" }}>
-            {f.label}
-          </button>
-        ))}
-      </div>
+      <Tabs<StatusFilter>
+        label="발주 상태"
+        className="mb-5"
+        value={statusFilter}
+        onChange={setStatusFilter}
+        items={[
+          { value: "all", label: "전체" },
+          { value: "pending", label: "발주 대기" },
+          { value: "ordered", label: "발주 완료" },
+          { value: "shipped", label: "배송 중" },
+          { value: "delivered", label: "배송 완료" },
+        ]}
+      />
 
       {/* 서비스별 요약 */}
       {Object.keys(summary).length > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
           {Object.entries(summary).map(([service, s]) => (
-            <div key={service} className="border border-border rounded-xl p-3">
-              <p className="text-xs font-bold mb-1">{SERVICE_LABELS[service] || service}</p>
-              <p className="text-lg font-extrabold">{s.items}끼</p>
-              <div className="flex justify-between text-[10px] text-muted mt-1">
-                <span>{s.users}명</span>
-                <span>{s.amount.toLocaleString()}원</span>
+            <Card key={service}>
+              <p className="text-label font-bold text-ink mb-2">{SERVICE_LABELS[service] || service}</p>
+              <Stat label="끼" value={s.items.toLocaleString()} />
+              <div className="flex justify-between gap-2 text-caption text-ink-2 mt-2">
+                <span><span className="num">{s.users}</span>명</span>
+                <span><span className="num">{s.amount.toLocaleString()}</span>원</span>
               </div>
-            </div>
+            </Card>
           ))}
         </div>
       )}
 
       {/* 발주 목록 */}
       {loading ? (
-        <div className="text-center py-12">
-          <div className="inline-block w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-        </div>
+        <div className="flex justify-center py-12"><Spinner /></div>
       ) : pos.length === 0 ? (
-        <div className="text-center py-12 text-muted">
-          <p className="text-3xl mb-2">📦</p>
-          <p className="text-sm">발주 내역이 없습니다</p>
-        </div>
+        <EmptyState title="발주 내역이 없어요" description="주문이 들어오면 서비스별로 묶여 여기에 보여요" />
       ) : (
-        <div className="space-y-3">
+        <div className="flex flex-col gap-3">
           {pos.map(po => {
-            const st = STATUS_LABELS[po.status] || { label: po.status, color: "" };
+            const st = STATUS_LABELS[po.status] || { label: po.status, tone: "neutral" as BadgeTone };
             return (
-              <div key={po.id} className="border border-border rounded-xl overflow-hidden">
-                <div className="bg-surface/50 px-4 py-3 border-b border-border flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <span className="text-sm font-bold">{SERVICE_LABELS[po.service] || po.service}</span>
-                    <span className="text-xs text-muted">{po.delivery_date}</span>
-                    <span className={`text-xs font-bold ${st.color}`}>{st.label}</span>
+              <Card key={po.id} padding="none" className="overflow-hidden">
+                <div className="px-4 py-3 border-b border-line flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex flex-wrap items-center gap-2 min-w-0">
+                    <span className="text-body font-bold text-ink">{SERVICE_LABELS[po.service] || po.service}</span>
+                    <span className="num text-caption text-ink-2">{po.delivery_date}</span>
+                    <Badge tone={st.tone}>{st.label}</Badge>
                   </div>
                   <div className="text-right">
-                    <p className="text-sm font-bold">{po.total_amount.toLocaleString()}원</p>
-                    <p className="text-[10px] text-muted">{po.total_users}명 · {po.total_items}끼</p>
+                    <p className="text-body font-bold text-ink"><span className="num">{po.total_amount.toLocaleString()}</span>원</p>
+                    <p className="text-caption text-ink-2"><span className="num">{po.total_users}</span>명 · <span className="num">{po.total_items}</span>끼</p>
                   </div>
                 </div>
                 {/* 제품 목록 */}
                 {po.items && po.items.length > 0 && (
-                  <div className="px-4 py-2 divide-y divide-border/20">
+                  <div className="px-4 py-1 divide-y divide-line">
                     {po.items.map((item, i) => (
-                      <div key={i} className="flex justify-between py-1.5 text-xs">
-                        <span>{item.product_name}</span>
-                        <span className="text-muted">{item.quantity}개 · {(item.unit_price * item.quantity).toLocaleString()}원</span>
+                      <div key={i} className="flex justify-between gap-3 py-2 text-label">
+                        <span className="text-ink min-w-0">{item.product_name}</span>
+                        <span className="text-ink-2 shrink-0">
+                          <span className="num">{item.quantity}</span>개 · <span className="num">{(item.unit_price * item.quantity).toLocaleString()}</span>원
+                        </span>
                       </div>
                     ))}
                   </div>
                 )}
-                {/* 상태 변경 버튼 */}
+                {/* 상태 변경 */}
                 {po.status === "pending" && (
-                  <div className="px-4 py-2 border-t border-border flex gap-2">
-                    <button onClick={() => updateStatus(po.id, "ordered")}
-                      className="text-xs bg-primary text-white px-3 py-1.5 rounded-lg font-bold"
-                      style={{ minHeight: "28px", minWidth: "unset" }}>
-                      발주하기
-                    </button>
-                    <button onClick={() => updateStatus(po.id, "cancelled")}
-                      className="text-xs text-red-400 px-3 py-1.5 rounded-lg border border-red-400/30"
-                      style={{ minHeight: "28px", minWidth: "unset" }}>
-                      취소
-                    </button>
+                  <div className="px-4 py-3 border-t border-line flex gap-2">
+                    <Button size="sm" onClick={() => updateStatus(po.id, "ordered")}>발주하기</Button>
+                    <Button size="sm" variant="danger" onClick={() => setCancelTarget(po.id)}>취소하기</Button>
                   </div>
                 )}
                 {po.status === "ordered" && (
-                  <div className="px-4 py-2 border-t border-border">
-                    <button onClick={() => updateStatus(po.id, "shipped")}
-                      className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg font-bold"
-                      style={{ minHeight: "28px", minWidth: "unset" }}>
-                      출하 처리
-                    </button>
+                  <div className="px-4 py-3 border-t border-line">
+                    <Button size="sm" variant="secondary" onClick={() => updateStatus(po.id, "shipped")}>출하 처리하기</Button>
                   </div>
                 )}
-              </div>
+              </Card>
             );
           })}
         </div>
       )}
-    </div>
+
+      <ConfirmSheet
+        open={cancelTarget !== null}
+        onClose={() => setCancelTarget(null)}
+        onConfirm={() => { const id = cancelTarget; setCancelTarget(null); if (id) updateStatus(id, "cancelled"); }}
+        title="이 발주를 취소할까요?"
+        description="취소한 발주는 다시 대기 상태로 되돌릴 수 없어요"
+        confirmLabel="취소하기"
+      />
+    </Page>
   );
 }

@@ -1,411 +1,167 @@
 {
-  "measuredAt": "2026-11-04T07:25:11.310Z",
+  "measuredAt": "2026-11-04T07:58:36.410Z",
   "files": 54,
-  "distinctColors": 135,
-  "gradients": 2,
-  "shadows": 47,
-  "fontSizeKinds": 21,
-  "radiusKinds": 11,
-  "buttonShapeKinds": 35,
-  "inlineStyles": 278,
+  "distinctColors": 2,
+  "gradients": 0,
+  "shadows": 3,
+  "fontSizeKinds": 5,
+  "radiusKinds": 4,
+  "buttonShapeKinds": 1,
+  "inlineStyles": 7,
   "topColors": [
     [
-      "tw:white",
-      57
+      "#fbf8f3",
+      1
     ],
     [
-      "#c4870a",
-      32
-    ],
-    [
-      "#8a919a",
-      29
-    ],
-    [
-      "#252c35",
-      27
-    ],
-    [
-      "#0c1117",
-      22
-    ],
-    [
-      "#ecebe6",
-      18
-    ],
-    [
-      "rgba(0,0,0,0.04)",
-      17
-    ],
-    [
-      "tw:red-400",
-      13
-    ],
-    [
-      "#e06030",
-      12
-    ],
-    [
-      "tw:yellow-400",
-      9
-    ],
-    [
-      "tw:orange-400",
-      9
-    ],
-    [
-      "tw:red-500",
-      9
-    ],
-    [
-      "#d4a843",
-      9
-    ],
-    [
-      "tw:green-400",
-      8
-    ],
-    [
-      "#161c24",
-      7
-    ],
-    [
-      "tw:red-50",
-      7
-    ],
-    [
-      "#4a8fd4",
-      7
-    ],
-    [
-      "tw:red-600",
-      6
-    ],
-    [
-      "tw:amber-700",
-      6
-    ],
-    [
-      "tw:green-700",
-      5
-    ],
-    [
-      "tw:emerald-700",
-      5
-    ],
-    [
-      "#2ea860",
-      5
-    ],
-    [
-      "#d4960a",
-      5
-    ],
-    [
-      "#d46a3a",
-      5
-    ],
-    [
-      "tw:green-500",
-      4
-    ],
-    [
-      "rgba(196,135,10,0.1)",
-      4
-    ],
-    [
-      "tw:amber-50",
-      4
-    ],
-    [
-      "tw:amber-900/20",
-      4
-    ],
-    [
-      "tw:amber-400",
-      4
-    ],
-    [
-      "tw:emerald-50",
-      4
-    ],
-    [
-      "tw:emerald-900/20",
-      4
-    ],
-    [
-      "tw:emerald-400",
-      4
-    ],
-    [
-      "tw:red-700",
-      4
-    ],
-    [
-      "#8a6ebf",
-      4
-    ],
-    [
-      "#6ba3e8",
-      4
-    ],
-    [
-      "tw:blue-600",
-      3
-    ],
-    [
-      "rgba(0,0,0,0.06)",
-      3
-    ],
-    [
-      "tw:black/40",
-      3
-    ],
-    [
-      "tw:red-900/20",
-      3
-    ],
-    [
-      "tw:red-950",
-      3
+      "#141210",
+      1
     ]
   ],
   "fontSizes": [
     [
-      "tw:xs",
-      287
+      "ds:label",
+      161
     ],
     [
-      "tw:sm",
-      270
+      "ds:caption",
+      147
     ],
     [
-      "10px",
-      121
+      "ds:body",
+      72
     ],
     [
-      "11px",
-      52
-    ],
-    [
-      "tw:lg",
-      43
-    ],
-    [
-      "tw:2xl",
-      42
-    ],
-    [
-      "tw:base",
-      38
-    ],
-    [
-      "tw:xl",
-      29
-    ],
-    [
-      "13px",
+      "ds:title",
       27
     ],
     [
-      "12px",
-      16
-    ],
-    [
-      "9px",
-      12
-    ],
-    [
-      "tw:3xl",
-      9
-    ],
-    [
-      "14px",
-      6
-    ],
-    [
-      "tw:5xl",
-      6
-    ],
-    [
-      "15px",
-      5
-    ],
-    [
-      "tw:4xl",
-      2
-    ],
-    [
-      "44px",
-      1
-    ],
-    [
-      "18px",
-      1
-    ],
-    [
-      "16px",
-      1
-    ],
-    [
-      "32px",
-      1
-    ],
-    [
-      "22px",
-      1
+      "ds:display",
+      4
     ]
   ],
   "radii": [
     [
+      "md",
+      26
+    ],
+    [
       "full",
-      166
-    ],
-    [
-      "xl",
-      142
-    ],
-    [
-      "2xl",
-      63
+      19
     ],
     [
       "lg",
-      52
-    ],
-    [
-      "default",
-      22
-    ],
-    [
-      "[14px]",
-      3
+      19
     ],
     [
       "sm",
-      2
-    ],
-    [
-      "md",
-      2
-    ],
-    [
-      "3xl",
-      1
-    ],
-    [
-      "[20px]",
-      1
-    ],
-    [
-      "[18px]",
-      1
+      4
     ]
   ],
   "worstFiles": [
     [
-      "src/components/ProductExplorer.tsx",
+      "src/app/onboarding/page.tsx",
       {
-        "colors": 35,
-        "inline": 33
+        "colors": 0,
+        "inline": 5
       }
     ],
     [
-      "src/app/weekly-box/page.tsx",
+      "src/app/layout.tsx",
       {
-        "colors": 38,
-        "inline": 28
-      }
-    ],
-    [
-      "src/app/community/[id]/PostDetail.tsx",
-      {
-        "colors": 35,
-        "inline": 23
-      }
-    ],
-    [
-      "src/components/community/MealCard.tsx",
-      {
-        "colors": 32,
-        "inline": 21
-      }
-    ],
-    [
-      "src/app/health/report/page.tsx",
-      {
-        "colors": 50,
+        "colors": 2,
         "inline": 0
       }
     ],
     [
       "src/app/diary/page.tsx",
       {
-        "colors": 16,
-        "inline": 32
+        "colors": 0,
+        "inline": 1
       }
     ],
     [
-      "src/app/products/[id]/page.tsx",
+      "src/app/diary/report/page.tsx",
       {
-        "colors": 30,
-        "inline": 14
-      }
-    ],
-    [
-      "src/app/onboarding/page.tsx",
-      {
-        "colors": 18,
-        "inline": 23
-      }
-    ],
-    [
-      "src/components/community/PostComposer.tsx",
-      {
-        "colors": 26,
-        "inline": 13
-      }
-    ],
-    [
-      "src/components/DualRadarChart.tsx",
-      {
-        "colors": 27,
-        "inline": 7
-      }
-    ],
-    [
-      "src/app/community/page.tsx",
-      {
-        "colors": 22,
-        "inline": 11
-      }
-    ],
-    [
-      "src/components/community/DailyCard.tsx",
-      {
-        "colors": 18,
-        "inline": 12
+        "colors": 0,
+        "inline": 1
       }
     ],
     [
       "src/app/admin/insights/page.tsx",
       {
-        "colors": 22,
-        "inline": 2
+        "colors": 0,
+        "inline": 0
       }
     ],
     [
-      "src/app/page.tsx",
+      "src/app/admin/odm/page.tsx",
       {
-        "colors": 22,
-        "inline": 2
+        "colors": 0,
+        "inline": 0
       }
     ],
     [
-      "src/components/TasteReview.tsx",
+      "src/app/admin/orders/page.tsx",
       {
-        "colors": 22,
-        "inline": 2
+        "colors": 0,
+        "inline": 0
+      }
+    ],
+    [
+      "src/app/admin/page.tsx",
+      {
+        "colors": 0,
+        "inline": 0
+      }
+    ],
+    [
+      "src/app/auth/actions.ts",
+      {
+        "colors": 0,
+        "inline": 0
+      }
+    ],
+    [
+      "src/app/auth/callback/route.ts",
+      {
+        "colors": 0,
+        "inline": 0
+      }
+    ],
+    [
+      "src/app/community/[id]/MealPlanActions.tsx",
+      {
+        "colors": 0,
+        "inline": 0
+      }
+    ],
+    [
+      "src/app/community/[id]/PostDetail.tsx",
+      {
+        "colors": 0,
+        "inline": 0
+      }
+    ],
+    [
+      "src/app/community/[id]/page.tsx",
+      {
+        "colors": 0,
+        "inline": 0
+      }
+    ],
+    [
+      "src/app/community/page.tsx",
+      {
+        "colors": 0,
+        "inline": 0
+      }
+    ],
+    [
+      "src/app/family/layout.tsx",
+      {
+        "colors": 0,
+        "inline": 0
       }
     ]
   ]

@@ -110,7 +110,7 @@ export function IconButton({
 export function TextLink({ className, children, ...rest }: ComponentProps<typeof Link>) {
   return (
     <Link
-      className={cn("inline-flex items-center gap-0.5 text-label font-medium text-brand-ink hover:underline underline-offset-4", className)}
+      className={cn("inline-flex items-center gap-0.5 min-h-8 text-label font-medium text-brand-ink hover:underline underline-offset-4", className)}
       {...rest}
     >
       {children}

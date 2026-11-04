@@ -1,0 +1,55 @@
+name: design-system
+
+# 1) 푸시·PR 마다: 정적 검사 — 기준 밖 값이 1건이라도 있으면 실패
+# 2) Vercel 배포가 끝나면: 배포된 주소로 화면 검사 — 리포트(스크린샷 포함)를 아티팩트로 올림
+# 3) 수동 실행: 원하는 주소로 화면 검사
+
+on:
+  push:
+    branches: [main]
+    paths: ["src/**", "scripts/ds/**", "DESIGN.md", ".github/workflows/design-system.yml"]
+  pull_request:
+    paths: ["src/**", "scripts/ds/**"]
+  deployment_status:
+  workflow_dispatch:
+    inputs:
+      base:
+        description: "검사할 주소"
+        default: "https://carefood-iota.vercel.app"
+
+jobs:
+  lint:
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: 디자인 시스템 정적 검사
+        run: node scripts/ds/lint.mjs
+      - name: 수치 측정
+        if: always()
+        run: node scripts/ds/measure.mjs
+
+  audit:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'deployment_status' && github.event.deployment_status.state == 'success')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Playwright 설치
+        run: npm i --no-save playwright@1.49.1 && npx playwright install --with-deps chromium
+      - name: 화면 검사
+        env:
+          DS_AUDIT_BASE: ${{ github.event.inputs.base || github.event.deployment_status.environment_url || github.event.deployment_status.target_url }}
+        run: node scripts/ds/audit.mjs
+      - name: 리포트 올리기
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ds-audit-report
+          path: ds-audit/report
+          retention-days: 14

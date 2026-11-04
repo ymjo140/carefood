@@ -1,5 +1,4 @@
 import { notFound } from "next/navigation";
-import Link from "next/link";
 import type { Metadata } from "next";
 import { cache } from "react";
 import { createServiceRoleClient } from "@/lib/supabase/server";
@@ -10,6 +9,10 @@ import ProductReviews from "@/components/ProductReviews";
 import FavoriteButton from "@/components/FavoriteButton";
 import TrackableLink from "@/components/TrackableLink";
 import AllergenWarning from "@/components/AllergenWarning";
+import {
+  Page, SectionHeader, Card, Badge, Icon, MacroStat, Stat, EmptyState, Notice, Thumb, Price,
+  TextLink, buttonClass, cn,
+} from "@/components/ui";
 
 // 동적 라우트 — DB 조회 필요
 export const instant = false;
@@ -68,73 +71,39 @@ const PLATFORM_LABELS: Record<string, string> = {
   designmeal: "디자인밀", makesalad: "메이크샐러드",
 };
 
-const PLATFORM_COLORS: Record<string, string> = {
-  kurly: "bg-purple-600 hover:bg-purple-700",
-  oasis: "bg-green-600 hover:bg-green-700",
-  homeplus: "bg-orange-600 hover:bg-orange-700",
-  "11st": "bg-red-600 hover:bg-red-700",
-  danawa: "bg-blue-600 hover:bg-blue-700",
-  greating: "bg-emerald-600 hover:bg-emerald-700",
-  yundiet: "bg-amber-600 hover:bg-amber-700",
-  sixmeal: "bg-rose-600 hover:bg-rose-700",
-  designmeal: "bg-teal-600 hover:bg-teal-700",
-  makesalad: "bg-lime-600 hover:bg-lime-700",
-};
-
-function formatPrice(price: number): string {
-  return price.toLocaleString("ko-KR") + "원";
-}
-
 /* ───── 건강점수 게이지 ───── */
+const SCORE_TONE = {
+  good: { stroke: "stroke-positive", text: "text-positive" },
+  mid: { stroke: "stroke-brand", text: "text-brand-ink" },
+  low: { stroke: "stroke-danger", text: "text-danger" },
+} as const;
+
 function HealthScoreGauge({ score }: { score: number }) {
   const r = 22;
   const circ = 2 * Math.PI * r;
   const pct = Math.min(score / 100, 1);
   const offset = circ * (1 - pct);
-  const color = score >= 80 ? "#2EA860" : score >= 60 ? "#C4870A" : "#D04040";
+  const tone = SCORE_TONE[score >= 80 ? "good" : score >= 60 ? "mid" : "low"];
   return (
-    <div className="relative shrink-0" style={{ width: 56, height: 56 }}>
-      <svg viewBox="0 0 56 56" width="56" height="56">
-        <circle cx="28" cy="28" r={r} fill="none" stroke="var(--border)" strokeWidth="5" />
-        <circle cx="28" cy="28" r={r} fill="none" stroke={color} strokeWidth="5"
-          strokeLinecap="round" strokeDasharray={circ} strokeDashoffset={offset}
-          transform="rotate(-90 28 28)" />
-      </svg>
-      <div className="absolute inset-0 flex items-center justify-center">
-        <span className="font-[family-name:var(--font-outfit)] text-base font-bold" style={{ color }}>{score}</span>
+    <div className="flex flex-col items-center gap-1 shrink-0">
+      <div className="relative size-14">
+        <svg viewBox="0 0 56 56" width="56" height="56" aria-hidden="true">
+          <circle cx="28" cy="28" r={r} fill="none" className="stroke-line" strokeWidth="5" />
+          <circle cx="28" cy="28" r={r} fill="none" className={tone.stroke} strokeWidth="5"
+            strokeLinecap="round" strokeDasharray={circ} strokeDashoffset={offset}
+            transform="rotate(-90 28 28)" />
+        </svg>
+        <div className="absolute inset-0 flex items-center justify-center">
+          <span className={cn("num text-body font-bold", tone.text)}>{score}</span>
+        </div>
       </div>
+      <span className="text-caption text-ink-2">건강 점수</span>
     </div>
   );
 }
 
-/* ───── 매크로 컬러 바 ───── */
-function MacroBar({ label, value, unit, dailyMax, cssVar }: {
-  label: string; value: number; unit: string; dailyMax: number; cssVar: string;
-}) {
-  const pct = Math.min((value / dailyMax) * 100, 100);
-  const isHigh = pct > 70;
-  return (
-    <div className="flex items-center gap-3 py-2.5">
-      <span className="text-sm font-medium w-16 shrink-0">{label}</span>
-      <div className="flex-1 min-w-0">
-        <div className="h-2 rounded-full overflow-hidden" style={{ background: `var(--${cssVar}-bg)` }}>
-          <div className="h-full rounded-full transition-all" style={{
-            width: `${pct}%`,
-            background: `var(--${cssVar})`,
-            opacity: isHigh ? 1 : 0.75,
-          }} />
-        </div>
-      </div>
-      <span className="font-[family-name:var(--font-outfit)] text-sm font-semibold tabular-nums w-14 text-right"
-        style={{ color: isHigh ? `var(--${cssVar})` : undefined }}>
-        {value % 1 === 0 ? value : value.toFixed(1)}{unit}
-      </span>
-      <span className="font-[family-name:var(--font-outfit)] text-xs tabular-nums w-10 text-right"
-        style={{ color: isHigh ? `var(--${cssVar})` : "var(--muted)" }}>
-        {Math.round(pct)}%
-      </span>
-    </div>
-  );
+function fmtNum(v: number): string {
+  return v % 1 === 0 ? v.toLocaleString("ko-KR") : v.toFixed(1);
 }
 
 /* ───── 메인 ───── */
@@ -279,150 +248,119 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
     ? ({ greating: "그리팅", yundiet: "윤식단", sixmeal: "식스밀", designmeal: "디자인밀", makesalad: "메이크샐러드" }[product.manufacturer || ""] || product.manufacturer)
     : product.manufacturer;
 
+  const macroRows = [
+    { macro: "protein" as const, value: displayProtein, target: 80 },
+    { macro: "carbs" as const, value: displayCarbs, target: 260 },
+    { macro: "fat" as const, value: displayFat, target: 60 },
+    { macro: "sodium" as const, value: displaySodium, target: 2000 },
+  ];
+
+  const detailRows = [
+    { label: "칼로리", val: product.calories, unit: "kcal" },
+    { label: "탄수화물", val: displayCarbs, unit: "g" },
+    { label: "당류", val: displaySugar, unit: "g" },
+    { label: "단백질", val: product.protein_g, unit: "g" },
+    { label: "지방", val: displayFat, unit: "g" },
+    { label: "포화지방", val: displaySatFat, unit: "g" },
+    { label: "트랜스지방", val: adj(product.trans_fat_g), unit: "g" },
+    { label: "콜레스테롤", val: displayCholesterol, unit: "mg" },
+    { label: "나트륨", val: displaySodium, unit: "mg" },
+    { label: "식이섬유", val: displayFiber, unit: "g" },
+  ].filter((r): r is { label: string; val: number; unit: string } => r.val != null);
+
   return (
-    <div className="max-w-lg mx-auto px-4 py-6">
+    <Page width="default">
       <ProductViewTracker productId={product.id} />
 
-      <Link href="/products" className="text-sm text-muted hover:text-primary transition-colors mb-5 inline-block">
-        ← 제품 목록
-      </Link>
+      <TextLink href="/products" className="mb-4">
+        <Icon name="chevron-left" size={16} /> 제품 목록
+      </TextLink>
 
-      {/* ── 헤더: 이미지 + 제품명 + 건강점수 게이지 ── */}
-      <div className="flex gap-4 mb-6">
-        {imageUrl && (
-          <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl overflow-hidden shrink-0 bg-border">
-            <img src={imageUrl} alt={product.name} className="w-full h-full object-cover" />
-          </div>
-        )}
+      {/* ── 헤더: 이미지 + 제품명 + 건강점수 ── */}
+      <header className="flex gap-4 items-start mb-5">
+        {imageUrl && <Thumb src={imageUrl} alt={product.name} size={88} className="rounded-lg" />}
         <div className="min-w-0 flex-1">
-          <div className="flex items-start gap-3">
-            <div className="flex-1 min-w-0">
-              <h1 className="text-lg sm:text-xl font-extrabold leading-tight">{product.name}</h1>
-              {mfrLabel && (
-                <div className="flex items-center gap-2 mt-1">
-                  <p className="text-sm text-muted">{mfrLabel}</p>
-                  {product.category_large === "건강식단서비스" && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/15 text-primary font-medium">건강식단</span>
-                  )}
-                </div>
-              )}
-              {product.category_large === "건강식단서비스" && originalProductUrl && (
-                <TrackableLink href={originalProductUrl} productId={product.id} platform={product.manufacturer || "health_meal"}
-                  className="inline-flex items-center gap-1 text-xs text-primary hover:text-primary-dark transition-colors mt-0.5">
-                  원본 상품 페이지 →
-                </TrackableLink>
-              )}
-            </div>
-            {product.health_score != null && (
-              <HealthScoreGauge score={product.health_score} />
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* ── 액션 바 ── */}
-      <div className="flex items-center gap-2 mb-6">
-        <FavoriteButton productId={product.id} />
-        <MealLogButton productId={product.id} productName={product.name} />
-        {product.food_type && product.category_large !== "건강식단서비스" && (
-          <span className="text-xs text-muted ml-auto">{product.food_type}</span>
-        )}
-      </div>
-
-      {/* ── 칼로리 + 매크로 컬러 바 ── */}
-      {product.calories != null || product.protein_g != null ? (
-        <section className="bg-card border border-border rounded-2xl p-5 mb-5" style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <span className="font-[family-name:var(--font-outfit)] text-3xl font-extrabold tabular-nums">
-                {displayCal != null ? Math.round(displayCal) : "—"}
-              </span>
-              <span className="text-sm text-muted ml-1">kcal</span>
-            </div>
-            {s && <span className="text-xs text-muted">{servingLabel}</span>}
-          </div>
-
-          <div className="divide-y divide-border/50">
-            {displayProtein != null && (
-              <MacroBar label="단백질" value={displayProtein} unit="g" dailyMax={80} cssVar="macro-protein" />
-            )}
-            {displayCarbs != null && (
-              <MacroBar label="탄수화물" value={displayCarbs} unit="g" dailyMax={260} cssVar="macro-carbs" />
-            )}
-            {displayFat != null && (
-              <MacroBar label="지방" value={displayFat} unit="g" dailyMax={60} cssVar="macro-fat" />
-            )}
-            {displaySodium != null && (
-              <MacroBar label="나트륨" value={displaySodium} unit="mg" dailyMax={2000} cssVar="macro-sodium" />
-            )}
-          </div>
-
-          {/* 경고 태그 */}
-          {(sodiumHigh || fatHigh || sugarHigh) && (
-            <div className="flex flex-wrap gap-1.5 mt-3 pt-3 border-t border-border/50">
-              {sodiumHigh && (
-                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
-                  style={{ background: "var(--macro-sodium-bg)", color: "var(--macro-sodium)" }}>나트륨 주의</span>
-              )}
-              {fatHigh && (
-                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
-                  style={{ background: "var(--macro-fat-bg)", color: "var(--macro-fat)" }}>지방 높음</span>
-              )}
-              {sugarHigh && (
-                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
-                  style={{ background: "var(--macro-carbs-bg)", color: "var(--macro-carbs)" }}>당류 높음</span>
+          <h1 className="text-title font-bold text-ink text-balance">{product.name}</h1>
+          {mfrLabel && (
+            <div className="flex flex-wrap items-center gap-2 mt-1">
+              <span className="text-label text-ink-2">{mfrLabel}</span>
+              {product.category_large === "건강식단서비스" && <Badge tone="brand">건강식단</Badge>}
+              {product.food_type && product.category_large !== "건강식단서비스" && (
+                <span className="text-caption text-ink-3">{product.food_type}</span>
               )}
             </div>
           )}
-
-          <p className="text-[10px] text-muted mt-3">* 1일 기준치: 2,000kcal 성인 기준</p>
-        </section>
-      ) : (
-        <div className="border border-border rounded-2xl p-6 text-center mb-5">
-          <p className="text-sm font-medium mb-1">영양 정보 수집 중</p>
-          <p className="text-xs text-muted">해당 제품의 상세 영양 성분을 수집하고 있습니다.</p>
+          {product.category_large === "건강식단서비스" && originalProductUrl && (
+            <TrackableLink href={originalProductUrl} productId={product.id} platform={product.manufacturer || "health_meal"}
+              className="inline-flex items-center gap-1 min-h-8 text-label font-medium text-brand-ink hover:underline underline-offset-4">
+              원본 상품 페이지 <Icon name="external" size={16} />
+            </TrackableLink>
+          )}
         </div>
+        {product.health_score != null && <HealthScoreGauge score={product.health_score} />}
+      </header>
+
+      {/* ── 액션 바 ── */}
+      <div className="flex items-center gap-2 mb-5">
+        <FavoriteButton productId={product.id} />
+        <MealLogButton productId={product.id} productName={product.name} />
+      </div>
+
+      {/* ── 칼로리 + 영양 타일 ── */}
+      {product.calories != null || product.protein_g != null ? (
+        <Card className="mb-5">
+          <div className="flex items-end justify-between gap-3 mb-4">
+            <Stat size="lg" emphasis label="칼로리" value={displayCal != null ? Math.round(displayCal).toLocaleString("ko-KR") : "–"} unit="kcal" />
+            {s && <span className="text-caption text-ink-2">{servingLabel}</span>}
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {macroRows.map((m) => (
+              <MacroStat key={m.macro} macro={m.macro} value={m.value} target={m.target} digits={1} />
+            ))}
+          </div>
+
+          {(sodiumHigh || fatHigh || sugarHigh) && (
+            <div className="flex flex-wrap gap-1.5 mt-3 pt-3 border-t border-line">
+              {sodiumHigh && <Badge tone="caution">나트륨 주의</Badge>}
+              {fatHigh && <Badge tone="caution">지방 높음</Badge>}
+              {sugarHigh && <Badge tone="caution">당류 높음</Badge>}
+            </div>
+          )}
+
+          <p className="text-caption text-ink-3 mt-3">막대는 1일 기준치 대비 (2,000kcal 성인 기준)</p>
+        </Card>
+      ) : (
+        <EmptyState className="mb-5" title="영양 정보 수집 중" description="해당 제품의 상세 영양 성분을 수집하고 있어요." />
       )}
 
       {/* ── 상세 영양 성분표 (접는 형태) ── */}
       {(product.saturated_fat_g != null || product.cholesterol_mg != null || product.fiber_g != null || product.sugar_g != null) && (
         <details className="mb-5 group">
-          <summary className="text-xs font-bold text-muted cursor-pointer hover:text-foreground transition-colors py-2 flex items-center gap-1">
-            <span>상세 영양 성분표</span>
-            <span className="group-open:rotate-180 transition-transform text-[10px]">▼</span>
+          <summary className="flex items-center gap-1 h-11 cursor-pointer text-label font-bold text-ink-2 hover:text-ink transition-colors list-none">
+            상세 영양 성분표
+            <Icon name="chevron-down" size={16} className="group-open:rotate-180 transition-transform" />
           </summary>
-          <div className="border border-border rounded-xl overflow-hidden mt-2">
-            <table className="w-full text-sm">
+          <div className="rounded-lg border border-line bg-surface overflow-x-auto">
+            <table className="w-full text-label">
               <thead>
-                <tr className="border-b border-border bg-surface/50">
-                  <th className="text-left py-2 px-4 text-xs text-muted font-medium">항목</th>
-                  <th className="text-right py-2 px-3 text-xs text-muted font-medium">{s ? `${s}g당` : "함량"}</th>
-                  <th className="text-right py-2 px-3 text-xs text-muted font-medium">100g당</th>
+                <tr className="border-b border-line bg-sunken">
+                  <th className="text-left py-2 px-4 text-caption text-ink-2 font-medium">항목</th>
+                  <th className="text-right py-2 px-3 text-caption text-ink-2 font-medium">{s ? `${s}g당` : "함량"}</th>
+                  <th className="text-right py-2 px-4 text-caption text-ink-2 font-medium">100g당</th>
                 </tr>
               </thead>
               <tbody>
-                {[
-                  { label: "칼로리", val: product.calories, unit: "kcal" },
-                  { label: "탄수화물", val: displayCarbs, unit: "g" },
-                  { label: "당류", val: displaySugar, unit: "g" },
-                  { label: "단백질", val: product.protein_g, unit: "g" },
-                  { label: "지방", val: displayFat, unit: "g" },
-                  { label: "포화지방", val: displaySatFat, unit: "g" },
-                  { label: "트랜스지방", val: adj(product.trans_fat_g), unit: "g" },
-                  { label: "콜레스테롤", val: displayCholesterol, unit: "mg" },
-                  { label: "나트륨", val: displaySodium, unit: "mg" },
-                  { label: "식이섬유", val: displayFiber, unit: "g" },
-                ].filter(r => r.val != null).map(r => (
-                  <tr key={r.label} className="border-b border-border/50 last:border-0">
-                    <td className="py-2 px-4 font-medium">{r.label}</td>
-                    <td className="py-2 px-3 text-right tabular-nums font-[family-name:var(--font-outfit)]">
-                      {r.val! % 1 === 0 ? r.val : r.val!.toFixed(1)}{r.unit}
-                    </td>
-                    <td className="py-2 px-3 text-right tabular-nums text-muted font-[family-name:var(--font-outfit)]">
-                      {per100(r.val!) != null ? (per100(r.val!)! % 1 === 0 ? per100(r.val!) : per100(r.val!)!.toFixed(1)) : "—"}
-                    </td>
-                  </tr>
-                ))}
+                {detailRows.map((r) => {
+                  const p100 = per100(r.val);
+                  return (
+                    <tr key={r.label} className="border-b border-line last:border-0">
+                      <td className="py-2 px-4 font-medium text-ink">{r.label}</td>
+                      <td className="py-2 px-3 text-right num text-ink">{fmtNum(r.val)}{r.unit}</td>
+                      <td className="py-2 px-4 text-right num text-ink-2">{p100 != null ? fmtNum(p100) : "–"}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -434,34 +372,32 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
 
       {/* ── 건강 안전 정보 ── */}
       {safetyNotes.length > 0 && (
-        <section className="mb-5">
-          <h2 className="text-sm font-extrabold mb-2">건강 안전 정보</h2>
-          <div className="bg-card rounded-xl border border-border p-4 space-y-2" style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
-            {safetyNotes.map((note) => (
-              <div key={note.text} className="flex items-start gap-2 text-sm">
-                <span className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${note.type === "good" ? "bg-green-500" : "bg-orange-500"}`} />
-                <span>{note.text}</span>
-              </div>
-            ))}
-          </div>
+        <section className="mb-6">
+          <SectionHeader title="건강 안전 정보" />
+          <Card>
+            <ul className="flex flex-col gap-2">
+              {safetyNotes.map((note) => (
+                <li key={note.text} className="flex items-start gap-2 text-label text-ink">
+                  <span className={cn("size-2 rounded-full mt-1.5 shrink-0", note.type === "good" ? "bg-positive" : "bg-caution")} aria-hidden="true" />
+                  <span>{note.text}</span>
+                </li>
+              ))}
+            </ul>
+          </Card>
         </section>
       )}
 
       {/* ── 원재료 (food_reports) ── */}
       {ingredients.length > 0 && (
-        <section className="mb-5">
-          <h2 className="text-sm font-extrabold mb-2">원재료</h2>
-          <div className="border border-border rounded-xl p-4">
+        <section className="mb-6">
+          <SectionHeader title="원재료" description="출처: 식품안전나라 품목제조보고" />
+          <Card>
             <div className="flex flex-wrap gap-1.5">
               {ingredients.map((ing: string) => (
-                <span key={ing} className="text-xs px-2.5 py-1 rounded-full bg-surface text-foreground/70"
-                  style={{ minHeight: "unset", minWidth: "unset" }}>
-                  {ing}
-                </span>
+                <Badge key={ing}>{ing}</Badge>
               ))}
             </div>
-            <p className="text-[11px] text-muted mt-3">출처: 식품안전나라 품목제조보고</p>
-          </div>
+          </Card>
         </section>
       )}
 
@@ -487,69 +423,57 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
       {/* ── 가격 비교 ── */}
       {sortedPrices.length > 0 && (
         <section className="mb-6">
-          <h2 className="text-sm font-extrabold mb-3">구매처 비교</h2>
-          <div className="bg-card border border-border rounded-2xl overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
-            {/* 최저가 강조 */}
+          <SectionHeader title="구매처 비교" />
+          <Card padding="none" className="overflow-hidden">
             {bestPrice && (
-              <div className="px-5 py-4 border-b border-border">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <span className="text-[10px] text-primary font-bold uppercase tracking-wider">최저가</span>
-                    <p className="font-[family-name:var(--font-outfit)] text-2xl font-extrabold text-primary tabular-nums mt-0.5">
-                      {formatPrice(bestPrice.price)}
-                    </p>
-                  </div>
-                  <TrackableLink href={bestPrice.url} productId={product.id} platform={bestPrice.platform}
-                    className="bg-primary text-white px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-primary-dark transition-colors">
-                    {PLATFORM_LABELS[bestPrice.platform] || bestPrice.platform}에서 구매
-                  </TrackableLink>
+              <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-4 border-b border-line">
+                <div className="flex flex-col gap-1">
+                  <Badge tone="brand" className="self-start">최저가</Badge>
+                  <Price value={bestPrice.price} className="text-title" />
                 </div>
+                <TrackableLink href={bestPrice.url} productId={product.id} platform={bestPrice.platform}
+                  className={buttonClass({ variant: "primary" })}>
+                  {PLATFORM_LABELS[bestPrice.platform] || bestPrice.platform}에서 사기
+                  <Icon name="external" size={18} />
+                </TrackableLink>
               </div>
             )}
-            {/* 다른 플랫폼 */}
             {sortedPrices.length > 1 && (
-              <div className="divide-y divide-border/50">
+              <div className="flex flex-col p-1">
                 {sortedPrices.slice(1).map((pp) => (
                   <TrackableLink key={pp.platform} href={pp.url} productId={product.id} platform={pp.platform}
-                    className="flex items-center justify-between px-5 py-3 hover:bg-surface/50 transition-colors">
-                    <span className="text-sm">{PLATFORM_LABELS[pp.platform] || pp.platform}</span>
-                    <span className="font-[family-name:var(--font-outfit)] text-sm font-semibold tabular-nums">{formatPrice(pp.price)}</span>
+                    className="flex items-center gap-3 px-3 h-12 rounded-md hover:bg-sunken transition-colors">
+                    <span className="flex-1 text-body text-ink">{PLATFORM_LABELS[pp.platform] || pp.platform}</span>
+                    <Price value={pp.price} className="text-label" />
+                    <Icon name="external" size={16} className="text-ink-3" />
                   </TrackableLink>
                 ))}
               </div>
             )}
-          </div>
+          </Card>
         </section>
       )}
 
       {/* ── 원재료 (원본 텍스트) ── */}
       {product.ingredients_raw && (
         <section className="mb-6">
-          <h2 className="text-sm font-extrabold mb-2">원재료 (전문)</h2>
-          <div className="bg-card rounded-xl border border-border p-4" style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
-            <p className="text-sm text-muted leading-relaxed">{product.ingredients_raw}</p>
-          </div>
+          <SectionHeader title="원재료 (전문)" />
+          <Card>
+            <p className="text-label text-ink-2">{product.ingredients_raw}</p>
+          </Card>
         </section>
       )}
 
-      {/* ── 신뢰 배지 ── */}
-      <section className="mb-6">
-        <div className="flex gap-2 flex-wrap">
-          <div className="flex items-center gap-1.5 text-xs text-muted bg-card border border-border rounded-full px-3 py-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-primary/40" /> 식약처 MFDS 데이터
-          </div>
-          {product.food_code && (
-            <div className="flex items-center gap-1.5 text-xs text-muted bg-card border border-border rounded-full px-3 py-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-primary/40" /> 식품코드 {product.food_code}
-            </div>
-          )}
-        </div>
-      </section>
+      {/* ── 출처 ── */}
+      <div className="flex gap-2 flex-wrap mb-6">
+        <Badge>식약처 MFDS 데이터</Badge>
+        {product.food_code && <Badge>식품코드 {product.food_code}</Badge>}
+      </div>
 
       {/* ── 면책 ── */}
-      <div className="text-[10px] text-muted text-center py-6 border-t border-border">
+      <Notice>
         본 정보는 식약처 영양성분 데이터베이스를 기반으로 하며, 의학적 진단·치료·처방을 대체하지 않습니다. 질환이 있는 경우 반드시 의사와 상담하세요.
-      </div>
-    </div>
+      </Notice>
+    </Page>
   );
 }

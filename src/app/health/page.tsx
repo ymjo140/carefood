@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { Button, Card, Field, Input, Notice, Page, PageHeader, PageLoading, ProgressBar } from "@/components/ui";
 
 // ── 타입 ──
 type HealthData = {
@@ -62,10 +63,10 @@ const CHOLESTEROL_FIELDS: FieldConfig[] = [
 ];
 
 const SECTIONS = [
-  { title: "기본 정보", fields: BASIC_FIELDS, icon: "📏" },
-  { title: "혈당", fields: GLUCOSE_FIELDS, icon: "🩸" },
-  { title: "혈압", fields: BP_FIELDS, icon: "❤️" },
-  { title: "콜레스테롤", fields: CHOLESTEROL_FIELDS, icon: "🧪" },
+  { title: "기본 정보", fields: BASIC_FIELDS },
+  { title: "혈당", fields: GLUCOSE_FIELDS },
+  { title: "혈압", fields: BP_FIELDS },
+  { title: "콜레스테롤", fields: CHOLESTEROL_FIELDS },
 ];
 
 export default function HealthPage() {
@@ -169,101 +170,60 @@ export default function HealthPage() {
     router.push("/health/report");
   };
 
-  if (!loaded) {
-    return (
-      <div className="min-h-[calc(100vh-3.5rem)] flex items-center justify-center">
-        <div className="inline-block w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-      </div>
-    );
-  }
+  if (!loaded) return <PageLoading />;
 
   return (
-    <div className="min-h-[calc(100vh-3.5rem)] px-4 py-8">
-      <div className="max-w-lg mx-auto">
-        {/* 헤더 */}
-        <div className="mb-8">
-          <h1 className="text-2xl font-extrabold mb-2">건강검진 정보 입력</h1>
-          <p className="text-muted text-sm leading-relaxed">
-            건강검진 결과를 입력하면 더 정확한 맞춤 추천을 받을 수 있어요.
-            <br />
-            <span className="text-xs">모든 항목은 선택 사항이에요 · 입력한 정보는 기기에만 저장돼요</span>
-          </p>
-        </div>
+    <Page width="narrow">
+      <PageHeader
+        title="건강검진 정보 입력"
+        description="검진 결과를 넣으면 성분 매칭이 더 정확해져요. 모든 항목은 선택이에요."
+      />
 
-        {/* 진행도 */}
-        <div className="flex items-center gap-2 mb-6 p-3 rounded-xl bg-primary/5 border border-primary/10">
-          <span className="text-sm font-medium text-primary">
-            {filledCount}/{totalCount}개 입력됨
+      {/* 진행도 */}
+      <Card tone="brand" padding="sm" className="mb-4">
+        <div className="flex items-center gap-3">
+          <span className="text-label font-bold text-brand-ink shrink-0">
+            <span className="num">{filledCount}</span>/<span className="num">{totalCount}</span>개 입력함
           </span>
-          <div className="flex-1 h-1.5 bg-border rounded-full overflow-hidden">
-            <div
-              className="h-full bg-primary rounded-full transition-all duration-300"
-              style={{ width: `${(filledCount / totalCount) * 100}%` }}
-            />
-          </div>
+          <ProgressBar value={filledCount} max={totalCount} label="입력 진행도" />
         </div>
+      </Card>
 
-        {/* 입력 섹션 */}
-        <div className="space-y-6">
-          {SECTIONS.map((section) => (
-            <div key={section.title} className="bg-card border border-border rounded-2xl p-5">
-              <h2 className="font-bold text-sm mb-4 flex items-center gap-2">
-                <span>{section.icon}</span>
-                {section.title}
-              </h2>
-              <div className="space-y-4">
-                {section.fields.map((field) => (
-                  <div key={field.key}>
-                    <label className="block text-sm font-medium mb-1.5">
-                      {field.label}
-                    </label>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="text"
-                        inputMode="decimal"
-                        value={data[field.key]}
-                        onChange={(e) => handleChange(field.key, e.target.value)}
-                        placeholder={field.placeholder}
-                        className="flex-1 px-4 py-3 rounded-xl border border-border bg-background text-foreground placeholder:text-muted/50 focus:border-primary focus:ring-1 focus:ring-primary/20 outline-none transition-colors"
-                      />
-                      <span className="text-sm text-muted w-14 text-right shrink-0">
-                        {field.unit}
-                      </span>
-                    </div>
-                    {field.hint && (
-                      <p className="text-xs text-muted mt-1.5 pl-1">{field.hint}</p>
-                    )}
+      {/* 입력 섹션 */}
+      <div className="flex flex-col gap-3">
+        {SECTIONS.map((section) => (
+          <Card key={section.title}>
+            <h2 className="text-body font-bold text-ink mb-3">{section.title}</h2>
+            <div className="flex flex-col gap-4">
+              {section.fields.map((field) => (
+                <Field key={field.key} label={field.label} hint={field.hint}>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="text"
+                      inputMode="decimal"
+                      value={data[field.key]}
+                      onChange={(e) => handleChange(field.key, e.target.value)}
+                      placeholder={field.placeholder}
+                    />
+                    <span className="text-label text-ink-2 w-14 text-right shrink-0">{field.unit}</span>
                   </div>
-                ))}
-              </div>
+                </Field>
+              ))}
             </div>
-          ))}
-        </div>
-
-        {/* 하단 안내 + 버튼 */}
-        <div className="mt-6 p-4 rounded-xl bg-surface border border-border">
-          <p className="text-xs text-muted leading-relaxed">
-            입력하신 정보는 식품 성분 매칭에만 사용되며, 의학적 진단이 아닙니다.
-            건강에 이상이 있다면 의료 전문가와 상담하세요.
-          </p>
-        </div>
-
-        <div className="mt-6 flex gap-3">
-          <button
-            onClick={() => router.back()}
-            className="flex-1 border border-border py-3.5 rounded-full font-medium hover:bg-card transition-colors"
-          >
-            돌아가기
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={saving || filledCount === 0}
-            className="flex-1 bg-primary text-white py-3.5 rounded-full font-bold hover:bg-primary-dark transition-colors disabled:opacity-40"
-          >
-            {saving ? "저장 중..." : "분석 결과 보기"}
-          </button>
-        </div>
+          </Card>
+        ))}
       </div>
-    </div>
+
+      <Notice className="mt-4">
+        입력한 정보는 식품 성분 매칭에만 쓰이며 의학적 진단이 아니에요. 건강에 이상이 있다면 전문가와 상담하세요.
+      </Notice>
+
+      <div className="mt-4 flex gap-2">
+        <Button variant="secondary" block onClick={() => router.back()}>돌아가기</Button>
+        <Button block onClick={handleSave} disabled={filledCount === 0} loading={saving}>
+          {saving ? "저장 중" : "분석 결과 보기"}
+        </Button>
+      </div>
+    </Page>
   );
 }

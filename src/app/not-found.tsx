@@ -1,23 +1,17 @@
-import Link from "next/link";
+import { LinkButton, Page } from "@/components/ui";
 
 export default function NotFound() {
   return (
-    <div className="min-h-[60vh] flex flex-col items-center justify-center px-4 text-center">
-      <p className="text-5xl mb-4">🍽️</p>
-      <h1 className="text-2xl font-extrabold mb-2">페이지를 찾을 수 없습니다</h1>
-      <p className="text-sm text-muted mb-6">
-        요청하신 페이지가 존재하지 않거나 이동되었습니다.
-      </p>
-      <div className="flex gap-3">
-        <Link href="/"
-          className="bg-primary text-white px-5 py-2.5 rounded-full text-sm font-bold hover:bg-primary-dark transition-colors">
-          홈으로
-        </Link>
-        <Link href="/products"
-          className="border border-border px-5 py-2.5 rounded-full text-sm font-medium hover:bg-surface transition-colors">
-          제품 탐색
-        </Link>
+    <Page width="narrow">
+      <div className="min-h-[50vh] flex flex-col items-center justify-center text-center gap-2">
+        <p className="num text-display font-bold text-ink-3">404</p>
+        <h1 className="text-title font-bold text-ink">페이지를 찾을 수 없어요</h1>
+        <p className="text-label text-ink-2">요청하신 페이지가 없거나 다른 곳으로 옮겨졌어요.</p>
+        <div className="flex gap-2 mt-4">
+          <LinkButton href="/">홈으로 가기</LinkButton>
+          <LinkButton href="/products" variant="secondary">제품 둘러보기</LinkButton>
+        </div>
       </div>
-    </div>
+    </Page>
   );
 }
