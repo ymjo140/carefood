@@ -1,7 +1,11 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import Link from "next/link";
+import {
+  Badge, BottomBar, Button, Card, CardActions, ConfirmSheet, EmptyState, IconButton, Input, Kcal, LinkButton, ListRow,
+  MacroGrid, MacroInline, MealSlot, Page, PageLoading, Price, ProgressBar, SearchField, SectionHeader, Sheet, Spinner,
+  Stat, Tabs, TextLink, Thumb, cn, useToast,
+} from "@/components/ui";
 
 /* ───── 타입 ───── */
 type CellData = {
@@ -42,10 +46,10 @@ const DAYS = [
 ];
 
 const MEALS = [
-  { key: "breakfast", label: "아침", emoji: "☀️", color: "#E8A830" },
-  { key: "lunch", label: "점심", emoji: "🌤️", color: "#D47040" },
-  { key: "dinner", label: "저녁", emoji: "🌙", color: "#6870C8" },
-  { key: "supplement", label: "간식", emoji: "🍪", color: "#48A870" },
+  { key: "breakfast", label: "아침" },
+  { key: "lunch", label: "점심" },
+  { key: "dinner", label: "저녁" },
+  { key: "supplement", label: "간식" },
 ];
 
 const CONCERN_LABELS: Record<string, string> = {
@@ -59,8 +63,6 @@ const SERVICE_NAMES: Record<string, string> = {
   designmeal: "디자인밀", makesalad: "메이크샐러드",
   "11st": "11번가", kurly: "컬리", oasis: "오아시스", homeplus: "홈플러스",
 };
-
-const NUM = { fontFamily: "'Outfit', sans-serif", fontVariantNumeric: "tabular-nums" as const };
 
 function getUserId(): string | null {
   try { return localStorage.getItem("carefood_anon_id") || null; } catch { return null; }
@@ -84,35 +86,34 @@ function relativeTime(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString("ko-KR", { month: "short", day: "numeric" });
 }
 
-/* ───── 제품 검색 모달 ───── */
+/* ───── 제품 고르기 시트 ───── */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function ProductRow({ p, onSelect }: { p: any; onSelect: (cell: CellData) => void }) {
   const prices = p.product_prices?.filter((pp: { price: number }) => pp.price > 0) || [];
   const best = prices[0];
   return (
-    <button onClick={() => onSelect({
-      product_id: p.id, name: p.name, calories: p.calories, protein_g: p.protein_g,
-      price: best?.price, platform: best?.platform, url: best?.url, type: "product",
-    })}
-      className="w-full text-left p-3 rounded-xl hover:bg-[var(--color-surface)] transition-colors flex items-center gap-3">
-      <div className="w-10 h-10 rounded-xl bg-[var(--color-surface)] flex items-center justify-center text-lg shrink-0">🍱</div>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold line-clamp-1">{p.name}</p>
-        <p className="text-[11px] text-muted mt-0.5">
-          <span style={NUM}>{p.calories || 0}</span>kcal · 단백질 <span style={NUM}>{Math.round(p.protein_g || 0)}</span>g
-        </p>
-      </div>
-      {best && <span className="text-sm font-bold shrink-0" style={NUM}>{best.price.toLocaleString()}원</span>}
-    </button>
+    <ListRow
+      onClick={() => onSelect({
+        product_id: p.id, name: p.name, calories: p.calories, protein_g: p.protein_g,
+        price: best?.price, platform: best?.platform, url: best?.url, type: "product",
+      })}
+      leading={<Thumb src={best?.image_url || p.image_url} size={44} />}
+      title={p.name}
+      meta={<><Kcal value={p.calories || 0} className="text-caption" /> · 단백질 <span className="num">{Math.round(p.protein_g || 0)}</span>g</>}
+      trailing={best ? <Price value={best.price} className="text-label" /> : undefined}
+    />
   );
 }
 
-function ProductSearchModal({ onSelect, onClose, onEatingOut }: {
+type PickTab = "favorites" | "recent" | "search";
+
+function ProductSearchSheet({ open, onSelect, onClose, onEatingOut }: {
+  open: boolean;
   onSelect: (product: CellData) => void;
   onClose: () => void;
   onEatingOut: () => void;
 }) {
-  const [tab, setTab] = useState<"favorites" | "recent" | "search">("favorites");
+  const [tab, setTab] = useState<PickTab>("favorites");
   const [query, setQuery] = useState("");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [results, setResults] = useState<any[]>([]);
@@ -125,6 +126,7 @@ function ProductSearchModal({ onSelect, onClose, onEatingOut }: {
   const [loadingFavorites, setLoadingFavorites] = useState(true);
 
   useEffect(() => {
+    if (!open) return;
     const loadFavs = async () => {
       const userId = getUserId();
       if (!userId) { setLoadingFavorites(false); return; }
@@ -139,9 +141,10 @@ function ProductSearchModal({ onSelect, onClose, onEatingOut }: {
       finally { setLoadingFavorites(false); }
     };
     loadFavs();
-  }, []);
+  }, [open]);
 
   useEffect(() => {
+    if (!open) return;
     const loadRecent = async () => {
       const userId = getUserId();
       if (!userId) { setLoadingRecent(false); return; }
@@ -161,7 +164,7 @@ function ProductSearchModal({ onSelect, onClose, onEatingOut }: {
       finally { setLoadingRecent(false); }
     };
     loadRecent();
-  }, []);
+  }, [open]);
 
   const search = async () => {
     if (!query.trim()) return;
@@ -177,48 +180,33 @@ function ProductSearchModal({ onSelect, onClose, onEatingOut }: {
   const displayProducts = tab === "search" ? results : tab === "favorites" ? favoriteProducts : recentProducts;
   const isLoading = tab === "search" ? searching : tab === "favorites" ? loadingFavorites : loadingRecent;
 
+  const tabs: { value: PickTab; label: string; count?: number }[] = [
+    { value: "favorites", label: "즐겨찾기", count: favoriteProducts.length },
+    { value: "recent", label: "최근 본" },
+    ...(results.length > 0 ? [{ value: "search" as const, label: "검색 결과", count: results.length }] : []),
+  ];
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-[var(--color-card)] rounded-2xl w-full max-w-md max-h-[80vh] overflow-hidden flex flex-col">
-        <div className="p-4 border-b border-border flex items-center justify-between">
-          <h3 className="font-bold text-sm">제품 추가</h3>
-          <button onClick={onClose} className="text-muted hover:text-foreground" style={{ minHeight: "32px", minWidth: "32px" }}>✕</button>
-        </div>
-        <div className="px-4 pt-3">
-          <div className="flex gap-2">
-            <input type="text" value={query} onChange={e => setQuery(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && search()}
-              placeholder="제품 검색..."
-              className="flex-1 px-3 py-2 rounded-xl border border-border text-sm focus:outline-none focus:border-primary" />
-            <button onClick={search} className="px-4 py-2 bg-primary text-white rounded-xl text-sm font-bold" style={{ minHeight: "36px" }}>검색</button>
-          </div>
-        </div>
-        <div className="px-4 pt-2 pb-1 flex items-center justify-between">
-          <div className="flex gap-1">
-            {(["favorites", "recent", ...(results.length > 0 ? ["search"] : [])] as const).map(t => (
-              <button key={t} onClick={() => setTab(t as typeof tab)}
-                className={`text-xs px-2.5 py-1 rounded-full transition-colors ${tab === t ? "bg-foreground text-[var(--color-card)]" : "text-muted hover:text-foreground"}`}
-                style={{ minHeight: "26px", minWidth: "unset" }}>
-                {t === "favorites" ? "♥ 즐겨찾기" : t === "recent" ? "최근 본" : `검색 (${results.length})`}
-              </button>
-            ))}
-          </div>
-          <button onClick={onEatingOut} className="text-[11px] text-muted hover:text-foreground" style={{ minHeight: "unset", minWidth: "unset" }}>🍴 외식</button>
-        </div>
-        <div className="flex-1 overflow-y-auto px-2 pb-2">
-          {isLoading ? (
-            <p className="text-sm text-muted text-center py-6">로딩 중...</p>
-          ) : displayProducts.length > 0 ? (
-            displayProducts.map((p) => <ProductRow key={p.id} p={p} onSelect={onSelect} />)
-          ) : (
-            <p className="text-sm text-muted text-center py-6">
-              {tab === "favorites" ? "즐겨찾기한 제품이 없습니다." : tab === "recent" ? "최근 본 제품이 없습니다." : "결과가 없습니다"}
-            </p>
-          )}
-        </div>
+    <Sheet
+      open={open}
+      onClose={onClose}
+      title="음식 고르기"
+      footer={<Button variant="secondary" block icon="cart" onClick={onEatingOut}>외식으로 표시하기</Button>}
+    >
+      <SearchField value={query} onChange={setQuery} onSubmit={search} placeholder="제품 이름 검색" />
+      <Tabs variant="line" className="mt-3" value={tab} onChange={setTab} items={tabs} label="고르는 방법" />
+      <div className="mt-2 -mx-2">
+        {isLoading ? (
+          <div className="flex justify-center py-8"><Spinner /></div>
+        ) : displayProducts.length > 0 ? (
+          displayProducts.map((p) => <ProductRow key={p.id} p={p} onSelect={onSelect} />)
+        ) : (
+          <p className="text-label text-ink-2 text-center py-8">
+            {tab === "favorites" ? "즐겨찾기한 제품이 없어요" : tab === "recent" ? "최근 본 제품이 없어요" : "검색 결과가 없어요"}
+          </p>
+        )}
       </div>
-    </div>
+    </Sheet>
   );
 }
 
@@ -237,9 +225,8 @@ export default function WeeklyBoxPage() {
   const [preloading, setPreloading] = useState(false);
   const [editingTitle, setEditingTitle] = useState<string | null>(null);
   const [editTitleValue, setEditTitleValue] = useState("");
-  const [toast, setToast] = useState("");
-
-  const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(""), 2500); };
+  const [deleteTarget, setDeleteTarget] = useState<SavedPlan | null>(null);
+  const toast = useToast();
 
   const loadPlans = useCallback(async () => {
     const userId = getUserId();
@@ -253,7 +240,6 @@ export default function WeeklyBoxPage() {
 
   useEffect(() => { loadPlans().finally(() => setLoading(false)); }, [loadPlans]);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const fetchAndBuildGrid = async (): Promise<{ grid: GridData; title: string } | null> => {
     const profileRaw = localStorage.getItem("carefood_profile");
     if (!profileRaw) return null;
@@ -323,14 +309,16 @@ export default function WeeklyBoxPage() {
       setGrid(precomputed.grid); setPlanTitle(precomputed.title); setPlanId(null);
       setPrecomputed(null); setPreloading(true);
       fetchAndBuildGrid().then(r => { if (r) setPrecomputed(r); setPreloading(false); }).catch(() => setPreloading(false));
+      toast.show("AI 추천으로 7일을 채웠어요");
       return;
     }
     setGenerating(true);
     try {
       const result = await fetchAndBuildGrid();
-      if (!result) { showToast("식단을 생성할 수 없습니다. 프로필을 확인하세요."); return; }
+      if (!result) { toast.show("식단을 만들지 못했어요. 프로필을 확인해 주세요", { tone: "danger" }); return; }
       setGrid(result.grid); setPlanTitle(result.title); setPlanId(null);
-    } catch { showToast("식단 생성 중 오류가 발생했습니다."); }
+      toast.show("AI 추천으로 7일을 채웠어요");
+    } catch { toast.show("식단을 만들지 못했어요. 다시 시도해 주세요", { tone: "danger" }); }
     finally { setGenerating(false); }
   };
 
@@ -343,8 +331,9 @@ export default function WeeklyBoxPage() {
         body: JSON.stringify({ user_id: userId, id: planId, title: planTitle, grid }),
       });
       const data = await res.json();
-      if (data.ok) { setPlanId(data.id); loadPlans(); showToast("저장되었어요!"); }
-    } catch { /* */ }
+      if (data.ok) { setPlanId(data.id); loadPlans(); toast.show("식단을 저장했어요"); }
+      else toast.show("저장하지 못했어요. 다시 시도해 주세요", { tone: "danger" });
+    } catch { toast.show("저장하지 못했어요. 다시 시도해 주세요", { tone: "danger" }); }
     finally { setSaving(false); }
   };
 
@@ -353,7 +342,10 @@ export default function WeeklyBoxPage() {
     try {
       const res = await fetch(`/api/meal-plans/load?id=${id}&user_id=${userId}`);
       const data = await res.json();
-      if (data.plan) { setGrid(data.plan.grid || emptyGrid()); setPlanTitle(data.plan.title); setPlanId(data.plan.id); }
+      if (data.plan) {
+        setGrid(data.plan.grid || emptyGrid()); setPlanTitle(data.plan.title); setPlanId(data.plan.id);
+        toast.show(`"${data.plan.title}" 을 불러왔어요`);
+      }
     } catch { /* */ }
   };
 
@@ -372,7 +364,7 @@ export default function WeeklyBoxPage() {
       });
       setSavedPlans(prev => prev.map(p => p.id === id ? { ...p, title: editTitleValue.trim() } : p));
       if (planId === id) setPlanTitle(editTitleValue.trim());
-      showToast("이름이 변경되었어요");
+      toast.show("이름을 바꿨어요");
     } catch { /* */ }
     setEditingTitle(null);
   };
@@ -384,7 +376,7 @@ export default function WeeklyBoxPage() {
       await fetch(`/api/meal-plans?id=${id}&user_id=${userId}`, { method: "DELETE" });
       setSavedPlans(prev => prev.filter(p => p.id !== id));
       if (planId === id) { setGrid(emptyGrid()); setPlanId(null); setPlanTitle("새 식단"); }
-      showToast("삭제되었어요");
+      toast.show("식단을 삭제했어요");
     } catch { /* */ }
   };
 
@@ -435,288 +427,266 @@ export default function WeeklyBoxPage() {
     };
   })();
 
-  if (loading) {
-    return (
-      <div className="min-h-[calc(100vh-3.5rem)] flex items-center justify-center">
-        <div className="inline-block w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-      </div>
-    );
-  }
+  if (loading) return <PageLoading />;
 
   const activeDayMeals = grid[activeDay] || {};
   const activeDayCal = stats.perDay[activeDay] || 0;
   const activeDayLabel = DAYS.find(d => d.key === activeDay)?.label || "";
   const filledMeals = Object.values(activeDayMeals).filter(c => c && (c.product_id || c.name)).length;
 
-  const sourceLabel = (s?: string) => {
-    if (s === "community_copy") return { text: "따라하기", color: "#C4870A", bg: "rgba(196,135,10,0.12)" };
-    return { text: "AI 생성", color: "#4A8FD4", bg: "rgba(74,143,212,0.12)" };
-  };
-
   return (
-    <div className="max-w-[430px] mx-auto px-4 py-4 pb-36">
+    <Page width="narrow">
 
-      {/* ══════════════════════════════════════════════
-          ▌ 내 식단 리스트 — 저장된 식단 카드
-          ══════════════════════════════════════════════ */}
-      <div className="mb-6">
-        <div className="flex items-center justify-between mb-3">
-          <p className="text-xs font-bold">내 식단 리스트</p>
-          <Link href="/community" className="text-[10px] text-primary hover:underline">커뮤니티에서 따라하기 →</Link>
-        </div>
+      {/* ══════════ 내 식단 리스트 ══════════ */}
+      <section className="mb-8">
+        <SectionHeader
+          title="내 식단 리스트"
+          description="카드를 누르면 아래 편집기로 불러와요"
+          action={<TextLink href="/community">커뮤니티에서 따라하기</TextLink>}
+        />
 
         {savedPlans.length > 0 ? (
-          <div className="space-y-2 mb-4">
+          <div className="flex flex-col gap-2">
             {savedPlans.map(p => {
-              const src = sourceLabel(p.source);
               const isActive = planId === p.id;
               const isEditing = editingTitle === p.id;
-
               return (
-                <div key={p.id}
-                  className={`rounded-[14px] border transition-all ${isActive ? "border-primary bg-primary/5" : "border-border hover:border-primary/30"}`}>
-                  <div className="p-3 cursor-pointer" onClick={() => !isEditing && loadPlan(p.id)}>
+                <Card key={p.id} padding="md" className={cn(isActive && "border-brand")}>
+                  <div
+                    role={isEditing ? undefined : "button"}
+                    tabIndex={isEditing ? undefined : 0}
+                    onClick={() => !isEditing && loadPlan(p.id)}
+                    onKeyDown={(e) => { if (!isEditing && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); loadPlan(p.id); } }}
+                    className={cn(!isEditing && "cursor-pointer")}
+                  >
                     <div className="flex items-center justify-between gap-2 mb-1">
                       {isEditing ? (
-                        <div className="flex gap-2 flex-1" onClick={e => e.stopPropagation()}>
-                          <input type="text" value={editTitleValue} onChange={e => setEditTitleValue(e.target.value)}
-                            onKeyDown={e => { if (e.key === "Enter") renamePlan(p.id); if (e.key === "Escape") setEditingTitle(null); }}
-                            className="flex-1 px-2 py-0.5 rounded-lg border border-primary text-xs font-bold bg-transparent outline-none" autoFocus />
-                          <button onClick={() => renamePlan(p.id)} className="text-[10px] text-primary font-bold" style={{ minHeight: "unset", minWidth: "unset" }}>저장</button>
-                        </div>
+                        <form
+                          className="flex gap-2 flex-1"
+                          onClick={e => e.stopPropagation()}
+                          onSubmit={(e) => { e.preventDefault(); renamePlan(p.id); }}
+                        >
+                          <Input value={editTitleValue} onChange={e => setEditTitleValue(e.target.value)}
+                            onKeyDown={e => { if (e.key === "Escape") setEditingTitle(null); }}
+                            aria-label="식단 이름" autoFocus />
+                          <Button type="submit" size="sm" className="h-11">저장하기</Button>
+                        </form>
                       ) : (
-                        <h3 className="text-xs font-bold flex-1 min-w-0 line-clamp-1">{p.title}</h3>
+                        <h3 className="text-body font-bold text-ink flex-1 min-w-0 line-clamp-1">{p.title}</h3>
                       )}
-                      <span className="text-[9px] px-1.5 py-0.5 rounded-full font-semibold shrink-0" style={{ background: src.bg, color: src.color }}>{src.text}</span>
+                      {!isEditing && (
+                        <Badge tone={p.source === "community_copy" ? "brand" : "neutral"}>
+                          {p.source === "community_copy" ? "따라하기" : "AI 생성"}
+                        </Badge>
+                      )}
                     </div>
-                    <div className="flex gap-3 text-[10px] text-muted">
-                      <span><span className="font-semibold text-foreground" style={NUM}>{p.product_count}</span>개</span>
-                      {p.avg_daily_calories > 0 && <span><span style={NUM}>{p.avg_daily_calories}</span>kcal</span>}
-                      {p.total_price > 0 && <span><span style={NUM}>{p.total_price.toLocaleString()}</span>원</span>}
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-caption text-ink-2">
+                      <span><span className="num font-bold text-ink">{p.product_count}</span>개</span>
+                      {p.avg_daily_calories > 0 && <Kcal value={p.avg_daily_calories} className="text-caption" />}
+                      {p.total_price > 0 && <Price value={p.total_price} className="text-caption" />}
                       <span className="ml-auto">{relativeTime(p.updated_at)}</span>
                     </div>
                   </div>
-                  {/* 액션 */}
-                  <div className="border-t border-border/30 px-3 py-1.5 flex items-center gap-3">
-                    <button onClick={(e) => { e.stopPropagation(); setEditingTitle(p.id); setEditTitleValue(p.title); }}
-                      className="text-[10px] text-muted hover:text-foreground" style={{ minHeight: "unset", minWidth: "unset" }}>✏️ 이름</button>
-                    <button onClick={(e) => { e.stopPropagation(); loadPlan(p.id); }}
-                      className="text-[10px] text-muted hover:text-foreground" style={{ minHeight: "unset", minWidth: "unset" }}>📂 불러오기</button>
-                    <div className="flex-1" />
-                    <button onClick={(e) => { e.stopPropagation(); if (confirm("삭제할까요?")) deletePlan(p.id); }}
-                      className="text-[10px] text-red-400 hover:text-red-500" style={{ minHeight: "unset", minWidth: "unset" }}>🗑️</button>
-                  </div>
-                </div>
+                  <CardActions>
+                    <Button size="sm" variant="ghost" icon="edit"
+                      onClick={() => { setEditingTitle(p.id); setEditTitleValue(p.title); }}>이름 바꾸기</Button>
+                    <Button size="sm" variant="ghost" icon="refresh" onClick={() => loadPlan(p.id)}>불러오기</Button>
+                    <Button size="sm" variant="ghost" icon="trash" className="ml-auto" onClick={() => setDeleteTarget(p)}>삭제하기</Button>
+                  </CardActions>
+                </Card>
               );
             })}
           </div>
         ) : (
-          <div className="text-center py-6 mb-4 rounded-[14px] border border-dashed border-border">
-            <p className="text-xs text-muted">아직 저장된 식단이 없어요</p>
-            <p className="text-[10px] text-muted mt-0.5">아래에서 AI로 만들거나, 커뮤니티에서 따라하기하세요</p>
-          </div>
+          <EmptyState
+            title="아직 저장한 식단이 없어요"
+            description="아래에서 AI 추천으로 채우거나, 커뮤니티에서 따라하기 해 보세요"
+            action={<LinkButton href="/community" size="sm" variant="secondary">커뮤니티 보기</LinkButton>}
+          />
         )}
-      </div>
+      </section>
 
-      {/* ══════════════════════════════════════════════
-          ▌ 7일 식단 편집기
-          ══════════════════════════════════════════════ */}
-
-      {/* ── 편집기 헤더 ── */}
-      <div className="flex items-start justify-between gap-3 mb-5">
-        <div className="flex-1 min-w-0">
-          <input type="text" value={planTitle} onChange={e => setPlanTitle(e.target.value)}
-            className="text-xl font-extrabold bg-transparent border-none outline-none w-full" placeholder="식단 이름" />
-          <p className="text-xs text-muted mt-0.5">AI가 영양 밸런스 맞춰 7일 구성</p>
-        </div>
-        <div className="flex gap-2 shrink-0">
-          <button onClick={generatePlan} disabled={generating}
-            className={`px-3 py-2 rounded-xl text-xs font-bold transition-colors disabled:opacity-50 ${precomputed ? "bg-primary text-white" : "bg-[var(--color-surface)] text-foreground/80 hover:bg-border"}`}
-            style={{ minHeight: "36px" }}>
-            {generating ? "생성 중..." : precomputed ? "✨ AI 채우기" : preloading ? "⏳ 준비 중..." : "✨ AI 채우기"}
-          </button>
-          <button onClick={savePlan} disabled={saving || stats.products === 0}
-            className="px-3 py-2 bg-primary text-white rounded-xl text-xs font-bold disabled:opacity-40" style={{ minHeight: "36px" }}>
-            {saving ? "저장 중..." : "저장"}
-          </button>
-        </div>
-      </div>
-
-      {/* ── 주간 요약 대시보드 ── */}
-      {stats.products > 0 && (
-        <div className="bg-[var(--color-card)] rounded-[20px] p-5 shadow-[0_1px_4px_rgba(28,27,24,0.06)] mb-5">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <div className="text-[32px] font-extrabold leading-none" style={NUM}>{stats.avgCal.toLocaleString()}</div>
-              <div className="text-[11px] text-muted mt-1">일 평균 kcal</div>
-            </div>
-            <div className="text-center">
-              <div className="text-sm font-bold" style={{ ...NUM, color: stats.goalPct >= 80 ? "#2EA860" : "#D48A20" }}>{stats.goalPct}%</div>
-              <div className="text-[11px] text-muted">목표 달성률</div>
-            </div>
-            <div className="text-right">
-              <div className="text-[22px] font-bold text-primary" style={NUM}>{stats.totalPrice.toLocaleString()}<span className="text-xs text-muted font-normal">원</span></div>
-              <div className="text-[11px] text-muted">주간 예상 비용</div>
-            </div>
+      {/* ══════════ 7일 식단 편집기 ══════════ */}
+      <section className="border-t border-line pt-6">
+        <div className="flex flex-col gap-3 mb-5">
+          <div>
+            <Input
+              value={planTitle}
+              onChange={e => setPlanTitle(e.target.value)}
+              placeholder="식단 이름"
+              aria-label="식단 이름"
+              className="text-title font-bold"
+            />
+            <p className="text-caption text-ink-2 mt-1.5">영양 밸런스를 맞춰 7일을 구성해요</p>
           </div>
-          <div className="grid grid-cols-4 gap-2">
-            {[
-              { label: "단백질", val: stats.avgProtein, unit: "g", color: "#4A8FD4", bg: "rgba(74,143,212,0.08)", pct: Math.min(100, Math.round((stats.avgProtein / 80) * 100)) },
-              { label: "탄수화물", val: stats.avgCarbs, unit: "g", color: "#D4960A", bg: "rgba(212,150,10,0.08)", pct: Math.min(100, Math.round((stats.avgCarbs / 260) * 100)) },
-              { label: "지방", val: stats.avgFat, unit: "g", color: "#D46A3A", bg: "rgba(212,106,58,0.08)", pct: Math.min(100, Math.round((stats.avgFat / 60) * 100)) },
-              { label: "나트륨", val: stats.avgSodium, unit: "mg", color: "#8A6EBF", bg: "rgba(138,110,191,0.08)", pct: Math.min(100, Math.round((stats.avgSodium / 2000) * 100)) },
-            ].map(m => (
-              <div key={m.label} className="flex flex-col items-center gap-[5px] py-2 px-1 rounded-xl" style={{ background: m.bg }}>
-                <div className="text-[15px] font-bold leading-none" style={{ ...NUM, color: m.color }}>
-                  {m.val.toLocaleString()}<span className="text-[10px] font-medium">{m.unit}</span>
-                </div>
-                <div className="w-full h-[5px] rounded-full overflow-hidden" style={{ background: "var(--color-border)" }}>
-                  <div className="h-full rounded-full transition-all duration-500" style={{ width: `${m.pct}%`, background: m.color }} />
-                </div>
-                <div className="text-[10px] text-muted font-medium">{m.label}</div>
+          <div className="flex gap-2">
+            <Button variant="secondary" block onClick={generatePlan} loading={generating || (!precomputed && preloading)}>
+              {generating ? "만드는 중" : !precomputed && preloading ? "준비 중" : "AI 추천으로 채우기"}
+            </Button>
+            <Button block onClick={savePlan} disabled={stats.products === 0} loading={saving}>
+              {saving ? "저장 중" : "저장하기"}
+            </Button>
+          </div>
+        </div>
+
+        {/* ── 주간 요약 ── */}
+        {stats.products > 0 && (
+          <Card className="mb-5">
+            <div className="flex items-end justify-between gap-4 mb-4">
+              <Stat size="lg" emphasis label="일 평균 kcal" value={stats.avgCal.toLocaleString()} />
+              <div className="flex gap-5">
+                <Stat label="목표 달성률" value={stats.goalPct} unit="%" />
+                <Stat label="주간 예상 비용" value={stats.totalPrice.toLocaleString()} unit="원" />
               </div>
-            ))}
-          </div>
-        </div>
-      )}
+            </div>
+            <MacroGrid
+              values={{ protein: stats.avgProtein, carbs: stats.avgCarbs, fat: stats.avgFat, sodium: stats.avgSodium }}
+              targets={{ protein: 80, carbs: 260, fat: 60, sodium: 2000 }}
+            />
+          </Card>
+        )}
 
-      {/* ── 요일 탭 ── */}
-      <div className="flex gap-1 mb-4 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
-        {DAYS.map(d => {
-          const dayCal = stats.perDay[d.key] || 0;
-          const isActive = d.key === activeDay;
-          return (
-            <button key={d.key} onClick={() => setActiveDay(d.key)}
-              className={`flex-1 min-w-[48px] flex flex-col items-center gap-1 py-2 pb-2.5 rounded-[14px] transition-all border-none ${isActive ? "bg-primary text-white" : "bg-transparent hover:bg-primary/8"}`}
-              style={{ minHeight: "unset", minWidth: "unset" }}>
-              <span className={`text-[11px] font-semibold tracking-wide ${isActive ? "text-white" : ""}`}>{d.label}</span>
-              <span className={`text-[10px] font-semibold ${isActive ? "text-white/80" : "text-muted"}`} style={NUM}>
-                {dayCal > 0 ? dayCal.toLocaleString() : "—"}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* ── 섹션 라벨 ── */}
-      <div className="flex items-center justify-between mb-3 px-1">
-        <span className="text-[13px] font-bold text-foreground/80">{activeDayLabel}요일 식단</span>
-        <span className="text-[11px] text-muted">{filledMeals}/{MEALS.length}끼{activeDayCal > 0 ? ` · ${activeDayCal.toLocaleString()}kcal` : ""}</span>
-      </div>
-
-      {/* ── 끼니 카드 ── */}
-      {MEALS.map(meal => {
-        const cell = activeDayMeals[meal.key];
-        const isEmpty = !cell || (!cell.product_id && !cell.name);
-        const isEatingOut = cell?.type === "eating_out";
-
-        return (
-          <div key={meal.key}
-            className={`bg-[var(--color-card)] rounded-[18px] shadow-[0_1px_4px_rgba(28,27,24,0.06)] mb-2.5 overflow-hidden transition-all ${isEmpty && !isEatingOut ? "opacity-60" : ""}`}
-            style={{ borderLeft: `4px solid ${meal.color}` }}>
-            <div className="p-3.5 flex flex-col gap-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="text-lg">{meal.emoji}</span>
-                  <span className="text-sm font-bold">{meal.label}</span>
-                </div>
-                {!isEmpty && !isEatingOut && (
-                  <div className="text-[15px] font-bold text-primary" style={NUM}>
-                    {cell?.calories || 0} <span className="text-[10px] text-muted font-medium">kcal</span>
-                  </div>
+        {/* ── 요일 고르기 ── */}
+        <div role="tablist" aria-label="요일" className="grid grid-cols-7 gap-1 mb-4">
+          {DAYS.map(d => {
+            const dayCal = stats.perDay[d.key] || 0;
+            const isActive = d.key === activeDay;
+            return (
+              <button
+                key={d.key}
+                type="button"
+                role="tab"
+                aria-selected={isActive}
+                onClick={() => setActiveDay(d.key)}
+                className={cn(
+                  "flex flex-col items-center justify-center gap-0.5 h-14 rounded-md border transition-colors",
+                  isActive ? "bg-brand-soft border-brand text-brand-ink" : "border-transparent text-ink-2 hover:bg-sunken",
                 )}
-              </div>
+              >
+                <span className="text-label font-bold">{d.label}</span>
+                <span className="num text-caption">{dayCal > 0 ? dayCal.toLocaleString() : "–"}</span>
+              </button>
+            );
+          })}
+        </div>
 
-              {isEatingOut ? (
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-muted">🍴 외식</span>
-                  <button onClick={() => updateCell(activeDay, meal.key, null)}
-                    className="text-[10px] text-muted hover:text-foreground" style={{ minHeight: "unset", minWidth: "unset" }}>취소</button>
-                </div>
-              ) : !isEmpty ? (
-                <>
-                  <div className="text-[13px] font-semibold">{cell?.name}</div>
-                  <div className="flex items-center gap-2 text-[10px] text-muted">
-                    {cell?.platform && SERVICE_NAMES[cell.platform] && (
-                      <span className="px-1.5 py-0.5 rounded-md text-[9px] font-semibold" style={{ background: "var(--gold-glow, rgba(196,135,10,0.12))", color: "var(--color-primary)" }}>
-                        {SERVICE_NAMES[cell.platform]}
-                      </span>
-                    )}
-                    {cell?.price && <span style={NUM}>{cell.price.toLocaleString()}원</span>}
-                  </div>
-                  <div className="flex gap-2">
-                    {[
-                      { v: cell?.protein_g, u: "g", c: "#4A8FD4" },
-                      { v: cell?.carbs_g, u: "g", c: "#D4960A" },
-                      { v: cell?.fat_g, u: "g", c: "#D46A3A" },
-                      { v: cell?.sodium_mg, u: "mg", c: "#8A6EBF" },
-                    ].filter(m => m.v).map((m, i) => (
-                      <div key={i} className="flex items-center gap-1 text-[10px] font-semibold" style={NUM}>
-                        <div className="w-1.5 h-1.5 rounded-full" style={{ background: m.c }} />
-                        {m.v}{m.u}
-                      </div>
+        <div className="flex items-center justify-between mb-3">
+          <span className="text-body font-bold text-ink">{activeDayLabel}요일 식단</span>
+          <span className="text-caption text-ink-2">
+            <span className="num">{filledMeals}</span>/<span className="num">{MEALS.length}</span>끼
+            {activeDayCal > 0 && <> · <Kcal value={activeDayCal} className="text-caption" /></>}
+          </span>
+        </div>
+
+        {/* ── 끼니 ── */}
+        <div className="flex flex-col gap-2">
+          {MEALS.map(meal => {
+            const cell = activeDayMeals[meal.key];
+            const isEatingOut = cell?.type === "eating_out";
+            const isEmpty = !isEatingOut && (!cell || (!cell.product_id && !cell.name));
+            const foods = cell?._foods as { name: string; calories?: number }[] | undefined;
+
+            if (isEmpty) {
+              return (
+                <MealSlot key={meal.key} meal={meal.key} empty
+                  onAdd={() => setSearchModal({ day: activeDay, meal: meal.key })} />
+              );
+            }
+            if (isEatingOut) {
+              return (
+                <MealSlot key={meal.key} meal={meal.key}
+                  right={<Button size="sm" variant="ghost" onClick={() => updateCell(activeDay, meal.key, null)}>취소</Button>}>
+                  <p className="text-label text-ink-2">외식</p>
+                </MealSlot>
+              );
+            }
+            return (
+              <MealSlot key={meal.key} meal={meal.key} right={<Kcal value={cell?.calories || 0} className="text-label" />}>
+                {foods && foods.length > 1 ? (
+                  <ul className="flex flex-col gap-0.5">
+                    {foods.map((f, i) => (
+                      <li key={i} className="text-body text-ink">{f.name}</li>
                     ))}
-                  </div>
-                  <div className="flex gap-2 pt-1">
-                    <button onClick={() => setSearchModal({ day: activeDay, meal: meal.key })}
-                      className="text-[10px] text-primary hover:underline" style={{ minHeight: "unset", minWidth: "unset" }}>교체</button>
-                    <button onClick={() => updateCell(activeDay, meal.key, null)}
-                      className="text-[10px] text-muted hover:text-foreground" style={{ minHeight: "unset", minWidth: "unset" }}>삭제</button>
-                  </div>
-                </>
-              ) : (
-                <button onClick={() => setSearchModal({ day: activeDay, meal: meal.key })}
-                  className="text-xs text-muted hover:text-primary py-2 transition-colors text-left" style={{ minHeight: "unset", minWidth: "unset" }}>
-                  + 제품 추가 또는 AI 추천 받기
-                </button>
-              )}
-            </div>
-          </div>
-        );
-      })}
+                  </ul>
+                ) : (
+                  <p className="text-body font-medium text-ink">{cell?.name}</p>
+                )}
+                <div className="flex flex-wrap items-center gap-2 mt-1">
+                  {cell?.platform && SERVICE_NAMES[cell.platform] && <Badge tone="brand">{SERVICE_NAMES[cell.platform]}</Badge>}
+                  {cell?.price ? <Price value={cell.price} className="text-caption" /> : null}
+                </div>
+                <MacroInline className="mt-1.5" values={{ protein: cell?.protein_g, carbs: cell?.carbs_g, fat: cell?.fat_g, sodium: cell?.sodium_mg }} />
+                <div className="flex gap-1 mt-2 -ml-3">
+                  <Button size="sm" variant="ghost" icon="refresh" onClick={() => setSearchModal({ day: activeDay, meal: meal.key })}>바꾸기</Button>
+                  <Button size="sm" variant="ghost" icon="trash" onClick={() => updateCell(activeDay, meal.key, null)}>빼기</Button>
+                </div>
+              </MealSlot>
+            );
+          })}
+        </div>
 
-      {/* ── 하단 고정 CTA ── */}
+        {/* ── 서비스 구성 ── */}
+        {stats.products > 0 && stats.serviceMix.length > 0 && (
+          <Card className="mt-5">
+            <p className="text-label font-bold text-ink mb-3">서비스 구성</p>
+            <div className="flex flex-col gap-2.5">
+              {stats.serviceMix.map(svc => (
+                <div key={svc.key} className="grid grid-cols-[72px_minmax(0,1fr)_auto] items-center gap-3">
+                  <span className="text-caption font-medium text-ink truncate">{svc.name}</span>
+                  <ProgressBar value={svc.count} max={stats.products} tone={svc.isHealth ? "brand" : "positive"} label={`${svc.name} 비중`} />
+                  <span className="text-caption text-ink-2 text-right">
+                    <span className="num">{svc.count}</span>끼 · <span className="num">{svc.cost.toLocaleString()}</span>원
+                  </span>
+                </div>
+              ))}
+            </div>
+            <div className="flex justify-between mt-4 pt-3 border-t border-line text-label">
+              <span className="font-bold text-ink">월 예상</span>
+              <Price value={stats.monthlyEstimate} className="text-label" />
+            </div>
+          </Card>
+        )}
+      </section>
+
+      {/* ── 하단 주문 ── */}
       {stats.products > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 border-t border-border bg-[var(--color-background)] z-10"
-          style={{ padding: `12px max(16px, env(safe-area-inset-right, 0px)) max(16px, env(safe-area-inset-bottom, 16px)) max(16px, env(safe-area-inset-left, 0px))` }}>
-          <div className="max-w-[430px] mx-auto flex items-center gap-3">
-            <div className="flex-1">
-              <div className="text-[12px] text-muted">{stats.products}끼 · {stats.serviceMix.filter(s => s.isHealth).length}개 서비스</div>
-              <div className="text-lg font-bold" style={NUM}>{stats.totalPrice.toLocaleString()}<span className="text-xs text-muted font-normal">원</span></div>
+        <BottomBar>
+          <div className="flex-1 min-w-0">
+            <div className="text-caption text-ink-2">
+              <span className="num">{stats.products}</span>끼 · <span className="num">{stats.serviceMix.filter(s => s.isHealth).length}</span>개 서비스
             </div>
-            <button onClick={() => {
-              const orderItems: { day: string; slot: string; product_name: string; product_id?: string }[] = [];
-              for (const [day, slots] of Object.entries(grid)) {
-                for (const [slot, cell] of Object.entries(slots)) {
-                  if (cell && cell.name) orderItems.push({ day, slot, product_name: cell.name, product_id: cell.product_id || undefined });
-                }
-              }
-              if (orderItems.length > 0) { localStorage.setItem("carefood_order_items", JSON.stringify(orderItems)); window.location.href = "/order"; }
-            }}
-              className="shrink-0 px-7 py-3.5 rounded-2xl bg-primary text-white text-sm font-bold shadow-[0_2px_10px_rgba(196,135,10,0.3)] hover:-translate-y-0.5 transition-all"
-              style={{ minHeight: "44px" }}>
-              이 식단 주문하기
-            </button>
+            <Price value={stats.totalPrice} className="text-body" />
           </div>
-        </div>
+          <Button onClick={() => {
+            const orderItems: { day: string; slot: string; product_name: string; product_id?: string }[] = [];
+            for (const [day, slots] of Object.entries(grid)) {
+              for (const [slot, cell] of Object.entries(slots)) {
+                if (cell && cell.name) orderItems.push({ day, slot, product_name: cell.name, product_id: cell.product_id || undefined });
+              }
+            }
+            if (orderItems.length > 0) { localStorage.setItem("carefood_order_items", JSON.stringify(orderItems)); window.location.href = "/order"; }
+          }}>
+            이 식단 주문하기
+          </Button>
+        </BottomBar>
       )}
 
-      {/* ── 제품 검색 모달 ── */}
-      {searchModal && (
-        <ProductSearchModal
-          onSelect={(product) => { updateCell(searchModal.day, searchModal.meal, product); setSearchModal(null); }}
-          onClose={() => setSearchModal(null)}
-          onEatingOut={() => { updateCell(searchModal.day, searchModal.meal, { type: "eating_out" }); setSearchModal(null); }}
-        />
-      )}
+      {/* ── 음식 고르기 ── */}
+      <ProductSearchSheet
+        open={!!searchModal}
+        onSelect={(product) => { if (searchModal) updateCell(searchModal.day, searchModal.meal, product); setSearchModal(null); }}
+        onClose={() => setSearchModal(null)}
+        onEatingOut={() => { if (searchModal) updateCell(searchModal.day, searchModal.meal, { type: "eating_out" }); setSearchModal(null); }}
+      />
 
-      {/* ── Toast ── */}
-      {toast && (
-        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-xl shadow-lg text-[13px] font-medium"
-          style={{ background: "#C4870A", color: "#0C1117", maxWidth: "90vw" }}>
-          {toast}
-        </div>
-      )}
-    </div>
+      <ConfirmSheet
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => { if (deleteTarget) deletePlan(deleteTarget.id); setDeleteTarget(null); }}
+        title="이 식단을 삭제할까요?"
+        description={deleteTarget ? `"${deleteTarget.title}" 이 식단 리스트에서 사라지고 되돌릴 수 없어요` : undefined}
+        confirmLabel="삭제하기"
+      />
+    </Page>
   );
 }

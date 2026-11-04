@@ -671,8 +671,8 @@ export default function ProductExplorer() {
         </div>
       )}
       {!profile && (
-        <Notice className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <span>프로필을 설정하면 맞춤 추천을 받을 수 있어요</span>{" "}
+        <Notice className="mb-3">
+          프로필을 설정하면 맞춤 추천을 받을 수 있어요{" "}
           <TextLink href="/onboarding">설정하기</TextLink>
         </Notice>
       )}
