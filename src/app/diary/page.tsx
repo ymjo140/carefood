@@ -70,7 +70,7 @@ type SearchResult = {
 type CommonFood = {
   id: string;
   name: string;
-  icon: string;
+  icon?: string;
   category: string;
   serving_desc: string;
   serving_size_g: number | null;
@@ -179,7 +179,6 @@ function CommonFoodList({ items, onSelect }: { items: CommonFood[]; onSelect: (f
         <ListRow
           key={food.id}
           onClick={() => onSelect(food)}
-          leading={<span className="size-10 rounded-md bg-sunken flex items-center justify-center text-title" aria-hidden="true">{food.icon}</span>}
           title={food.name}
           meta={
             <span className="flex flex-wrap gap-x-2">

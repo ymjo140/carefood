@@ -50,21 +50,29 @@ export async function POST(request: NextRequest) {
     // 통계 계산 — 실제로 채워진 날 기준
     const days = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
     const meals = ["breakfast", "lunch", "dinner", "supplement"];
-    let totalPrice = 0, totalCalories = 0, totalProtein = 0, productCount = 0, eatingOutCount = 0;
+    let totalPrice = 0, totalCalories = 0, totalProtein = 0, productCount = 0, eatingOutCount = 0, filledDays = 0;
 
     for (const day of days) {
       const dayData = grid[day] || {};
+      let dayHas = false;
       for (const meal of meals) {
         const cell = dayData[meal];
         if (!cell) continue;
-        if (cell.type === "eating_out") { eatingOutCount++; continue; }
+        if (cell.type === "eating_out") {
+          // 외식도 칼로리·단백질은 하루 합계에 넣는다
+          eatingOutCount++; dayHas = true;
+          totalCalories += cell.calories || 0; totalProtein += cell.protein_g || 0;
+          continue;
+        }
         if (cell.product_id || cell.name) {
+          dayHas = true;
           productCount++;
           totalPrice += cell.price || 0;
           totalCalories += cell.calories || 0;
           totalProtein += cell.protein_g || 0;
         }
       }
+      if (dayHas) filledDays++;
     }
 
     const planData = {
@@ -73,8 +81,9 @@ export async function POST(request: NextRequest) {
       grid,
       tags: tags || [],
       total_price: totalPrice,
-      avg_daily_calories: Math.round(totalCalories / Math.max(productCount, 1)),
-      avg_daily_protein: Math.round(totalProtein / Math.max(productCount, 1)),
+      // 하루 평균 = 음식이 든 날 기준
+      avg_daily_calories: Math.round(totalCalories / Math.max(filledDays, 1)),
+      avg_daily_protein: Math.round(totalProtein / Math.max(filledDays, 1)),
       product_count: productCount,
       eating_out_count: eatingOutCount,
       updated_at: new Date().toISOString(),

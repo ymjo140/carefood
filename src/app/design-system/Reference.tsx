@@ -6,7 +6,7 @@ import {
   Input, Kcal, LinkButton, ListRow, MacroGrid, MacroInline, MealSlot, MealTag, Notice, Page, PageHeader, Price,
   ProgressBar, SearchField, SectionHeader, Select, Sheet, Spinner, Stat, Steps, Tabs, Textarea, TextLink, Thumb,
   Avatar, useToast, cn, type BadgeTone,
-  BottomNavItems, SkeletonList, DragArea, DragGhost, DragHandle, useDragItem, useDropTarget, type DragData, ChoiceCard, ChoiceList, LinkTabs, RatingStars, RatingInput, ScaleInput, PostAuthor, PostAction, PostActions, PostTags,
+  BottomNavItems, SkeletonList, FoodEntryForm, DragArea, DragGhost, DragHandle, useDragItem, useDropTarget, type DragData, ChoiceCard, ChoiceList, LinkTabs, RatingStars, RatingInput, ScaleInput, PostAuthor, PostAction, PostActions, PostTags,
 } from "@/components/ui";
 
 // 서버(UTC)와 브라우저 시간대가 달라도 같은 글자가 나오도록 한국 시간으로 고정
@@ -770,6 +770,17 @@ export default function Reference({ status }: { status: DsStatus }) {
             <MealSlot meal="dinner" empty onAdd={() => toast.show("음식 고르기를 열었어요")} />
             <span className="text-caption text-ink-2"><Code>{"<MealSlot meal right empty onAdd />"}</Code></span>
           </div>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 mt-6">
+          <Demo label="일반 메뉴 넣기 — 양 고르기 + kcal 고쳐 쓰기" code='<FoodEntryForm food={…} onSubmit />'>
+            <FoodEntryForm
+              food={{ id: "demo", name: "파스타 (크림)", serving_desc: "1인분 350g", serving_size_g: 350, calories: 650, protein_g: 18, carbs_g: 70, fat_g: 32, sodium_mg: 1100, source: "curated" }}
+              note="보통 1인분 기준이에요. 가게·양에 따라 달라요"
+              onSubmit={(e) => toast.show(`${e.name} ${e.calories}kcal 를 넣었어요`)} />
+          </Demo>
+          <Demo label="목록에 없을 때 — 이름 + kcal 직접" code="<FoodEntryForm onSubmit />">
+            <FoodEntryForm onSubmit={(e) => toast.show(`${e.name} ${e.calories}kcal 를 넣었어요`)} />
+          </Demo>
         </div>
       </Section>
 
