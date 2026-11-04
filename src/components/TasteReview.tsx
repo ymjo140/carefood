@@ -1,8 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { Badge, Button, Card, ProgressBar, SectionHeader, Steps, Textarea, TextLink, useToast } from "@/components/ui";
+import { RatingInput, RatingStars } from "@/components/ui/Rating";
+import { ChoiceList, type ChoiceTone } from "@/components/ui/ChoiceList";
 
 type ReviewStats = {
   count: number;
@@ -29,201 +31,68 @@ const PERSONA_LABELS: Record<string, string> = {
   general: "일반",
 };
 
-/* ── 별점 입력 ── */
-function StarInput({
-  value,
-  onChange,
-}: {
-  value: number;
-  onChange: (v: number) => void;
-}) {
-  return (
-    <div className="flex gap-1">
-      {[1, 2, 3, 4, 5].map((n) => (
-        <button
-          key={n}
-          type="button"
-          onClick={() => onChange(n)}
-          className={`text-2xl transition-transform hover:scale-110 ${
-            n <= value ? "text-yellow-400" : "text-border"
-          }`}
-          aria-label={`${n}점`}
-        >
-          ★
-        </button>
-      ))}
-    </div>
-  );
-}
+const CONSUMPTION_OPTIONS: { value: number; label: string; tone: ChoiceTone }[] = [
+  { value: 100, label: "다 먹었어요", tone: "positive" },
+  { value: 75, label: "조금 남겼어요", tone: "positive" },
+  { value: 50, label: "반 정도 먹었어요", tone: "caution" },
+  { value: 25, label: "조금만 먹었어요", tone: "caution" },
+  { value: 0, label: "거의 못 먹었어요", tone: "caution" },
+];
 
-/* ── 별점 표시 (읽기전용) ── */
-function Stars({ rating, size = "text-sm" }: { rating: number; size?: string }) {
-  return (
-    <span className={`${size} tracking-tight`}>
-      {[1, 2, 3, 4, 5].map((n) => (
-        <span key={n} className={n <= Math.round(rating) ? "text-yellow-400" : "text-border"}>
-          ★
-        </span>
-      ))}
-    </span>
-  );
-}
-
-/* ── 섭취 완료율 선택 ── */
-function ConsumptionSelector({
-  value,
-  onChange,
-}: {
-  value: number;
-  onChange: (v: number) => void;
-}) {
-  const options = [
-    { pct: 100, label: "다 먹었어요" },
-    { pct: 75, label: "조금 남겼어요" },
-    { pct: 50, label: "반 정도 먹었어요" },
-    { pct: 25, label: "조금만 먹었어요" },
-    { pct: 0, label: "거의 못 먹었어요" },
-  ];
-
-  return (
-    <div className="space-y-2">
-      {options.map((opt) => (
-        <button
-          key={opt.pct}
-          type="button"
-          onClick={() => onChange(opt.pct)}
-          className={`w-full text-left p-3 rounded-xl border-2 transition-all flex items-center gap-3 ${
-            value === opt.pct
-              ? "border-primary bg-primary/5"
-              : "border-border hover:border-primary/30"
-          }`}
-        >
-          <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${
-            opt.pct >= 75 ? "bg-green-500" : opt.pct >= 50 ? "bg-yellow-500" : "bg-orange-500"
-          }`} />
-          <span className="text-sm font-medium">{opt.label}</span>
-          {value === opt.pct && (
-            <span className="ml-auto text-primary text-xs font-bold">✓</span>
-          )}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-/* ── 편의성 선택 ── */
-function EaseSelector({
-  value,
-  onChange,
-}: {
-  value: number | null;
-  onChange: (v: number) => void;
-}) {
-  const options = [
-    { val: 5, label: "아주 편했어요" },
-    { val: 4, label: "편했어요" },
-    { val: 3, label: "보통이에요" },
-    { val: 2, label: "불편했어요" },
-    { val: 1, label: "매우 불편했어요" },
-  ];
-
-  return (
-    <div className="flex flex-wrap gap-2">
-      {options.map((opt) => (
-        <button
-          key={opt.val}
-          type="button"
-          onClick={() => onChange(opt.val)}
-          className={`px-3 py-2 rounded-full border-2 text-sm transition-all ${
-            value === opt.val
-              ? "border-primary bg-primary/10 text-primary font-medium"
-              : "border-border hover:border-primary/30"
-          }`}
-        >
-          {opt.label}
-        </button>
-      ))}
-    </div>
-  );
-}
+const EASE_OPTIONS: { value: number; label: string }[] = [
+  { value: 5, label: "아주 편했어요" },
+  { value: 4, label: "편했어요" },
+  { value: 3, label: "보통이에요" },
+  { value: 2, label: "불편했어요" },
+  { value: 1, label: "매우 불편했어요" },
+];
 
 /* ── 리뷰 통계 카드 ── */
 function ReviewStatsCard({ stats }: { stats: ReviewStats }) {
   if (stats.count === 0) return null;
 
   return (
-    <div className="bg-card rounded-2xl border border-border p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
-      <div className="flex items-center gap-4 flex-wrap">
-        <div className="text-center">
-          <div className="text-2xl font-bold text-primary">
-            {stats.avgStarRating}
-          </div>
-          <Stars rating={stats.avgStarRating} />
-          <div className="text-[10px] text-muted mt-0.5">
-            {stats.count}명 평가
-          </div>
+    <Card>
+      <div className="flex items-center gap-x-6 gap-y-3 flex-wrap">
+        <div className="flex flex-col items-start gap-1">
+          <span className="num text-title font-bold text-ink leading-none">{stats.avgStarRating}</span>
+          <RatingStars value={stats.avgStarRating} />
+          <span className="text-caption text-ink-2"><span className="num">{stats.count}</span>명 평가</span>
         </div>
 
-        <div className="flex-1 space-y-2">
-          {/* 섭취 완료율 바 */}
-          <div className="flex items-center gap-2 text-xs">
-            <span className="text-muted w-16 shrink-0">섭취율</span>
-            <div className="flex-1 h-2 bg-border rounded-full overflow-hidden">
-              <div
-                className="h-full bg-green-500 rounded-full transition-all"
-                style={{ width: `${stats.avgConsumptionPct}%` }}
-              />
-            </div>
-            <span className="font-bold w-10 text-right">
-              {stats.avgConsumptionPct}%
-            </span>
+        <div className="flex-1 min-w-48 flex flex-col gap-2">
+          <div className="flex items-center gap-2 text-caption">
+            <span className="text-ink-2 w-14 shrink-0">섭취율</span>
+            <ProgressBar value={stats.avgConsumptionPct} tone="positive" label="평균 섭취율" className="flex-1" />
+            <span className="num font-bold text-ink w-10 text-right">{stats.avgConsumptionPct}%</span>
           </div>
-
-          {/* 편의성 */}
           {stats.avgEaseRating > 0 && (
-            <div className="flex items-center gap-2 text-xs">
-              <span className="text-muted w-16 shrink-0">편의성</span>
-              <div className="flex-1 h-2 bg-border rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-blue-500 rounded-full transition-all"
-                  style={{ width: `${(stats.avgEaseRating / 5) * 100}%` }}
-                />
-              </div>
-              <span className="font-bold w-10 text-right">
-                {stats.avgEaseRating}/5
-              </span>
+            <div className="flex items-center gap-2 text-caption">
+              <span className="text-ink-2 w-14 shrink-0">편의성</span>
+              <ProgressBar value={stats.avgEaseRating} max={5} tone="brand" label="평균 편의성" className="flex-1" />
+              <span className="num font-bold text-ink w-10 text-right">{stats.avgEaseRating}/5</span>
             </div>
           )}
         </div>
       </div>
-    </div>
+    </Card>
   );
 }
 
 /* ── 리뷰 아이템 ── */
 function ReviewItem({ review }: { review: Review }) {
   return (
-    <div className="py-3 border-b border-border last:border-0">
-      <div className="flex items-center gap-2 mb-1">
-        <Stars rating={review.star_rating} size="text-xs" />
-        {review.persona && (
-          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary">
-            {PERSONA_LABELS[review.persona] || review.persona}
-          </span>
-        )}
-        {review.is_proxy_review && (
-          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300">
-            보호자 작성
-          </span>
-        )}
+    <div className="py-3 border-b border-line last:border-0">
+      <div className="flex flex-wrap items-center gap-2 mb-1">
+        <RatingStars value={review.star_rating} size={14} />
+        {review.persona && <Badge tone="brand">{PERSONA_LABELS[review.persona] || review.persona}</Badge>}
+        {review.is_proxy_review && <Badge tone="caution">보호자 작성</Badge>}
       </div>
-      <div className="flex items-center gap-3 text-xs text-muted mb-1">
-        <span>섭취율 {review.consumption_pct}%</span>
-        {review.ease_rating && <span>편의성 {review.ease_rating}/5</span>}
+      <div className="flex items-center gap-3 text-caption text-ink-2 mb-1">
+        <span>섭취율 <span className="num">{review.consumption_pct}</span>%</span>
+        {review.ease_rating && <span>편의성 <span className="num">{review.ease_rating}</span>/5</span>}
       </div>
-      {review.comment && (
-        <p className="text-sm mt-1">{review.comment}</p>
-      )}
+      {review.comment && <p className="text-body text-ink mt-1">{review.comment}</p>}
     </div>
   );
 }
@@ -246,6 +115,7 @@ export default function TasteReview({ productId }: { productId: string }) {
   const [starRating, setStarRating] = useState(0);
   const [comment, setComment] = useState("");
   const [isProxy, setIsProxy] = useState(false);
+  const toast = useToast();
 
   // 데이터 로드
   useEffect(() => {
@@ -291,6 +161,7 @@ export default function TasteReview({ productId }: { productId: string }) {
 
       if (res.ok) {
         setSubmitted(true);
+        toast.show("맛평가를 저장했어요");
         setShowForm(false);
         // 리프레시
         const refreshRes = await fetch(`/api/reviews?productId=${productId}`);
@@ -301,6 +172,7 @@ export default function TasteReview({ productId }: { productId: string }) {
       }
     } catch (err) {
       console.error("Review submit error:", err);
+      toast.show("맛평가를 저장하지 못했어요. 다시 시도해 주세요", { tone: "danger" });
     } finally {
       setSubmitting(false);
     }
@@ -311,175 +183,100 @@ export default function TasteReview({ productId }: { productId: string }) {
   const formSteps = ["consumption", "ease", "rating", "comment"];
   const currentFormStep = formSteps[formStep];
 
+  void submitted;
+
   return (
     <section className="mb-8">
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="text-sm font-extrabold">맛평가</h2>
-        {isLoggedIn && !showForm && (
-          <button
-            onClick={() => {
-              setShowForm(true);
-              setFormStep(0);
-              setSubmitted(false);
-            }}
-            className="text-xs text-primary font-medium hover:underline"
-          >
-            {myReview ? "리뷰 수정" : "평가하기"}
-          </button>
-        )}
-      </div>
+      <SectionHeader
+        title="맛평가"
+        action={isLoggedIn && !showForm ? (
+          <Button size="sm" variant="secondary" icon="edit" onClick={() => { setShowForm(true); setFormStep(0); setSubmitted(false); }}>
+            {myReview ? "리뷰 고치기" : "평가하기"}
+          </Button>
+        ) : undefined}
+      />
 
-      {/* 성공 메시지 */}
-      {submitted && (
-        <div className="bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-xl px-4 py-3 mb-3 text-sm text-green-700 dark:text-green-300">
-          맛평가가 저장되었습니다. 소중한 의견 감사합니다!
-        </div>
-      )}
-
-      {/* 통계 카드 */}
       {stats && <ReviewStatsCard stats={stats} />}
 
-      {/* 리뷰 작성 폼 (토스식: 한 번에 하나씩) */}
+      {/* 리뷰 작성 폼 (한 화면 한 질문) */}
       {showForm && (
-        <div className="bg-card rounded-2xl border-2 border-primary/20 p-5 mt-3 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
-          {/* 진행 바 */}
-          <div className="flex gap-1 mb-5">
-            {formSteps.map((_, i) => (
-              <div
-                key={i}
-                className={`h-1 flex-1 rounded-full transition-colors ${
-                  i <= formStep ? "bg-primary" : "bg-border"
-                }`}
-              />
-            ))}
-          </div>
+        <Card className="mt-3">
+          <Steps total={formSteps.length} current={formStep} className="mb-5" />
 
-          {/* 스텝 1: 섭취 완료율 */}
           {currentFormStep === "consumption" && (
             <div>
-              <h3 className="text-lg font-extrabold mb-1">다 드셨나요?</h3>
-              <p className="text-xs text-muted mb-4">
-                실제로 얼마나 드셨는지 알려주세요
-              </p>
-              <ConsumptionSelector
-                value={consumptionPct}
-                onChange={setConsumptionPct}
-              />
+              <h3 className="text-title font-bold text-ink">다 드셨나요?</h3>
+              <p className="text-label text-ink-2 mb-4">실제로 얼마나 드셨는지 알려주세요</p>
+              <ChoiceList label="섭취량" options={CONSUMPTION_OPTIONS} value={consumptionPct} onChange={setConsumptionPct} />
             </div>
           )}
 
-          {/* 스텝 2: 편의성 */}
           {currentFormStep === "ease" && (
             <div>
-              <h3 className="text-lg font-extrabold mb-1">드시기 편했나요?</h3>
-              <p className="text-xs text-muted mb-4">
-                조리·섭취 편의성을 평가해주세요
-              </p>
-              <EaseSelector value={easeRating} onChange={setEaseRating} />
+              <h3 className="text-title font-bold text-ink">드시기 편했나요?</h3>
+              <p className="text-label text-ink-2 mb-4">조리·섭취 편의성을 평가해 주세요</p>
+              <ChoiceList label="편의성" options={EASE_OPTIONS} value={easeRating} onChange={setEaseRating} />
             </div>
           )}
 
-          {/* 스텝 3: 별점 */}
           {currentFormStep === "rating" && (
             <div>
-              <h3 className="text-lg font-extrabold mb-1">전체적으로 어떠셨나요?</h3>
-              <p className="text-xs text-muted mb-4">
-                맛과 만족도를 별점으로 알려주세요
-              </p>
+              <h3 className="text-title font-bold text-ink">전체적으로 어떠셨나요?</h3>
+              <p className="text-label text-ink-2 mb-4">맛과 만족도를 별점으로 알려주세요</p>
               <div className="flex justify-center py-4">
-                <StarInput value={starRating} onChange={setStarRating} />
+                <RatingInput value={starRating} onChange={setStarRating} />
               </div>
             </div>
           )}
 
-          {/* 스텝 4: 코멘트 */}
           {currentFormStep === "comment" && (
             <div>
-              <h3 className="text-lg font-extrabold mb-1">한마디 남겨주세요</h3>
-              <p className="text-xs text-muted mb-4">
-                다른 분들에게 도움이 됩니다 (선택)
-              </p>
-              <textarea
+              <h3 className="text-title font-bold text-ink">한마디 남겨 주세요</h3>
+              <p className="text-label text-ink-2 mb-4">다른 분들에게 도움이 돼요 (선택)</p>
+              <Textarea
+                aria-label="소감"
                 value={comment}
                 onChange={(e) => setComment(e.target.value)}
-                placeholder="맛, 식감, 양 등에 대한 소감..."
-                rows={3}
-                className="w-full px-4 py-3 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
+                placeholder="맛, 식감, 양 등에 대한 소감"
               />
-              {/* 보호자 대리 작성 체크 */}
-              <label className="flex items-center gap-2 mt-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={isProxy}
-                  onChange={(e) => setIsProxy(e.target.checked)}
-                  className="w-4 h-4 rounded border-border accent-primary"
-                />
-                <span className="text-xs text-muted">
-                  보호자가 대신 작성합니다 (어르신/환자 반응 기록)
-                </span>
+              <label className="flex items-center gap-2 mt-3 min-h-11 cursor-pointer">
+                <input type="checkbox" className="ds-check" checked={isProxy} onChange={(e) => setIsProxy(e.target.checked)} />
+                <span className="text-label text-ink-2">보호자가 대신 작성합니다 (어르신/환자 반응 기록)</span>
               </label>
             </div>
           )}
 
-          {/* 네비게이션 */}
           <div className="flex gap-2 mt-5">
             {formStep > 0 && (
-              <button
-                onClick={() => setFormStep((s) => s - 1)}
-                className="flex-1 border border-border py-2.5 rounded-full text-sm font-medium hover:bg-background transition-colors"
-              >
-                이전
-              </button>
+              <Button variant="secondary" block onClick={() => setFormStep((s) => s - 1)}>이전</Button>
             )}
             {formStep < formSteps.length - 1 ? (
-              <button
-                onClick={() => setFormStep((s) => s + 1)}
-                disabled={formStep === 2 && starRating === 0}
-                className="flex-1 bg-primary text-white py-2.5 rounded-full text-sm font-bold hover:bg-primary-dark transition-colors disabled:opacity-40"
-              >
-                다음
-              </button>
+              <Button block onClick={() => setFormStep((s) => s + 1)} disabled={formStep === 2 && starRating === 0}>다음</Button>
             ) : (
-              <button
-                onClick={handleSubmit}
-                disabled={submitting || starRating === 0}
-                className="flex-1 bg-primary text-white py-2.5 rounded-full text-sm font-bold hover:bg-primary-dark transition-colors disabled:opacity-40"
-              >
-                {submitting ? "저장 중..." : "평가 완료"}
-              </button>
+              <Button block onClick={handleSubmit} disabled={starRating === 0} loading={submitting}>
+                {submitting ? "저장하는 중" : "평가 저장하기"}
+              </Button>
             )}
           </div>
 
-          <button
-            onClick={() => setShowForm(false)}
-            className="w-full mt-2 text-xs text-muted hover:text-foreground transition-colors"
-          >
-            취소
-          </button>
-        </div>
+          <Button variant="ghost" block className="mt-2" onClick={() => setShowForm(false)}>취소</Button>
+        </Card>
       )}
 
-      {/* 비로그인 안내 */}
       {!isLoggedIn && (
-        <p className="text-xs text-muted mt-3">
-          <Link href="/login" className="text-primary hover:underline">
-            로그인
-          </Link>
-          하시면 맛평가를 남길 수 있습니다.
+        <p className="text-label text-ink-2 mt-3">
+          <TextLink href="/login">로그인</TextLink>하시면 맛평가를 남길 수 있어요.
         </p>
       )}
 
-      {/* 리뷰 목록 */}
       {reviews.length > 0 && (
         <div className="mt-4">
-          <h3 className="text-xs font-extrabold text-muted mb-2">
-            평가 {reviews.length}개
-          </h3>
-          <div className="bg-card rounded-2xl border border-border px-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+          <p className="text-label font-bold text-ink-2 mb-2">평가 <span className="num">{reviews.length}</span>개</p>
+          <Card padding="none" className="px-4">
             {reviews.map((r) => (
               <ReviewItem key={r.id} review={r} />
             ))}
-          </div>
+          </Card>
         </div>
       )}
     </section>

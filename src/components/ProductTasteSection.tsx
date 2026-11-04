@@ -7,6 +7,7 @@ import DualRadarChart, {
   calcOverallMatchScore,
 } from "./DualRadarChart";
 import TasteReviewForm from "./TasteReviewForm";
+import { Button, Card, Notice, SectionHeader, cn } from "@/components/ui";
 
 type ReviewTasteData = {
   avgSalty: number;   // 1~5, 0=데이터없음
@@ -216,76 +217,46 @@ export default function ProductTasteSection({ productId, productName, nutrition,
   // 종합 매칭 = 맛 40% + 영양 60% (리스트의 매칭 점수와 동일 기준)
   const matchScore = tasteScore != null ? calcOverallMatchScore(tasteScore, nutritionScore) : null;
 
-  // 점수 색상
-  const scoreColor = (s: number) =>
-    s >= 80 ? "#2EA860" : s >= 60 ? "#D4A843" : s >= 40 ? "#E06030" : "#6E7A8A";
-
   return (
     <section className="mb-8">
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="text-sm font-extrabold">맛·영양 프로필</h2>
-        {taste && (
-          <span className="text-[10px] text-muted">
-            맛 리뷰 {taste.review_count}건
-            {taste.avg_rating > 0 && ` · ⭐ ${(+taste.avg_rating).toFixed(1)}`}
+      <SectionHeader
+        title="맛·영양 프로필"
+        action={taste ? (
+          <span className="text-caption text-ink-2">
+            맛 리뷰 <span className="num">{taste.review_count}</span>건
+            {taste.avg_rating > 0 && <> · 평점 <span className="num">{(+taste.avg_rating).toFixed(1)}</span></>}
           </span>
-        )}
-      </div>
+        ) : undefined}
+      />
 
-      {/* ── 3가지 점수 카드 ── */}
+      {/* ── 3가지 점수 ── */}
       {(tasteScore != null || nutritionScore > 0) && (
         <div className="grid grid-cols-3 gap-2 mb-3">
-          {matchScore != null && (
-            <div className="bg-surface border border-border rounded-xl p-3 text-center">
-              <div className="text-[10px] text-muted mb-1">매칭</div>
-              <div className="text-xl font-extrabold" style={{ color: scoreColor(matchScore), fontFamily: "var(--font-display, Outfit), sans-serif" }}>
-                {matchScore}
-              </div>
-            </div>
-          )}
-          {tasteScore != null && (
-            <div className="bg-surface border border-border rounded-xl p-3 text-center">
-              <div className="text-[10px] text-muted mb-1">맛</div>
-              <div className="text-xl font-extrabold" style={{ color: scoreColor(tasteScore), fontFamily: "var(--font-display, Outfit), sans-serif" }}>
-                {tasteScore}
-              </div>
-            </div>
-          )}
-          <div className="bg-surface border border-border rounded-xl p-3 text-center">
-            <div className="text-[10px] text-muted mb-1">영양</div>
-            <div className="text-xl font-extrabold" style={{ color: scoreColor(nutritionScore), fontFamily: "var(--font-display, Outfit), sans-serif" }}>
-              {nutritionScore}
-            </div>
-          </div>
+          {matchScore != null && <ScoreTile label="매칭" score={matchScore} />}
+          {tasteScore != null && <ScoreTile label="맛" score={tasteScore} />}
+          <ScoreTile label="영양" score={nutritionScore} />
         </div>
       )}
 
       {!userTasteProfile && (
-        <p className="text-[10px] text-center text-muted mb-3 bg-surface/50 rounded-lg py-2">
-          온보딩을 완료하면 맛 매칭 점수를 볼 수 있어요
-        </p>
+        <Notice className="mb-3">온보딩을 마치면 맛 매칭 점수를 볼 수 있어요</Notice>
       )}
 
-      {/* ── 이중 레이더 차트 (점수 헤드라인 없이, 시각적 비교만) ── */}
-      <div className="border border-border rounded-xl p-4 mb-3">
+      {/* ── 이중 레이더 차트 ── */}
+      <Card className="mb-3">
         <DualRadarChart
           taste={tasteProfile}
           userTaste={userTasteProfile}
           nutrition={nutritionProfile}
           mode="dual"
-          size={240}
         />
-      </div>
+      </Card>
 
       {/* 맛 리뷰 버튼/폼 */}
       {!showReviewForm ? (
-        <button
-          onClick={() => setShowReviewForm(true)}
-          className="w-full border border-border rounded-xl py-3 text-sm font-medium text-muted hover:text-foreground hover:border-primary/30 transition-colors"
-          style={{ minHeight: "44px" }}
-        >
-          🍽️ 이 제품 맛 평가하기
-        </button>
+        <Button variant="secondary" block icon="edit" onClick={() => setShowReviewForm(true)}>
+          이 제품 맛 평가하기
+        </Button>
       ) : (
         <TasteReviewForm
           productId={productId}
@@ -298,5 +269,23 @@ export default function ProductTasteSection({ productId, productName, nutrition,
         />
       )}
     </section>
+  );
+}
+
+/* 점수 칸 — 점수대별 색은 고정 클래스 */
+const SCORE_TEXT = {
+  high: "text-positive",
+  good: "text-brand-ink",
+  mid: "text-caution",
+  low: "text-ink-2",
+} as const;
+
+function ScoreTile({ label, score }: { label: string; score: number }) {
+  const cls = score >= 80 ? SCORE_TEXT.high : score >= 60 ? SCORE_TEXT.good : score >= 40 ? SCORE_TEXT.mid : SCORE_TEXT.low;
+  return (
+    <Card padding="sm" className="flex flex-col items-center gap-1 text-center">
+      <span className="text-caption text-ink-2">{label}</span>
+      <span className={cn("num text-title font-bold leading-none", cls)}>{score}</span>
+    </Card>
   );
 }
