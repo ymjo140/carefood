@@ -17,6 +17,7 @@ from coupang_match import accept
 ap = argparse.ArgumentParser()
 ap.add_argument("--max", type=int, default=1700); ap.add_argument("--per-minute", type=float, default=30)
 ap.add_argument("--dry", action="store_true", help="DB 에 쓰지 않음")
+ap.add_argument("--minutes", type=float, default=0, help="이 시간이 지나면 남은 것은 다음 실행으로 (0 = 끝까지)")
 a = ap.parse_args()
 
 SB = (os.environ.get("SUPABASE_URL") or os.environ.get("NEXT_PUBLIC_SUPABASE_URL") or "").rstrip("/") + "/rest/v1/"
@@ -32,7 +33,10 @@ def rest(method, path, body=None, prefer=None):
         t = r.read()
         return json.loads(t) if t else None
 
+PAUSED = False
 def pause(hours, note):
+    global PAUSED
+    PAUSED = True
     until = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() + hours * 3600))
     if not a.dry:
         rest("PATCH", "coupang_sync_state?id=eq.search", {"paused_until": until, "note": note[:300], "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())})
@@ -61,13 +65,13 @@ def target(p):
         mall = p["mall_name"]
         brand = (re.match(r"\s*\[([^\]]+)\]", mall) or [None, ""])[1]
         kw = re.sub(r"\(택\s*\d\)|\d+\s*종|\s*\([^)]*[xX×*][^)]*\)", " ", mall).replace("[", " ").replace("]", " ")
-        return {"keyword": re.sub(r"\s+", " ", kw).strip()[:60], "brand": brand, "name": p["name"], "mall_name": mall, "volume": p.get("volume") or ""}
+        return {"keyword": re.sub(r"\s+", " ", kw).strip()[:50], "brand": brand, "name": p["name"], "mall_name": mall, "volume": p.get("volume") or ""}
     name = p.get("name") or ""
     maker = short_maker(p.get("manufacturer"))
     generic = len(norm(name)) <= 5
     kw = f"{maker} {name}" if generic and maker and norm(maker) not in norm(name) else name
     g = p.get("serving_size_g") or p.get("total_weight_g")
-    return {"keyword": kw[:60], "brand": maker if generic else "", "name": name, "mall_name": name + (f" {float(g):g}g" if g else ""), "volume": ""}
+    return {"keyword": kw.strip()[:50], "brand": maker if generic else "", "name": name, "mall_name": name + (f" {float(g):g}g" if g else ""), "volume": ""}
 
 gap = 60.0 / a.per_minute
 found = 0; done = 0; t0 = time.time()
@@ -78,8 +82,12 @@ for p in queue:
     look = {"product_id": p["id"], "keyword": tg["keyword"], "checked_at": NOW()}
     try:
         d = search(tg["keyword"], 10)
-        if str(d.get("rCode")) != "0":
-            pause(6, f"rCode {d.get('rCode')} {d.get('rMessage')}"); break
+        rc = str(d.get("rCode"))
+        if rc != "0":
+            msg = f"rCode {rc} {d.get('rMessage')}"
+            if rc in ("401", "403", "429") or "limit" in str(d.get("rMessage")).lower():
+                pause(6, msg); break
+            raise ValueError(msg)  # 검색어 문제 등 — 이 제품만 건너뛴다
         items = ((d.get("data") or {}).get("productData")) or []
         ok = [it for it in items if accept(tg, it)[0]]
         if ok:
@@ -104,5 +112,10 @@ for p in queue:
         rest("POST", "coupang_lookups?on_conflict=product_id", look, prefer="resolution=merge-duplicates,return=minimal")
     done += 1
     if done % 100 == 0: print(f"{done}/{len(queue)} · 찾음 {found} · {time.time()-t0:.0f}s", flush=True)
+    if a.minutes and time.time() - t0 > a.minutes * 60:
+        print("시간이 다 돼서 남은 것은 다음 실행으로"); break
     time.sleep(max(0, gap - (time.time() - started)))
 print("끝", f"{done}개 검색 · 찾음 {found}", f"{time.time()-t0:.0f}s")
+# 쉬지 않았고 대기열이 남았으면 다음 실행을 이어서 (Actions 가 이 파일을 보고 다시 시작)
+if not PAUSED and done > 0 and len(queue) >= a.max * 0.5:
+    open("coupang-continue", "w").write("1")
