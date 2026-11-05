@@ -20,6 +20,7 @@ ap = argparse.ArgumentParser()
 ap.add_argument("csv"); ap.add_argument("--table", required=True)
 ap.add_argument("--apply", action="store_true"); ap.add_argument("--unlink", nargs="*", default=[])
 ap.add_argument("--id-col", default="kurly_id")
+ap.add_argument("--sql", default="", help="DB 에 쓰지 않고 같은 내용을 SQL 파일로")
 a = ap.parse_args()
 
 SB = os.environ["NEXT_PUBLIC_SUPABASE_URL"].rstrip("/") + "/rest/v1/"
@@ -59,6 +60,32 @@ for r in rows:
     plan.append((r[a.id_col], body, action))
 
 print("미리보기" if not a.apply else "반영", a.table, dict(Counter(p[2] for p in plan)), "· 판정", dict(Counter(r["verdict"] for r in rows)))
+
+def sql_lit(v):
+    if v is None: return "null"
+    return "'" + str(v).replace("'", "''") + "'"
+
+if a.sql:
+    # Supabase SQL Editor 에 붙여 넣어 실행하는 같은 내용 (한 트랜잭션)
+    with open(a.sql, "w", encoding="utf8") as f:
+        f.write(f"-- {a.table} 검증 반영 · {NOW} · {dict(Counter(p[2] for p in plan))}\n-- 되돌리기: update {a.table} set matched_product_id = prev_matched_product_id, match_status = 'matched' where prev_matched_product_id is not null;\nbegin;\n")
+        rec = [p for p in plan]
+        for i in range(0, len(rec), 500):
+            vals = ",\n".join(
+                f"({sql_lit(rid)}::uuid, {sql_lit(b['verify_status'])}, {sql_lit(b.get('verify_note'))}, {sql_lit(b.get('label_report_no'))}, {sql_lit(b.get('true_product_id'))}::uuid)"
+                for rid, b, _ in rec[i:i+500])
+            f.write(f"update {a.table} t set verify_status = v.s, verify_note = v.n, label_report_no = v.r, true_product_id = v.tp, verified_at = now()\nfrom (values\n{vals}\n) as v(id, s, n, r, tp) where t.id = v.id;\n")
+        rel = [(rid, b) for rid, b, act in plan if act == "relink"]
+        for i in range(0, len(rel), 500):
+            vals = ",\n".join(f"({sql_lit(rid)}::uuid, {sql_lit(b['matched_product_id'])}::uuid)" for rid, b in rel[i:i+500])
+            f.write(f"update {a.table} t set prev_matched_product_id = t.matched_product_id, matched_product_id = v.np\nfrom (values\n{vals}\n) as v(id, np) where t.id = v.id and t.prev_matched_product_id is null;\n")
+        unl = [rid for rid, b, act in plan if act == "unlink"]
+        for i in range(0, len(unl), 500):
+            ids = ",".join(sql_lit(x) + "::uuid" for x in unl[i:i+500])
+            f.write(f"update {a.table} set prev_matched_product_id = matched_product_id, matched_product_id = null, match_status = 'verify_unlinked' where id in ({ids}) and prev_matched_product_id is null;\n")
+        f.write("commit;\n")
+    print("SQL 저장", a.sql)
+
 if not a.apply:
     raise SystemExit(0)
 
