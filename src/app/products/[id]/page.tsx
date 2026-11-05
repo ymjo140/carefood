@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { PLATFORM_LABELS, AFFILIATE_PLATFORMS, COUPANG_DISCLOSURE } from "@/lib/platforms";
 import type { Metadata } from "next";
 import { cache } from "react";
 import { createServiceRoleClient } from "@/lib/supabase/server";
@@ -65,11 +66,6 @@ type PriceInfo = {
   image_url: string | null;
 };
 
-const PLATFORM_LABELS: Record<string, string> = {
-  kurly: "컬리", oasis: "오아시스", homeplus: "홈플러스", "11st": "11번가",
-  danawa: "다나와", greating: "그리팅", yundiet: "윤식단", sixmeal: "식스밀",
-  designmeal: "디자인밀", makesalad: "메이크샐러드",
-};
 
 /* ───── 건강점수 게이지 ───── */
 const SCORE_TONE = {
@@ -451,6 +447,9 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
               </div>
             )}
           </Card>
+          {sortedPrices.some((pp) => AFFILIATE_PLATFORMS.has(pp.platform)) && (
+            <p className="text-caption text-ink-2 mt-2">{COUPANG_DISCLOSURE}</p>
+          )}
         </section>
       )}
 

@@ -67,7 +67,7 @@ const CONCERN_LABELS: Record<string, string> = {
 const SERVICE_NAMES: Record<string, string> = {
   greating: "그리팅", yundiet: "윤식단", sixmeal: "식스밀",
   designmeal: "디자인밀", makesalad: "메이크샐러드",
-  "11st": "11번가", kurly: "컬리", oasis: "오아시스", homeplus: "홈플러스",
+  "11st": "11번가", kurly: "컬리", oasis: "오아시스", homeplus: "홈플러스", coupang: "쿠팡",
 };
 
 function getUserId(): string | null {

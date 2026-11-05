@@ -40,6 +40,21 @@ def name_overlap(mall_name, true_name):
     bg = lambda x: {x[i:i+2] for i in range(len(x) - 1)}
     B = bg(b_)
     return len(B & bg(a_)) / max(1, len(B))
+def core(name):
+    s = re.sub(r"\[[^\]]*\]|\([^)]*\)", " ", name or "")
+    s = re.sub(r"\d+(\.\d+)?\s*(kg|g|ml|l|개입|개|입|팩|봉|캔|병|포|구|매|인분)\b", " ", s, flags=re.I)
+    s = re.sub(r"\d+\s*종|택\s*\d|x\s*\d+|\*\s*\d+", " ", s, flags=re.I)
+    return re.sub(r"[^0-9a-z가-힣]", "", s.lower())
+
+def fwd_ok(r):
+    """판매처 이름의 핵심 낱말이 진짜 제품 이름에 다 들어 있고 브랜드도 맞음 (예: [비비고] 미역국 → 비비고 소고기미역국)"""
+    nm = lambda x: re.sub(r"[^0-9a-z가-힣]", "", (x or "").lower())
+    c = core(r.get("kurly_name") or r.get("mall_name")); bg = lambda x: {x[i:i+2] for i in range(len(x) - 1)}
+    B = bg(c); ov = len(B & bg(nm(r.get("true_name")))) / max(1, len(B))
+    m = re.match(r"\s*\[([^\]]+)\]", r.get("kurly_name") or r.get("mall_name") or ""); b = nm(m.group(1)) if m else ""
+    brand = (not b) or b[:3] in nm(r.get("true_name")) or b[:3] in nm(r.get("true_maker"))
+    return ov >= 0.6 and brand
+
 plan = []
 for r in rows:
     v = r["verdict"]
@@ -48,7 +63,7 @@ for r in rows:
             "verified_at": NOW}
     action = "record"
     ov = name_overlap(r.get("kurly_name") or r.get("mall_name"), r.get("true_name"))
-    if v == "relink" and r.get("true_product_id") and ov < 0.35:
+    if v == "relink" and r.get("true_product_id") and ov < 0.35 and not fwd_ok(r):
         body["verify_status"] = "relink_check"
         body["verify_note"] = f"라벨 번호의 제품 이름이 판매처 이름과 다름(겹침 {ov:.2f}) — 여러 맛 묶음일 수 있어 사람 확인"
     elif v == "relink" and r.get("true_product_id"):

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { PLATFORM_LABELS } from "@/lib/platforms";
 import Link from "next/link";
 import { Badge, Card, Icon, Price, SectionHeader, TextLink } from "@/components/ui";
 
@@ -26,12 +27,6 @@ type QuickProduct = {
   product_prices: { platform: string; price: number; url: string; image_url: string | null }[];
 };
 
-const PLATFORM_LABELS: Record<string, string> = {
-  kurly: "컬리",
-  oasis: "오아시스",
-  homeplus: "홈플러스",
-  "11st": "11번가",
-};
 
 /**
  * 홈 개인화 섹션 — 재방문 사용자에게 빠른 추천 카드 표시

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { PLATFORM_LABELS } from "@/lib/platforms";
 import Link from "next/link";
 import { Price, SectionHeader } from "@/components/ui";
 
@@ -14,9 +15,6 @@ type SimilarProduct = {
   product_prices: { platform: string; price: number; url: string; image_url: string | null }[];
 };
 
-const PLATFORM_LABELS: Record<string, string> = {
-  kurly: "컬리", oasis: "오아시스", homeplus: "홈플러스", "11st": "11번가",
-};
 
 export default function HomeSimilarUsers() {
   const [products, setProducts] = useState<SimilarProduct[]>([]);

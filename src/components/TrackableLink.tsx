@@ -1,5 +1,7 @@
 "use client";
 
+import { AFFILIATE_PLATFORMS } from "@/lib/platforms";
+
 /**
  * 클릭 트래킹이 포함된 외부 링크 컴포넌트
  *
@@ -49,7 +51,8 @@ export default function TrackableLink({
     <a
       href={href}
       target="_blank"
-      rel="noopener noreferrer"
+      // 제휴(수수료) 링크는 sponsored 로 표시
+      rel={AFFILIATE_PLATFORMS.has(platform) ? "sponsored noopener noreferrer" : "noopener noreferrer"}
       onClick={handleClick}
       className={className}
       style={style}
