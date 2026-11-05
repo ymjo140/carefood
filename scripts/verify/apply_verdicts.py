@@ -12,7 +12,7 @@ not_in_db  : prev_matched_product_id ← 지금 값, matched_product_id ← null
 'verify_unlinked' 는 기존 매칭 스크립트가 다시 붙이지 않는 상태값이다 (pending·error·low_score 만 다시 본다).
 되돌리기: prev_matched_product_id 를 matched_product_id 로, match_status 를 matched 로.
 """
-import argparse, csv, json, os, time, urllib.request
+import argparse, csv, json, os, re, time, urllib.request
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 
@@ -28,6 +28,17 @@ H = {"apikey": KEY, "Authorization": f"Bearer {KEY}", "Content-Type": "applicati
 NOW = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
 rows = list(csv.DictReader(open(a.csv, encoding="utf-8-sig")))
+
+def _n(s):
+    s = re.sub(r"\[[^\]]*\]|\([^)]*\)", " ", s or "").lower()
+    return re.sub(r"[^0-9a-z가-힣]", "", s)
+
+def name_overlap(mall_name, true_name):
+    """진짜 제품 이름의 글자 2개씩 중 판매처 이름에 있는 비율 — 여러 맛 묶음에서 다른 맛 번호를 읽은 경우를 거른다"""
+    a_, b_ = _n(mall_name), _n(true_name)
+    bg = lambda x: {x[i:i+2] for i in range(len(x) - 1)}
+    B = bg(b_)
+    return len(B & bg(a_)) / max(1, len(B))
 plan = []
 for r in rows:
     v = r["verdict"]
@@ -35,7 +46,11 @@ for r in rows:
             "label_report_no": r.get("label_report_no") or None, "true_product_id": r.get("true_product_id") or None,
             "verified_at": NOW}
     action = "record"
-    if v == "relink" and r.get("true_product_id"):
+    ov = name_overlap(r.get("kurly_name") or r.get("mall_name"), r.get("true_name"))
+    if v == "relink" and r.get("true_product_id") and ov < 0.35:
+        body["verify_status"] = "relink_check"
+        body["verify_note"] = f"라벨 번호의 제품 이름이 판매처 이름과 다름(겹침 {ov:.2f}) — 여러 맛 묶음일 수 있어 사람 확인"
+    elif v == "relink" and r.get("true_product_id"):
         body.update({"prev_matched_product_id": r["matched_product_id"], "matched_product_id": r["true_product_id"]})
         action = "relink"
     elif v == "not_in_db" or v in a.unlink:
