@@ -56,7 +56,9 @@ def label_images(goods_no):
 def ocr(url):
     from PIL import Image
     im = Image.open(io.BytesIO(get(url))).convert("L")
-    if im.width < 1400: im = im.resize((im.width * 2, im.height * 2))
+    # 작은 라벨만 키운다 (긴 상세 이미지는 그대로 — 키우면 너무 느림)
+    if im.width < 1000 and im.height < 2500: im = im.resize((im.width * 2, im.height * 2))
+    elif im.width > 1600: im = im.resize((1600, int(im.height * 1600 / im.width)))
     # 아주 긴 상세 이미지는 위아래로 잘라 읽는다
     parts = [im] if im.height <= 6000 else [im.crop((0, y, im.width, min(im.height, y + 5000))) for y in range(0, im.height, 4800)]
     texts = []
@@ -64,7 +66,7 @@ def ocr(url):
         with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
             part.save(f.name); path = f.name
         try:
-            r = subprocess.run(["tesseract", path, "-", "-l", "kor+eng", "--psm", "6"], capture_output=True, timeout=240)
+            r = subprocess.run(["tesseract", path, "-", "-l", "kor+eng", "--oem", "1", "--psm", "6"], capture_output=True, timeout=600)
             texts.append(r.stdout.decode("utf8", "ignore"))
         finally:
             os.unlink(path)

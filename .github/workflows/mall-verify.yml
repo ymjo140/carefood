@@ -25,7 +25,7 @@ jobs:
       - id: m
         run: |
           MODE="${{ github.event.inputs.mode }}"
-          [ -z "$MODE" ] && MODE=$(tr -d ' \n' < scripts/verify/input/RUN)
+          [ -z "$MODE" ] && MODE=$(awk 'NR==1{print $1}' scripts/verify/input/RUN)   # 첫 낱말: test | full
           echo "mode=$MODE" >> "$GITHUB_OUTPUT"
           if [ "$MODE" = "full" ]; then echo 'shards=[0,1,2,3,4,5,6,7,8,9,10,11]' >> "$GITHUB_OUTPUT"; else echo 'shards=[0]' >> "$GITHUB_OUTPUT"; fi
 
@@ -52,8 +52,13 @@ jobs:
         shard: ${{ fromJSON(needs.plan.outputs.shards) }}
     steps:
       - uses: actions/checkout@v4
-      - name: OCR 도구
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq tesseract-ocr tesseract-ocr-kor && pip install -q pillow
+      - name: OCR 도구 (로컬과 같은 tessdata_best 한국어 모델)
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq tesseract-ocr && pip install -q pillow
+          mkdir -p "$HOME/tessdata"
+          for l in kor eng osd; do curl -sSL -o "$HOME/tessdata/$l.traineddata" "https://raw.githubusercontent.com/tesseract-ocr/tessdata_best/main/$l.traineddata"; done
+          echo "TESSDATA_PREFIX=$HOME/tessdata" >> "$GITHUB_ENV"
+          echo "OMP_THREAD_LIMIT=1" >> "$GITHUB_ENV"   # 작업마다 한 스레드 — 동시에 여러 장 읽을 때 서로 막지 않게
       - name: 상품정보 이미지 OCR
         run: |
           if [ "${{ needs.plan.outputs.mode }}" = "full" ]; then
