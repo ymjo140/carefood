@@ -1,0 +1,35 @@
+# 쿠팡 가격 자동 검색 — 1시간마다 아직 안 찾아본 제품을 우선순위대로 약 1,700개 (1분 30회 → 한 번에 약 57분)
+# 한 번 돌면 거의 1시간이 걸려서 1시간마다 = 쉬지 않고 계속. 더 자주 돌리면 두 작업이 겹쳐 한도(1분 50회)를 넘는다.
+# 403 이 나오면 coupang_sync_state 에 6시간 쉬기를 적고 멈춘다. 이 파일을 바꿔 푸시하면 바로 한 번 돈다.
+name: coupang-sync
+
+on:
+  schedule:
+    - cron: "7 * * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: [".github/workflows/coupang-sync.yml"]
+
+concurrency:
+  group: coupang-sync
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    steps:
+      - uses: actions/checkout@v4
+      - name: 쿠팡 검색 → product_prices · coupang_lookups
+        env:
+          COUPANG_ACCESS_KEY: ${{ secrets.COUPANG_ACCESS_KEY }}
+          COUPANG_SECRET_KEY: ${{ secrets.COUPANG_SECRET_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: python3 scripts/verify/coupang_sync.py --max 1700 --per-minute 30
