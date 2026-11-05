@@ -33,7 +33,8 @@ def get(url, headers=None, timeout=30, tries=3):
             if i == tries - 1: raise
             time.sleep(1.5 * (i + 1))
 
-REPORT_RE = re.compile(r"(?:품목\s*(?:제조)?\s*보고\s*번호|보고\s*번호|품목보고)[^0-9]{0,14}([0-9][0-9\s\-]{8,22}[0-9])")
+# OCR 이 '품목'을 '품복·품옥·풍목'으로 읽는 일이 잦다
+REPORT_RE = re.compile(r"(?:[품풍][목복옥묵]\s*(?:제조)?\s*[보브]고\s*[번빈]호|보고\s*번호|품목보고)[^0-9]{0,14}([0-9][0-9\s\-]{8,22}[0-9])")
 ANY_NUM_RE = re.compile(r"(?<!\d)(\d{8,12}-?\d{1,6})(?!\d)")
 
 def parse(text):
@@ -46,11 +47,12 @@ def parse(text):
         n2 = n.replace("-", "")
         if 10 <= len(n2) <= 16 and n2.startswith(("19", "20")) and n2 not in nums: nums.append(n2)
     maker = ""
-    mm = re.search(r"(?:제조원|제조업소[^\n]{0,12}|제조사|제조자|생산자)\s*[:：_]?\s*([^\n/]{2,40})", t)
-    if mm: maker = mm.group(1).strip()
+    mm = re.search(r"(?:제조원|제조\s*[·및]?\s*판매원|제조업소[^\n:]{0,12}|업소명[^\n:]{0,8}|제조사|제조자|생산자)\s*[:：_]?\s*([^\n/]{2,40})", t)
+    if mm: maker = re.sub(r"^(및\s*소재지|명)\s*[:：]?\s*", "", mm.group(1).strip())
     kcal = None
-    km = re.search(r"100\s*m?[lg]\s*(?:당|기준)?[^\n]{0,30}?(\d{1,4})\s*kcal", t, re.I) or re.search(r"(\d{1,4})\s*kcal", t, re.I)
-    if km: kcal = int(km.group(1))
+    KC = r"k\s*[ce]\s*a\s*[l1I|]"
+    km = re.search(r"100\s*m?[lg]\s*(?:당|기준)?[^\n]{0,30}?(\d{1,4})\s*" + KC, t, re.I) or re.search(r"(\d{1,4})\s*" + KC, t, re.I)
+    if km and int(km.group(1)) > 0: kcal = int(km.group(1))
     return nums, maker, kcal
 
 def norm(s):
@@ -116,9 +118,13 @@ def judge(g):
         elif maker or kcal:
             ms = maker_sim(maker, p.get("manufacturer"))
             cal = p.get("calories")
-            kcal_ok = kcal is not None and cal not in (None, "") and abs(float(cal) - kcal) <= max(3, 0.03 * kcal)
-            if ms >= 0.5 and (kcal is None or kcal_ok): res["verdict"] = "maker_kcal_same"
-            elif (maker and ms < 0.2) or (kcal is not None and cal not in (None, "") and not kcal_ok): res["verdict"] = "maker_kcal_diff"
+            has_cal = kcal is not None and cal not in (None, "")
+            kcal_ok = has_cal and abs(float(cal) - kcal) <= max(5, 0.06 * kcal)
+            kcal_far = has_cal and abs(float(cal) - kcal) > max(15, 0.15 * kcal)
+            # 같다: 제조원이 맞고 kcal 가 어긋나지 않음 / 다르다: 제조원이 확실히 다르고 kcal 도 맞지 않음, 또는 kcal 가 크게 다름
+            if ms >= 0.5 and not kcal_far: res["verdict"] = "maker_kcal_same"
+            elif kcal_ok and not maker: res["verdict"] = "maker_kcal_same"
+            elif (maker and ms < 0.2 and not kcal_ok) or kcal_far: res["verdict"] = "maker_kcal_diff"
             else: res["verdict"] = "unknown"
             res["note"] = f"제조원 유사 {ms:.2f} · kcal {kcal} ↔ {cal}"
         else:
