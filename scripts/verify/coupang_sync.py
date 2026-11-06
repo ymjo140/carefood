@@ -50,8 +50,8 @@ except urllib.error.HTTPError as e:
 if state.get("paused_until") and state["paused_until"] > time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime()):
     raise SystemExit(f"쉬는 중 ({state['paused_until']} 까지): {state.get('note')}")
 
-queue = rest("GET", f"coupang_queue?select=id,name,manufacturer,serving_size_g,total_weight_g,mall_name,volume,priority&order=priority.asc,id.asc&limit={a.max}") or []
-print("대기열에서", len(queue), "개")
+QUEUE_SQL = "coupang_queue?select=id,name,manufacturer,serving_size_g,total_weight_g,mall_name,volume,priority&order=priority.asc,id.asc&limit=1000"
+# Supabase 는 한 번에 1,000줄까지만 준다 → 1,000개씩 받아 가며 계속 (처리한 제품은 coupang_lookups 에 기록돼 대기열에서 빠진다)
 
 def short_maker(m):
     s = re.sub(r"\(주\)|㈜|주식회사|유한회사|농업회사법인|영농조합법인|\(유\)|[0-9]*\s*공장|본사|지점|센터", " ", m or "")
@@ -74,9 +74,27 @@ def target(p):
     return {"keyword": kw.strip()[:50], "brand": maker if generic else "", "name": name, "mall_name": name + (f" {float(g):g}g" if g else ""), "volume": ""}
 
 gap = 60.0 / a.per_minute
-found = 0; done = 0; t0 = time.time()
+found = 0; done = 0; t0 = time.time(); stop = False; out_of_time = False; batch = [None]
 NOW = lambda: time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-for p in queue:
+
+def next_batch():
+    b = rest("GET", QUEUE_SQL) or []
+    print("대기열에서", len(b), "개 받음", flush=True)
+    return b
+
+SEEN = set()
+def items():
+    """기록에 실패한 제품이 대기열에 남아도 같은 실행에서 다시 돌지 않게"""
+    global batch, stop
+    while not stop:
+        batch = [p for p in next_batch() if p["id"] not in SEEN]
+        if not batch: return
+        for p in batch:
+            if stop: return
+            SEEN.add(p["id"])
+            yield p
+
+for p in items():
     started = time.time()
     tg = target(p)
     look = {"product_id": p["id"], "keyword": tg["keyword"], "checked_at": NOW()}
@@ -86,7 +104,7 @@ for p in queue:
         if rc != "0":
             msg = f"rCode {rc} {d.get('rMessage')}"
             if rc in ("401", "403", "429") or "limit" in str(d.get("rMessage")).lower():
-                pause(6, msg); break
+                pause(6, msg); stop = True; break
             raise ValueError(msg)  # 검색어 문제 등 — 이 제품만 건너뛴다
         items = ((d.get("data") or {}).get("productData")) or []
         ok = [it for it in items if accept(tg, it)[0]]
@@ -104,18 +122,18 @@ for p in queue:
             look.update({"status": "none", "reason": f"결과 {len(items)}개 중 맞는 것 없음"})
     except urllib.error.HTTPError as e:
         if "coupang" in (e.url or "") or e.code in (401, 403, 429):
-            pause(6, f"HTTP {e.code}"); break
+            pause(6, f"HTTP {e.code}"); stop = True; break
         look.update({"status": "error", "reason": f"HTTP {e.code}"})
     except Exception as e:
         look.update({"status": "error", "reason": str(e)[:200]})
     if not a.dry:
         rest("POST", "coupang_lookups?on_conflict=product_id", look, prefer="resolution=merge-duplicates,return=minimal")
     done += 1
-    if done % 100 == 0: print(f"{done}/{len(queue)} · 찾음 {found} · {time.time()-t0:.0f}s", flush=True)
-    if a.minutes and time.time() - t0 > a.minutes * 60:
-        print("시간이 다 돼서 남은 것은 다음 실행으로"); break
+    if done % 100 == 0: print(f"{done} · 찾음 {found} · {time.time()-t0:.0f}s", flush=True)
+    if (a.minutes and time.time() - t0 > a.minutes * 60) or done >= a.max:
+        print("시간·개수가 다 돼서 남은 것은 다음 실행으로"); out_of_time = True; stop = True; break
     time.sleep(max(0, gap - (time.time() - started)))
 print("끝", f"{done}개 검색 · 찾음 {found}", f"{time.time()-t0:.0f}s")
 # 쉬지 않았고 대기열이 남았으면 다음 실행을 이어서 (Actions 가 이 파일을 보고 다시 시작)
-if not PAUSED and done > 0 and len(queue) >= a.max * 0.5:
+if not PAUSED and out_of_time:
     open("coupang-continue", "w").write("1")
