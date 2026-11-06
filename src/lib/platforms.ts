@@ -13,4 +13,5 @@ export const platformLabel = (key: string | null | undefined) => (key ? PLATFORM
 /** 수수료를 받는(제휴) 판매처 */
 export const AFFILIATE_PLATFORMS = new Set(["coupang"]);
 
-export const COUPANG_DISCLOSURE = "쿠팡 파트너스 활동을 통해 케어푸드가 일정액의 수수료를 제공받을 수 있어요";
+// 쿠팡 파트너스 대가성 문구 — 정해진 표현(합쇼체) 그대로
+export const COUPANG_DISCLOSURE = "쿠팡 파트너스 활동을 통해 케어푸드가 일정액의 수수료를 제공받습니다";
