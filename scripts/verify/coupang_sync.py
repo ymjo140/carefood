@@ -117,6 +117,8 @@ for p in items():
                     "product_id": p["id"], "platform": "coupang", "price": look["price"], "url": best.get("productUrl"),
                     "image_url": best.get("productImage"), "is_available": True, "last_crawled_at": NOW()},
                     prefer="resolution=merge-duplicates,return=minimal")
+                # 가격이 생겼으니 탐색 '구매 가능만'·AI 추천에 나오게
+                rest("PATCH", f"products?id=eq.{p['id']}&is_purchasable=eq.false", {"is_purchasable": True}, prefer="return=minimal")
             found += 1
         else:
             look.update({"status": "none", "reason": f"결과 {len(items)}개 중 맞는 것 없음"})
