@@ -57,7 +57,7 @@ for l, tg, why in random.sample(bad, min(60, len(bad))): print((tg.get("maker") 
 if a.apply:
     # 바로 지우지 않고 '다시 확인'으로 둔다 → coupang_sync.py 가 지금 규칙으로 다시 검색해 맞는 것으로 바꾸거나 숨긴다
     groups = {}
-    for l, tg, why in bad: groups.setdefault(why, []).append(l["product_id"])
+    for l, tg, why in bad: groups.setdefault(why.split(" (")[0], []).append(l["product_id"])  # 이유 갈래별로 묶어 한 번에
     for why, ids in groups.items():
         for i in range(0, len(ids), 150):
             rest("PATCH", f"coupang_lookups?status=eq.found&product_id=in.({','.join(ids[i:i+150])})", {"status": "recheck", "reason": f"다시 확인: {why}"[:200]})
