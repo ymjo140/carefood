@@ -46,7 +46,7 @@ const HOW_IT_WORKS = [
 const MORE_LINKS = [
   { href: "/weekly-box", title: "식단 리스트", desc: "AI 추천 · 따라하기 식단 모아보기" },
   { href: "/products", title: "건강식단 비교", desc: "5곳 서비스 한눈에 비교" },
-  { href: "/community", title: "커뮤니티", desc: "식단 공유 & 공구" },
+  { href: "/community", title: "커뮤니티", desc: "식단 공유 · 따라하기" },
   { href: "/vendor/apply", title: "업체 입점", desc: "34만 DB에 제품 등록" },
 ];
 

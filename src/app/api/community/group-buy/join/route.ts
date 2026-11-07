@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { getActorId, noActor } from "@/lib/actor-server";
+import { GROUP_BUY_ENABLED } from "@/lib/features";
 
 /** POST /api/community/group-buy/join — 공구 참여 */
 export async function POST(request: NextRequest) {
@@ -33,7 +34,7 @@ export async function POST(request: NextRequest) {
       .eq("user_id", user_id)
       .maybeSingle();
 
-    if (existing) return NextResponse.json({ error: "이미 참여 중입니다" }, { status: 400 });
+    if (existing) return NextResponse.json({ error: GROUP_BUY_ENABLED ? "이미 참여했어요" : "이미 관심 표시했어요", already: true }, { status: 400 });
 
     // 참여
     await sb.from("group_buy_participants").insert({ group_buy_id, user_id });
@@ -42,8 +43,8 @@ export async function POST(request: NextRequest) {
     const newCount = (groupBuy.current_count || 0) + 1;
     const updates: Record<string, unknown> = { current_count: newCount, updated_at: new Date().toISOString() };
 
-    // 목표 달성 체크
-    if (newCount >= groupBuy.target_count) {
+    // 목표 달성 체크 — 판매(결제·배송)를 열기 전엔 관심 수만 센다 (src/lib/features.ts)
+    if (GROUP_BUY_ENABLED && newCount >= groupBuy.target_count) {
       updates.status = "achieved";
       updates.achieved_at = new Date().toISOString();
     }
@@ -53,7 +54,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       ok: true,
       current_count: newCount,
-      achieved: newCount >= groupBuy.target_count,
+      achieved: GROUP_BUY_ENABLED && newCount >= groupBuy.target_count,
     });
   } catch {
     return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });

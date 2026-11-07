@@ -8,6 +8,7 @@ import {
   Spinner, TextLink, buttonClass, cn,
 } from "@/components/ui";
 import { getClientActorId } from "@/lib/actor-client";
+import { InterestList } from "./InterestList";
 
 /* ───── 타입 ───── */
 type NutrientGrade = {
@@ -236,29 +237,8 @@ function ReportContent() {
         </Card>
       )}
 
-      {/* ── 관련 공구 ── */}
-      {groupBuys.length > 0 && (
-        <Card>
-          <SectionHeader title="진행 중인 공구" />
-          <div className="flex flex-col gap-2">
-            {groupBuys.map(gb => (
-              <Link href="/community" key={gb.id}
-                className="flex items-center justify-between gap-3 bg-sunken rounded-md px-3 py-2.5 border border-transparent hover:border-line-strong transition-colors">
-                <div className="min-w-0">
-                  <p className="text-label font-medium text-ink line-clamp-1">{gb.product_name}</p>
-                  {gb.target_price && (
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <span className="num text-label font-bold text-ink">{gb.target_price.toLocaleString()}<span className="text-caption font-medium text-ink-2">원</span></span>
-                      {gb.discount_rate && <Badge tone="danger"><span className="num">{Math.round(gb.discount_rate * 100)}%</span> 할인</Badge>}
-                    </div>
-                  )}
-                </div>
-                <span className="text-caption text-ink-2 shrink-0"><span className="num">{gb.current_count}/{gb.target_count}</span>명</span>
-              </Link>
-            ))}
-          </div>
-        </Card>
-      )}
+      {/* ── 관심 제품 (공구는 판매를 열기 전까지 관심 표시만) ── */}
+      {groupBuys.length > 0 && <InterestList items={groupBuys} />}
 
       {/* ── CTA ── */}
       <div className="flex gap-3">

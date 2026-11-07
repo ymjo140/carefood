@@ -11,7 +11,7 @@ import { getClientActorId } from "@/lib/actor-client";
  * 재방문 유저에게 표시:
  * 1. 오늘의 영양 상태 (기록 있으면 달성률, 없으면 기록 독려)
  * 2. 주간 영양 점수 미리보기
- * 3. 진행 중인 공구 알림
+ * 3. 관심 모으는 제품 (공구는 판매를 열기 전까지 관심 표시만)
  */
 
 type TodayData = {
@@ -129,16 +129,16 @@ export default function HomeTodayWidget() {
           </Card>
         </Link>
 
-        {/* 공구 알림 */}
-        <Link href="/community" className="block rounded-lg">
+        {/* 관심 모으는 제품 (공구는 판매를 열기 전까지 관심 표시만) */}
+        <Link href="/diary/report" className="block rounded-lg">
           <Card interactive className="h-full">
-            <p className="text-label font-bold text-ink mb-1">진행 중인 공구</p>
+            <p className="text-label font-bold text-ink mb-1">관심 모으는 제품</p>
             {data.activeGroupBuys > 0 ? (
               <p className="text-caption text-ink-2">
-                <span className="num text-title font-bold text-ink mr-1">{data.activeGroupBuys}</span>건의 공구가 모집 중이에요
+                <span className="num text-title font-bold text-ink mr-1">{data.activeGroupBuys}</span>개 제품에 관심을 모으고 있어요
               </p>
             ) : (
-              <p className="text-caption text-ink-2">지금 진행 중인 공구가 없어요</p>
+              <p className="text-caption text-ink-2">지금 관심을 모으는 제품이 없어요</p>
             )}
           </Card>
         </Link>
