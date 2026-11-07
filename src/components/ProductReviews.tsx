@@ -103,7 +103,7 @@ export default function ProductReviews({ productId }: { productId: string }) {
   };
 
   return (
-    <section className="mb-8">
+    <section id="reviews" className="mb-8 scroll-mt-20">
       <SectionHeader
         title="리뷰"
         action={

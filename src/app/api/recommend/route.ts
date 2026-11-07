@@ -14,6 +14,7 @@ import {
   insertExplorationSlots,
   getCFBoosts,
   CONCERN_RULES,
+  byRank,
 } from "@/lib/recommend";
 import type {
   UserProfile,
@@ -332,7 +333,7 @@ export async function GET(request: NextRequest) {
     switch (sortBy) {
       case "price_asc":
       case "price_desc":
-        filtered.sort((a, b) => b.match_score - a.match_score);
+        filtered.sort(byRank);
         break;
       case "protein_desc":
         filtered.sort((a, b) => ((b.protein_g as number) || 0) - ((a.protein_g as number) || 0));
@@ -344,7 +345,7 @@ export async function GET(request: NextRequest) {
         filtered.sort((a, b) => ((b.health_score as number) || 0) - ((a.health_score as number) || 0));
         break;
       default:
-        filtered.sort((a, b) => b.match_score - a.match_score);
+        filtered.sort(byRank);
     }
 
     // 그룹핑 (dish_keyword 기준)
@@ -369,7 +370,7 @@ export async function GET(request: NextRequest) {
     } else if (sortBy === "calories_asc") {
       sortedGroups.sort((a, b) => ((a.representative.calories as number) || 9999) - ((b.representative.calories as number) || 9999));
     } else {
-      sortedGroups.sort((a, b) => b.representative.match_score - a.representative.match_score);
+      sortedGroups.sort((a, b) => byRank(a.representative, b.representative));
     }
 
     // 페이지네이션

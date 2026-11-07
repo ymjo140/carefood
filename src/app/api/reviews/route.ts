@@ -12,6 +12,20 @@ import { getActorId, noActor } from "@/lib/actor-server";
 /* ── GET: 제품 리뷰 조회 ── */
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;
+
+  // ?mine=1&product_ids=a,b — 내가 이 제품들에 남긴 별점 (기록 화면의 '맛 어땠어요?')
+  if (searchParams.has("mine")) {
+    const me = await getActorId();
+    if (!me) return noActor();
+    const ids = (searchParams.get("product_ids") || "").split(",").filter((x) => /^[0-9a-f-]{36}$/i.test(x)).slice(0, 100);
+    if (ids.length === 0) return NextResponse.json({ ratings: {} });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (createServiceRoleClient() as any)
+      .from("product_reviews").select("product_id, rating").eq("user_id", me).in("product_id", ids);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ ratings: Object.fromEntries((data || []).map((r: { product_id: string; rating: number }) => [r.product_id, r.rating])) });
+  }
+
   const productId = searchParams.get("productId") || searchParams.get("product_id");
 
   if (!productId) {
@@ -115,17 +129,19 @@ export async function POST(request: NextRequest) {
       .eq("user_id", user_id)
       .maybeSingle();
 
+    // 보낸 칸만 바꾼다 — 기록 화면의 '맛 한 번 누르기'(rating 만)가 자세히 쓴 리뷰를 지우지 않게
+    const sent = (k: string) => Object.prototype.hasOwnProperty.call(body, k);
     const reviewData = {
       user_id,
       product_id,
       rating,
-      would_rebuy: would_rebuy ?? null,
-      taste_salty_feel: taste_salty_feel ?? null,
-      taste_sweet_feel: taste_sweet_feel ?? null,
-      taste_spicy_feel: taste_spicy_feel ?? null,
-      taste_fatty_feel: taste_fatty_feel ?? null,
-      consumed_as: consumed_as || null,
-      comment: comment || null,
+      ...(sent("would_rebuy") && { would_rebuy: would_rebuy ?? null }),
+      ...(sent("taste_salty_feel") && { taste_salty_feel: taste_salty_feel ?? null }),
+      ...(sent("taste_sweet_feel") && { taste_sweet_feel: taste_sweet_feel ?? null }),
+      ...(sent("taste_spicy_feel") && { taste_spicy_feel: taste_spicy_feel ?? null }),
+      ...(sent("taste_fatty_feel") && { taste_fatty_feel: taste_fatty_feel ?? null }),
+      ...(sent("consumed_as") && { consumed_as: consumed_as || null }),
+      ...(sent("comment") && { comment: comment || null }),
       reviewer_age_group: profile?.age_group || null,
       reviewer_gender: profile?.gender || null,
       reviewer_concerns: profile?.concerns || [],

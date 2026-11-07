@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Badge, Button, Card, CardActions, Chip, ChipRow, ConfirmSheet, EmptyState, Field, Icon, ICON_NAMES, IconButton,
-  Input, Kcal, LinkButton, ListRow, MacroGrid, MacroInline, MealSlot, MealTag, Notice, Page, PageHeader, Price,
+  Input, Kcal, LinkButton, ListRow, MacroGrid, MacroInline, MealSlot, MealTag, Notice, Estimate, Page, PageHeader, Price,
   ProgressBar, SearchField, SectionHeader, Select, Sheet, Spinner, Stat, Steps, Tabs, Textarea, TextLink, Thumb,
   Avatar, useToast, cn, type BadgeTone,
   BottomNavItems, SkeletonList, FoodEntryForm, DragArea, DragGhost, DragHandle, useDragItem, useDropTarget, type DragData, ChoiceCard, ChoiceList, LinkTabs, RatingStars, RatingInput, ScaleInput, PostAuthor, PostAction, PostActions, PostTags,
@@ -800,6 +800,8 @@ export default function Reference({ status }: { status: DsStatus }) {
             <Notice tone="caution">나트륨이 하루 권장량의 45%예요</Notice>
             <Notice>식약처 영양 DB 기준 정보이며 의학적 진단·처방을 대신하지 않아요</Notice>
             <span className="text-caption text-ink-2"><Code>{'<Notice tone="danger|caution|neutral|brand" title>'}</Code></span>
+            <Estimate>제품 맛은 영양성분으로 추정했어요. 맛 평가가 2건 모이면 평가를 반영해요</Estimate>
+            <span className="text-caption text-ink-2"><Code>{'<Estimate>'}</Code> — 계산으로 짐작한 값 옆에 한 줄. 실제 측정·평가처럼 보이지 않게</span>
           </div>
           <div className="flex flex-col gap-4">
             <EmptyState title="아직 저장한 식단이 없어요" description="AI 추천으로 7일 식단을 채우거나 커뮤니티에서 따라하기 해 보세요"

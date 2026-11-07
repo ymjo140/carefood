@@ -4,7 +4,7 @@
  */
 
 export { parseProfile, getProfileLabels } from "./profile";
-export { scoreProduct, scoreAndRank, normalizeScores } from "./scoring";
+export { scoreProduct, scoreAndRank, displayMatch, byRank } from "./scoring";
 export { fetchRecommendPool, loadPurchasableIds, loadPrices } from "./query-builder";
 export { loadUserInteractions } from "./interactions";
 export { loadProductReviewStats } from "./reviews";

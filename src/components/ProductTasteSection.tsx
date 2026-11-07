@@ -6,9 +6,7 @@ import DualRadarChart, {
   calcNutritionMatchScore,
   calcOverallMatchScore,
 } from "./DualRadarChart";
-import TasteReviewForm from "./TasteReviewForm";
-import { Button, Card, Notice, SectionHeader, cn } from "@/components/ui";
-import { getClientActorId } from "@/lib/actor-client";
+import { Card, Estimate, Notice, SectionHeader, TextLink, cn } from "@/components/ui";
 
 type ReviewTasteData = {
   avgSalty: number;   // 1~5, 0=데이터없음
@@ -34,21 +32,6 @@ type Props = {
   /** 리뷰 기반 맛 체감 평균 (있으면 영양 예측을 보정) */
   reviewTaste?: ReviewTasteData;
 };
-
-type TasteData = {
-  spicy: number;
-  sweet: number;
-  salty: number;
-  umami: number;
-  sour: number;
-  review_count: number;
-  avg_rating: number;
-};
-
-function getUserId(): string {
-  // 서버가 발급한 쿠키의 id — API 는 이 값을 받지 않고 쿠키로 직접 확인한다
-  return getClientActorId() || "";
-}
 
 /**
  * 영양성분 → 맛 프로필 예측 (1~5 스케일)
@@ -116,28 +99,12 @@ function toNutritionProfile(n: Props["nutrition"]) {
   return { protein, carbs, fat, fiber, vitamins: balance };
 }
 
-export default function ProductTasteSection({ productId, productName, nutrition, reviewTaste }: Props) {
-  const [taste, setTaste] = useState<TasteData | null>(null);
+export default function ProductTasteSection({ nutrition, reviewTaste }: Props) {
   const [userTaste, setUserTaste] = useState<{ pref_spicy: number; pref_sweet: number; pref_salty: number; pref_umami: number; pref_sour: number } | null>(null);
-  const [showReviewForm, setShowReviewForm] = useState(false);
-  const [userId, setUserId] = useState("");
-
-  const fetchData = () => {
-    fetch(`/api/taste?product_id=${productId}`)
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.taste_profile) setTaste(d.taste_profile);
-      })
-      .catch(() => {}); // ds-allow: 맛 예측은 없으면 숨김
-  };
 
   useEffect(() => {
-    const uid = getUserId();
-    setUserId(uid);
-    fetchData();
-
-    // 사용자 맛 선호 조회 (user_taste_preferences 테이블 우선 → 온보딩 폴백)
-    fetch(`/api/taste?user_id=${uid}`)
+    // 내 맛 선호 (서버 user_taste_preferences 우선 → 온보딩 폴백). 누구인지는 서버가 쿠키로 안다
+    fetch(`/api/taste?mine=1`)
       .then((r) => r.json())
       .then((d) => {
         if (d.preferences && d.preferences.source !== "default") {
@@ -168,11 +135,13 @@ export default function ProductTasteSection({ productId, productName, nutrition,
         }
       })
       .catch(() => {}); // ds-allow: 보조 정보 불러오기
-  }, [productId]);
+  }, []);
 
   // 맛 프로필: 영양성분 예측 + 리뷰 체감 보정
   const predicted = predictTasteFromNutrition(nutrition);
-  const tasteProfile = (reviewTaste && reviewTaste.reviewCount >= 2)
+  const reviewCount = reviewTaste?.reviewCount || 0;
+  const estimated = reviewCount < 2; // 맛 평가가 2건 모이기 전엔 영양성분으로 추정한 맛
+  const tasteProfile = !estimated && reviewTaste
     ? {
         // 리뷰 2건 이상이면 리뷰 70% + 예측 30% 블렌딩
         salty: reviewTaste.avgSalty > 0
@@ -214,11 +183,8 @@ export default function ProductTasteSection({ productId, productName, nutrition,
     <section className="mb-8">
       <SectionHeader
         title="맛·영양 프로필"
-        action={taste ? (
-          <span className="text-caption text-ink-2">
-            맛 리뷰 <span className="num">{taste.review_count}</span>건
-            {taste.avg_rating > 0 && <> · 평점 <span className="num">{(+taste.avg_rating).toFixed(1)}</span></>}
-          </span>
+        action={reviewCount > 0 ? (
+          <span className="text-caption text-ink-2">맛 평가 <span className="num">{reviewCount}</span>건</span>
         ) : undefined}
       />
 
@@ -241,26 +207,19 @@ export default function ProductTasteSection({ productId, productName, nutrition,
           taste={tasteProfile}
           userTaste={userTasteProfile}
           nutrition={nutritionProfile}
+          tasteEstimated={estimated}
           mode="dual"
         />
       </Card>
 
-      {/* 맛 리뷰 버튼/폼 */}
-      {!showReviewForm ? (
-        <Button variant="secondary" block icon="edit" onClick={() => setShowReviewForm(true)}>
-          이 제품 맛 평가하기
-        </Button>
-      ) : (
-        <TasteReviewForm
-          productId={productId}
-          productName={productName}
-          userId={userId}
-          onSubmitted={() => {
-            setShowReviewForm(false);
-            fetchData();
-          }}
-        />
-      )}
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+        <Estimate>
+          {estimated
+            ? "제품 맛은 영양성분으로 추정했어요. 맛 평가가 2건 모이면 평가를 반영해요"
+            : <>맛 평가 <span className="num">{reviewCount}</span>건을 반영했어요</>}
+        </Estimate>
+        <TextLink href="#reviews">맛 평가 남기기</TextLink>
+      </div>
     </section>
   );
 }

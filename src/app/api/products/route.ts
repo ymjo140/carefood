@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
+import { displayMatch } from "@/lib/recommend/scoring";
 import { ALLERGEN_KEYWORDS } from "@/lib/recommend/constants";
 
 /** 알레르기 유발 제품 필터링 (제품명 기반) */
@@ -155,7 +156,7 @@ interface ProfileData {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function scoreProduct(p: Record<string, any>, profile: ProfileData, isPurchasable: boolean): { match_score: number; taste_score: number; nutrition_score: number; match_reasons: string[] } {
+function scoreProduct(p: Record<string, any>, profile: ProfileData, isPurchasable: boolean): { match_score: number; taste_score: number; nutrition_score: number; match_reasons: string[]; taste_known: boolean } {
   const { concerns, goals, conditions, sensitivity, tastes, nutrition_goals: ng } = profile;
 
   const healthScore = (p.health_score as number) || 50;
@@ -322,7 +323,7 @@ function scoreProduct(p: Record<string, any>, profile: ProfileData, isPurchasabl
   nTotal++; if (proteinG && proteinG >= 5 && (p.carbs_g as number) * sRatio >= 5 && fatVal * sRatio >= 1) nHits++;
   const nutrition_score = nTotal > 0 ? Math.round((nHits / nTotal) * 100) : 50;
 
-  return { match_score: Math.min(score, 100), taste_score, nutrition_score, match_reasons: reasons.slice(0, 4) };
+  return { match_score: Math.min(score, 100), taste_score, nutrition_score, match_reasons: reasons.slice(0, 4), taste_known: tasteAxes > 0 };
 }
 
 /* ════════════════════════════════════════════
@@ -626,13 +627,14 @@ export async function POST(request: NextRequest) {
     // match_score 계산
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const scored = result.map((p: any) => {
-      const { match_score, taste_score, nutrition_score, match_reasons } = scoreProduct(p, profile, purchasableIds.has(p.id));
-      return { ...p, match_score, taste_score, nutrition_score, match_reasons };
+      const { match_score: rank_score, taste_score, nutrition_score, match_reasons, taste_known } = scoreProduct(p, profile, purchasableIds.has(p.id));
+      // 화면 점수는 절대 기준(맛 40 + 영양 60), 정렬은 목적·건강 점수까지 더한 rank_score
+      return { ...p, match_score: displayMatch(taste_score, nutrition_score, taste_known), rank_score, taste_score, nutrition_score, match_reasons };
     });
 
-    // match_score 내림차순 정렬
+    // 추천순 정렬
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    scored.sort((a: any, b: any) => b.match_score - a.match_score);
+    scored.sort((a: any, b: any) => b.rank_score - a.rank_score);
 
     return NextResponse.json({
       products: scored,

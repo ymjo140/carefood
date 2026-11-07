@@ -35,6 +35,8 @@ type DualRadarChartProps = {
   nutrition?: NutritionProfile;
   /** 사용자의 현재 영양 상태 (0~100), 없으면 영양만 단일 표시 */
   userNutrition?: NutritionProfile;
+  /** 제품 맛이 실제 평가가 아니라 영양성분으로 추정한 값이면 true (범례에 '추정') */
+  tasteEstimated?: boolean;
   /** 종합 매칭 점수 (0~100) */
   matchScore?: number;
   /** (호환용) 예전 크기 지정 — 이제 라벨이 12px 실제 크기로 보이도록 고정 크기로 그림 */
@@ -156,6 +158,7 @@ export default function DualRadarChart({
   nutrition,
   userNutrition,
   matchScore,
+  tasteEstimated = false,
   mode = "dual",
 }: DualRadarChartProps) {
   const showTaste = mode === "taste" || mode === "dual";
@@ -181,7 +184,7 @@ export default function DualRadarChart({
           <RadarPanel title="맛 프로필" labels={TASTE_LABELS} values={tasteValues} userValues={userTasteValues} series="taste" />
           <RadarPanel title="영양 프로필" labels={NUTRITION_LABELS} values={nutritionValues} userValues={userNutritionValues} series="nutrition" />
         </div>
-        <Legend showUser={!!(userTasteValues || userNutritionValues)} showNutrition />
+        <Legend showUser={!!(userTasteValues || userNutritionValues)} showNutrition estimated={tasteEstimated} />
       </div>
     );
   }
@@ -195,17 +198,17 @@ export default function DualRadarChart({
       {matchScore !== undefined && <MatchBadge score={matchScore} />}
       <RadarPanel title={showTaste ? "맛 프로필" : "영양 프로필"} labels={showTaste ? TASTE_LABELS : NUTRITION_LABELS}
         values={values} userValues={bgValues} series={showTaste ? "taste" : "nutrition"} />
-      {bgValues && <Legend showUser showNutrition={!showTaste} showTaste={showTaste} />}
+      {bgValues && <Legend showUser showNutrition={!showTaste} showTaste={showTaste} estimated={tasteEstimated} />}
     </div>
   );
 }
 
-function Legend({ showUser, showNutrition, showTaste = true }: { showUser: boolean; showNutrition: boolean; showTaste?: boolean }) {
+function Legend({ showUser, showNutrition, showTaste = true, estimated = false }: { showUser: boolean; showNutrition: boolean; showTaste?: boolean; estimated?: boolean }) {
   return (
     <div className="flex flex-wrap justify-center gap-x-4 gap-y-1 text-caption text-ink-2">
       {showTaste && (
         <span className="inline-flex items-center gap-1.5">
-          <span className={cn("size-2.5 rounded-full", SERIES.taste.dot)} aria-hidden="true" />제품 맛
+          <span className={cn("size-2.5 rounded-full", SERIES.taste.dot)} aria-hidden="true" />{estimated ? "제품 맛 (추정)" : "제품 맛"}
         </span>
       )}
       {showNutrition && (

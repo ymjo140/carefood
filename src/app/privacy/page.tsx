@@ -9,7 +9,7 @@ export default function PrivacyPage() {
   return (
     <Page width="default">
       <h1 className="text-title font-bold text-ink mb-1">개인정보처리방침</h1>
-      <p className="text-label text-ink-2 mb-8">시행일: 2026년 10월 27일</p>
+      <p className="text-label text-ink-2 mb-8">시행일: 2026년 11월 7일</p>
 
       <div className="flex flex-col gap-8 text-label text-ink-2">
         {/* 1조 */}
@@ -49,8 +49,18 @@ export default function PrivacyPage() {
               </tr>
               <tr className="border-b border-line">
                 <td className="py-2 pr-3">서비스 이용</td>
-                <td className="py-2 pr-3">검색어, 필터 사용 내역, 찜 목록, 맛 평가</td>
+                <td className="py-2 pr-3">검색어, 필터 사용 내역, 찜 목록, 맛 평가, 식단 기록, 저장한 식단</td>
                 <td className="py-2 pr-3">서비스 이용 중</td>
+              </tr>
+              <tr className="border-b border-line">
+                <td className="py-2 pr-3">기기 식별</td>
+                <td className="py-2 pr-3">무작위로 만든 기기 식별자(쿠키 cf_uid) — 이름·연락처와 연결하지 않음</td>
+                <td className="py-2 pr-3">첫 접속 시</td>
+              </tr>
+              <tr className="border-b border-line">
+                <td className="py-2 pr-3">구매 링크 이용</td>
+                <td className="py-2 pr-3">누른 제품, 판매처, 누른 화면, 시각</td>
+                <td className="py-2 pr-3">판매처 링크를 누를 때</td>
               </tr>
             </tbody>
           </table></div>
@@ -119,7 +129,7 @@ export default function PrivacyPage() {
           <h2 className="text-body font-bold text-ink mb-2">제4조 (보유 및 이용 기간)</h2>
           <ul className="list-disc pl-5 flex flex-col gap-1">
             <li>
-              <strong className="text-ink">비회원:</strong> 기기 내(localStorage) 저장. 브라우저 데이터 삭제 시 즉시 파기.
+              <strong className="text-ink">비회원:</strong> 기기 식별자에 묶어 서버에 보관합니다. 쿠키를 지우면 그 기기에서는 기록에 다시 접근할 수 없으며, 삭제를 요청하면 지체 없이 파기합니다. 회원으로 로그인하면 그 기기의 기록은 회원 계정으로 옮겨집니다.
             </li>
             <li>
               <strong className="text-ink">회원:</strong> 회원 탈퇴 시 즉시 파기. 관련 법령에 따라 보존이 필요한 경우 해당 기간 동안 보관 후 파기.
@@ -150,6 +160,11 @@ export default function PrivacyPage() {
             <li>이용자가 사전에 동의한 경우</li>
             <li>법령에 의하여 요구되는 경우</li>
           </ul>
+          <p className="mt-2">
+            제품 페이지의 판매처 링크(쿠팡·컬리·11번가 등)를 누르면 해당 판매처 사이트로 이동합니다.
+            회사는 이때 이용자의 개인정보를 판매처에 넘기지 않습니다. 쿠팡 파트너스 링크는 쿠팡이 자체 쿠키로
+            구매 여부를 확인하며, 그 처리는 쿠팡의 개인정보처리방침을 따릅니다.
+          </p>
         </section>
 
         {/* 7조 */}
@@ -173,7 +188,8 @@ export default function PrivacyPage() {
           <ul className="list-disc pl-5 flex flex-col gap-1">
             <li>비밀번호 암호화 저장 (bcrypt)</li>
             <li>SSL/TLS 통신 암호화</li>
-            <li>데이터베이스 접근 권한 최소화</li>
+            <li>데이터베이스 접근 권한 최소화 — 이용자 데이터는 서버만 읽고 쓸 수 있도록 행 단위 접근 제어(RLS) 적용</li>
+            <li>기기 식별 쿠키에 서명을 붙여 다른 이용자의 기록에 접근할 수 없도록 함</li>
             <li>정기적 보안 점검</li>
           </ul>
         </section>
@@ -186,6 +202,11 @@ export default function PrivacyPage() {
             이용자는 브라우저 설정을 통해 쿠키 수집을 거부할 수 있으나,
             일부 서비스 이용에 제한이 있을 수 있습니다.
           </p>
+          <ul className="list-disc pl-5 flex flex-col gap-1 mt-2">
+            <li><strong className="text-ink">cf_uid</strong> — 식단 기록·저장한 식단·찜 목록의 주인을 알아보는 기기 식별자. 유효기간 약 13개월</li>
+            <li><strong className="text-ink">로그인 세션 쿠키</strong> — 회원 로그인 유지. 로그아웃하면 삭제</li>
+            <li><strong className="text-ink">브라우저 저장소</strong> — 온보딩 프로필, 작성 중인 식단 등 화면 편의를 위한 정보. 기기 안에만 저장</li>
+          </ul>
         </section>
 
         {/* 10조 */}

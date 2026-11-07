@@ -68,9 +68,11 @@ export type UserProfile = {
 
 // ── 스코어링 결과 ──
 export type ScoredProduct = Record<string, unknown> & {
-  match_score: number;      // 종합 매칭 (목적+맛+영양 전부)
-  taste_score: number;      // 맛 일치도
-  nutrition_score: number;  // 영양 충족도
+  match_score: number;      // 화면에 보이는 매칭 점수 0~100 — 맛 40% + 영양 60% (절대 기준, displayMatch)
+  rank_score?: number;      // 정렬용 점수 (목적·맛·영양·행동·리뷰를 곱한 값, 목록 안에서만 비교)
+  taste_score: number;      // 맛 일치도 0~100
+  taste_known?: boolean;    // 맛 취향을 받아서 계산했는지 (아니면 맛 점수는 빼고 영양만)
+  nutrition_score: number;  // 영양 충족도 0~100
   match_reasons: string[];
   reason_detail: string | null;
   dish_keyword: string;

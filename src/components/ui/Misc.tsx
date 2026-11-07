@@ -35,6 +35,19 @@ export function ListRow({ leading, title, meta, trailing, onClick, href, classNa
   return <div className={cls}>{inner}</div>;
 }
 
+/**
+ * 추정 표시 — 실제 측정·평가가 아니라 계산으로 짐작한 값일 때 그 옆에 한 줄
+ * (예: 리뷰가 모이기 전 영양성분으로 추정한 맛). 숫자·그림이 실제 값처럼 보이지 않게 한다.
+ */
+export function Estimate({ children, className }: { children: ReactNode; className?: string }) {
+  return (
+    <p className={cn("inline-flex items-start gap-1.5 text-caption text-ink-2", className)}>
+      <Icon name="info" size={14} className="shrink-0 mt-0.5 text-ink-3" />
+      <span>{children}</span>
+    </p>
+  );
+}
+
 /** 썸네일 자리 — 이미지 없을 때 */
 export function Thumb({ src, alt = "", size = 48, className }: { src?: string | null; alt?: string; size?: number; className?: string }) {
   return (

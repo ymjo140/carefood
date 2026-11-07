@@ -6,6 +6,7 @@
 
 import type { ScoredProduct } from "./types";
 import type { UserInteractions } from "./interactions";
+import { byRank } from "./scoring";
 
 // ── 3-1. 카테고리 다양성 보장 ──
 
@@ -30,7 +31,7 @@ export function diversifyResults(
 
   // 카테고리를 대표 제품 점수순으로 정렬
   const sortedCats = Array.from(catGroups.entries())
-    .sort((a, b) => b[1][0].match_score - a[1][0].match_score)
+    .sort((a, b) => byRank(a[1][0], b[1][0]))
     .map(([cat]) => cat);
 
   // 각 카테고리의 현재 인덱스 (라운드 로빈용)

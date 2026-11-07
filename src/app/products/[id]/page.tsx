@@ -9,6 +9,7 @@ import ProductViewTracker from "@/components/ProductViewTracker";
 import ProductReviews from "@/components/ProductReviews";
 import FavoriteButton from "@/components/FavoriteButton";
 import TrackableLink from "@/components/TrackableLink";
+import { checkedLabel, usablePrices } from "@/lib/prices";
 import AllergenWarning from "@/components/AllergenWarning";
 import {
   Page, SectionHeader, Card, Badge, Icon, MacroStat, Stat, EmptyState, Notice, Thumb, Price,
@@ -64,6 +65,7 @@ type PriceInfo = {
   price: number;
   url: string;
   image_url: string | null;
+  last_crawled_at: string | null;
 };
 
 
@@ -138,12 +140,12 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
   // 가격 데이터
   const { data: prices } = await supabase
     .from("v_all_prices" as any)
-    .select("platform, price, url, image_url")
+    .select("platform, price, url, image_url, last_crawled_at")
     .eq("product_id", productId) as { data: PriceInfo[] | null };
 
-  const sortedPrices: PriceInfo[] = (prices || [])
-    .filter((p) => p.price > 0)
-    .sort((a, b) => a.price - b.price);
+  // 0원·오래된 가격 빼고, 몰마다 가장 싼 것 하나, 싼 순 (src/lib/prices.ts)
+  const sortedPrices: PriceInfo[] = usablePrices(prices);
+  const priceChecked = checkedLabel(sortedPrices);
 
   const bestPrice = sortedPrices.length > 0 ? sortedPrices[0] : null;
   const imageUrl = sortedPrices.find((p) => p.image_url)?.image_url;
@@ -158,7 +160,8 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
     const valid = rr.filter(r => (r as Record<string, unknown>)[field] != null && ((r as Record<string, unknown>)[field] as number) > 0);
     return valid.length > 0 ? Math.round(valid.reduce((s, r) => s + ((r as Record<string, unknown>)[field] as number), 0) / valid.length * 10) / 10 : 0;
   };
-  const reviewTaste = rr.length >= 2 ? {
+  // 평가가 1건이라도 있으면 건수를 넘긴다 — 2건부터 맛 그림에 반영 (ProductTasteSection)
+  const reviewTaste = rr.length >= 1 ? {
     avgSalty: avgTasteField("taste_salty_feel"),
     avgSweet: avgTasteField("taste_sweet_feel"),
     avgSpicy: avgTasteField("taste_spicy_feel"),
@@ -287,7 +290,7 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
             </div>
           )}
           {product.category_large === "건강식단서비스" && originalProductUrl && (
-            <TrackableLink href={originalProductUrl} productId={product.id} platform={product.manufacturer || "health_meal"}
+            <TrackableLink href={originalProductUrl} productId={product.id} platform={product.manufacturer || "health_meal"} placement="detail_origin"
               className="inline-flex items-center gap-1 min-h-8 text-label font-medium text-brand-ink hover:underline underline-offset-4">
               원본 상품 페이지 <Icon name="external" size={16} />
             </TrackableLink>
@@ -427,7 +430,7 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
                   <Badge tone="brand" className="self-start">최저가</Badge>
                   <Price value={bestPrice.price} className="text-title" />
                 </div>
-                <TrackableLink href={bestPrice.url} productId={product.id} platform={bestPrice.platform}
+                <TrackableLink href={bestPrice.url} productId={product.id} platform={bestPrice.platform} placement="detail_best"
                   className={buttonClass({ variant: "primary" })}>
                   {PLATFORM_LABELS[bestPrice.platform] || bestPrice.platform}에서 사기
                   <Icon name="external" size={18} />
@@ -437,7 +440,7 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
             {sortedPrices.length > 1 && (
               <div className="flex flex-col p-1">
                 {sortedPrices.slice(1).map((pp) => (
-                  <TrackableLink key={pp.platform} href={pp.url} productId={product.id} platform={pp.platform}
+                  <TrackableLink key={pp.platform} href={pp.url} productId={product.id} platform={pp.platform} placement="detail_other"
                     className="flex items-center gap-3 px-3 h-12 rounded-md hover:bg-sunken transition-colors">
                     <span className="flex-1 text-body text-ink">{PLATFORM_LABELS[pp.platform] || pp.platform}</span>
                     <Price value={pp.price} className="text-label" />
@@ -447,9 +450,10 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
               </div>
             )}
           </Card>
-          {sortedPrices.some((pp) => AFFILIATE_PLATFORMS.has(pp.platform)) && (
-            <p className="text-caption text-ink-2 mt-2">{COUPANG_DISCLOSURE}</p>
-          )}
+          <div className="flex flex-col gap-1 mt-2 text-caption text-ink-2">
+            {priceChecked && <p>{priceChecked} · 판매처에서 바뀌었을 수 있어요</p>}
+            {sortedPrices.some((pp) => AFFILIATE_PLATFORMS.has(pp.platform)) && <p>{COUPANG_DISCLOSURE}</p>}
+          </div>
         </section>
       )}
 

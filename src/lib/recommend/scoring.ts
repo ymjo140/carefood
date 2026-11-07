@@ -73,6 +73,7 @@ export function scoreProduct(
         return {
           ...p,
           match_score: -1,
+          rank_score: -1,
           taste_score: 0,
           nutrition_score: 0,
           match_reasons: [],
@@ -366,8 +367,10 @@ export function scoreProduct(
 
   return {
     ...p,
-    match_score: rawScore, // percentile로 나중에 변환
+    match_score: displayMatch(tasteScoreRaw, nutritionScoreRaw, tasteAxes > 0),
+    rank_score: rawScore,
     taste_score: tasteScoreRaw,
+    taste_known: tasteAxes > 0,
     nutrition_score: nutritionScoreRaw,
     match_reasons: reasons.slice(0, 4),
     reason_detail: reasonDetails[0] || null,
@@ -375,20 +378,17 @@ export function scoreProduct(
   };
 }
 
-/** 점수 배열을 percentile(0~100)로 변환 */
-export function normalizeScores(products: ScoredProduct[]): ScoredProduct[] {
-  if (products.length === 0) return products;
-
-  const scores = products.map((p) => p.match_score).sort((a, b) => a - b);
-  const min = scores[0];
-  const max = scores[scores.length - 1];
-  const range = max - min || 1;
-
-  return products.map((p) => ({
-    ...p,
-    match_score: Math.round(((p.match_score - min) / range) * 80 + 20), // 20~100 범위
-  }));
+/**
+ * 화면에 보이는 매칭 점수 (0~100, 절대 기준) — 기획서: 맛 40% + 영양 60%
+ * 같은 제품·같은 프로필이면 어느 목록에서 봐도 같은 점수다. 맛 취향을 모르면 영양 점수만.
+ */
+export function displayMatch(taste: number, nutrition: number, tasteKnown: boolean) {
+  const v = tasteKnown ? 0.4 * taste + 0.6 * nutrition : nutrition;
+  return Math.max(0, Math.min(100, Math.round(v)));
 }
+
+/** 정렬용 점수 비교 (rank_score 가 없으면 match_score) */
+export const byRank = (a: ScoredProduct, b: ScoredProduct) => (b.rank_score ?? b.match_score) - (a.rank_score ?? a.match_score);
 
 /** 제품 배열 스코어링 + 정규화 + 정렬 */
 export function scoreAndRank(
@@ -405,7 +405,6 @@ export function scoreAndRank(
   );
   // 알레르기 제외 제품 필터링
   const filtered = scored.filter((p) => !p.is_excluded_allergy);
-  const normalized = normalizeScores(filtered);
-  normalized.sort((a, b) => b.match_score - a.match_score);
-  return normalized;
+  filtered.sort(byRank);
+  return filtered;
 }
