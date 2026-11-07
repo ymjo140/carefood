@@ -5,7 +5,7 @@ import Link from "next/link";
 import type { ProductWithPrices, TasteLevel, DishCategory } from "@/types/database";
 import { DISH_CATEGORY_LABELS } from "@/types/database";
 import { useFavorites } from "@/hooks/useFavorites";
-import { Badge, Button, Card, Chip, cn, EmptyState, IconButton, Input, Kcal, MACRO_META, Notice, Price, ProgressBar, SearchField, Sheet, SkeletonList, Spinner, Tabs, TextLink, type BadgeTone, type Macro } from "@/components/ui";
+import { Badge, Button, Card, Chip, cn, EmptyState, Icon, IconButton, Input, Kcal, MACRO_META, Notice, Price, ProgressBar, SearchField, SectionHeader, Sheet, SkeletonList, Tabs, TextLink, type BadgeTone, type Macro } from "@/components/ui";
 
 /* ───── 타입 ───── */
 type TasteFilters = {
@@ -502,9 +502,15 @@ function ProductCard({ product, isFavorite, onToggleFavorite }: {
   );
 }
 
-/* ───── 메인 컴포넌트 ───── */
-export default function ProductExplorer() {
+/* ───── 메인 컴포넌트 ─────
+ * variant="home": 홈 아래쪽 '전체 제품' — 검색 줄·프로필 안내는 홈 위쪽이 맡는다
+ * variant="page": /products 검색 결과 — 주소의 q·cat·protein_min·kind·focus 로 시작한다 (홈 검색 줄·카테고리에서 들어옴)
+ */
+export default function ProductExplorer({ variant = "page" }: { variant?: "page" | "home" }) {
   const { isFavorite, toggleFavorite } = useFavorites();
+  const [kind, setKind] = useState<"meal_service" | null>(null);
+  const [error, setError] = useState(false);
+  const [autoFocus, setAutoFocus] = useState(false);
   const [tastes, setTastes] = useState<TasteFilters>({ salty: 0, sweet: 0, spicy: 0, fatty: 0 });
   const [search, setSearch] = useState("");
   const [searchInput, setSearchInput] = useState("");
@@ -532,8 +538,20 @@ export default function ProductExplorer() {
         setProfile(p);
       }
     } catch { /* */ } // ds-allow: 로컬 프로필 읽기
+    if (variant === "page") {
+      // 홈 검색 줄·카테고리에서 넘어온 조건
+      const sp = new URLSearchParams(window.location.search);
+      const q = sp.get("q");
+      if (q) { setSearch(q); setSearchInput(q); }
+      const cat = (sp.get("cat") || "").split(",").filter((c): c is DishCategory => c in DISH_CATEGORY_LABELS);
+      if (cat.length) setSelectedCategories(cat);
+      const proteinMin = Number(sp.get("protein_min") || 0);
+      if (proteinMin > 0) setNutrition((n) => ({ ...n, protein_min: proteinMin }));
+      if (sp.get("kind") === "meal_service") setKind("meal_service");
+      setAutoFocus(sp.has("focus"));
+    }
     setProfileLoaded(true);
-  }, []);
+  }, [variant]);
 
   // 프로필 요약 (상단 칩 표시용)
   const profileSummary = useMemo(() => {
@@ -556,6 +574,7 @@ export default function ProductExplorer() {
       if (selectedPurposes.length > 0) params.set("purpose", selectedPurposes.join(","));
       if (selectedIngredients.length > 0) params.set("tags", selectedIngredients.join(","));
       if (hasPriceOnly) params.set("hasPrice", "1");
+      if (kind) params.set("kind", kind);
       if (priceMin > 0) params.set("price_min", String(priceMin));
       if (priceMax > 0) params.set("price_max", String(priceMax));
       if (nutrition.protein_min > 0) params.set("protein_min", String(nutrition.protein_min));
@@ -595,7 +614,7 @@ export default function ProductExplorer() {
       } else {
         res = await fetch(`/api/products?${params.toString()}`);
       }
-      if (!res.ok) throw new Error("Failed to fetch");
+      if (!res.ok) throw new Error(`제품 목록 ${res.status}`);
       const json: ApiResponse = await res.json();
 
       // 맛순/영양순: 클라이언트에서 재정렬
@@ -610,18 +629,28 @@ export default function ProductExplorer() {
       }
 
       setData(json);
+      setError(false);
     } catch (err) {
-      console.error("Failed to fetch products:", err);
+      console.error("제품 목록을 불러오지 못했어요:", err);
+      setError(true);
     } finally {
       setLoading(false);
     }
-  }, [tastes, search, selectedCategories, selectedPurposes, selectedIngredients, hasPriceOnly, priceMin, priceMax, nutrition, sortBy, page, profile]);
+  }, [tastes, search, selectedCategories, selectedPurposes, selectedIngredients, hasPriceOnly, kind, priceMin, priceMax, nutrition, sortBy, page, profile]);
 
   useEffect(() => { if (profileLoaded) fetchProducts(); }, [profileLoaded, fetchProducts]);
 
   const handleSearch = () => {
     setSearch(searchInput);
     setPage(1);
+    // 뒤로 갔다 와도 같은 검색이 남게 주소에 적어 둔다
+    if (variant === "page") {
+      const sp = new URLSearchParams(window.location.search);
+      sp.delete("focus");
+      if (searchInput) sp.set("q", searchInput); else sp.delete("q");
+      const qs = sp.toString();
+      window.history.replaceState(null, "", qs ? `/products?${qs}` : "/products");
+    }
   };
 
   const toggleList = (list: string[], key: string) =>
@@ -631,11 +660,12 @@ export default function ProductExplorer() {
     setTastes({ salty: 0, sweet: 0, spicy: 0, fatty: 0 });
     setSearch(""); setSearchInput("");
     setSelectedCategories([]); setSelectedPurposes([]); setSelectedIngredients([]);
-    setHasPriceOnly(false); setPriceMin(0); setPriceMax(0);
+    setHasPriceOnly(false); setPriceMin(0); setPriceMax(0); setKind(null);
     setNutrition(INITIAL_NUTRITION); setPage(1);
   };
 
   const activeFilterCount = selectedCategories.length + selectedPurposes.length + selectedIngredients.length
+    + (kind ? 1 : 0)
     + (priceMin > 0 || priceMax > 0 ? 1 : 0)
     + Object.values(nutrition).filter(v => v > 0).length
     + Object.values(tastes).filter(v => v > 0).length
@@ -660,31 +690,41 @@ export default function ProductExplorer() {
 
   return (
     <div>
-      {/* 프로필 요약 */}
-      {profileSummary && (
-        <div className="flex flex-wrap items-center gap-2 mb-3">
-          <Badge tone="brand">{profileSummary}</Badge>
-          <TextLink href="/onboarding" className="text-caption">수정하기</TextLink>
-        </div>
-      )}
-      {!profile && (
-        <Notice className="mb-3">
-          프로필을 설정하면 맞춤 추천을 받을 수 있어요{" "}
-          <TextLink href="/onboarding">설정하기</TextLink>
-        </Notice>
-      )}
+      {variant === "page" && (
+        <>
+          {/* 프로필 요약 */}
+          {profileSummary && (
+            <div className="flex flex-wrap items-center gap-2 mb-3">
+              <Badge tone="brand">{profileSummary}</Badge>
+              <TextLink href="/onboarding" className="text-caption">수정하기</TextLink>
+            </div>
+          )}
+          {profileLoaded && !profile && (
+            <Notice className="mb-3">
+              프로필을 설정하면 맞춤 추천을 받을 수 있어요{" "}
+              <TextLink href="/onboarding">설정하기</TextLink>
+            </Notice>
+          )}
 
-      {/* 검색 */}
-      <div className="mb-4">
-        <SearchField value={searchInput} onChange={setSearchInput} onSubmit={handleSearch}
-          placeholder="제품명으로 검색 (예: 닭가슴살, 샐러드)" />
-      </div>
+          {/* 검색 */}
+          <div className="mb-4">
+            <SearchField value={searchInput} onChange={setSearchInput} onSubmit={handleSearch} autoFocus={autoFocus}
+              placeholder="제품명으로 검색 (예: 닭가슴살, 샐러드)" />
+          </div>
+        </>
+      )}
+      {variant === "home" && <SectionHeader title="전체 제품" className="mb-1" />}
 
       {/* 필터 + 정렬 */}
       <div className="flex items-center gap-2 mb-4 sticky top-14 z-30 bg-canvas py-2 border-b border-line">
         <Button variant="secondary" size="sm" icon="filter" className="lg:hidden shrink-0" onClick={() => setMobileFilterOpen(true)}>
           필터{activeFilterCount > 0 && <span className="num text-brand-ink">{activeFilterCount}</span>}
         </Button>
+        {kind && (
+          <Chip size="sm" selected className="shrink-0" aria-label="건강식단 서비스 조건 빼기" onClick={() => { setKind(null); setPage(1); }}>
+            건강식단 서비스 <Icon name="close" size={14} />
+          </Chip>
+        )}
         <Tabs label="정렬" className="flex-1 min-w-0" value={sortBy}
           onChange={(v) => { setSortBy(v); setPage(1); }}
           items={SORT_OPTIONS.map(o => ({ value: o.value, label: o.label }))} />
@@ -717,10 +757,15 @@ export default function ProductExplorer() {
           <p className="text-label text-ink-2 mb-3">
             {data ? (
               <><span className="num font-bold text-ink">{(data.total ?? 0).toLocaleString()}</span>개 제품{search && <> · &quot;{search}&quot; 검색 결과</>}</>
-            ) : "불러오는 중"}
+            ) : error ? "" : "불러오는 중"}
           </p>
 
-          {loading && !data ? (
+          {error && !loading ? (
+            <Card className="flex flex-col items-start gap-3">
+              <p className="text-label text-ink">제품 목록을 불러오지 못했어요. 잠시 뒤 다시 시도해 주세요</p>
+              <Button variant="secondary" size="sm" icon="refresh" onClick={fetchProducts}>다시 불러오기</Button>
+            </Card>
+          ) : loading && !data ? (
             <SkeletonList rows={5} />
           ) : data?.products?.length ? (
             <>

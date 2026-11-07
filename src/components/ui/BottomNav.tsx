@@ -15,10 +15,10 @@ import { Icon, type IconName } from "./Icon";
  * - 보이는 동안 <html data-bottom-nav> 를 달아, 떠 있는 버튼·알림이 그 위로 올라가게 합니다(.above-nav).
  */
 export const NAV_TABS: { href: string; label: string; icon: IconName }[] = [
-  { href: "/", label: "홈", icon: "home" },
-  { href: "/products", label: "탐색", icon: "search" },
+  { href: "/", label: "홈", icon: "home" }, // 홈 = 추천 + 탐색 (제품 찾기는 홈 검색 줄)
   { href: "/diary", label: "기록", icon: "notebook" },
   { href: "/weekly-box", label: "식단", icon: "list" },
+  { href: "/group-buy", label: "공구", icon: "users" }, // 판매 열기 전엔 관심 모으기 (src/lib/features.ts)
   { href: "/community", label: "피드", icon: "feed" },
 ];
 

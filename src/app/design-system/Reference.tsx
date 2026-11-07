@@ -802,7 +802,8 @@ export default function Reference({ status }: { status: DsStatus }) {
             <Notice tone="danger" title="알레르기 성분이 들어 있어요">우유, 대두 — 프로필에 등록한 알레르기와 겹쳐요</Notice>
             <Notice tone="caution">나트륨이 하루 권장량의 45%예요</Notice>
             <Notice>식약처 영양 DB 기준 정보이며 의학적 진단·처방을 대신하지 않아요</Notice>
-            <span className="text-caption text-ink-2"><Code>{'<Notice tone="danger|caution|neutral|brand" title>'}</Code></span>
+            <Notice icon="lock">지금은 관심만 모아요. 판매는 준비가 끝나면 열려요</Notice>
+            <span className="text-caption text-ink-2"><Code>{'<Notice tone="danger|caution|neutral|brand" title icon?>'}</Code></span>
             <Estimate>제품 맛은 영양성분으로 추정했어요. 맛 평가가 2건 모이면 평가를 반영해요</Estimate>
             <span className="text-caption text-ink-2"><Code>{'<Estimate>'}</Code> — 계산으로 짐작한 값 옆에 한 줄. 실제 측정·평가처럼 보이지 않게</span>
           </div>

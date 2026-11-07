@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { cn } from "./cn";
-import { Icon } from "./Icon";
+import { Icon, type IconName } from "./Icon";
 
 /** 프로필 동그라미 — 이름 첫 글자 */
 export function Avatar({ name, size = "md", className }: { name?: string | null; size?: "sm" | "md"; className?: string }) {
@@ -64,10 +64,12 @@ export function Thumb({ src, alt = "", size = 48, className }: { src?: string | 
  *   danger  빨강 아이콘·제목 (알레르기 경고)    caution  회색 + 경고 아이콘
  *   brand   앰버 글자 제목                      neutral  회색
  */
-export function Notice({ tone = "neutral", title, children, className }: {
+export function Notice({ tone = "neutral", title, icon: iconProp, children, className }: {
   tone?: "neutral" | "caution" | "danger" | "brand"; title?: ReactNode; children: ReactNode; className?: string;
+  /** neutral 안내에 뜻을 더하는 아이콘 (예: 잠긴 기능은 lock). 다른 tone 은 정해진 아이콘을 쓴다 */
+  icon?: IconName;
 }) {
-  const icon = tone === "danger" || tone === "caution" ? "alert" : tone === "brand" ? "info" : null;
+  const icon = tone === "danger" || tone === "caution" ? "alert" : tone === "brand" ? "info" : iconProp ?? null;
   return (
     <div role={tone === "danger" ? "alert" : undefined}
       className={cn("flex gap-2.5 rounded-md bg-sunken px-4 py-3 text-label text-ink-2", className)}>

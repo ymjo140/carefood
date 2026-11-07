@@ -75,7 +75,7 @@ for (const f of baseFiles) {
   try { before = git(`show ${BASE}:${f}`); } catch { continue; }
   checked++;
   const nowSrc = nowFiles.has(f) ? readFileSync(join(ROOT, f), "utf8") : "";
-  const drops = [...nowSrc.matchAll(/ds-wiring-drop:\s*([^\s—-]+)/g)].map((m) => m[1]);
+  const drops = [...nowSrc.matchAll(/ds-wiring-drop:\s*(\S+)/g)].map((m) => m[1]);
   const b = extract(before), n = extract(nowSrc);
   for (const [k, def] of Object.entries(EXTRACT)) {
     for (const v of b[k]) {

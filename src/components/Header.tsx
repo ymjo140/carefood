@@ -8,15 +8,15 @@ import { logout } from "@/app/auth/actions";
 import { Avatar, IconButton, LinkButton, cn } from "@/components/ui";
 
 const NAV_ITEMS = [
-  { href: "/", label: "홈" },
-  { href: "/products", label: "제품 탐색" },
+  { href: "/", label: "홈" }, // 홈 = 추천 + 제품 탐색
   { href: "/diary", label: "식단 기록" },
   { href: "/weekly-box", label: "식단 리스트" },
+  { href: "/group-buy", label: "공구" },
   { href: "/community", label: "커뮤니티" },
 ];
 
 const USER_MENU_ITEMS = [
-  { href: "/products", label: "제품 탐색" },
+  { href: "/products", label: "제품 찾기" },
   { href: "/health", label: "건강검진 정보" },
   { href: "/health/report", label: "영양 리포트" },
   { href: "/diary", label: "식단 기록" },

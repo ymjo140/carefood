@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { PLATFORM_LABELS } from "@/lib/platforms";
 import Link from "next/link";
-import { Badge, Card, Icon, Price, SectionHeader, TextLink } from "@/components/ui";
+import { Badge, Price, SectionHeader, TextLink } from "@/components/ui";
 
 const CONCERN_LABELS: Record<string, string> = {
   gut_health: "장건강",
@@ -122,26 +122,9 @@ export default function HomePersonalized() {
   })();
 
   return (
-    <section className="py-6">
-      <SectionHeader
-        title={`${sectionLabel} 추천`}
-        action={<TextLink href="/products">전체 보기 <Icon name="chevron-right" size={16} /></TextLink>}
-      />
-
-      {/* 건강검진 입력 유도 */}
-      {!hasHealthData && (
-        <Link href="/health" className="block rounded-lg mb-4">
-          <Card tone="brand" interactive>
-            <div className="flex items-center gap-3">
-              <div className="flex-1 min-w-0">
-                <p className="text-label font-bold text-brand-ink">건강검진 정보 입력하기</p>
-                <p className="text-caption text-ink-2 mt-0.5">혈당·혈압·콜레스테롤을 입력하면 더 정확한 추천을 받아요</p>
-              </div>
-              <Icon name="chevron-right" size={20} className="text-brand-ink shrink-0" />
-            </div>
-          </Card>
-        </Link>
-      )}
+    <section className="pt-8">
+      {/* 전체 목록은 바로 아래 '전체 제품'이 맡는다 */}
+      <SectionHeader title={`${sectionLabel} 추천`} />
 
       {/* 가로 스크롤 제품 카드 */}
       {products.length > 0 && (
@@ -168,6 +151,7 @@ export default function HomePersonalized() {
                 <div className="p-3">
                   {p.slot && <p className="text-caption font-medium text-brand-ink mb-0.5">{p.slot}</p>}
                   <h3 className="text-label font-medium text-ink line-clamp-2 mb-1.5">{p.name}</h3>
+                  {p.reason_detail && <p className="text-caption text-ink-2 line-clamp-2 mb-1">{p.reason_detail}</p>}
                   {bestPrice && <Price value={bestPrice} className="text-body" />}
                   {bestPlatform && <p className="text-caption text-ink-2">{bestPlatform} 외</p>}
                 </div>
@@ -175,6 +159,13 @@ export default function HomePersonalized() {
             );
           })}
         </div>
+      )}
+
+      {/* 건강검진 입력 유도 — 추천을 가리지 않게 한 줄로 */}
+      {!hasHealthData && (
+        <p className="text-label text-ink-2 mt-2">
+          혈당·혈압을 입력하면 더 정확하게 골라요 · <TextLink href="/health">건강검진 정보 입력하기</TextLink>
+        </p>
       )}
     </section>
   );

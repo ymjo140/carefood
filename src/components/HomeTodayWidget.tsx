@@ -1,148 +1,61 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import Link from "next/link";
-import { Card, Icon, ProgressBar } from "@/components/ui";
-import { getClientActorId } from "@/lib/actor-client";
+import { useEffect, useState } from "react";
+import { Button, Skeleton, TextLink } from "@/components/ui";
 
 /**
- * 홈 화면 개인화 위젯
- *
- * 재방문 유저에게 표시:
- * 1. 오늘의 영양 상태 (기록 있으면 달성률, 없으면 기록 독려)
- * 2. 주간 영양 점수 미리보기
- * 3. 관심 모으는 제품 (공구는 판매를 열기 전까지 관심 표시만)
+ * 홈 '오늘' 한 줄 — 남은 칼로리 + 기록하기.
+ * 추천이 첫 화면에 보이게 카드 세 장 대신 한 줄로 줄였다.
+ * ds-wiring-drop: /api/community/group-buy?status=recruiting — 공구는 탭 바의 공구 탭이 맡는다
+ * ds-wiring-drop: /api/diary/report — 주간 점수는 기록 탭의 리포트에서 본다
+ * ds-wiring-drop: /diary/report — 같은 이유
  */
-
-type TodayData = {
-  hasProfile: boolean;
-  today: {
-    entries: number;
-    calories: number;
-    protein_g: number;
-    goalCalories: number;
-  } | null;
-  weeklyScore: number | null;
-  activeGroupBuys: number;
-  streak: number; // 연속 기록 일수
-};
-
-function getUserId(): string | null {
-  // 서버가 발급한 쿠키의 id — API 는 이 값을 받지 않고 쿠키로 직접 확인한다
-  return getClientActorId();
-}
+type Today = { entries: number; calories: number; goal: number | null };
 
 export default function HomeTodayWidget() {
-  const [data, setData] = useState<TodayData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [state, setState] = useState<{ status: "loading" | "error" | "done"; today?: Today }>({ status: "loading" });
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
-    const userId = getUserId();
-    if (!userId) { setLoading(false); return; }
+    let alive = true;
+    // 식단 기록 화면과 같은 날짜 기준
+    const date = new Date().toISOString().slice(0, 10);
+    fetch(`/api/diary?date=${date}`)
+      .then(async (r) => {
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error);
+        if (alive) setState({ status: "done", today: { entries: d.entries?.length || 0, calories: d.totals?.calories || 0, goal: d.goals?.daily_calories || null } });
+      })
+      .catch(() => { if (alive) setState({ status: "error" }); });
+    return () => { alive = false; };
+  }, [attempt]);
 
-    const today = new Date().toISOString().slice(0, 10);
-
-    // 병렬로 데이터 가져오기
-    Promise.all([
-      // 오늘 식단
-      fetch(`/api/diary?date=${today}&user_id=${userId}`).then(r => r.json()).catch(() => null), // ds-allow: 위젯 일부는 없으면 숨김
-      // 공구 수
-      fetch("/api/community/group-buy?status=recruiting").then(r => r.json()).catch(() => null), // ds-allow: 위젯 일부는 없으면 숨김
-      // 주간 리포트 (점수만)
-      fetch(`/api/diary/report?user_id=${userId}`).then(r => r.json()).catch(() => null), // ds-allow: 위젯 일부는 없으면 숨김
-    ]).then(([diary, groupBuys, report]) => {
-      const todayEntries = diary?.entries?.length || 0;
-      const todayTotals = diary?.totals || { calories: 0, protein_g: 0 };
-      const goalCal = diary?.goals?.daily_calories || 2000;
-
-      setData({
-        hasProfile: true,
-        today: {
-          entries: todayEntries,
-          calories: Math.round(todayTotals.calories || 0),
-          protein_g: Math.round((todayTotals.protein_g || 0) * 10) / 10,
-          goalCalories: goalCal,
-        },
-        weeklyScore: report?.hasData ? report.overallScore : null,
-        activeGroupBuys: groupBuys?.total || groupBuys?.group_buys?.length || 0,
-        streak: 0, // TODO: 연속 기록 계산
-      });
-    }).finally(() => setLoading(false));
-  }, []);
-
-  // 프로필 없거나 로딩 중이면 렌더링 안 함
-  if (loading || !data?.hasProfile) return null;
-
-  const hasRecords = data.today && data.today.entries > 0;
-  const score = data.weeklyScore;
-  const scoreTone = score === null ? "" : score >= 80 ? "text-positive" : score >= 40 ? "text-brand-ink" : "text-danger";
+  if (state.status === "loading") return <Skeleton className="h-16 rounded-lg mt-6" />;
 
   return (
-    <section className="pb-6">
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        {/* 오늘의 영양 */}
-        <Link href="/diary" className="block rounded-lg">
-          <Card interactive className="h-full">
-            {hasRecords ? (
-              <>
-                <div className="flex items-center justify-between gap-2 mb-2">
-                  <span className="text-label font-bold text-ink">오늘의 영양</span>
-                  <span className="text-caption text-ink-2"><span className="num">{data.today!.entries}</span>끼 기록</span>
-                </div>
-                <p className="text-label text-ink-2 mb-1.5">
-                  <span className="num text-title font-bold text-ink highlight">{data.today!.calories.toLocaleString("ko-KR")}</span>
-                  <span className="ml-0.5">kcal</span>
-                  <span className="num ml-1">/ {data.today!.goalCalories.toLocaleString("ko-KR")}</span>
-                </p>
-                <ProgressBar value={data.today!.calories} max={data.today!.goalCalories} label="오늘 칼로리 목표 대비" />
-                <p className="text-caption text-ink-2 mt-2">단백질 <span className="num font-bold text-protein">{data.today!.protein_g}g</span></p>
-              </>
-            ) : (
-              <>
-                <p className="text-label font-bold text-ink mb-1">오늘 식단을 기록해 보세요</p>
-                <p className="text-caption text-ink-2 mb-2">기록할수록 추천이 정확해져요</p>
-                <span className="inline-flex items-center gap-0.5 text-label font-medium text-brand-ink">기록하기 <Icon name="chevron-right" size={16} /></span>
-              </>
-            )}
-          </Card>
-        </Link>
-
-        {/* 주간 점수 */}
-        <Link href="/diary/report" className="block rounded-lg">
-          <Card interactive className="h-full">
-            {score !== null ? (
-              <>
-                <p className="text-label font-bold text-ink mb-1">주간 영양 점수</p>
-                <p className="flex items-baseline gap-1">
-                  <span className={`num text-title font-bold ${scoreTone}`}>{score}</span>
-                  <span className="text-caption text-ink-2">/ 100</span>
-                </p>
-                <span className="inline-flex items-center gap-0.5 text-label font-medium text-brand-ink mt-1">리포트 보기 <Icon name="chevron-right" size={16} /></span>
-              </>
-            ) : (
-              <>
-                <p className="text-label font-bold text-ink mb-1">주간 영양 리포트</p>
-                <p className="text-caption text-ink-2 mb-2">2일 이상 기록하면 분석해 드려요</p>
-                <span className="inline-flex items-center gap-0.5 text-label font-medium text-brand-ink">시작하기 <Icon name="chevron-right" size={16} /></span>
-              </>
-            )}
-          </Card>
-        </Link>
-
-        {/* 관심 모으는 제품 (공구는 판매를 열기 전까지 관심 표시만) */}
-        <Link href="/diary/report" className="block rounded-lg">
-          <Card interactive className="h-full">
-            <p className="text-label font-bold text-ink mb-1">관심 모으는 제품</p>
-            {data.activeGroupBuys > 0 ? (
-              <p className="text-caption text-ink-2">
-                <span className="num text-title font-bold text-ink mr-1">{data.activeGroupBuys}</span>개 제품에 관심을 모으고 있어요
-              </p>
-            ) : (
-              <p className="text-caption text-ink-2">지금 관심을 모으는 제품이 없어요</p>
-            )}
-          </Card>
-        </Link>
-      </div>
+    <section aria-label="오늘" className="mt-6 flex items-center justify-between gap-3 rounded-lg border border-line bg-surface px-4 py-3 min-h-16">
+      {state.status === "error" ? (
+        <>
+          <p className="text-label text-ink-2">오늘 기록을 불러오지 못했어요</p>
+          <Button size="sm" variant="ghost" icon="refresh" onClick={() => { setState({ status: "loading" }); setAttempt((n) => n + 1); }}>다시 불러오기</Button>
+        </>
+      ) : (
+        <>
+          <TodayText today={state.today!} />
+          <TextLink href="/diary" className="shrink-0">기록하기</TextLink>
+        </>
+      )}
     </section>
+  );
+}
+
+function TodayText({ today }: { today: Today }) {
+  if (today.entries === 0) return <p className="text-body text-ink">오늘 기록이 아직 없어요</p>;
+  if (!today.goal) return <p className="text-body text-ink">오늘 <span className="num text-title font-bold">{today.calories.toLocaleString("ko-KR")}</span>kcal 먹었어요</p>;
+  const left = today.goal - today.calories;
+  return left >= 0 ? (
+    <p className="text-body text-ink">오늘 <span className="num text-title font-bold highlight">{left.toLocaleString("ko-KR")}</span>kcal 남았어요</p>
+  ) : (
+    <p className="text-body text-ink">오늘 목표보다 <span className="num text-title font-bold">{(-left).toLocaleString("ko-KR")}</span>kcal 더 먹었어요</p>
   );
 }

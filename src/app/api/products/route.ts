@@ -358,6 +358,7 @@ function parseSearchParams(searchParams: URLSearchParams) {
     page: Number(searchParams.get("page") || 1),
     limit: Math.min(Number(searchParams.get("limit") || 20), 50),
     source: searchParams.get("source") || null,
+    kind: searchParams.get("kind") === "meal_service" ? "meal_service" : null,
     allergies: (searchParams.get("allergies") || "").split(",").filter(Boolean),
   };
 }
@@ -371,7 +372,7 @@ function buildProductQuery(supabase: any, params: ReturnType<typeof parseSearchP
   const {
     salty, sweet, fatty, spicy,
     search, tag, tags, purpose, dishCategory,
-    hasPriceOnly,
+    hasPriceOnly, kind,
     proteinMin, caloriesMax, sodiumMax, sugarMax, fiberMin, healthScoreMin,
     sort, page, limit,
   } = params;
@@ -414,7 +415,10 @@ function buildProductQuery(supabase: any, params: ReturnType<typeof parseSearchP
   }
 
   // 상용제품 + 건강식단서비스
-  query = query.in("category_large", ["상용제품", "건강식단서비스"]);
+  // (홈 카테고리 '식단 서비스' → kind=meal_service)
+  query = kind === "meal_service"
+    ? query.eq("category_large", "건강식단서비스")
+    : query.in("category_large", ["상용제품", "건강식단서비스"]);
 
   // 구매 가능 제품만
   if (hasPriceOnly) {

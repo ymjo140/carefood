@@ -17,7 +17,7 @@ export default function Footer() {
             <div>
               <p className="text-caption font-bold text-ink mb-2">서비스</p>
               <div className="flex flex-col">
-                <Link href="/products" className={LINK}>제품 탐색</Link>
+                <Link href="/products" className={LINK}>제품 찾기</Link>
                 <Link href="/weekly-box" className={LINK}>식단 리스트</Link>
                 <Link href="/community" className={LINK}>커뮤니티</Link>
               </div>
