@@ -6,7 +6,6 @@ import {
   getProfileLabels,
   scoreAndRank,
   fetchRecommendPool,
-  loadPurchasableIds as loadPurchasableIdsV4,
   loadPrices as loadPricesV4,
   loadUserInteractions,
   loadProductReviewStats,
@@ -94,11 +93,9 @@ async function loadSafetyFilters(supabase: ReturnType<typeof createServiceRoleCl
   return { safetyFilters, safetyMinFilters };
 }
 
-async function loadPurchasableSet(supabase: ReturnType<typeof createServiceRoleClient>): Promise<Set<string>> {
-  const { data: priceIds } = await supabase
-    .from("v_all_prices" as "product_prices")
-    .select("product_id") as { data: { product_id: string }[] | null };
-  return new Set<string>((priceIds || []).map((p) => p.product_id));
+/** 구매 가능 제품 id — 이미 불러온 제품 행의 is_purchasable 로 */
+function purchasableFrom(rows: Record<string, unknown>[]): Set<string> {
+  return new Set(rows.filter((p) => p.is_purchasable).map((p) => p.id as string));
 }
 
 type PriceInfo = { platform: string; price: number; url: string; image_url: string | null };
@@ -193,9 +190,8 @@ export async function GET(request: NextRequest) {
       ? loadUserInteractions(supabase, userId)
       : Promise.resolve(undefined);
 
-    const [{ safetyFilters, safetyMinFilters }, purchasableSet, interactions] = await Promise.all([
+    const [{ safetyFilters, safetyMinFilters }, interactions] = await Promise.all([
       loadSafetyFilters(supabase, conditions),
-      loadPurchasableSet(supabase),
       loadInteractions,
     ]);
 
@@ -317,6 +313,8 @@ export async function GET(request: NextRequest) {
     // 시간대별 부스트 (KST)
     const kstHour = new Date(Date.now() + 9 * 3600 * 1000).getUTCHours();
 
+    // 구매 가능 = 제품 행의 is_purchasable (가격을 찾으면 켜진다). 예전엔 가격 뷰를 통째로 읽어 1,000개에서 잘렸다
+    const purchasableSet = purchasableFrom(products);
     const scored = scoreAndRank(products, userProfile, purchasableSet, interactions, reviewStats, kstHour, cfBoosts.length > 0 ? cfBoosts : undefined);
 
     // 다양성 보장 + 탐색 슬롯
@@ -468,11 +466,11 @@ export async function POST(request: NextRequest) {
       ? loadUserInteractions(supabase, userId)
       : Promise.resolve(undefined);
 
-    const [{ products, degraded, degradeMessage }, purchasableIds, interactions] = await Promise.all([
+    const [{ products, degraded, degradeMessage }, interactions] = await Promise.all([
       fetchRecommendPool(supabase, profile, 500),
-      loadPurchasableIdsV4(supabase),
       loadInteractions,
     ]);
+    const purchasableIds = purchasableFrom(products);
 
     if (products.length === 0) {
       return NextResponse.json({

@@ -1,8 +1,8 @@
--- 가격 비교에서 '묶음이 다를 가능성이 큰' 가격 빼기 + 오래된 가격 빼기 (2026-11-07)
+-- 가격 비교에서 '묶음·다른 상품일 가능성이 큰' 가격 빼기 + 오래된 가격 빼기 (2026-11-07)
 --
--- 쿠팡 가격은 총중량(±12%)·묶음 수까지 맞춘 것만 넣는다(scripts/verify/coupang_match.py).
--- 같은 제품의 다른 몰 가격이 그 쿠팡 가격의 2배를 넘거나 절반보다 낮으면 대부분 묶음·용량이 다른 상품이라
--- 비교 화면에서 뺀다 (데이터는 그대로, 보기에서만). 11번가는 이름으로만 붙여 76%가 ±30% 밖이었다.
+-- 같은 제품의 가격 중 가장 싼 가격의 2배를 넘는 가격은 보기에서 뺀다 (데이터는 그대로).
+-- 확인(2026-11-07): 쿠팡과 2배 넘게 차이 나는 11번가 가격 중 11번가가 비싼 3,922건의 80%(3,118건)는
+-- 11번가 상품명에만 묶음 표시(x5, 20개, 10개입, 2팩, 박스, 세트 등)가 있었다. 반대 방향은 쿠팡이 다른 브랜드·큰 용량인 경우가 많았다.
 -- 확인한 지 60일이 넘은 가격도 뺀다 (src/lib/prices.ts PRICE_HIDE_DAYS 와 같은 값).
 create or replace view public.v_all_prices as
 with base as (
@@ -36,9 +36,9 @@ with base as (
      AND st11_products.is_active = true AND st11_products.price > 0
 )
 SELECT b.product_id, b.platform, b.price, b.url, b.image_url, b.is_available, b.last_crawled_at
-  FROM base b
- WHERE (b.last_crawled_at IS NULL OR b.last_crawled_at > now() - interval '60 days')
-   AND (b.platform = 'coupang' OR NOT EXISTS (
-         SELECT 1 FROM product_prices c
-          WHERE c.product_id = b.product_id AND c.platform = 'coupang' AND c.is_available AND c.price > 0
-            AND (b.price > 2 * c.price OR b.price * 2 < c.price)));
+  FROM (
+    SELECT base.*, min(base.price) OVER (PARTITION BY base.product_id) AS min_price
+      FROM base
+     WHERE base.last_crawled_at IS NULL OR base.last_crawled_at > now() - interval '60 days'
+  ) b
+ WHERE b.price <= 2 * b.min_price;
