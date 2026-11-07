@@ -1,11 +1,13 @@
 """
-이미 넣은 쿠팡 가격을 지금 매칭 규칙으로 다시 본다. 맞지 않으면 product_prices(coupang) 에서 빼고 기록을 rejected 로.
+이미 넣은 쿠팡 가격을 지금 매칭 규칙으로 다시 본다. 맞지 않으면 기록을 recheck 로 — coupang_sync.py 가 다시 검색해서 맞는 것으로 바꾸거나 숨긴다.
 
   python3 scripts/verify/coupang_recheck.py [--apply]
 """
 import argparse, json, os, re, sys, urllib.parse, urllib.request
 sys.path.insert(0, os.path.dirname(__file__))
 from coupang_match import accept
+# coupang_sync.py 와 같은 표 (그 파일은 불러오면 바로 검색을 시작해서 따로 둔다)
+SERVICE_BRANDS = {"sixmeal": "식스밀", "greating": "그리팅", "yundiet": "윤식단", "designmeal": "디자인밀", "makesalad": "메이크샐러드"}
 
 ap = argparse.ArgumentParser(); ap.add_argument("--apply", action="store_true"); a = ap.parse_args()
 SB = (os.environ.get("SUPABASE_URL") or os.environ["NEXT_PUBLIC_SUPABASE_URL"]).rstrip("/") + "/rest/v1/"
@@ -39,17 +41,24 @@ for l in looks:
     p = prods.get(l["product_id"]) or {}; k = mall.get(l["product_id"])
     if k:
         brand = (re.match(r"\s*\[([^\]]+)\]", k["name"]) or [None, ""])[1]
-        tg = {"brand": brand, "name": p.get("name"), "mall_name": k["name"], "volume": k.get("volume") or ""}
+        tg = {"brand": brand, "name": p.get("name"), "mall_name": k["name"], "volume": k.get("volume") or "", "maker": p.get("manufacturer") or ""}
     else:
         g = p.get("serving_size_g") or p.get("total_weight_g")
-        tg = {"brand": "", "name": p.get("name"), "mall_name": (p.get("name") or "") + (f" {float(g):g}g" if g else ""), "volume": ""}
+        svc = SERVICE_BRANDS.get((p.get("manufacturer") or "").strip().lower(), "")
+        tg = {"brand": svc, "name": p.get("name"), "mall_name": (p.get("name") or "") + (f" {float(g):g}g" if g else ""), "volume": "", "maker": p.get("manufacturer") or ""}
     ok, why = accept(tg, {"productName": l["coupang_name"]})
     if not ok: bad.append((l, tg, why))
 
 print("다시 본 것", len(looks), "· 맞지 않음", len(bad))
-for l, tg, why in bad[:25]: print("  -", (tg["mall_name"] or "")[:30].ljust(30), "↔", (l["coupang_name"] or "")[:34], "|", why)
+import random, collections
+print(collections.Counter(w.split(" (")[0] for _, _, w in bad).most_common(12))
+random.seed(1)
+for l, tg, why in random.sample(bad, min(60, len(bad))): print((tg.get("maker") or "-")[:14].ljust(14), "  -", (tg["mall_name"] or "")[:30].ljust(30), "↔", (l["coupang_name"] or "")[:34], "|", why)
 if a.apply:
-    for l, tg, why in bad:
-        rest("DELETE", f"product_prices?product_id=eq.{l['product_id']}&platform=eq.coupang")
-        rest("PATCH", f"coupang_lookups?product_id=eq.{l['product_id']}", {"status": "rejected", "reason": f"다시 보니 다른 상품: {why}"[:200]})
-    print("뺐음", len(bad))
+    # 바로 지우지 않고 '다시 확인'으로 둔다 → coupang_sync.py 가 지금 규칙으로 다시 검색해 맞는 것으로 바꾸거나 숨긴다
+    groups = {}
+    for l, tg, why in bad: groups.setdefault(why, []).append(l["product_id"])
+    for why, ids in groups.items():
+        for i in range(0, len(ids), 150):
+            rest("PATCH", f"coupang_lookups?status=eq.found&product_id=in.({','.join(ids[i:i+150])})", {"status": "recheck", "reason": f"다시 확인: {why}"[:200]})
+    print("다시 확인으로 표시", len(bad))

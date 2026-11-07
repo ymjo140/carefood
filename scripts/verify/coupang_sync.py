@@ -4,8 +4,10 @@
   python3 scripts/verify/coupang_sync.py --max 1700 --per-minute 30
 
 1. coupang_sync_state 가 쉬는 중이면 끝낸다
+   (먼저) coupang_lookups.status=recheck 인 것 — 예전 규칙으로 붙인 쿠팡 상품을 지금 규칙으로 다시 검색해 바꾸거나 숨긴다(rejected)
 2. coupang_queue(아직 안 찾아본 제품, 우선순위 순)에서 max 개를 가져온다
-3. 쿠팡 파트너스 검색(1분 per-minute 회) → 이름·총중량이 맞는 것 중 가장 싼 것
+3. 쿠팡 파트너스 검색(1분 per-minute 회) → 브랜드·이름·맛·총중량이 맞는 것 중 가장 싼 것
+   쿠팡 쪽 브랜드만 달라 빠졌으면 제조사 이름을 붙여 한 번 더 찾는다
 4. 찾으면 product_prices(platform=coupang) 에 넣고, 찾든 못 찾든 coupang_lookups 에 기록
 5. 403·rCode 오류면 6시간 쉬게 표시하고 끝낸다 (반복되면 API 가 제한될 수 있음)
 6. 대기열이 비면 '재확인': 가격을 찾은 지 --refresh-days 일이 지난 제품을 오래된 순으로 다시 검색한다
@@ -64,18 +66,27 @@ def short_maker(m):
 
 def norm(s): return re.sub(r"[^0-9a-z가-힣]", "", (s or "").lower())
 
+# 식단 배송 서비스 제품은 제조사 칸에 영어 이름이 들어 있다 → 쿠팡 판매 이름(한글 브랜드)
+SERVICE_BRANDS = {"sixmeal": "식스밀", "greating": "그리팅", "yundiet": "윤식단", "designmeal": "디자인밀", "makesalad": "메이크샐러드"}
+
 def target(p):
     if p.get("mall_name"):  # 컬리 라벨로 확인된 제품 — 판매처 이름(브랜드 포함)으로 찾는다
         mall = p["mall_name"]
         brand = (re.match(r"\s*\[([^\]]+)\]", mall) or [None, ""])[1]
         kw = re.sub(r"\(택\s*\d\)|\d+\s*종|\s*\([^)]*[xX×*][^)]*\)", " ", mall).replace("[", " ").replace("]", " ")
-        return {"keyword": re.sub(r"\s+", " ", kw).strip()[:50], "brand": brand, "name": p["name"], "mall_name": mall, "volume": p.get("volume") or ""}
+        return {"keyword": re.sub(r"\s+", " ", kw).strip()[:50], "brand": brand, "name": p["name"], "mall_name": mall, "volume": p.get("volume") or "", "maker": p.get("manufacturer") or ""}
     name = p.get("name") or ""
+    svc = SERVICE_BRANDS.get((p.get("manufacturer") or "").strip().lower())
+    if svc:  # 식단 배송 브랜드 — 이름이 '부채살 스테이크'처럼 흔해서 브랜드를 붙여 찾고, 쿠팡 이름에 브랜드가 있어야 같은 제품
+        clean = re.sub(r"\s*\([^)]*\)", " ", name)
+        kw = clean if norm(svc) in norm(clean) else f"{svc} {clean}"
+        g = p.get("serving_size_g") or p.get("total_weight_g")
+        return {"keyword": re.sub(r"\s+", " ", kw).strip()[:50], "brand": svc, "name": name, "mall_name": name + (f" {float(g):g}g" if g else ""), "volume": "", "maker": p.get("manufacturer") or ""}
     maker = short_maker(p.get("manufacturer"))
     generic = len(norm(name)) <= 5
     kw = f"{maker} {name}" if generic and maker and norm(maker) not in norm(name) else name
     g = p.get("serving_size_g") or p.get("total_weight_g")
-    return {"keyword": kw.strip()[:50], "brand": maker if generic else "", "name": name, "mall_name": name + (f" {float(g):g}g" if g else ""), "volume": ""}
+    return {"keyword": kw.strip()[:50], "brand": maker if generic else "", "name": name, "mall_name": name + (f" {float(g):g}g" if g else ""), "volume": "", "maker": p.get("manufacturer") or ""}
 
 gap = 60.0 / a.per_minute
 found = 0; done = 0; t0 = time.time(); stop = False; out_of_time = False; batch = [None]
@@ -90,6 +101,20 @@ SEEN = set()
 def items():
     """기록에 실패한 제품이 대기열에 남아도 같은 실행에서 다시 돌지 않게. 대기열이 비면 재확인 대상으로."""
     global batch, stop
+    # 0) 다시 확인할 것 (coupang_recheck.py --apply 가 표시) — 지금 규칙으로 다시 검색해 맞는 것으로 바꾸거나 숨긴다
+    while not stop:
+        looks = [l for l in (rest("GET", "coupang_lookups?status=eq.recheck&select=product_id&order=product_id.asc&limit=300") or []) if l["product_id"] not in SEEN]
+        if not looks: break
+        print("다시 확인", len(looks), "개", flush=True)
+        ids = ",".join(l["product_id"] for l in looks)
+        prods = {p["id"]: p for p in (rest("GET", f"products?id=in.({ids})&select=id,name,manufacturer,serving_size_g,total_weight_g") or [])}
+        for k in rest("GET", f"kurly_products?select=matched_product_id,name,volume&verify_status=in.(same,relink)&matched_product_id=in.({ids})") or []:
+            if k["matched_product_id"] in prods: prods[k["matched_product_id"]].update({"mall_name": k["name"], "volume": k.get("volume")})
+        for l in looks:
+            if stop: return
+            SEEN.add(l["product_id"])
+            p = prods.get(l["product_id"])
+            if p: yield p, {"recheck": True}
     while not stop:
         batch = [p for p in next_batch() if p["id"] not in SEEN]
         if not batch: break
@@ -111,26 +136,39 @@ def items():
             p = prods.get(l["product_id"])
             if p: yield p, l
 
+class Paused(Exception): pass
+def do_search(kw):
+    d = search(kw, 10)
+    rc = str(d.get("rCode"))
+    if rc != "0":
+        msg = f"rCode {rc} {d.get('rMessage')}"
+        if rc in ("401", "403", "429") or "limit" in str(d.get("rMessage")).lower(): raise Paused(msg)
+        raise ValueError(msg)  # 검색어 문제 등 — 이 제품만 건너뛴다
+    return ((d.get("data") or {}).get("productData")) or []
+
 for p, old in items():
     started = time.time()
+    rechk = bool(old and old.get("recheck"))
+    if rechk: old = None
     tg = target(p)
     old_keyword = old["keyword"] if old else None
     if old_keyword: tg["keyword"] = old_keyword  # 재확인: 처음 찾을 때 쓴 검색어 그대로
     look = {"product_id": p["id"], "keyword": tg["keyword"], "checked_at": NOW()}
     try:
-        d = search(tg["keyword"], 10)
-        rc = str(d.get("rCode"))
-        if rc != "0":
-            msg = f"rCode {rc} {d.get('rMessage')}"
-            if rc in ("401", "403", "429") or "limit" in str(d.get("rMessage")).lower():
-                pause(6, msg); stop = True; break
-            raise ValueError(msg)  # 검색어 문제 등 — 이 제품만 건너뛴다
-        results = ((d.get("data") or {}).get("productData")) or []
+        results = do_search(tg["keyword"])
         if old:
             # 재확인: 처음 찾은 그 쿠팡 상품이 검색 결과에 아직 있는지로 판단 (이름 규칙을 다시 적용하지 않음)
             ok = [it for it in results if str(it.get("productId")) == str(old.get("coupang_product_id"))]
         else:
-            ok = [it for it in results if accept(tg, it)[0]]
+            checks = [(it, accept(tg, it)) for it in results]
+            ok = [it for it, (good, _) in checks if good]
+            maker = short_maker(p.get("manufacturer"))
+            # 이름은 맞는데 쿠팡 쪽 브랜드가 달라 빠진 것만 있으면, 제조사 이름을 붙여 한 번 더 찾는다 (롯데 슈크림빵 ↔ 삼립 슈크림빵)
+            if not ok and maker and re.search(r"[가-힣]", maker) and norm(maker) not in norm(tg["keyword"]) and any(w.startswith("브랜드 다름") for _, (_, w) in checks):
+                time.sleep(gap)
+                tg2 = dict(tg, keyword=f"{maker} {tg['keyword']}"[:50])
+                ok = [it for it in do_search(tg2["keyword"]) if accept(tg2, it)[0]]
+                if ok: tg = tg2; look["keyword"] = tg2["keyword"]
         if ok:
             best = min(ok, key=lambda x: float(x.get("productPrice") or 9e9))
             look.update({"status": "found", "coupang_product_id": best.get("productId"), "coupang_name": (best.get("productName") or "")[:200],
@@ -151,8 +189,15 @@ for p, old in items():
             look.update({"status": "gone", "coupang_product_id": old.get("coupang_product_id"), "reason": f"재확인 2회 연속 못 찾음 (결과 {len(results)}개)"})
             if not a.dry:
                 rest("PATCH", f"product_prices?product_id=eq.{p['id']}&platform=eq.coupang", {"is_available": False, "last_crawled_at": NOW()}, prefer="return=minimal")
+        elif rechk:
+            # 예전 규칙으로 붙인 쿠팡 상품이 지금 규칙으로는 다른 상품 — 숨긴다 (지우지 않아 되돌릴 수 있다)
+            look.update({"status": "rejected", "reason": f"다시 확인: 결과 {len(results)}개 중 맞는 것 없음"})
+            if not a.dry:
+                rest("PATCH", f"product_prices?product_id=eq.{p['id']}&platform=eq.coupang", {"is_available": False, "last_crawled_at": NOW()}, prefer="return=minimal")
         else:
             look.update({"status": "none", "reason": f"결과 {len(results)}개 중 맞는 것 없음"})
+    except Paused as e:
+        pause(6, str(e)); stop = True; break
     except urllib.error.HTTPError as e:
         if "coupang" in (e.url or "") or e.code in (401, 403, 429):
             pause(6, f"HTTP {e.code}"); stop = True; break
