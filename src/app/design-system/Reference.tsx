@@ -6,7 +6,7 @@ import {
   Input, Kcal, LinkButton, ListRow, MacroGrid, MacroInline, MealSlot, MealTag, Notice, Estimate, Page, PageHeader, Price,
   ProgressBar, SearchField, SectionHeader, Select, Sheet, Spinner, Stat, Steps, Tabs, Textarea, TextLink, Thumb,
   Avatar, useToast, cn, type BadgeTone,
-  BottomNavItems, SkeletonList, FoodEntryForm, DragArea, DragGhost, DragHandle, useDragItem, useDropTarget, type DragData, ChoiceCard, ChoiceList, LinkTabs, RatingStars, RatingInput, ScaleInput, QuickRating, PostAuthor, PostAction, PostActions, PostTags, ThreadItem, MealAttach, PlanAttach, ProductTagLinks,
+  BottomNavItems, SkeletonList, FoodEntryForm, DragArea, DragGhost, DragHandle, useDragItem, useDropTarget, type DragData, ChoiceCard, ChoiceList, LinkTabs, RatingStars, RatingInput, ScaleInput, QuickRating, PostAuthor, PostAction, PostActions, PostTags, ThreadItem, MealAttach, PlanAttach, ProductTagLinks, PhotoGrid,
 } from "@/components/ui";
 
 // 서버(UTC)와 브라우저 시간대가 달라도 같은 글자가 나오도록 한국 시간으로 고정
@@ -752,6 +752,10 @@ export default function Reference({ status }: { status: DsStatus }) {
             </ThreadItem>
             <ThreadItem nickname="유나" topic="고단백">
               <PlanAttach title="이번 주 식단" dayKcal={[1600, 1500, 1700, 1600, 1600, 1900, 1400]} avgKcal={1614} avgProtein={104} />
+            </ThreadItem>
+            <ThreadItem nickname="서준" topic="도시락">
+              <p className="text-body text-ink">이번 주 도시락 네 개</p>
+              <PhotoGrid alt="도시락 사진" urls={[1, 2, 3, 4].map((i) => `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect width="200" height="200" fill="${["#E7E0D5", "#CFC5B6", "#F3EEE6", "#E7E0D5"][i - 1]}"/></svg>`)}`)} />
             </ThreadItem>
           </Demo>
         </div>

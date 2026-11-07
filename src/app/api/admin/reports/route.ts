@@ -34,7 +34,7 @@ export async function GET() {
   const postIds = [...groups.values()].filter((g) => g.kind === "post").map((g) => g.id);
   const commentIds = [...groups.values()].filter((g) => g.kind === "comment").map((g) => g.id);
   const [p, c] = await Promise.all([
-    postIds.length ? sb.from("community_feed").select("id, author_nickname, content, image_url, hidden_by_reports, is_active, created_at").in("id", postIds) : { data: [] },
+    postIds.length ? sb.from("community_feed").select("id, author_nickname, content, image_url, image_urls, hidden_by_reports, is_active, created_at").in("id", postIds) : { data: [] },
     commentIds.length ? sb.from("community_feed_comments").select("id, post_id, author_nickname, content, hidden_by_reports, is_active, created_at").in("id", commentIds) : { data: [] },
   ]);
   if (p.error || c.error) return NextResponse.json({ error: (p.error || c.error).message }, { status: 500 });
@@ -61,12 +61,12 @@ export async function POST(request: NextRequest) {
 
   // 글을 내리면 사진 파일도 지운다
   if (action === "remove" && kind === "post") {
-    const { data: p } = await sb.from("community_feed").select("image_url").eq("id", id).maybeSingle();
-    const imgErr = await removeImages(sb, [p?.image_url]);
+    const { data: p } = await sb.from("community_feed").select("image_url, image_urls").eq("id", id).maybeSingle();
+    const imgErr = await removeImages(sb, [p?.image_url, ...(p?.image_urls || [])]);
     if (imgErr) console.error("사진 파일을 지우지 못했어요:", imgErr);
   }
   const update = action === "keep" ? { hidden_by_reports: false, report_count: 0 }
-    : kind === "post" ? { is_active: false, hidden_by_reports: true, image_url: null } : { is_active: false, hidden_by_reports: true };
+    : kind === "post" ? { is_active: false, hidden_by_reports: true, image_url: null, image_urls: [] } : { is_active: false, hidden_by_reports: true };
   const { data: target, error: tErr } = await sb.from(table).update(update).eq("id", id).select(kind === "post" ? "id" : "id, post_id, is_active").single();
   if (tErr) return NextResponse.json({ error: tErr.message }, { status: 500 });
   if (action === "remove" && kind === "comment" && target?.post_id) {

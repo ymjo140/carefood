@@ -229,3 +229,24 @@ export function PostTags({ tags, className }: { tags?: string[] | null; classNam
     </div>
   );
 }
+
+/**
+ * 글 사진 1~4장 — 1장은 넓게, 2장은 나란히, 3장은 세 칸, 4장은 2×2.
+ * onOpen 이 있으면 사진을 눌러 크게 본다 (글 상세). 없으면 글 전체를 누른 것으로 넘어간다 (피드)
+ */
+export function PhotoGrid({ urls, alt, onOpen, className }: { urls: string[]; alt: string; onOpen?: (i: number) => void; className?: string }) {
+  if (!urls.length) return null;
+  const n = Math.min(urls.length, 4);
+  const shown = urls.slice(0, 4);
+  return (
+    <div className={cn("grid gap-1 overflow-hidden rounded-md border border-line bg-sunken", n === 1 ? "grid-cols-1" : n === 3 ? "grid-cols-3" : "grid-cols-2", className)}>
+      {shown.map((u, i) => {
+        // eslint-disable-next-line @next/next/no-img-element
+        const img = <img src={u} alt={n > 1 ? `${alt} ${i + 1}/${n}` : alt} loading="lazy" className={cn("w-full object-cover", n === 1 ? "max-h-96" : "aspect-square")} />;
+        return onOpen
+          ? <button key={u} type="button" className="press block" aria-label={`사진 ${i + 1} 크게 보기`} onClick={() => onOpen(i)}>{img}</button>
+          : <span key={u} className="block">{img}</span>;
+      })}
+    </div>
+  );
+}

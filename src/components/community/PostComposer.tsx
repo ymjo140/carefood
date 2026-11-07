@@ -2,12 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  Button, Chip, ChipRow, Field, Icon, Input, Kcal, Select, Sheet, SkeletonList, Textarea, cn, useToast,
+  Button, Chip, ChipRow, IconButton, Field, Icon, Input, Kcal, Select, Sheet, SkeletonList, Textarea, cn, useToast,
 } from "@/components/ui";
 import { COMMUNITY_TOPICS } from "@/lib/community-topics";
 
 /**
- * 글쓰기 시트 — 글 + 붙이기(사진 · 기록한 끼니 · 저장한 식단 · 제품 태그) + 모임.
+ * 글쓰기 시트 — 글 + 붙이기(사진 4장 · 기록한 끼니 · 저장한 식단 · 제품 태그) + 모임.
  * 사진은 /api/community/upload 가 위치 정보 같은 메타데이터를 지우고 줄여서 올린다.
  * 작성자 건강 관심사는 붙이지 않는다 (서버도 받지 않음).
  */
@@ -61,53 +61,72 @@ export default function PostComposer({ isOpen, initialAttach, nickname, onClose,
   const [products, setProducts] = useState<Hit[]>([]);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [retry, setRetry] = useState(0);
-  // 사진 한 장
-  const [photo, setPhoto] = useState<{ status: "idle" | "uploading" | "done"; url?: string; preview?: string }>({ status: "idle" });
+  // 사진 4장까지
+  type Photo = { key: string; status: "uploading" | "done"; url?: string; preview: string };
+  const MAX_PHOTOS = 4;
+  const [photos, setPhotos] = useState<Photo[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const pickPhoto = async (picked: File | undefined) => {
-    if (!picked) return;
-    // 서버로 보낼 수 있는 크기(약 4MB)를 넘으면 브라우저에서 먼저 줄인다
-    let file: Blob = picked;
-    if (picked.size > 3.5 * 1024 * 1024) {
-      try {
-        const bmp = await createImageBitmap(picked, { imageOrientation: "from-image" });
-        const scale = Math.min(1, 2000 / Math.max(bmp.width, bmp.height));
-        const canvas = document.createElement("canvas");
-        canvas.width = Math.round(bmp.width * scale); canvas.height = Math.round(bmp.height * scale);
-        canvas.getContext("2d")!.drawImage(bmp, 0, 0, canvas.width, canvas.height);
-        file = await new Promise<Blob>((ok, no) => canvas.toBlob((b) => (b ? ok(b) : no(new Error("줄이지 못했어요"))), "image/jpeg", 0.85));
-      } catch {
-        toast.show("사진이 너무 커요. 더 작은 사진으로 해 주세요", { tone: "danger" });
-        return;
-      }
-      if (file.size > 4 * 1024 * 1024) { toast.show("사진이 너무 커요. 더 작은 사진으로 해 주세요", { tone: "danger" }); return; }
-    }
-    const preview = URL.createObjectURL(file);
-    setPhoto({ status: "uploading", preview });
+  // 서버로 보낼 수 있는 크기(약 4MB)를 넘으면 브라우저에서 먼저 줄인다
+  const shrink = async (picked: File): Promise<Blob | null> => {
+    if (picked.size <= 3.5 * 1024 * 1024) return picked;
     try {
-      const fd = new FormData();
-      fd.append("file", file, "photo");
-      const r = await fetch("/api/community/upload", { method: "POST", body: fd });
-      const d = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(d.error);
-      setPhoto({ status: "done", url: d.url, preview });
-    } catch (e) {
-      URL.revokeObjectURL(preview);
-      setPhoto({ status: "idle" });
-      toast.show(e instanceof Error && e.message ? e.message : "사진을 올리지 못했어요. 다시 시도해 주세요", { tone: "danger" });
-    } finally {
-      if (fileRef.current) fileRef.current.value = "";
+      const bmp = await createImageBitmap(picked, { imageOrientation: "from-image" });
+      const scale = Math.min(1, 2000 / Math.max(bmp.width, bmp.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(bmp.width * scale); canvas.height = Math.round(bmp.height * scale);
+      canvas.getContext("2d")!.drawImage(bmp, 0, 0, canvas.width, canvas.height);
+      const out = await new Promise<Blob>((ok, no) => canvas.toBlob((b) => (b ? ok(b) : no(new Error("줄이지 못했어요"))), "image/jpeg", 0.85));
+      return out.size > 4 * 1024 * 1024 ? null : out;
+    } catch {
+      return null;
     }
   };
-  // 글에 쓰지 않은 사진은 저장소에서도 지운다 (올린 뒤 빼거나 글쓰기를 취소했을 때)
-  const dropPhoto = (discardUpload = true) => {
-    if (photo.preview) URL.revokeObjectURL(photo.preview);
-    if (discardUpload && photo.url) {
-      fetch("/api/community/upload", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url: photo.url }) })
-        .catch(() => {}); // ds-allow: 정리는 보조 — 남아도 글에는 안 나온다
+
+  const pickPhotos = async (list: FileList | null) => {
+    const files = Array.from(list || []);
+    if (fileRef.current) fileRef.current.value = "";
+    if (!files.length) return;
+    const room = MAX_PHOTOS - photos.length;
+    if (files.length > room) toast.show(`사진은 ${MAX_PHOTOS}장까지 붙일 수 있어요. 앞의 ${Math.max(0, room)}장만 붙였어요`);
+    // 한 장씩 차례로 올린다 (요청 크기 한도·느린 연결 대비)
+    for (const picked of files.slice(0, Math.max(0, room))) {
+      const blob = await shrink(picked);
+      if (!blob) { toast.show("사진이 너무 커요. 더 작은 사진으로 해 주세요", { tone: "danger" }); continue; }
+      const key = crypto.randomUUID();
+      const preview = URL.createObjectURL(blob);
+      setPhotos((cur) => [...cur, { key, status: "uploading", preview }]);
+      try {
+        const fd = new FormData();
+        fd.append("file", blob, "photo");
+        const r = await fetch("/api/community/upload", { method: "POST", body: fd });
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(d.error);
+        setPhotos((cur) => cur.map((p) => (p.key === key ? { ...p, status: "done", url: d.url } : p)));
+      } catch (e) {
+        URL.revokeObjectURL(preview);
+        setPhotos((cur) => cur.filter((p) => p.key !== key));
+        toast.show(e instanceof Error && e.message ? e.message : "사진을 올리지 못했어요. 다시 시도해 주세요", { tone: "danger" });
+      }
     }
-    setPhoto({ status: "idle" });
+  };
+
+  // 글에 쓰지 않은 사진은 저장소에서도 지운다 (올린 뒤 빼거나 글쓰기를 취소했을 때)
+  const discard = (url?: string) => {
+    if (!url) return;
+    fetch("/api/community/upload", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url }) })
+      .catch(() => {}); // ds-allow: 정리는 보조 — 남아도 글에는 안 나온다
+  };
+  const dropPhoto = (key: string) => {
+    const p = photos.find((x) => x.key === key);
+    if (!p) return;
+    URL.revokeObjectURL(p.preview);
+    discard(p.url);
+    setPhotos((cur) => cur.filter((x) => x.key !== key));
+  };
+  const dropAllPhotos = (discardUploads: boolean) => {
+    for (const p of photos) { URL.revokeObjectURL(p.preview); if (discardUploads) discard(p.url); }
+    setPhotos([]);
   };
 
   // 시트를 열 때 고른 붙이기로 시작
@@ -154,7 +173,7 @@ export default function PostComposer({ isOpen, initialAttach, nickname, onClose,
   }, []);
 
   const reset = (posted = false) => {
-    setContent(""); setAttach(null); setTopic(""); setPicked([]); setPlan(null); setProducts([]); setQ(""); dropPhoto(!posted);
+    setContent(""); setAttach(null); setTopic(""); setPicked([]); setPlan(null); setProducts([]); setQ(""); dropAllPhotos(!posted);
     setHits({ status: "idle", items: [] }); if (days[0]) setDay(days[0].iso);
   };
   const close = () => { reset(); onClose(); };
@@ -166,7 +185,9 @@ export default function PostComposer({ isOpen, initialAttach, nickname, onClose,
   };
 
   const hasMeal = picked.length > 0;
-  const canPost = !posting && photo.status !== "uploading" && (content.trim().length > 0 || hasMeal || !!plan || !!photo.url);
+  const uploading = photos.some((p) => p.status === "uploading");
+  const photoUrls = photos.filter((p) => p.url).map((p) => p.url!);
+  const canPost = !posting && !uploading && (content.trim().length > 0 || hasMeal || !!plan || photoUrls.length > 0);
 
   const submit = async () => {
     setPosting(true);
@@ -194,7 +215,7 @@ export default function PostComposer({ isOpen, initialAttach, nickname, onClose,
           meal_type: hasMeal && !plan ? mealType : null,
           meal_data,
           product_ids: products.map((p) => p.id),
-          image_url: photo.url ?? null,
+          image_urls: photoUrls,
           topic: topic || null,
           author_nickname: nickname,
         }),
@@ -225,15 +246,24 @@ export default function PostComposer({ isOpen, initialAttach, nickname, onClose,
         </Field>
 
         {/* 붙인 것 */}
-        {(hasMeal || plan || products.length > 0 || photo.status !== "idle") && (
+        {(hasMeal || plan || products.length > 0 || photos.length > 0) && (
           <div className="flex flex-col gap-2">
-            {photo.status !== "idle" && (
-              <div className="relative self-start">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={photo.preview} alt="붙인 사진" className={cn("h-32 w-auto max-w-full rounded-md border border-line object-cover", photo.status === "uploading" && "opacity-50")} />
-                {photo.status === "uploading"
-                  ? <p className="text-caption text-ink-2 mt-1">사진을 올리고 있어요</p>
-                  : <Button size="sm" variant="ghost" className="mt-1 -ml-2" onClick={() => dropPhoto()}>사진 빼기</Button>}
+            {photos.length > 0 && (
+              <div className="flex flex-col gap-1.5">
+                <div className="grid grid-cols-4 gap-2">
+                  {photos.map((p, i) => (
+                    <div key={p.key} className="relative">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={p.preview} alt={`붙인 사진 ${i + 1}`} className={cn("aspect-square w-full rounded-md border border-line object-cover", p.status === "uploading" && "opacity-50")} />
+                      {p.status === "done" && (
+                        <IconButton icon="close" size="sm" tone="secondary" label={`사진 ${i + 1} 빼기`} className="absolute -top-2 -right-2" onClick={() => dropPhoto(p.key)} />
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <p className="text-caption text-ink-2">
+                  {uploading ? "사진을 올리고 있어요" : <>사진 <span className="num">{photos.length}</span> / {MAX_PHOTOS}장 · 위치 같은 촬영 정보는 지우고 올려요</>}
+                </p>
               </div>
             )}
             {plan && (
@@ -265,11 +295,11 @@ export default function PostComposer({ isOpen, initialAttach, nickname, onClose,
         <div className="flex flex-col gap-2">
           <span className="text-label font-medium text-ink">붙이기</span>
           <ChipRow>
-            <Chip disabled={photo.status !== "idle"} onClick={() => fileRef.current?.click()}>
-              <Icon name="camera" size={16} />사진
+            <Chip disabled={photos.length >= MAX_PHOTOS || uploading} onClick={() => fileRef.current?.click()}>
+              <Icon name="camera" size={16} />사진{photos.length > 0 && <span className="num">{photos.length}/{MAX_PHOTOS}</span>}
             </Chip>
-            <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" className="sr-only" tabIndex={-1} aria-hidden="true"
-              name="photo" onChange={(e) => pickPhoto(e.target.files?.[0])} />
+            <input ref={fileRef} type="file" multiple accept="image/jpeg,image/png,image/webp,image/heic,image/heif" className="sr-only" tabIndex={-1} aria-hidden="true"
+              name="photo" onChange={(e) => pickPhotos(e.target.files)} />
             {([["meal", "notebook", "기록한 끼니"], ["plan", "calendar", "저장한 식단"], ["product", "tag", "제품 태그"]] as const).map(([k, icon, label]) => (
               <Chip key={k} selected={attach === k} onClick={() => setAttach(attach === k ? null : k)}>
                 <Icon name={icon} size={16} />{label}

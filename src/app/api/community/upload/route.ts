@@ -69,7 +69,7 @@ export async function DELETE(request: NextRequest) {
   // 이미 글에 쓴 사진이면 지우지 않는다
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sb = createServiceRoleClient() as any;
-  const { data: used } = await sb.from("community_feed").select("id").eq("image_url", url).eq("is_active", true).limit(1);
+  const { data: used } = await sb.from("community_feed").select("id").contains("image_urls", [url]).eq("is_active", true).limit(1);
   if (used?.length) return NextResponse.json({ error: "글에 쓰고 있는 사진이에요" }, { status: 409 });
   const err = await removeImages(sb, [url]);
   if (err) return NextResponse.json({ error: err }, { status: 500 });

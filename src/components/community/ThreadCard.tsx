@@ -1,6 +1,7 @@
 "use client";
 
-import { MealAttach, PlanAttach, PostAction, PostActions, ProductTagLinks, ThreadItem } from "@/components/ui";
+import { useState } from "react";
+import { IconButton, MealAttach, PhotoGrid, PlanAttach, PostAction, PostActions, ProductTagLinks, Sheet, ThreadItem } from "@/components/ui";
 import { isTopic } from "@/lib/community-topics";
 import PostMenu, { type MenuDone } from "./PostMenu";
 
@@ -19,6 +20,7 @@ export type FeedPostData = {
   } | null;
   tags?: string[] | null;
   image_url?: string | null;
+  image_urls?: string[] | null;
   products?: { id: string; name: string }[];
   like_count: number;
   comment_count: number;
@@ -47,6 +49,9 @@ export default function ThreadCard({ post, onLike, onCopy, onReply, onMenuDone, 
   const md = post.meal_data;
   const latest = post.preview_comments?.[0];
   const canCopy = !!(md?.plan || (md?.foods && md.foods.length > 0));
+  const photos = post.image_urls?.length ? post.image_urls : post.image_url ? [post.image_url] : [];
+  const [viewing, setViewing] = useState<number | null>(null);
+  const alt = `${post.author_nickname} 님이 올린 사진`;
 
   return (
     <ThreadItem
@@ -65,10 +70,23 @@ export default function ThreadCard({ post, onLike, onCopy, onReply, onMenuDone, 
       }
     >
       {post.content && <p className={detail ? "text-body text-ink whitespace-pre-line" : "text-body text-ink whitespace-pre-line line-clamp-6"}>{post.content}</p>}
-      {post.image_url && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={post.image_url} alt={post.content ? `${post.author_nickname} 님이 올린 사진` : "올린 사진"} loading="lazy"
-          className="w-full max-h-96 object-cover rounded-md border border-line bg-sunken" />
+      <PhotoGrid urls={photos} alt={alt} onOpen={detail ? setViewing : undefined} />
+      {detail && photos.length > 0 && (
+        <Sheet open={viewing != null} onClose={() => setViewing(null)} size="lg"
+          title={photos.length > 1 ? `사진 ${(viewing ?? 0) + 1} / ${photos.length}` : "사진"}>
+          {viewing != null && (
+            <div className="flex flex-col gap-3">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={photos[viewing]} alt={alt} className="w-full max-h-[70dvh] object-contain rounded-md bg-sunken" />
+              {photos.length > 1 && (
+                <div className="flex justify-center gap-2">
+                  <IconButton icon="chevron-left" tone="secondary" label="이전 사진" disabled={viewing === 0} onClick={() => setViewing(viewing - 1)} />
+                  <IconButton icon="chevron-right" tone="secondary" label="다음 사진" disabled={viewing === photos.length - 1} onClick={() => setViewing(viewing + 1)} />
+                </div>
+              )}
+            </div>
+          )}
+        </Sheet>
       )}
       {md?.plan ? (
         <PlanAttach title={md.plan.title || "저장한 식단"} dayKcal={md.plan.day_kcal || []} avgKcal={md.plan.avg_kcal} avgProtein={md.plan.avg_protein} />

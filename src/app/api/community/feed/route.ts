@@ -263,7 +263,9 @@ export async function POST(request: NextRequest) {
     const meal_data = cleanMealData(body.meal_data);
     // 사진은 우리 저장소(/api/community/upload 가 올린 것)만 받는다
     const imgPrefix = imagePrefix();
-    const image_url = typeof body.image_url === "string" && body.image_url.startsWith(imgPrefix) && !body.image_url.includes("..") ? body.image_url.slice(0, 400) : null;
+    const okImg = (u: unknown): u is string => typeof u === "string" && u.startsWith(imgPrefix) && !u.includes("..") && u.length <= 400;
+    const image_urls = [...new Set((Array.isArray(body.image_urls) ? body.image_urls : [body.image_url]).filter(okImg))].slice(0, 4) as string[];
+    const image_url = image_urls[0] ?? null; // 한 장 칸은 첫 장 (예전 화면 호환)
     if (!content && !meal_data && !image_url) return NextResponse.json({ error: "내용이나 식단·사진을 넣어 주세요" }, { status: 400 });
     const product_ids = Array.isArray(body.product_ids) ? body.product_ids.filter((id: unknown) => typeof id === "string" && UUID.test(id)).slice(0, 3) : [];
     const tags = isTopic(topic) ? [topic] : [];
@@ -282,6 +284,7 @@ export async function POST(request: NextRequest) {
         meal_data: meal_data || null,
         product_ids: product_ids.length ? product_ids : null,
         image_url,
+        image_urls,
         tags,
         author_nickname,
         // 건강 관심사·목표·나이대는 글에 붙이지 않는다 (마이페이지에서 나만 본다)
@@ -307,14 +310,14 @@ export async function DELETE(request: NextRequest) {
   if (!id || !UUID.test(id)) return NextResponse.json({ error: "id 필수" }, { status: 400 });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sb = createServiceRoleClient() as any;
-  const { data: before, error: bErr } = await sb.from("community_feed").select("image_url").eq("id", id).eq("user_id", actor).maybeSingle();
+  const { data: before, error: bErr } = await sb.from("community_feed").select("image_url, image_urls").eq("id", id).eq("user_id", actor).maybeSingle();
   if (bErr) return NextResponse.json({ error: bErr.message }, { status: 500 });
   if (!before) return NextResponse.json({ error: "내 글만 지울 수 있어요" }, { status: 403 });
-  const { error } = await sb.from("community_feed").update({ is_active: false, image_url: null, updated_at: new Date().toISOString() })
+  const { error } = await sb.from("community_feed").update({ is_active: false, image_url: null, image_urls: [], updated_at: new Date().toISOString() })
     .eq("id", id).eq("user_id", actor);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   // 사진 파일도 지운다 (남겨 두지 않음)
-  const imgErr = await removeImages(sb, [before.image_url]);
+  const imgErr = await removeImages(sb, [before.image_url, ...(before.image_urls || [])]);
   if (imgErr) console.error("사진 파일을 지우지 못했어요:", imgErr);
   return NextResponse.json({ ok: true });
 }

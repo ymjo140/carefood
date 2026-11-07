@@ -23,6 +23,6 @@ export { ChoiceCard } from "./ChoiceCard";
 export { ChoiceList, type ChoiceTone } from "./ChoiceList";
 export { LinkTabs, ADMIN_TABS } from "./LinkTabs";
 export { RatingStars, RatingInput, ScaleInput, QuickRating, QUICK_RATINGS } from "./Rating";
-export { PostAuthor, PostAction, PostActions, PostTags, ThreadItem, MealAttach, PlanAttach, ProductTagLinks, timeAgo, AGE_GROUP_LABELS, CONCERN_LABELS } from "./FeedPost";
+export { PostAuthor, PostAction, PostActions, PostTags, ThreadItem, MealAttach, PlanAttach, ProductTagLinks, PhotoGrid, timeAgo, AGE_GROUP_LABELS, CONCERN_LABELS } from "./FeedPost";
 export { DragArea, DragHandle, DragGhost, useDragItem, useDropTarget, dropClass, type DragData } from "./Drag";
 export { FoodEntryForm, type FoodBase, type FoodEntry } from "./FoodEntry";
