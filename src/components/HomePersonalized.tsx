@@ -22,11 +22,32 @@ type QuickProduct = {
   id: string;
   name: string;
   match_score: number;
+  category_large?: string | null;
+  dish_category?: string | null;
+  is_exploration?: boolean;
+  slot?: string;
   reason_detail: string | null;
   reasons: string[];
   product_prices: { platform: string; price: number; url: string; image_url: string | null }[];
 };
 
+
+/**
+ * 홈 추천 세 칸 (추천 유형화 설계 v3)
+ * 1. 내 프로필에 가장 잘 맞는 것  2. 건강식단 서비스 중 가장 잘 맞는 것  3. 평소 안 보던 종류 (필터 버블 방지)
+ * 해당하는 게 없으면 다음 순위로 채운다.
+ */
+function pickSlots(list: QuickProduct[]): QuickProduct[] {
+  const out: QuickProduct[] = [];
+  const used = new Set<string>();
+  const take = (p: QuickProduct | undefined, slot: string) => { if (p && !used.has(p.id)) { used.add(p.id); out.push({ ...p, slot }); } };
+  take(list.find((p) => !p.is_exploration) || list[0], "가장 잘 맞아요");
+  take(list.find((p) => !used.has(p.id) && p.category_large === "건강식단서비스"), "건강식단 서비스");
+  const firstCat = out[0]?.dish_category;
+  take(list.find((p) => !used.has(p.id) && (p.is_exploration || (p.dish_category && p.dish_category !== firstCat))), "새로 시도해 보기");
+  for (const p of list) { if (out.length >= 3) break; take(p, "잘 맞아요"); }
+  return out;
+}
 
 /**
  * 홈 개인화 섹션 — 재방문 사용자에게 빠른 추천 카드 표시
@@ -72,7 +93,7 @@ export default function HomePersonalized() {
       })
         .then((r) => r.json())
         .then((data) => {
-          setProducts((data.recommendations || []).slice(0, 3));
+          setProducts(pickSlots(data.recommendations || []));
         })
         .catch(console.error)
         .finally(() => setLoading(false));
@@ -143,6 +164,7 @@ export default function HomePersonalized() {
                   <Badge tone="brand" className="absolute top-2 left-2">적합도 <span className="num">{p.match_score}</span></Badge>
                 </div>
                 <div className="p-3">
+                  {p.slot && <p className="text-caption font-medium text-brand-ink mb-0.5">{p.slot}</p>}
                   <h3 className="text-label font-medium text-ink line-clamp-2 mb-1.5">{p.name}</h3>
                   {bestPrice && <Price value={bestPrice} className="text-body" />}
                   {bestPlatform && <p className="text-caption text-ink-2">{bestPlatform} 외</p>}

@@ -8,7 +8,7 @@ import {
   MacroGrid, MacroInline, MealSlot, Page, PageLoading, Price, ProgressBar, SearchField, SectionHeader, Sheet, SkeletonList,
   Stat, Tabs, TextLink, Thumb, cn, useToast,
   DragArea, DragGhost, DragHandle, useDragItem, useDropTarget, type DragData,
-  Chip, ChipRow, FoodEntryForm, type FoodBase, type FoodEntry,
+  Chip, ChipRow, FoodEntryForm, type FoodBase, type FoodEntry, Field, Select,
 } from "@/components/ui";
 import { ORDERING_ENABLED } from "@/lib/features";
 import { ShoppingList } from "./ShoppingList";
@@ -32,6 +32,14 @@ type CellData = {
 } | null;
 
 type GridData = Record<string, Record<string, CellData>>;
+
+/** 가족 프로필 (/api/family) — AI 채우기 기준으로 고를 수 있다 */
+type FamilyMember = {
+  id: string; nickname: string; relationship: string | null;
+  concerns: string[] | null; conditions: string[] | null; allergies: string[] | null;
+  sensitivity_digestive: number | null; sensitivity_additive: number | null;
+  taste_salty: number | null; taste_sweet: number | null; taste_spicy: number | null; taste_fatty: number | null;
+};
 
 type SavedPlan = {
   id: string;
@@ -480,6 +488,13 @@ export default function WeeklyBoxPage() {
   const [generating, setGenerating] = useState(false);
   const [searchModal, setSearchModal] = useState<{ day: string; meal: string } | null>(null);
   const [shopOpen, setShopOpen] = useState(false);
+  // 누구 기준으로 AI 가 채울지 — 로그인하고 가족을 등록한 경우만 고를 수 있다
+  const [familyList, setFamilyList] = useState<FamilyMember[]>([]);
+  const [forWhom, setForWhom] = useState("me");
+  useEffect(() => {
+    fetch("/api/family").then((r) => (r.ok ? r.json() : null)).then((d) => { if (d?.profiles) setFamilyList(d.profiles); })
+      .catch(() => {}); // ds-allow: 가족 목록이 없으면 '나' 기준만
+  }, []);
   const [saving, setSaving] = useState(false);
   const [precomputed, setPrecomputed] = useState<{ grid: GridData; title: string } | null>(null);
   const [preloading, setPreloading] = useState(false);
@@ -528,12 +543,23 @@ export default function WeeklyBoxPage() {
     try { localStorage.setItem(DRAFT_KEY, JSON.stringify({ grid, planTitle, planId, activeDay })); } catch { /* */ } // ds-allow: 저장 공간이 없으면 임시 저장만 건너뜀
   }, [grid, planTitle, planId, activeDay]);
 
-  const fetchAndBuildGrid = async (): Promise<{ grid: GridData; title: string } | null> => {
-    const profileRaw = localStorage.getItem("carefood_profile");
-    if (!profileRaw) return null;
-    const profile = JSON.parse(profileRaw);
+  const fetchAndBuildGrid = async (who?: FamilyMember): Promise<{ grid: GridData; title: string } | null> => {
+    // 가족 기준이면 가족 프로필로, 아니면 내 온보딩 프로필로
+    let profile: Record<string, unknown> & { concerns?: string[]; goals?: string[]; conditions?: string[] };
     let healthConditions: string[] = [];
-    try { const h = localStorage.getItem("carefood_health"); if (h) healthConditions = JSON.parse(h).conditions || []; } catch { /* */ } // ds-allow: 로컬 검진 정보 읽기
+    if (who) {
+      profile = {
+        concerns: who.concerns || [], goals: [], conditions: who.conditions || [], allergies: who.allergies || [],
+        sensitivity: { digestive: who.sensitivity_digestive ?? 2, additive: who.sensitivity_additive ?? 2 },
+        tastes: { salty: who.taste_salty ?? 5, sweet: who.taste_sweet ?? 5, spicy: who.taste_spicy ?? 5, fatty: who.taste_fatty ?? 5 },
+        meals_per_day: 3,
+      };
+    } else {
+      const profileRaw = localStorage.getItem("carefood_profile");
+      if (!profileRaw) return null;
+      profile = JSON.parse(profileRaw);
+      try { const h = localStorage.getItem("carefood_health"); if (h) healthConditions = JSON.parse(h).conditions || []; } catch { /* */ } // ds-allow: 로컬 검진 정보 읽기
+    }
 
     const res = await fetch("/api/weekly-box", {
       method: "POST", headers: { "Content-Type": "application/json" },
@@ -573,8 +599,9 @@ export default function WeeklyBoxPage() {
         };
       }
     }
-    const goalLabels = (profile.goals || profile.concerns || []).map((c: string) => CONCERN_LABELS[c] || c);
-    return { grid: newGrid, title: (goalLabels.length > 0 ? goalLabels.join(" · ") : "맞춤") + " 식단" };
+    const goalLabels = ((profile.goals?.length ? profile.goals : profile.concerns) || []).map((c: string) => CONCERN_LABELS[c] || c);
+    const base = (goalLabels.length > 0 ? goalLabels.join(" · ") : "맞춤") + " 식단";
+    return { grid: newGrid, title: who ? `${who.nickname} · ${base}` : base };
   };
 
   useEffect(() => {
@@ -593,6 +620,18 @@ export default function WeeklyBoxPage() {
   }, []);
 
   const generatePlan = async () => {
+    const who = familyList.find((f) => f.id === forWhom);
+    if (who) {
+      setGenerating(true);
+      try {
+        const result = await fetchAndBuildGrid(who);
+        if (!result) { toast.show("식단을 만들지 못했어요. 가족 프로필을 확인해 주세요", { tone: "danger" }); return; }
+        setGrid(result.grid); setPlanTitle(result.title); setPlanId(null);
+        toast.show(`${who.nickname} 기준으로 7일을 채웠어요`);
+      } catch { toast.show("식단을 만들지 못했어요. 다시 시도해 주세요", { tone: "danger" }); }
+      finally { setGenerating(false); }
+      return;
+    }
     if (precomputed) {
       setGrid(precomputed.grid); setPlanTitle(precomputed.title); setPlanId(null);
       setPrecomputed(null); setPreloading(true);
@@ -609,6 +648,18 @@ export default function WeeklyBoxPage() {
     } catch { toast.show("식단을 만들지 못했어요. 다시 시도해 주세요", { tone: "danger" }); }
     finally { setGenerating(false); }
   };
+
+  // 온보딩을 마치고 바로 온 경우(?fill=1): 비어 있으면 한 번 AI 로 채운다 — 첫 방문에 '내 기준 7일'을 바로 보이게
+  const autoFilled = useRef(false);
+  useEffect(() => {
+    if (loading || autoFilled.current) return;
+    if (!new URLSearchParams(window.location.search).has("fill")) return;
+    autoFilled.current = true;
+    window.history.replaceState(null, "", "/weekly-box");
+    const empty = Object.values(grid).every((slots) => Object.values(slots).every((c) => !c));
+    if (empty) generatePlan();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- 첫 로딩이 끝났을 때 한 번만
+  }, [loading]);
 
   const savePlan = async () => {
     const userId = getUserId(); if (!userId) return;
@@ -903,6 +954,14 @@ export default function WeeklyBoxPage() {
             />
             <p className="text-caption text-ink-2 mt-1.5">영양 밸런스를 맞춰 7일을 구성해요</p>
           </div>
+          {familyList.length > 0 && (
+            <Field label="누구 기준으로 채울까요">
+              <Select value={forWhom} onChange={(e) => setForWhom(e.target.value)}>
+                <option value="me">나</option>
+                {familyList.map((f) => <option key={f.id} value={f.id}>{f.nickname}{f.relationship ? ` (${f.relationship})` : ""}</option>)}
+              </Select>
+            </Field>
+          )}
           <div className="flex gap-2">
             <Button variant="secondary" block onClick={generatePlan} loading={generating || (!precomputed && preloading)}>
               {generating ? "만드는 중" : !precomputed && preloading ? "준비 중" : "AI 추천으로 채우기"}

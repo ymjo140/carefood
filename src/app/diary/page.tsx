@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import Link from "next/link";
 import {
-  Badge, Button, Card, Chip, ConfirmSheet, EmptyState, Field, Icon, IconButton, Input, Kcal, LinkButton, ListRow, MacroGrid, MealSlot, Page, PageHeader, PageLoading, SectionHeader, Spinner, Tabs, buttonClass, cn, useToast, SkeletonList, QuickRating,
+  Badge, Button, Card, Chip, ConfirmSheet, EmptyState, Field, Icon, IconButton, Input, Kcal, LinkButton, ListRow, MacroGrid, MealSlot, Page, PageHeader, PageLoading, SectionHeader, Spinner, Tabs, buttonClass, cn, useToast, SkeletonList, QuickRating, Notice, TextLink,
 } from "@/components/ui";
 import { getClientActorId } from "@/lib/actor-client";
 import { NextMeal, pickNextMeal, type NextCandidate } from "./NextMeal";
@@ -275,6 +275,15 @@ export default function DiaryPage() {
       .then((d) => { if (d?.ratings) setRatings((m) => ({ ...m, ...d.ratings })); })
       .catch(() => {}); // ds-allow: 평가 여부를 못 불러오면 '맛 어땠어요?'를 그대로 보여 준다
   }, [entryProductIds]);
+
+  // 로그인 여부 — 기록이 쌓이면 '다른 기기에서도 보려면 로그인' 안내
+  const [loggedIn, setLoggedIn] = useState<boolean | null>(null);
+  useEffect(() => {
+    import("@/lib/supabase/client")
+      .then(({ createClient }) => createClient().auth.getUser())
+      .then(({ data }) => setLoggedIn(!!data.user))
+      .catch(() => setLoggedIn(null)); // ds-allow: 확인 못 하면 안내를 띄우지 않음
+  }, []);
 
   /* ── 초기화 ── */
   useEffect(() => {
@@ -1055,6 +1064,14 @@ export default function DiaryPage() {
         <p className="text-label text-ink-2 text-center mt-5">
           이번 주 <span className="num font-bold text-brand-ink">{streakDays}일</span> 기록했어요
         </p>
+      )}
+
+      {/* ━━ 기록이 3일 쌓이면: 기기를 바꿔도 이어 보려면 로그인 ━━ */}
+      {loggedIn === false && streakDays >= 3 && (
+        <Notice className="mt-4" title="기록이 이 기기에만 묶여 있어요">
+          로그인하면 휴대폰을 바꾸거나 다른 기기에서도 이어서 볼 수 있어요.{" "}
+          <TextLink href="/login?returnTo=/diary">로그인하기</TextLink>
+        </Notice>
       )}
 
       <p className="text-caption text-ink-3 text-center mt-4">34만 식품 DB에서 검색하면 영양 정보가 자동으로 채워져요</p>

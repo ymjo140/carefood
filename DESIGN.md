@@ -67,6 +67,8 @@
 - 실패는 무엇이 안 됐는지 + 할 일: "저장하지 못했어요. 다시 시도해 주세요"
 - 비어 있음은 이유 한 줄 + 행동 하나 (`<EmptyState>`)
 - 의료 표현 금지: 진단·처방·치료 단어 대신 "성분 정보 + 통계적 매칭"
+- 추천 이유는 성분 사실 + 숫자 한 줄: "나트륨 210mg · 한 끼 기준의 절반", "단백질 24g". "건강에 좋아요"·"혈당 관리에 적합" 같은 효능 말은 쓰지 않는다
+- 계산으로 짐작한 값(리뷰 전 맛, 1회 제공량 환산 등)은 옆에 `<Estimate>` 한 줄로 추정임을 밝힌다
 
 ## 6. 컴포넌트 고르는 법
 
@@ -79,11 +81,11 @@
 | 보기 전환 | `Tabs` (pill: 화면 위쪽 / line: 카드·시트 안) · 페이지 이동 탭 `LinkTabs` |
 | 묶음 | `Card` `CardActions` |
 | 목록 한 줄 | `ListRow` + `Thumb` / `Avatar` |
-| 입력 | `Field` `Input` `Textarea` `Select` `SearchField`, `.ds-range`, `.ds-check`, `RatingInput` `ScaleInput` |
+| 입력 | `Field` `Input` `Textarea` `Select` `SearchField`, `.ds-range`, `.ds-check`, `RatingInput` `ScaleInput` · 한 번 누르는 맛 평가 `QuickRating` |
 | 영양 | `MacroGrid` `MacroStat` `MacroInline` `ProgressBar` `Stat` `Kcal` `Price` |
 | 끼니 | `MealTag` `MealSlot` `mealMeta()` |
 | 커뮤니티 글 | `PostAuthor` `PostActions` `PostAction` `PostTags` |
-| 안내 / 비어 있음 / 불러오는 중 | `Notice` / `EmptyState` / `Skeleton` `SkeletonList` `SkeletonPost` (`Spinner` 는 버튼·작은 칸에만) |
+| 안내 / 추정 표시 / 비어 있음 / 불러오는 중 | `Notice` / `Estimate` / `EmptyState` / `Skeleton` `SkeletonList` `SkeletonPost` (`Spinner` 는 버튼·작은 칸에만) |
 | 겹침 | `Sheet` `ConfirmSheet` `useToast()` |
 | 하단 | `BottomNav`(레이아웃에 한 번) · 주 행동 줄 `BottomBar`(있으면 탭 바가 물러남) · 떠 있는 버튼은 `above-nav` |
 | 단계 | `Steps` |

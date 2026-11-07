@@ -295,7 +295,8 @@ function OnboardingContent() {
       }
     } catch { /* DB 저장 실패해도 localStorage가 있으니 진행 */ } // ds-allow: 로컬 저장이 있어 진행
 
-    router.push("/products");
+    // 결과를 본 다음 행동: 내 기준으로 이번 주 식단을 바로 채워 보여 준다
+    router.push("/weekly-box?fill=1");
   };
 
   const isResultStep = currentStepKey === "result";
@@ -414,7 +415,7 @@ function OnboardingContent() {
               disabled={!canProceed()}
               iconRight={isResultStep ? "arrow-right" : undefined}
             >
-              {isResultStep ? "이 전략으로 시작하기" : step === totalSteps - 2 ? "영양 분석 보기" : "다음"}
+              {isResultStep ? "이번 주 식단 채우기" : step === totalSteps - 2 ? "영양 분석 보기" : "다음"}
             </Button>
           </div>
           {canSkip && (
