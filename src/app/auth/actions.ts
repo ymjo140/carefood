@@ -2,6 +2,12 @@
 
 import { redirect } from "next/navigation";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { linkActorToAccount, resetActor } from "@/lib/actor-server";
+
+/** 로그인 뒤 돌아갈 곳 — 이 사이트 안의 경로만 */
+function safePath(p: string | null | undefined) {
+  return p && p.startsWith("/") && !p.startsWith("//") ? p : "/";
+}
 
 /**
  * 이메일/비밀번호 회원가입
@@ -22,13 +28,17 @@ export async function signup(
   }
 
   const supabase = await createServerSupabaseClient();
-  const { error } = await supabase.auth.signUp({ email, password });
+  const { data, error } = await supabase.auth.signUp({ email, password });
 
   if (error) {
     if (error.message.includes("already registered")) {
       return { error: "이미 가입된 이메일이에요." };
     }
     return { error: error.message };
+  }
+  // 이메일 확인 없이 바로 로그인된 경우: 이 기기의 기록을 새 계정에 묶는다
+  if (data.session && data.user) {
+    try { await linkActorToAccount(data.user.id); } catch (e) { console.error(e); return { error: "가입은 됐지만 기록을 계정에 잇지 못했어요. 다시 로그인해 주세요." }; }
   }
 
   // 가입 후 바로 로그인 처리 (이메일 인증 비활성화 시)
@@ -50,15 +60,17 @@ export async function login(
   }
 
   const supabase = await createServerSupabaseClient();
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
   if (error) {
     return { error: "이메일 또는 비밀번호가 맞지 않아요." };
   }
 
+  // 이 기기의 기록을 계정에 묶는다 (다른 기기에서 로그인해도 같은 기록)
+  try { await linkActorToAccount(data.user.id); } catch (e) { console.error(e); return { error: "로그인은 됐지만 기록을 불러오지 못했어요. 다시 시도해 주세요." }; }
+
   // returnTo 파라미터가 있으면 그쪽으로, 없으면 홈
-  const returnTo = formData.get("returnTo") as string;
-  redirect(returnTo || "/");
+  redirect(safePath(formData.get("returnTo") as string));
 }
 
 /**
@@ -67,6 +79,8 @@ export async function login(
 export async function logout() {
   const supabase = await createServerSupabaseClient();
   await supabase.auth.signOut();
+  // 이 기기는 새 익명 기록으로 — 다음 사람이 계정 기록을 보지 않게
+  await resetActor();
   redirect("/");
 }
 

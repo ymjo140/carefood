@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
+import { getActorId, noActor } from "@/lib/actor-server";
 
 /**
  * POST /api/track/click — 구매 링크 클릭 트래킹
@@ -9,7 +10,8 @@ import { createServiceRoleClient } from "@/lib/supabase/server";
  */
 export async function POST(request: NextRequest) {
   try {
-    const { user_id, product_id, platform, click_url, referrer_page } = await request.json();
+    const { product_id, platform, click_url, referrer_page, placement } = await request.json();
+    const user_id = await getActorId();
 
     if (!product_id || !platform) {
       return NextResponse.json({ error: "product_id, platform 필수" }, { status: 400 });
@@ -18,13 +20,21 @@ export async function POST(request: NextRequest) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const sb = createServiceRoleClient() as any;
 
-    await sb.from("product_clicks").insert({
+    const row = {
       user_id: user_id || null,
       product_id,
       platform,
       click_url: click_url || null,
       referrer_page: referrer_page || null,
-    });
+      placement: typeof placement === "string" ? placement.slice(0, 40) : null,
+    };
+    const { error } = await sb.from("product_clicks").insert(row);
+    if (error) {
+      // placement 칸이 아직 없는 DB 에서도 클릭은 남긴다
+      const { placement: _drop, ...rest } = row; void _drop;
+      const { error: again } = await sb.from("product_clicks").insert(rest);
+      if (again) return NextResponse.json({ error: again.message }, { status: 500 });
+    }
 
     return NextResponse.json({ ok: true });
   } catch {

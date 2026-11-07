@@ -278,10 +278,9 @@ async function main() {
 
   for (const v of VARIANTS) {
     const ctx = await browser.newContext({ viewport: v.viewport, colorScheme: v.scheme, deviceScaleFactor: 1, isMobile: v.mobile, hasTouch: v.mobile, locale: "ko-KR" });
-    // 개인화 화면이 그려지도록 검사용 프로필을 넣어 둔다
+    // 개인화 화면이 그려지도록 검사용 프로필을 넣어 둔다 (기록 주인은 서버가 쿠키로 새로 발급)
     await ctx.addInitScript(() => {
       try {
-        if (!localStorage.getItem("carefood_anon_id")) localStorage.setItem("carefood_anon_id", "anon_ds_audit");
         if (!localStorage.getItem("carefood_profile")) localStorage.setItem("carefood_profile", JSON.stringify({
           nickname: "검사용사용자", age_group: "30s", gender: "female", height: 165, weight: 58,
           concerns: ["balanced"], goals: ["muscle"], allergies: [], tastes: { salty: 5, sweet: 4, spicy: 6, fatty: 5 }, meals_per_day: 3,

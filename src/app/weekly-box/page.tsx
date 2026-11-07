@@ -10,6 +10,9 @@ import {
   DragArea, DragGhost, DragHandle, useDragItem, useDropTarget, type DragData,
   Chip, ChipRow, FoodEntryForm, type FoodBase, type FoodEntry,
 } from "@/components/ui";
+import { ORDERING_ENABLED } from "@/lib/features";
+import { ShoppingList } from "./ShoppingList";
+import { getClientActorId } from "@/lib/actor-client";
 
 /* ───── 타입 ───── */
 type CellData = {
@@ -71,7 +74,8 @@ const SERVICE_NAMES: Record<string, string> = {
 };
 
 function getUserId(): string | null {
-  try { return localStorage.getItem("carefood_anon_id") || null; } catch { return null; }
+  // 서버가 발급한 쿠키의 id — API 는 이 값을 받지 않고 쿠키로 직접 확인한다
+  return getClientActorId();
 }
 
 /** 사용자 id 를 붙여 JSON 을 받는다. 익명 id 가 없으면 빈 결과 (항상 비동기) */
@@ -475,6 +479,7 @@ export default function WeeklyBoxPage() {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [searchModal, setSearchModal] = useState<{ day: string; meal: string } | null>(null);
+  const [shopOpen, setShopOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [precomputed, setPrecomputed] = useState<{ grid: GridData; title: string } | null>(null);
   const [preloading, setPreloading] = useState(false);
@@ -735,6 +740,12 @@ export default function WeeklyBoxPage() {
   };
 
   // ── 통계 계산 ──
+  // 장보기 목록: 제품 → 이번 주에 들어간 횟수 (외식 제외)
+  const shopCounts: Record<string, number> = {};
+  for (const slots of Object.values(grid)) for (const cell of Object.values(slots)) {
+    if (cell?.product_id && cell.type !== "eating_out") shopCounts[cell.product_id] = (shopCounts[cell.product_id] || 0) + 1;
+  }
+
   const stats = (() => {
     let totalPrice = 0, totalCal = 0, totalProtein = 0, totalCarbs = 0, totalFat = 0, totalSodium = 0;
     let products = 0, eatingOut = 0;
@@ -1031,7 +1042,7 @@ export default function WeeklyBoxPage() {
 
     </DragArea>
 
-      {/* ── 하단 주문 ── */}
+      {/* ── 하단: 장보기 목록 (통합 주문은 ORDERING_ENABLED 를 켜야 열린다) ── */}
       {stats.products > 0 && (
         <BottomBar>
           <div className="flex-1 min-w-0">
@@ -1040,19 +1051,23 @@ export default function WeeklyBoxPage() {
             </div>
             <Price value={stats.totalPrice} className="text-body" />
           </div>
-          <Button onClick={() => {
-            const orderItems: { day: string; slot: string; product_name: string; product_id?: string }[] = [];
-            for (const [day, slots] of Object.entries(grid)) {
-              for (const [slot, cell] of Object.entries(slots)) {
-                if (cell && cell.name && cell.type !== "eating_out") orderItems.push({ day, slot, product_name: cell.name, product_id: cell.product_id || undefined });
+          {ORDERING_ENABLED && (
+            <Button variant="secondary" onClick={() => {
+              const orderItems: { day: string; slot: string; product_name: string; product_id?: string }[] = [];
+              for (const [day, slots] of Object.entries(grid)) {
+                for (const [slot, cell] of Object.entries(slots)) {
+                  if (cell && cell.name && cell.type !== "eating_out") orderItems.push({ day, slot, product_name: cell.name, product_id: cell.product_id || undefined });
+                }
               }
-            }
-            if (orderItems.length > 0) { localStorage.setItem("carefood_order_items", JSON.stringify(orderItems)); window.location.href = "/order"; }
-          }}>
-            이 식단 주문하기
-          </Button>
+              if (orderItems.length > 0) { localStorage.setItem("carefood_order_items", JSON.stringify(orderItems)); window.location.href = "/order"; }
+            }}>
+              주문하기
+            </Button>
+          )}
+          <Button onClick={() => setShopOpen(true)}>장보기 목록 보기</Button>
         </BottomBar>
       )}
+      <ShoppingList open={shopOpen} onClose={() => setShopOpen(false)} counts={shopCounts} />
 
       {/* ── 음식 고르기 ── */}
       <ProductSearchSheet

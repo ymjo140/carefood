@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
+import { getActorId, noActor } from "@/lib/actor-server";
 import { perServing } from "@/lib/nutrition";
 
 /**
@@ -155,8 +156,8 @@ export async function POST(request: NextRequest) {
       budget = 100000,
       mealsPerDay = 3,
       supplementsPerDay = 1,
-      user_id,
     } = body;
+    const user_id = await getActorId();
 
     const supabase = createServiceRoleClient();
 

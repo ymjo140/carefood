@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
+import { getActorId, noActor } from "@/lib/actor-server";
 
 /** POST /api/community/follow — 팔로우 토글 */
 export async function POST(request: NextRequest) {
   try {
-    const { follower_id, following_id } = await request.json();
-    if (!follower_id || !following_id) return NextResponse.json({ error: "follower_id, following_id 필수" }, { status: 400 });
+    const { following_id } = await request.json();
+    const follower_id = await getActorId();
+    if (!follower_id) return noActor();
+    if (!following_id) return NextResponse.json({ error: "following_id 필수" }, { status: 400 });
     if (follower_id === following_id) return NextResponse.json({ error: "자기 자신은 팔로우 불가" }, { status: 400 });
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

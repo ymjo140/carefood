@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connection } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
+import { getActorId, noActor } from "@/lib/actor-server";
 
-/** GET /api/meal-plans/load?id=xxx&user_id=xxx */
+/** GET /api/meal-plans/load?id=xxx — 내 식단 하나 (사용자는 쿠키로) */
 export async function GET(request: NextRequest) {
   await connection();
   const id = request.nextUrl.searchParams.get("id");
-  const userId = request.nextUrl.searchParams.get("user_id");
-  if (!id || !userId) return NextResponse.json({ error: "id, user_id 필수" }, { status: 400 });
+  const userId = await getActorId();
+  if (!userId) return noActor();
+  if (!id) return NextResponse.json({ error: "id 필수" }, { status: 400 });
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sb = createServiceRoleClient() as any;

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Button, Sheet, MealTag, useToast } from "@/components/ui";
+import { getClientActorId } from "@/lib/actor-client";
 
 const MEAL_OPTIONS = ["breakfast", "lunch", "dinner", "snack"] as const;
 
@@ -17,15 +18,7 @@ export default function MealLogButton({ productId, productName }: { productId: s
   const toast = useToast();
 
   useEffect(() => {
-    try {
-      const profile = localStorage.getItem("carefood_profile");
-      if (profile) {
-        const p = JSON.parse(profile);
-        if (p.user_id) { setUserId(p.user_id); return; }
-      }
-      const anonId = localStorage.getItem("carefood_anon_id");
-      if (anonId) setUserId(anonId);
-    } catch { /* */ } // ds-allow: 로컬 ID 읽기
+    setUserId(getClientActorId()); // eslint-disable-line react-hooks/set-state-in-effect -- 쿠키는 브라우저에서만 읽힌다
   }, []);
 
   const handleLog = async (mealType: string) => {

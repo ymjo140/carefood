@@ -1,14 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connection } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
+import { getActorId, noActor } from "@/lib/actor-server";
 
 /**
- * GET /api/products/recent?user_id=xxx — 최근 30일에 본·가격을 누른 제품 (최근 순, 최대 20개, 가격 포함)
+ * GET /api/products/recent — 최근 30일에 본·가격을 누른 제품 (최근 순, 최대 20개, 가격 포함)
  */
 export async function GET(request: NextRequest) {
   await connection();
-  const userId = request.nextUrl.searchParams.get("user_id");
-  if (!userId) return NextResponse.json({ error: "user_id 필수" }, { status: 400 });
+  const userId = await getActorId();
+  if (!userId) return noActor();
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sb = createServiceRoleClient() as any;

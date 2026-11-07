@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
+import { getActorId, noActor } from "@/lib/actor-server";
 
 /**
- * GET /api/community/group-buy/suggest?user_id=xxx
+ * GET /api/community/group-buy/suggest[?mine=1] — mine 이면 내 기록 기준 (사용자는 쿠키로)
  *
  * 사용자의 최근 7일 식단 기록에서 영양 갭을 분석하고,
  * 부족한 영양소를 채울 수 있는 제품으로 공구를 추천합니다.
  *
- * user_id 없이 호출하면 전체 사용자 평균 영양 갭 기반 추천 (시스템 공구용)
+ * mine 없이 호출하면 전체 사용자 평균 영양 갭 기반 추천 (시스템 공구용)
  */
 
 type NutrientGap = {
@@ -35,7 +36,8 @@ type SuggestedGroupBuy = {
 };
 
 export async function GET(req: NextRequest) {
-  const userId = req.nextUrl.searchParams.get("user_id");
+  const sp = req.nextUrl.searchParams;
+  const userId = sp.has("mine") || sp.has("user_id") ? await getActorId() : null;
   const sb = createServiceRoleClient() as any;
 
   // ── 1. 영양 목표 가져오기 ──

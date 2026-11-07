@@ -6,6 +6,7 @@ import MealCard from "@/components/community/MealCard";
 import DailyCard from "@/components/community/DailyCard";
 import { Avatar, Badge, BottomBar, Button, Card, EmptyState, Input, Page, PageLoading, SectionHeader, useToast } from "@/components/ui";
 import { CONCERN_LABELS, timeAgo } from "@/components/ui/FeedPost";
+import { getClientActorId } from "@/lib/actor-client";
 
 const NICKNAME_ADJECTIVES = ["건강한", "활기찬", "든든한", "상쾌한", "깔끔한", "씩씩한", "발랄한", "포근한", "산뜻한", "튼튼한"];
 const NICKNAME_ANIMALS = ["사자", "호랑이", "토끼", "곰", "여우", "다람쥐", "펭귄", "고래", "부엉이", "사슴"];
@@ -36,16 +37,8 @@ function getOrCreateNickname(): string {
 }
 
 function getUserId(): string {
-  try {
-    let id = localStorage.getItem("carefood_anon_id");
-    if (!id) {
-      id = `anon_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-      localStorage.setItem("carefood_anon_id", id);
-    }
-    return id;
-  } catch {
-    return `anon_${Date.now()}`;
-  }
+  // 서버가 발급한 쿠키의 id — API 는 이 값을 받지 않고 쿠키로 직접 확인한다
+  return getClientActorId() || "";
 }
 
 type Comment = {

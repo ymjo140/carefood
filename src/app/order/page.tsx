@@ -1,7 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { ORDERING_ENABLED } from "@/lib/features";
 import { Button, Card, EmptyState, Field, Icon, Input, LinkButton, Page, PageHeader, PageLoading, Price, TextLink, useToast } from "@/components/ui";
+import { getClientActorId } from "@/lib/actor-client";
 
 /**
  * 주문 요약 페이지
@@ -46,17 +48,30 @@ const SLOT_LABELS: Record<string, string> = {
 };
 
 function getUserId(): string {
-  try {
-    let id = localStorage.getItem("carefood_anon_id");
-    if (!id) {
-      id = `anon_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-      localStorage.setItem("carefood_anon_id", id);
-    }
-    return id;
-  } catch { return `anon_${Date.now()}`; }
+  // 서버가 발급한 쿠키의 id — API 는 이 값을 받지 않고 쿠키로 직접 확인한다
+  return getClientActorId() || "";
 }
 
 export default function OrderPage() {
+  if (!ORDERING_ENABLED) return <OrderLocked />;
+  return <OrderFlow />;
+}
+
+/** 통합 주문은 사업자 등록·PG 연결 뒤에 연다 (src/lib/features.ts) */
+function OrderLocked() {
+  return (
+    <Page width="narrow">
+      <PageHeader title="한 번에 주문하기" />
+      <EmptyState
+        title="한 번에 주문하기는 준비 중이에요"
+        description="지금은 식단 리스트의 장보기 목록에서 몰마다 바로 갈 수 있어요"
+        action={<LinkButton href="/weekly-box" size="sm">식단 리스트로 가기</LinkButton>}
+      />
+    </Page>
+  );
+}
+
+function OrderFlow() {
   const toast = useToast();
   const [items, setItems] = useState<BoxItem[]>([]);
   const [groups, setGroups] = useState<ServiceGroup[]>([]);

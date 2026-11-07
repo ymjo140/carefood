@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
+import { getActorId, noActor } from "@/lib/actor-server";
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { user_id, daily_calories, daily_protein_g, max_sodium_mg, max_sugar_g } = body;
-
-  if (!user_id) {
-    return NextResponse.json({ error: "user_id required" }, { status: 400 });
-  }
+  const { daily_calories, daily_protein_g, max_sodium_mg, max_sugar_g } = body;
+  const user_id = await getActorId();
+  if (!user_id) return noActor();
 
   const supabase = createServiceRoleClient();
   const { error } = await (supabase as any)

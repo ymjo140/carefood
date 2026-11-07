@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connection } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
+import { getActorId, noActor } from "@/lib/actor-server";
+import { ORDERING_ENABLED } from "@/lib/features";
 
 /**
  * POST /api/orders — 주간 식단 → 통합 주문 생성
@@ -10,6 +12,8 @@ import { createServiceRoleClient } from "@/lib/supabase/server";
  * 3. 서비스별 purchase_orders 생성/집계
  *
  * GET /api/orders — 내 주문 내역
+ *
+ * 통합 주문은 사업자 등록·PG 연결 후 NEXT_PUBLIC_ORDERING_ENABLED=1 로 연다 (그 전엔 POST 403)
  */
 
 // 서비스 식별: product의 manufacturer/source로 판단
@@ -35,12 +39,15 @@ function identifyService(manufacturer: string | null): string {
 
 export async function POST(request: NextRequest) {
   await connection();
+  if (!ORDERING_ENABLED) return NextResponse.json({ error: "한 번에 주문하기는 준비 중이에요" }, { status: 403 });
   try {
     const body = await request.json();
-    const { user_id, items, address_id, delivery_week_start, delivery_preference } = body;
+    const { items, address_id, delivery_week_start, delivery_preference } = body;
+    const user_id = await getActorId();
+    if (!user_id) return noActor();
 
-    if (!user_id || !items || !Array.isArray(items) || items.length === 0) {
-      return NextResponse.json({ error: "user_id, items[] 필수" }, { status: 400 });
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return NextResponse.json({ error: "items[] 필수" }, { status: 400 });
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -243,8 +250,8 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   await connection();
-  const userId = request.nextUrl.searchParams.get("user_id");
-  if (!userId) return NextResponse.json({ error: "user_id 필수" }, { status: 400 });
+  const userId = await getActorId();
+  if (!userId) return noActor();
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sb = createServiceRoleClient() as any;

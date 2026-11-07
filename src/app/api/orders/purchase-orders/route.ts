@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connection } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
+import { adminOnly } from "@/lib/actor-server";
 
 /**
  * GET /api/orders/purchase-orders — 발주 현황 (관리자용)
@@ -11,6 +12,8 @@ import { createServiceRoleClient } from "@/lib/supabase/server";
  * - 배송 존별 분류
  */
 export async function GET(request: NextRequest) {
+  const denied = await adminOnly();
+  if (denied) return denied;
   await connection();
   const service = request.nextUrl.searchParams.get("service");
   const status = request.nextUrl.searchParams.get("status") || "pending";
@@ -57,6 +60,8 @@ export async function GET(request: NextRequest) {
  * PATCH /api/orders/purchase-orders — 발주 상태 변경
  */
 export async function PATCH(request: NextRequest) {
+  const denied = await adminOnly();
+  if (denied) return denied;
   try {
     const { po_id, status, tracking_info } = await request.json();
     if (!po_id || !status) {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
+import { getActorId, noActor } from "@/lib/actor-server";
 
 /**
  * POST /api/community/like — 좋아요 토글 (atomic increment)
@@ -8,9 +9,10 @@ import { createServiceRoleClient } from "@/lib/supabase/server";
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const user_id = body.user_id;
+    const user_id = await getActorId();
+    if (!user_id) return noActor();
     const post_id = body.post_id || body.plan_id; // 호환
-    if (!user_id || !post_id) return NextResponse.json({ error: "user_id, post_id 필수" }, { status: 400 });
+    if (!post_id) return NextResponse.json({ error: "post_id 필수" }, { status: 400 });
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const sb = createServiceRoleClient() as any;

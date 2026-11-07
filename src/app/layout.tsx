@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono, Noto_Sans_KR, Outfit } from "next/font/google";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import SessionSync from "@/components/SessionSync";
 import { BottomNav, ToastProvider } from "@/components/ui";
 import "./globals.css";
 
@@ -85,6 +86,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="min-h-full flex flex-col bg-canvas text-ink">
         <ToastProvider>
         <Header />
+        <SessionSync />
         <script
           dangerouslySetInnerHTML={{
             __html: `if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(()=>{})}`, // ds-allow: 서비스 워커 등록 실패는 화면에 영향 없음

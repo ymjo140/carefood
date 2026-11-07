@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connection } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
+import { adminOnly } from "@/lib/actor-server";
 
 /**
  * GET /api/admin/dashboard
  * 관리 대시보드 데이터 (데이터 현황 + 품질 + 사용자 분석)
  */
 export async function GET(_request: NextRequest) {
+  const denied = await adminOnly();
+  if (denied) return denied;
   await connection(); // force dynamic rendering
   const supabase = createServiceRoleClient();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

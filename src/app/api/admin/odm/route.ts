@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { connection } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
+import { adminOnly } from "@/lib/actor-server";
 
 /**
  * GET /api/admin/odm — ODM 수요 기반 제품 스펙 제안
@@ -12,6 +13,8 @@ import { createServiceRoleClient } from "@/lib/supabase/server";
  */
 
 export async function GET() {
+  const denied = await adminOnly();
+  if (denied) return denied;
   await connection();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sb = createServiceRoleClient() as any;

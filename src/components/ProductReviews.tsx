@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Badge, Button, Card, Chip, EmptyState, Field, SectionHeader, Spinner, Textarea, useToast } from "@/components/ui";
 import { RatingInput, RatingStars, ScaleInput } from "@/components/ui/Rating";
+import { getClientActorId } from "@/lib/actor-client";
 
 type Review = {
   id: string;
@@ -74,17 +75,8 @@ export default function ProductReviews({ productId }: { productId: string }) {
     if (formData.rating === 0) return;
     setSubmitting(true);
 
-    let userId: string | null = null;
-    try {
-      const { createClient } = await import("@/lib/supabase/client");
-      const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      userId = user?.id || null;
-    } catch { /* */ } // ds-allow: 비로그인은 정상
-    if (!userId) {
-      try { userId = localStorage.getItem("carefood_anon_id"); } catch { /* */ } // ds-allow: 로컬 ID 읽기
-    }
-    if (!userId) { setSubmitting(false); return; }
+    const userId = getClientActorId(); // 서버는 쿠키로 확인한다
+    if (!userId) { setSubmitting(false); toast.show("접속 정보를 확인하지 못했어요. 페이지를 새로 고쳐 주세요", { tone: "danger" }); return; }
 
     try {
       await fetch("/api/reviews", {

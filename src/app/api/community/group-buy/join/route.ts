@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
+import { getActorId, noActor } from "@/lib/actor-server";
 
 /** POST /api/community/group-buy/join — 공구 참여 */
 export async function POST(request: NextRequest) {
   try {
-    const { user_id, group_buy_id } = await request.json();
-    if (!user_id || !group_buy_id) {
-      return NextResponse.json({ error: "user_id, group_buy_id 필수" }, { status: 400 });
+    const { group_buy_id } = await request.json();
+    const user_id = await getActorId();
+    if (!user_id) return noActor();
+    if (!group_buy_id) {
+      return NextResponse.json({ error: "group_buy_id 필수" }, { status: 400 });
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

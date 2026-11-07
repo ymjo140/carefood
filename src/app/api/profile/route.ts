@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
+import { getActorId, noActor } from "@/lib/actor-server";
 
 /**
  * POST /api/profile — 사용자 프로필 저장 (upsert)
@@ -7,12 +8,10 @@ import { createServiceRoleClient } from "@/lib/supabase/server";
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { user_id, concerns, sensitivity, allergies, tastes,
+    const { concerns, sensitivity, allergies, tastes,
             age_group, gender, household, diet_type } = body;
-
-    if (!user_id) {
-      return NextResponse.json({ error: "user_id 필수" }, { status: 400 });
-    }
+    const user_id = await getActorId();
+    if (!user_id) return noActor();
 
     const supabase = createServiceRoleClient();
 
@@ -50,13 +49,11 @@ export async function POST(request: NextRequest) {
 }
 
 /**
- * GET /api/profile?user_id=xxx — 프로필 조회
+ * GET /api/profile — 내 프로필 조회 (사용자는 쿠키로)
  */
 export async function GET(request: NextRequest) {
-  const userId = request.nextUrl.searchParams.get("user_id");
-  if (!userId) {
-    return NextResponse.json({ error: "user_id 필수" }, { status: 400 });
-  }
+  const userId = await getActorId();
+  if (!userId) return noActor();
 
   const supabase = createServiceRoleClient();
 

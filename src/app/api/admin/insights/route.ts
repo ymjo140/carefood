@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
+import { adminOnly } from "@/lib/actor-server";
 
 export async function GET() {
+  const denied = await adminOnly();
+  if (denied) return denied;
   const supabase = createServiceRoleClient();
   const sb = supabase as any;
 

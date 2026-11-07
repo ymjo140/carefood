@@ -1,18 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connection } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
+import { getActorId, noActor } from "@/lib/actor-server";
 
 /**
- * GET  /api/meal-plans?user_id=xxx[&include=grid] — 저장된 식단 목록 (+ filled_days, 요청 시 grid)
+ * GET  /api/meal-plans[?include=grid] — 내 식단 (사용자는 쿠키로) — 저장된 식단 목록 (+ filled_days, 요청 시 grid)
  * POST /api/meal-plans — 식단 저장/수정
  * PATCH /api/meal-plans — 이름 변경
- * DELETE /api/meal-plans?id=xxx&user_id=xxx — 식단 삭제 (soft)
+ * DELETE /api/meal-plans?id=xxx — 식단 삭제 (soft)
  */
 
 export async function GET(request: NextRequest) {
   await connection();
-  const userId = request.nextUrl.searchParams.get("user_id");
-  if (!userId) return NextResponse.json({ error: "user_id 필수" }, { status: 400 });
+  const userId = await getActorId();
+  if (!userId) return noActor();
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sb = createServiceRoleClient() as any;
@@ -41,10 +42,12 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { user_id, id, title, grid, tags } = body;
+    const { id, title, grid, tags } = body;
+    const user_id = await getActorId();
+    if (!user_id) return noActor();
 
-    if (!user_id || !grid) {
-      return NextResponse.json({ error: "user_id, grid 필수" }, { status: 400 });
+    if (!grid) {
+      return NextResponse.json({ error: "grid 필수" }, { status: 400 });
     }
 
     // 통계 계산 — 실제로 채워진 날 기준
@@ -109,8 +112,10 @@ export async function POST(request: NextRequest) {
 /** PATCH — 이름 변경 */
 export async function PATCH(request: NextRequest) {
   try {
-    const { id, user_id, title } = await request.json();
-    if (!id || !user_id || !title) return NextResponse.json({ error: "id, user_id, title 필수" }, { status: 400 });
+    const { id, title } = await request.json();
+    const user_id = await getActorId();
+    if (!user_id) return noActor();
+    if (!id || !title) return NextResponse.json({ error: "id, title 필수" }, { status: 400 });
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const sb = createServiceRoleClient() as any;
@@ -130,8 +135,9 @@ export async function PATCH(request: NextRequest) {
 /** DELETE — soft delete */
 export async function DELETE(request: NextRequest) {
   const id = request.nextUrl.searchParams.get("id");
-  const userId = request.nextUrl.searchParams.get("user_id");
-  if (!id || !userId) return NextResponse.json({ error: "id, user_id 필수" }, { status: 400 });
+  const userId = await getActorId();
+  if (!userId) return noActor();
+  if (!id) return NextResponse.json({ error: "id 필수" }, { status: 400 });
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sb = createServiceRoleClient() as any;

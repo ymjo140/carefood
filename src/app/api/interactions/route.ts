@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
+import { getActorId, noActor } from "@/lib/actor-server";
 
 /**
  * POST /api/interactions
@@ -8,10 +9,12 @@ import { createServiceRoleClient } from "@/lib/supabase/server";
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { user_id, product_id, action, metadata } = body;
+    const { product_id, action, metadata } = body;
+    const user_id = await getActorId();
+    if (!user_id) return noActor();
 
-    if (!user_id || !action) {
-      return NextResponse.json({ error: "user_id, action 필수" }, { status: 400 });
+    if (!action) {
+      return NextResponse.json({ error: "action 필수" }, { status: 400 });
     }
     // product_id는 view/click_price에만 필수
     if (["view", "click_price", "add_box", "remove_box"].includes(action) && !product_id) {
@@ -46,14 +49,12 @@ export async function POST(request: NextRequest) {
 }
 
 /**
- * GET /api/interactions?user_id=xxx
+ * GET /api/interactions — 내 행동 요약
  * 사용자 선호도 요약 (추천 개인화용)
  */
 export async function GET(request: NextRequest) {
-  const userId = request.nextUrl.searchParams.get("user_id");
-  if (!userId) {
-    return NextResponse.json({ error: "user_id 필수" }, { status: 400 });
-  }
+  const userId = await getActorId();
+  if (!userId) return noActor();
 
   const supabase = createServiceRoleClient();
 

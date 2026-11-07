@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
+import { adminOnly } from "@/lib/actor-server";
 
 // 업체 대시보드 데이터 — vendor slug 기반
 export async function GET(req: NextRequest) {
+  const denied = await adminOnly();
+  if (denied) return denied;
   const slug = req.nextUrl.searchParams.get("slug");
   if (!slug) return NextResponse.json({ error: "slug required" }, { status: 400 });
 

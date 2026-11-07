@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Card, Icon, ProgressBar } from "@/components/ui";
+import { getClientActorId } from "@/lib/actor-client";
 
 /**
  * 홈 화면 개인화 위젯
@@ -27,11 +28,8 @@ type TodayData = {
 };
 
 function getUserId(): string | null {
-  try {
-    return localStorage.getItem("carefood_anon_id");
-  } catch {
-    return null;
-  }
+  // 서버가 발급한 쿠키의 id — API 는 이 값을 받지 않고 쿠키로 직접 확인한다
+  return getClientActorId();
 }
 
 export default function HomeTodayWidget() {

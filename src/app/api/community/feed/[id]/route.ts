@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
+import { getActorId, noActor } from "@/lib/actor-server";
 
 /**
  * GET /api/community/feed/[id] — 식단 상세 + 댓글
@@ -12,7 +13,7 @@ export async function GET(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sb = createServiceRoleClient() as any;
 
-  const userId = request.nextUrl.searchParams.get("user_id");
+  const userId = await getActorId();
 
   // 식단
   const { data: plan, error } = await sb

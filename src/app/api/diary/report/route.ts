@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connection } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
+import { getActorId, noActor } from "@/lib/actor-server";
 
 /**
- * GET /api/diary/report?user_id=xxx
+ * GET /api/diary/report — 내 주간 리포트 (사용자는 쿠키로)
  *
  * 주간 영양 리포트 — 최근 7일 식단 기록 기반
  *
@@ -41,8 +42,8 @@ type NutrientGrade = {
 
 export async function GET(request: NextRequest) {
   await connection();
-  const userId = request.nextUrl.searchParams.get("user_id");
-  if (!userId) return NextResponse.json({ error: "user_id 필수" }, { status: 400 });
+  const userId = await getActorId();
+  if (!userId) return noActor();
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sb = createServiceRoleClient() as any;

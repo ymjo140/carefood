@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connection } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
+import { getActorId, noActor } from "@/lib/actor-server";
 
 /**
  * GET /api/community/group-buy — 공구 목록
@@ -47,11 +48,13 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { creator_id, product_id, product_name, original_price, target_price,
+    const { product_id, product_name, original_price, target_price,
             target_count, concern, title, description, source_plan_id } = body;
+    const creator_id = await getActorId();
+    if (!creator_id) return noActor();
 
-    if (!creator_id || !product_name || !target_count) {
-      return NextResponse.json({ error: "creator_id, product_name, target_count 필수" }, { status: 400 });
+    if (!product_name || !target_count) {
+      return NextResponse.json({ error: "product_name, target_count 필수" }, { status: 400 });
     }
 
     const discountRate = original_price && target_price

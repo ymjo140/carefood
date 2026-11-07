@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import ShareButton from "@/components/ShareButton";
 import { Avatar, Button, Icon, Input, SectionHeader, buttonClass, useToast } from "@/components/ui";
 import { AGE_GROUP_LABELS } from "@/components/ui/FeedPost";
+import { getClientActorId } from "@/lib/actor-client";
 
 type Comment = {
   id: string;
@@ -17,16 +18,8 @@ type Comment = {
 };
 
 function getUserId(): string {
-  try {
-    let id = localStorage.getItem("carefood_anon_id");
-    if (!id) {
-      id = `anon_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-      localStorage.setItem("carefood_anon_id", id);
-    }
-    return id;
-  } catch {
-    return `anon_${Date.now()}`;
-  }
+  // 서버가 발급한 쿠키의 id — API 는 이 값을 받지 않고 쿠키로 직접 확인한다
+  return getClientActorId() || "";
 }
 
 export default function MealPlanActions({

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connection } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
+import { getActorId, noActor } from "@/lib/actor-server";
 
 /**
  * GET /api/community/feed — 식단 피드
@@ -10,7 +11,7 @@ import { createServiceRoleClient } from "@/lib/supabase/server";
 export async function GET(request: NextRequest) {
   await connection();
   const { searchParams } = request.nextUrl;
-  const userId = searchParams.get("user_id");
+  const userId = await getActorId();
   const postId = searchParams.get("id"); // 단일 게시글 조회
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -155,10 +156,10 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { user_id, post_type, content, meal_type, meal_data, product_ids, tags,
+    const { post_type, content, meal_type, meal_data, product_ids, tags,
             author_nickname, author_age_group, author_concerns, author_goals } = body;
-
-    if (!user_id) return NextResponse.json({ error: "user_id 필수" }, { status: 400 });
+    const user_id = await getActorId();
+    if (!user_id) return noActor();
     if (!content && !meal_data) return NextResponse.json({ error: "내용 또는 식단 데이터 필수" }, { status: 400 });
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

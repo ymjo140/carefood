@@ -2,9 +2,11 @@
 
 import { useState, useEffect } from "react";
 import { IconButton } from "@/components/ui";
+import { getClientActorId } from "@/lib/actor-client";
 
 function getUserId(): string | null {
-  try { return localStorage.getItem("carefood_anon_id") || null; } catch { return null; }
+  // 서버가 발급한 쿠키의 id — API 는 이 값을 받지 않고 쿠키로 직접 확인한다
+  return getClientActorId();
 }
 
 export default function FavoriteButton({ productId, size = "md" }: { productId: string; size?: "sm" | "md" }) {

@@ -1,21 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
-
-function getUserId(req: NextRequest): string | null {
-  // 쿠키에서 또는 헤더에서 user_id 추출
-  try {
-    const cookie = req.cookies.get("carefood_user_id");
-    if (cookie?.value) return cookie.value;
-  } catch { /* */ }
-  return null;
-}
+import { getActorId, noActor } from "@/lib/actor-server";
 
 // GET: 특정 날짜의 식단 기록 조회 (+ recent=true 모드)
 export async function GET(req: NextRequest) {
-  const userId = req.nextUrl.searchParams.get("user_id") || getUserId(req);
-  if (!userId) {
-    return NextResponse.json({ error: "user_id required" }, { status: 400 });
-  }
+  const userId = await getActorId();
+  if (!userId) return noActor();
 
   const supabase = createServiceRoleClient();
   const sb = supabase as any;
@@ -118,12 +108,14 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const body = await req.json();
   const {
-    user_id, date, meal_type, product_id, food_name,
+    date, meal_type, product_id, food_name,
     serving_g, calories, protein_g, fat_g, carbs_g, sugar_g, sodium_mg, fiber_g,
     serving_multiplier: rawMultiplier, memo,
   } = body;
 
-  if (!user_id || !meal_type || !food_name) {
+  const user_id = await getActorId();
+  if (!user_id) return noActor();
+  if (!meal_type || !food_name) {
     return NextResponse.json({ error: "필수 항목 누락" }, { status: 400 });
   }
 
@@ -200,10 +192,10 @@ export async function POST(req: NextRequest) {
 // DELETE: 식단 기록 삭제 (소유자 검증)
 export async function DELETE(req: NextRequest) {
   const id = req.nextUrl.searchParams.get("id");
-  const userId = req.nextUrl.searchParams.get("user_id") || getUserId(req);
+  const userId = await getActorId();
 
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
-  if (!userId) return NextResponse.json({ error: "user_id required" }, { status: 400 });
+  if (!userId) return noActor();
 
   const supabase = createServiceRoleClient();
   const sb = supabase as any;

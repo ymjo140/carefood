@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
+import { getActorId, noActor } from "@/lib/actor-server";
 
 /**
  * 제품 리뷰 API v2
@@ -90,12 +91,14 @@ function avg(arr: any[], key: string): number | null {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { user_id, product_id, rating, would_rebuy,
+    const { product_id, rating, would_rebuy,
             taste_salty_feel, taste_sweet_feel, taste_spicy_feel, taste_fatty_feel,
             consumed_as, comment } = body;
 
-    if (!user_id || !product_id || !rating) {
-      return NextResponse.json({ error: "user_id, product_id, rating 필수" }, { status: 400 });
+    const user_id = await getActorId();
+    if (!user_id) return noActor();
+    if (!product_id || !rating) {
+      return NextResponse.json({ error: "product_id, rating 필수" }, { status: 400 });
     }
 
     if (rating < 1 || rating > 5) {

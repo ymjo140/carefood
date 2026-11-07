@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
+import { getActorId, noActor } from "@/lib/actor-server";
 
 /**
  * 식사 기록 API
@@ -10,9 +11,11 @@ import { createServiceRoleClient } from "@/lib/supabase/server";
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { userId, productId, mealType = "snack" } = body;
+    const { productId, mealType = "snack" } = body;
+    const userId = await getActorId();
+    if (!userId) return noActor();
 
-    if (!userId || !productId) {
+    if (!productId) {
       return NextResponse.json({ error: "userId와 productId가 필요합니다." }, { status: 400 });
     }
 
@@ -55,12 +58,10 @@ export async function POST(request: NextRequest) {
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const userId = searchParams.get("userId");
+    const userId = await getActorId();
     const days = parseInt(searchParams.get("days") || "7");
 
-    if (!userId) {
-      return NextResponse.json({ error: "userId가 필요합니다." }, { status: 400 });
-    }
+    if (!userId) return noActor();
 
     const supabase = createServiceRoleClient();
 

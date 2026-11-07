@@ -61,15 +61,13 @@ export default function HomePersonalized() {
         }
       } catch { /* silent */ } // ds-allow: 로컬 프로필 읽기
 
-      // v5: 프로필 + 건강검진 + user_id → 5축 복합 프로필 + 피드백 루프 반영 추천
-      const anonId = (() => { try { return localStorage.getItem("carefood_anon_id") || ""; } catch { return ""; } })();
+      // v5: 프로필 + 건강검진 → 5축 복합 프로필 + 피드백 루프 반영 추천 (사용자 행동은 서버가 쿠키로 찾는다)
       fetch("/api/recommend", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           profile: parsed,
           health: healthData,
-          user_id: anonId,
         }),
       })
         .then((r) => r.json())

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
+import { getActorId, noActor } from "@/lib/actor-server";
 
 /**
  * POST /api/profile/analyze
@@ -35,10 +36,8 @@ const SEARCH_TAG_PATTERNS: [RegExp, string][] = [
 
 export async function POST(request: NextRequest) {
   try {
-    const { user_id } = await request.json();
-    if (!user_id) {
-      return NextResponse.json({ error: "user_id 필수" }, { status: 400 });
-    }
+    const user_id = await getActorId();
+    if (!user_id) return noActor();
 
     const supabase = createServiceRoleClient();
 

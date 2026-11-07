@@ -1,13 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
+import { getActorId, noActor } from "@/lib/actor-server";
 
 /**
  * POST /api/community/copy — "따라하기": 커뮤니티 식단을 내 식단 리스트(saved_meal_plans)에 저장
  */
 export async function POST(request: NextRequest) {
   try {
-    const { post_id, user_id } = await request.json();
-    if (!post_id || !user_id) return NextResponse.json({ error: "post_id, user_id 필수" }, { status: 400 });
+    const { post_id } = await request.json();
+    const user_id = await getActorId();
+    if (!user_id) return noActor();
+    if (!post_id) return NextResponse.json({ error: "post_id 필수" }, { status: 400 });
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const sb = createServiceRoleClient() as any;

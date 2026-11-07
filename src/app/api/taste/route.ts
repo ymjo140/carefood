@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connection } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
+import { getActorId, noActor } from "@/lib/actor-server";
 
 /**
  * 맛 프로필 API
  *
  * GET  /api/taste?product_id=xxx — 제품 맛 프로필 조회
- * GET  /api/taste?user_id=xxx    — 사용자 맛 선호 조회
+ * GET  /api/taste?mine=1         — 내 맛 선호 조회 (사용자는 쿠키로)
  * POST /api/taste                — 맛 리뷰 제출 + 프로필 재집계
  */
 
@@ -18,7 +19,9 @@ function sb(): any {
 export async function GET(request: NextRequest) {
   await connection();
   const productId = request.nextUrl.searchParams.get("product_id");
-  const userId = request.nextUrl.searchParams.get("user_id");
+  const wantMine = request.nextUrl.searchParams.has("mine") || request.nextUrl.searchParams.has("user_id");
+  const userId = wantMine ? await getActorId() : null;
+  if (wantMine && !userId) return noActor();
 
   // 제품 맛 프로필 조회
   if (productId) {
@@ -73,10 +76,12 @@ export async function POST(request: NextRequest) {
 
     // ─── 맛 리뷰 제출 ───
     if (action === "review") {
-      const { user_id, product_id, spicy, sweet, salty, umami, sour, overall_rating, comment, would_rebuy } = body;
+      const { product_id, spicy, sweet, salty, umami, sour, overall_rating, comment, would_rebuy } = body;
+      const user_id = await getActorId();
+      if (!user_id) return noActor();
 
-      if (!user_id || !product_id) {
-        return NextResponse.json({ error: "user_id, product_id 필수" }, { status: 400 });
+      if (!product_id) {
+        return NextResponse.json({ error: "product_id 필수" }, { status: 400 });
       }
 
       // 리뷰 저장 (upsert)
@@ -132,11 +137,9 @@ export async function POST(request: NextRequest) {
 
     // ─── 사용자 맛 선호 저장 ───
     if (action === "save_preference") {
-      const { user_id, pref_spicy, pref_sweet, pref_salty, pref_umami, pref_sour, dislike_tags, allergy_tags, dietary_tags } = body;
-
-      if (!user_id) {
-        return NextResponse.json({ error: "user_id 필수" }, { status: 400 });
-      }
+      const { pref_spicy, pref_sweet, pref_salty, pref_umami, pref_sour, dislike_tags, allergy_tags, dietary_tags } = body;
+      const user_id = await getActorId();
+      if (!user_id) return noActor();
 
       await sb()
         .from("user_taste_preferences")

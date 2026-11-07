@@ -22,6 +22,7 @@ import {
   type BadgeTone,
 } from "@/components/ui";
 import { ChoiceCard } from "@/components/ui/ChoiceCard";
+import { getClientActorId } from "@/lib/actor-client";
 
 /* ════════════════════════════════════════════
    타입 & 상수
@@ -267,11 +268,7 @@ function OnboardingContent() {
         userId = user.id;
         await saveProfile(JSON.stringify(profile));
       } else {
-        userId = localStorage.getItem("carefood_anon_id");
-        if (!userId) {
-          userId = `anon_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-          localStorage.setItem("carefood_anon_id", userId);
-        }
+        userId = getClientActorId(); // 서버는 쿠키로 확인한다
       }
       if (userId) {
         // 프로필 저장

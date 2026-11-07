@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
+import { getActorId, noActor } from "@/lib/actor-server";
 import {
   parseProfile,
   getProfileLabels,
@@ -182,7 +183,7 @@ export async function GET(request: NextRequest) {
     const page = Math.max(1, Number(sp.get("page") || 1));
     const limit = Math.min(50, Math.max(1, Number(sp.get("limit") || 20)));
     const platformFilter = sp.get("platform") || "";
-    const userId = sp.get("user_id") || "";
+    const userId = (await getActorId()) || "";
 
     const supabase = createServiceRoleClient();
 
@@ -455,7 +456,7 @@ export async function POST(request: NextRequest) {
     // v2 호환: concerns/tastes 직접 전달 → v4 프로필로 변환
     const profileRaw = body.profile || body;
     const healthRaw = body.health || null;
-    const userId = body.user_id || "";
+    const userId = (await getActorId()) || "";
 
     const profile = parseProfile(profileRaw, healthRaw);
 

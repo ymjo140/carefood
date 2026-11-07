@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connection } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
+import { getActorId, noActor } from "@/lib/actor-server";
 
 /** GET /api/community/comment?post_id=xxx — 댓글 목록 */
 export async function GET(request: NextRequest) {
@@ -26,13 +27,14 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const user_id = body.user_id;
+    const user_id = await getActorId();
+    if (!user_id) return noActor();
     const post_id = body.post_id || body.plan_id;
     const content = body.content;
     const author_nickname = body.author_nickname || body.display_name || "익명";
 
-    if (!user_id || !post_id || !content?.trim()) {
-      return NextResponse.json({ error: "user_id, post_id, content 필수" }, { status: 400 });
+    if (!post_id || !content?.trim()) {
+      return NextResponse.json({ error: "post_id, content 필수" }, { status: 400 });
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   Badge, Button, Card, Chip, ConfirmSheet, EmptyState, Field, Icon, IconButton, Input, Kcal, LinkButton, ListRow, MacroGrid, MealSlot, Page, PageHeader, PageLoading, SectionHeader, Spinner, Tabs, buttonClass, cn, useToast, SkeletonList,
 } from "@/components/ui";
+import { getClientActorId } from "@/lib/actor-client";
 
 /* ── 타입 ── */
 type DiaryEntry = {
@@ -112,21 +113,8 @@ const MEAL_THRESHOLDS = {
 };
 
 function getUserId(): string {
-  try {
-    const profile = localStorage.getItem("carefood_profile");
-    if (profile) {
-      const p = JSON.parse(profile);
-      if (p.user_id) return p.user_id;
-    }
-    let id = localStorage.getItem("carefood_anon_id");
-    if (!id) {
-      id = `anon_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-      localStorage.setItem("carefood_anon_id", id);
-    }
-    return id;
-  } catch {
-    return `anon_${Date.now()}`;
-  }
+  // 서버가 발급한 쿠키의 id — API 는 이 값을 받지 않고 쿠키로 직접 확인한다
+  return getClientActorId() || "";
 }
 
 function formatDate(dateStr: string): string {
