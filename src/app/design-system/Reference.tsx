@@ -6,7 +6,7 @@ import {
   Input, Kcal, LinkButton, ListRow, MacroGrid, MacroInline, MealSlot, MealTag, Notice, Estimate, Page, PageHeader, Price,
   ProgressBar, SearchField, SectionHeader, Select, Sheet, Spinner, Stat, Steps, Tabs, Textarea, TextLink, Thumb,
   Avatar, useToast, cn, type BadgeTone,
-  BottomNavItems, SkeletonList, FoodEntryForm, DragArea, DragGhost, DragHandle, useDragItem, useDropTarget, type DragData, ChoiceCard, ChoiceList, LinkTabs, RatingStars, RatingInput, ScaleInput, QuickRating, PostAuthor, PostAction, PostActions, PostTags, ThreadItem, MealAttach, PlanAttach, ProductTagLinks, PhotoGrid,
+  BottomNavItems, SkeletonList, FoodEntryForm, DragArea, DragGhost, DragHandle, useDragItem, useDropTarget, type DragData, ChoiceCard, ChoiceList, LinkTabs, RatingStars, RatingInput, ScaleInput, QuickRating, PostAuthor, PostAction, PostActions, PostTags, ThreadItem, MealAttach, PlanAttach, ProductTagLinks, PhotoGrid, PollAttach, DayDots,
 } from "@/components/ui";
 
 // 서버(UTC)와 브라우저 시간대가 달라도 같은 글자가 나오도록 한국 시간으로 고정
@@ -758,6 +758,15 @@ export default function Reference({ status }: { status: DsStatus }) {
               <PhotoGrid alt="도시락 사진" urls={[1, 2, 3, 4].map((i) => `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect width="200" height="200" fill="${["#E7E0D5", "#CFC5B6", "#F3EEE6", "#E7E0D5"][i - 1]}"/></svg>`)}`)} />
             </ThreadItem>
           </Demo>
+          <Demo label="투표 — 고르기 전 선택지 / 고른 뒤 비율 막대 (고른 것 다시 누르면 취소)" code="<PollAttach options counts myChoice closed note onVote />">
+            <PollDemo />
+          </Demo>
+          <Demo label="챌린지 날짜 줄 — 해낸 날 체크 · 못 한 날 옅게 · 오늘 진한 테두리 · 남은 날 점선" code="<DayDots days />">
+            <div className="flex flex-col gap-2">
+              <DayDots days={(["done", "done", "missed", "done", "today", "future", "future"] as const).map((state, i) => ({ date: `d${i}`, state }))} />
+              <p className="text-label text-ink"><span className="num">7</span>일 중 <span className="num font-bold text-brand-ink">3</span>일 해냈어요</p>
+            </div>
+          </Demo>
         </div>
       </Section>
 
@@ -1036,5 +1045,18 @@ function DragDemo() {
         <DemoMeal id="a" name="닭가슴살 샐러드" />
       </div>
     </DragArea>
+  );
+}
+
+/** 투표 데모 — 눌러 보면 비율 막대로 바뀐다 */
+function PollDemo() {
+  const [mine, setMine] = useState<number | null>(null);
+  const base = [12, 7, 3];
+  const counts = base.map((c, i) => c + (mine === i ? 1 : 0));
+  return (
+    <div className="flex flex-col gap-4">
+      <PollAttach options={["현미밥 도시락", "샐러드 도시락", "곤약밥 도시락"]} counts={counts} myChoice={mine} closed={false} note="2일 남았어요" onVote={setMine} />
+      <PollAttach options={["아침에 먹어요", "점심에 먹어요"]} counts={[18, 9]} myChoice={null} closed note="마감했어요" />
+    </div>
   );
 }

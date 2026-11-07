@@ -5,13 +5,14 @@ import {
   Button, Chip, ChipRow, IconButton, Field, Icon, Input, Kcal, Select, Sheet, SkeletonList, Textarea, cn, useToast,
 } from "@/components/ui";
 import { COMMUNITY_TOPICS } from "@/lib/community-topics";
+import { POLL_DAYS, POLL_MAX_OPTIONS, POLL_OPTION_MAX } from "@/lib/community-poll";
 
 /**
- * 글쓰기 시트 — 글 + 붙이기(사진 4장 · 기록한 끼니 · 저장한 식단 · 제품 태그) + 모임.
+ * 글쓰기 시트 — 글 + 붙이기(사진 4장 · 기록한 끼니 · 저장한 식단 · 제품 태그 · 투표) + 모임.
  * 사진은 /api/community/upload 가 위치 정보 같은 메타데이터를 지우고 줄여서 올린다.
  * 작성자 건강 관심사는 붙이지 않는다 (서버도 받지 않음).
  */
-export type Attach = "meal" | "plan" | "product";
+export type Attach = "meal" | "plan" | "product" | "poll";
 
 type DiaryEntry = { id: string; food_name: string; calories: number; protein_g: number; carbs_g: number; fat_g: number; meal_type: string };
 type Plan = { id: string; title: string; avg_daily_calories: number | null; avg_daily_protein: number | null; filled_days: string[]; grid: Record<string, Record<string, { calories?: number } | null>> };
@@ -66,6 +67,10 @@ export default function PostComposer({ isOpen, initialAttach, nickname, onClose,
   const MAX_PHOTOS = 4;
   const [photos, setPhotos] = useState<Photo[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
+  // 투표 — 내용이 질문, 선택지 2~4개
+  const [pollOn, setPollOn] = useState(false);
+  const [pollOpts, setPollOpts] = useState<string[]>(["", ""]);
+  const [pollDays, setPollDays] = useState<number>(3);
 
   // 서버로 보낼 수 있는 크기(약 4MB)를 넘으면 브라우저에서 먼저 줄인다
   const shrink = async (picked: File): Promise<Blob | null> => {
@@ -137,7 +142,8 @@ export default function PostComposer({ isOpen, initialAttach, nickname, onClose,
       const d = lastDays();
       setDays(d);
       setDay(d[0].iso);
-      setAttach(initialAttach ?? null);
+      setAttach(initialAttach === "poll" ? null : initialAttach ?? null);
+      if (initialAttach === "poll") setPollOn(true);
     }
   }
 
@@ -174,6 +180,7 @@ export default function PostComposer({ isOpen, initialAttach, nickname, onClose,
 
   const reset = (posted = false) => {
     setContent(""); setAttach(null); setTopic(""); setPicked([]); setPlan(null); setProducts([]); setQ(""); dropAllPhotos(!posted);
+    setPollOn(false); setPollOpts(["", ""]); setPollDays(3);
     setHits({ status: "idle", items: [] }); if (days[0]) setDay(days[0].iso);
   };
   const close = () => { reset(); onClose(); };
@@ -187,7 +194,9 @@ export default function PostComposer({ isOpen, initialAttach, nickname, onClose,
   const hasMeal = picked.length > 0;
   const uploading = photos.some((p) => p.status === "uploading");
   const photoUrls = photos.filter((p) => p.url).map((p) => p.url!);
-  const canPost = !posting && !uploading && (content.trim().length > 0 || hasMeal || !!plan || photoUrls.length > 0);
+  const pollFilled = [...new Set(pollOpts.map((o) => o.trim()).filter(Boolean))];
+  const pollReady = !pollOn || (pollFilled.length >= 2 && content.trim().length > 0);
+  const canPost = !posting && !uploading && pollReady && (content.trim().length > 0 || hasMeal || !!plan || photoUrls.length > 0);
 
   const submit = async () => {
     setPosting(true);
@@ -216,18 +225,20 @@ export default function PostComposer({ isOpen, initialAttach, nickname, onClose,
           meal_data,
           product_ids: products.map((p) => p.id),
           image_urls: photoUrls,
+          poll: pollOn ? { options: pollFilled, days: pollDays } : null,
           topic: topic || null,
           author_nickname: nickname,
         }),
       });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(d.error);
-      toast.show("올렸어요");
+      toast.show(pollOn ? "투표를 올렸어요" : "올렸어요");
       reset(true);
       onPosted();
       onClose();
-    } catch {
-      toast.show("올리지 못했어요. 다시 시도해 주세요", { tone: "danger" });
+    } catch (e) {
+      const known = ["선택지를 서로 다르게 2개 이상 적어 주세요", "투표 질문을 내용에 적어 주세요"];
+      toast.show(e instanceof Error && known.includes(e.message) ? e.message : "올리지 못했어요. 다시 시도해 주세요", { tone: "danger" });
     } finally { setPosting(false); }
   };
 
@@ -242,8 +253,36 @@ export default function PostComposer({ isOpen, initialAttach, nickname, onClose,
       <div className="flex flex-col gap-5">
         <Field label="내용">
           <Textarea value={content} name="content" rows={3} maxLength={1000} onChange={(e) => setContent(e.target.value)}
-            placeholder="오늘 뭐 먹었는지, 궁금한 점, 꿀팁을 나눠 보세요" />
+            placeholder={pollOn ? "무엇을 물어볼까요? (예: 점심 도시락 뭐가 나아요?)" : "오늘 뭐 먹었는지, 궁금한 점, 꿀팁을 나눠 보세요"} />
         </Field>
+
+        {/* ── 투표 ── */}
+        {pollOn && (
+          <fieldset className="flex flex-col gap-2">
+            <legend className="text-label font-medium text-ink mb-2">투표 선택지</legend>
+            {pollOpts.map((o, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <Input value={o} name={`poll_option_${i + 1}`} maxLength={POLL_OPTION_MAX} aria-label={`선택지 ${i + 1}`} placeholder={`선택지 ${i + 1}`}
+                  onChange={(e) => setPollOpts(pollOpts.map((x, j) => (j === i ? e.target.value : x)))} />
+                {pollOpts.length > 2 && (
+                  <IconButton icon="close" size="sm" label={`선택지 ${i + 1} 빼기`} onClick={() => setPollOpts(pollOpts.filter((_, j) => j !== i))} />
+                )}
+              </div>
+            ))}
+            {pollOpts.length < POLL_MAX_OPTIONS && (
+              <Button size="sm" variant="ghost" icon="plus" className="self-start" onClick={() => setPollOpts([...pollOpts, ""])}>선택지 더하기</Button>
+            )}
+            <div className="flex items-center gap-2">
+              <span className="text-label text-ink-2 shrink-0">기간</span>
+              <ChipRow>
+                {POLL_DAYS.map((d) => <Chip key={d} size="sm" selected={pollDays === d} onClick={() => setPollDays(d)}>{`${d}일`}</Chip>)}
+              </ChipRow>
+            </div>
+            {!pollReady && (
+              <p className="text-caption text-ink-2">{content.trim() ? "서로 다른 선택지를 2개 이상 적어 주세요" : "위 내용 칸에 질문을 적어 주세요"}</p>
+            )}
+          </fieldset>
+        )}
 
         {/* 붙인 것 */}
         {(hasMeal || plan || products.length > 0 || photos.length > 0) && (
@@ -305,6 +344,9 @@ export default function PostComposer({ isOpen, initialAttach, nickname, onClose,
                 <Icon name={icon} size={16} />{label}
               </Chip>
             ))}
+            <Chip selected={pollOn} onClick={() => setPollOn(!pollOn)}>
+              <Icon name="poll" size={16} />투표
+            </Chip>
           </ChipRow>
         </div>
 

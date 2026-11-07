@@ -5,6 +5,7 @@ import { getActorId, noActor } from "@/lib/actor-server";
 import { isTopic } from "@/lib/community-topics";
 import { viewerFilters } from "@/lib/community-safety";
 import { imagePrefix, removeImages } from "@/lib/community-images";
+import { cleanPoll, withPolls } from "@/lib/community-poll";
 
 
 /**
@@ -14,6 +15,7 @@ import { imagePrefix, removeImages } from "@/lib/community-images";
  *
  * 작성자의 건강 관심사·목표·나이대는 응답에 넣지 않는다 (민감정보 — 예전 글에 남아 있어도 보이지 않게).
  * 글에 붙은 제품(product_ids)은 이름을 같이 돌려준다 → products: [{ id, name }]
+ * 투표가 붙은 글은 poll 이 결과 모양 → { options, counts, total, my_choice, closes_at, closed }
  */
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -68,7 +70,9 @@ export async function GET(request: NextRequest) {
     }
     const names = await productNames(sb, [post]);
     const products = (post.product_ids || []).filter((id: string) => names.has(id)).map((id: string) => ({ id, name: names.get(id) }));
-    return NextResponse.json({ post: { ...publicPost(post), products, is_mine: isMine, is_liked: isLiked, is_following: isFollowing } });
+    let polled;
+    try { [polled] = await withPolls(sb, [publicPost(post) as { id: string; poll?: unknown }], userId); } catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: 500 }); }
+    return NextResponse.json({ post: { ...polled, products, is_mine: isMine, is_liked: isLiked, is_following: isFollowing } });
   }
 
   /* ── 피드 목록 모드 ── */
@@ -201,8 +205,11 @@ export async function GET(request: NextRequest) {
     });
   }
 
+  let polled;
+  try { polled = await withPolls(sb, result, userId); } catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: 500 }); }
+
   return NextResponse.json({
-    posts: result,
+    posts: polled,
     total: count || 0,
     page,
     hasMore: from + limit < (count || 0),
@@ -273,6 +280,10 @@ export async function POST(request: NextRequest) {
     const image_urls = [...new Set((Array.isArray(body.image_urls) ? body.image_urls : [body.image_url]).filter(okImg))].slice(0, 4) as string[];
     const image_url = image_urls[0] ?? null; // 한 장 칸은 첫 장 (예전 화면 호환)
     if (!content && !meal_data && !image_url) return NextResponse.json({ error: "내용이나 식단·사진을 넣어 주세요" }, { status: 400 });
+    // 투표 — 질문(내용)이 있어야 하고 선택지는 2~4개
+    const poll = body.poll ? cleanPoll(body.poll) : null;
+    if (body.poll && !poll) return NextResponse.json({ error: "선택지를 서로 다르게 2개 이상 적어 주세요" }, { status: 400 });
+    if (poll && !content) return NextResponse.json({ error: "투표 질문을 내용에 적어 주세요" }, { status: 400 });
     const product_ids = Array.isArray(body.product_ids) ? body.product_ids.filter((id: unknown) => typeof id === "string" && UUID.test(id)).slice(0, 3) : [];
     const tags = isTopic(topic) ? [topic] : [];
     const author_nickname = typeof body.author_nickname === "string" && body.author_nickname.trim() ? body.author_nickname.trim().slice(0, 20) : "익명";
@@ -291,6 +302,7 @@ export async function POST(request: NextRequest) {
         product_ids: product_ids.length ? product_ids : null,
         image_url,
         image_urls,
+        poll,
         tags,
         author_nickname,
         // 건강 관심사·목표·나이대는 글에 붙이지 않는다 (마이페이지에서 나만 본다)
@@ -302,7 +314,8 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    return NextResponse.json({ post: publicPost(data) });
+    const [polled] = await withPolls(sb, [publicPost(data) as { id: string; poll?: unknown }], user_id);
+    return NextResponse.json({ post: polled });
   } catch {
     return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
   }

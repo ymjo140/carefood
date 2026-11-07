@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { IconButton, MealAttach, PhotoGrid, PlanAttach, PostAction, PostActions, ProductTagLinks, Sheet, ThreadItem } from "@/components/ui";
+import { IconButton, MealAttach, PhotoGrid, PlanAttach, PollAttach, PostAction, PostActions, ProductTagLinks, Sheet, ThreadItem, useToast } from "@/components/ui";
 import { isTopic } from "@/lib/community-topics";
+import { pollRemaining, type PollView } from "@/lib/community-poll";
 import PostMenu, { type MenuDone } from "./PostMenu";
 
 type Food = { name: string; calories?: number; protein_g?: number; carbs_g?: number; fat_g?: number };
@@ -22,6 +23,7 @@ export type FeedPostData = {
   image_url?: string | null;
   image_urls?: string[] | null;
   products?: { id: string; name: string }[];
+  poll?: PollView | null;
   like_count: number;
   comment_count: number;
   copy_count: number;
@@ -53,6 +55,34 @@ export default function ThreadCard({ post, onLike, onCopy, onReply, onMenuDone, 
   const [viewing, setViewing] = useState<number | null>(null);
   const alt = `${post.author_nickname} 님이 올린 사진`;
 
+  // 투표 — 누르면 바로 반영하고, 서버 결과로 맞춘다
+  const toast = useToast();
+  const [poll, setPoll] = useState<PollView | null>(post.poll ?? null);
+  const [seenPoll, setSeenPoll] = useState(post.poll);
+  if (post.poll !== seenPoll) { setSeenPoll(post.poll); setPoll(post.poll ?? null); }
+  const [voting, setVoting] = useState(false);
+  const vote = async (choice: number | null) => {
+    if (!poll || voting) return;
+    const before = poll;
+    const counts = [...poll.counts];
+    if (poll.my_choice != null) counts[poll.my_choice] = Math.max(0, counts[poll.my_choice] - 1);
+    if (choice != null) counts[choice] += 1;
+    setPoll({ ...poll, counts, total: counts.reduce((a, b) => a + b, 0), my_choice: choice });
+    setVoting(true);
+    try {
+      const r = await fetch("/api/community/poll", {
+        method: choice == null ? "DELETE" : "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ post_id: post.id, choice }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error);
+      if (d.poll) setPoll(d.poll);
+    } catch (e) {
+      setPoll(before);
+      toast.show(e instanceof Error && e.message === "마감한 투표예요" ? "마감한 투표예요" : choice == null ? "투표를 취소하지 못했어요. 다시 시도해 주세요" : "투표하지 못했어요. 다시 시도해 주세요", { tone: "danger" });
+    } finally { setVoting(false); }
+  };
+
   return (
     <ThreadItem
       nickname={post.author_nickname}
@@ -71,6 +101,10 @@ export default function ThreadCard({ post, onLike, onCopy, onReply, onMenuDone, 
       }
     >
       {post.content && <p className={detail ? "text-body text-ink whitespace-pre-line" : "text-body text-ink whitespace-pre-line line-clamp-6"}>{post.content}</p>}
+      {poll && (
+        <PollAttach options={poll.options} counts={poll.counts} myChoice={poll.my_choice} closed={poll.closed}
+          note={pollRemaining(poll.closes_at, poll.closed)} reveal={!!post.is_mine} busy={voting} onVote={vote} />
+      )}
       <PhotoGrid urls={photos} alt={alt} onOpen={detail ? setViewing : undefined} />
       {detail && photos.length > 0 && (
         <Sheet open={viewing != null} onClose={() => setViewing(null)} size="lg"

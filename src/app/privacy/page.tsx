@@ -116,6 +116,11 @@ export default function PrivacyPage() {
                 <td className="py-2 pr-3">커뮤니티 운영 (신고한 사람은 다른 이용자에게 알리지 않습니다)</td>
                 <td className="py-2 pr-3">선택</td>
               </tr>
+              <tr className="border-b border-line">
+                <td className="py-2 pr-3">투표 선택, 챌린지 참여·시작일</td>
+                <td className="py-2 pr-3">투표 결과(비율·참여자 수)와 챌린지 진행 계산. 누가 무엇을 골랐는지, 챌린지 달성 기록은 다른 이용자에게 보이지 않습니다</td>
+                <td className="py-2 pr-3">선택</td>
+              </tr>
             </tbody>
           </table></div>
         </section>

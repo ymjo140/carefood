@@ -256,3 +256,50 @@ export function PhotoGrid({ urls, alt, onOpen, className }: { urls: string[]; al
     </div>
   );
 }
+
+/**
+ * 글에 붙은 투표 — 고르기 전에는 선택지 버튼, 고른 뒤·마감 뒤·글쓴이에게는 비율 막대.
+ * 마감 전에는 다른 선택지를 눌러 바꿀 수 있고, 고른 것을 다시 누르면 취소한다.
+ */
+export function PollAttach({ options, counts, myChoice, closed, note, reveal = false, busy = false, onVote, className }: {
+  options: string[]; counts: number[]; myChoice: number | null; closed: boolean;
+  /** 아래 줄 — "2일 남았어요" 같은 남은 시간 */
+  note: string;
+  /** 고르기 전에도 결과를 보여 줄지 (글쓴이) */
+  reveal?: boolean;
+  busy?: boolean;
+  onVote?: (choice: number | null) => void;
+  className?: string;
+}) {
+  const total = counts.reduce((a, b) => a + b, 0);
+  const show = reveal || closed || myChoice != null;
+  return (
+    <div className={cn("flex flex-col gap-1.5", className)} role="group" aria-label="투표">
+      {options.map((o, i) => {
+        const pct = total ? Math.round((counts[i] / total) * 100) : 0;
+        const mine = myChoice === i;
+        return (
+          <button key={i} type="button" aria-pressed={mine} disabled={closed || busy || !onVote}
+            onClick={() => onVote?.(mine ? null : i)}
+            className={cn(
+              "press relative overflow-hidden flex items-center gap-2 min-h-11 px-3 py-2 rounded-md border text-left transition-colors duration-150 disabled:cursor-default",
+              mine ? "border-brand-ink" : "border-line-strong enabled:hover:border-ink-3",
+            )}>
+            {show && (
+              <span aria-hidden="true" className={cn("absolute inset-0 origin-left transition-transform duration-420 ease-out", mine ? "bg-brand-soft" : "bg-sunken")}
+                style={{ transform: `scaleX(${pct / 100})` }} />
+            )}
+            <span className={cn("relative flex-1 min-w-0 flex items-center gap-1.5 text-label text-ink", mine && "font-bold")}>
+              {mine && <Icon name="check" size={16} className="shrink-0 text-brand-ink" />}
+              <span className="min-w-0 break-words">{o}</span>
+            </span>
+            {show && <span className="relative num text-label font-bold text-ink shrink-0">{pct}%</span>}
+          </button>
+        );
+      })}
+      <p className="text-caption text-ink-2"><span className="num">{total.toLocaleString("ko-KR")}</span>명 참여 · {note}
+        {myChoice != null && !closed && <> · 고른 것을 다시 누르면 취소해요</>}
+      </p>
+    </div>
+  );
+}

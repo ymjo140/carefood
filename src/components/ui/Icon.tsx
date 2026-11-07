@@ -49,6 +49,8 @@ const PATHS = {
   cookie: "M12 20.5a8.5 8.5 0 1 0 0-17 8.5 8.5 0 0 0 0 17zM8.5 9h.01M14 8h.01M15.5 13.5h.01M9 15h.01M12 12h.01",
   cup: "M6 3.5h12l-1.5 16.5h-9zM6.5 8h11",
   grid: "M4 4h6.5v6.5H4zM13.5 4H20v6.5h-6.5zM4 13.5h6.5V20H4zM13.5 13.5H20V20h-6.5z",
+  poll: "M5 19.5h14M7 16.5v-5M12 16.5v-11M17 16.5v-8",
+  flag: "M6 20.5v-16M6 5h11.5l-2.5 4 2.5 4H6",
 } as const;
 
 export type IconName = keyof typeof PATHS;

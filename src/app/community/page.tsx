@@ -5,12 +5,13 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import ThreadCard, { type FeedPostData } from "@/components/community/ThreadCard";
 import PostComposer, { type Attach } from "@/components/community/PostComposer";
+import ChallengeEntry from "@/components/community/ChallengeEntry";
 import { Avatar, Button, Chip, ChipRow, EmptyState, Icon, Page, PageHeader, SkeletonPost, Spinner, Tabs, useToast } from "@/components/ui";
 import { COMMUNITY_TOPICS } from "@/lib/community-topics";
 import { getOrCreateNickname } from "@/lib/nickname";
 
 /**
- * 피드 (쓰레드형) — 맨 위 바로 쓰기 줄 → 보기(추천·팔로잉·모임·내 글) → 줄로 나눈 글 목록
+ * 피드 (쓰레드형) — 맨 위 바로 쓰기 줄 → 챌린지 한 줄 → 보기(추천·팔로잉·모임·내 글) → 줄로 나눈 글 목록
  * ds-wiring-drop: /api/community/follow — 팔로우는 글 상세에서 (목록의 카드마다 있던 채운 버튼을 뺌)
  * 글마다 ··· 메뉴: 숨기기·차단·신고·(내 글) 지우기 → 목록에서 바로 뺀다
  */
@@ -132,12 +133,16 @@ export default function CommunityPage() {
             <Chip size="sm" onClick={() => openComposer("meal")}><Icon name="notebook" size={14} />기록한 끼니</Chip>
             <Chip size="sm" onClick={() => openComposer("plan")}><Icon name="calendar" size={14} />저장한 식단</Chip>
             <Chip size="sm" onClick={() => openComposer("product")}><Icon name="tag" size={14} />제품 태그</Chip>
+            <Chip size="sm" onClick={() => openComposer("poll")}><Icon name="poll" size={14} />투표</Chip>
             <Link href="/group-buy" className="press inline-flex items-center justify-center gap-1 rounded-full border whitespace-nowrap shrink-0 h-8 px-3 text-caption border-line bg-surface text-ink-2 font-medium hover:border-line-strong hover:text-ink">
               <Icon name="users" size={14} />공구 제안
             </Link>
           </ChipRow>
         </div>
       </section>
+
+      {/* ── 챌린지 ── */}
+      <ChallengeEntry />
 
       {/* ── 보기 전환 ── */}
       <div className="sticky top-14 z-30 -mx-4 px-4 pt-3 pb-2 bg-canvas flex flex-col gap-2 border-b border-line">
