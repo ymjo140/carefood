@@ -41,10 +41,15 @@ export function Sheet({
     return () => clearTimeout(t);
   }, [leaving]);
 
+  // onClose 는 부모가 그릴 때마다 새 함수일 수 있다 — 아래 effect 가 열 때 한 번만 돌게 ref 로 받는다
+  // (deps 에 넣으면 입력칸에 한 글자 칠 때마다 포커스가 시트로 갔다가 돌아와 입력이 끊겼음)
+  const onCloseRef = useRef(onClose);
+  useEffect(() => { onCloseRef.current = onClose; });
+
   useEffect(() => {
     if (!open) return;
     returnFocus.current = document.activeElement as HTMLElement | null;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onCloseRef.current(); };
     document.addEventListener("keydown", onKey);
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -54,7 +59,7 @@ export function Sheet({
       document.body.style.overflow = prevOverflow;
       returnFocus.current?.focus?.();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!mounted) return null;
 
