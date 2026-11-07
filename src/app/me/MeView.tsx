@@ -145,6 +145,7 @@ export function MeView() {
         <ul className="flex flex-col">
           <Row icon="feed" title="내가 쓴 글" href="/community?tab=mine" />
           <Row icon="bell" title="알림" href="/notifications" />
+          <Row icon="user" title="차단한 사람" meta="차단을 풀 수 있어요" href="/me/blocked" />
           <Row icon="users" title="관심 표시한 공구" href="/group-buy?view=mine" />
           <Row icon="notebook" title="주간 식단 리포트" href="/diary/report" />
           <Row icon="users" title="가족 건강 관리" meta="로그인하면 가족 프로필을 함께 관리해요" href="/family" />
@@ -165,6 +166,7 @@ export function MeView() {
         <section className="mb-6">
           <SectionHeader title="관리자" />
           <ul className="flex flex-col">
+            <Row icon="alert" title="신고 검토" href="/admin/reports" />
             <Row icon="list" title="데이터 현황" href="/admin" />
             <Row icon="cart" title="발주 관리" href="/admin/orders" />
             <Row icon="info" title="시장 인사이트" href="/admin/insights" />

@@ -4,15 +4,14 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Button, Card, EmptyState, Icon, LinkButton, SkeletonList, cn, type IconName } from "@/components/ui";
 import { timeAgo } from "@/components/ui/FeedPost";
-import { getNotifSeen, markNotifSeen } from "@/lib/notif-seen";
 
-type Item = { id: string; type: "comment" | "like" | "follow"; at: string; who: string; count?: number; text?: string; post_id?: string; post_excerpt?: string };
+type Item = { id: string; type: "comment" | "reply" | "like" | "follow"; at: string; who: string; count?: number; text?: string; post_id?: string; post_excerpt?: string };
 
-const ICON: Record<Item["type"], IconName> = { comment: "message", like: "heart", follow: "user" };
+const ICON: Record<Item["type"], IconName> = { comment: "message", reply: "message", like: "heart", follow: "user" };
 
 export function NotificationList() {
   const [state, setState] = useState<{ status: "loading" | "error" | "done"; items: Item[] }>({ status: "loading", items: [] });
-  const [seen] = useState(() => (typeof window === "undefined" ? 0 : getNotifSeen()));
+  const [seen, setSeen] = useState(0);
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
@@ -22,8 +21,13 @@ export function NotificationList() {
         const d = await r.json();
         if (!r.ok) throw new Error(d.error);
         if (!alive) return;
+        setSeen(d.seen_at ? Date.parse(d.seen_at) : 0); // 이번에 열기 전 마지막으로 본 시각 → 그 뒤 소식에 '새 소식'
         setState({ status: "done", items: d.items || [] });
-        markNotifSeen();
+        // 다 봤다고 적는다 — 실패하면 다음에 점이 남을 뿐이라 알리지 않는다
+        fetch("/api/notifications", { method: "POST" })
+          .then((r) => (r.ok ? r.json() : null))
+          .then((x) => { if (x?.seen_at) window.dispatchEvent(new CustomEvent("cf-notif-seen", { detail: Date.parse(x.seen_at) })); })
+          .catch(() => {}); // ds-allow: 읽음 표시는 보조 — 다음에 다시 적는다
       })
       .catch(() => { if (alive) setState({ status: "error", items: [] }); });
     return () => { alive = false; };
@@ -58,12 +62,13 @@ export function NotificationList() {
             </span>
             <span className="flex-1 min-w-0 flex flex-col gap-0.5">
               <span className="text-label text-ink">
-                {n.type === "comment" && <><b className="font-bold">{n.who}</b> 님이 답글을 남겼어요</>}
+                {n.type === "comment" && <><b className="font-bold">{n.who}</b> 님이 내 글에 답글을 남겼어요</>}
+                {n.type === "reply" && <><b className="font-bold">{n.who}</b> 님이 내 답글에 답글을 남겼어요</>}
                 {n.type === "like" && <>내 글을 <b className="num font-bold">{n.count}</b>명이 좋아해요</>}
                 {n.type === "follow" && <><b className="font-bold">{n.who}</b> 님이 나를 팔로우했어요</>}
               </span>
               {n.text && <span className="text-label text-ink-2 line-clamp-2">“{n.text}”</span>}
-              {n.post_excerpt && n.type !== "comment" && <span className="text-caption text-ink-2 line-clamp-1">{n.post_excerpt}</span>}
+              {n.post_excerpt && n.type !== "comment" && n.type !== "reply" && <span className="text-caption text-ink-2 line-clamp-1">{n.post_excerpt}</span>}
               <span className="text-caption text-ink-3">{timeAgo(n.at)}{isNew && <span className="text-brand-ink font-medium"> · 새 소식</span>}</span>
             </span>
           </>

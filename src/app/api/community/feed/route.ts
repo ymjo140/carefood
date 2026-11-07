@@ -3,6 +3,8 @@ import { connection } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { getActorId, noActor } from "@/lib/actor-server";
 import { isTopic } from "@/lib/community-topics";
+import { viewerFilters } from "@/lib/community-safety";
+
 
 /**
  * GET /api/community/feed — 식단 피드
@@ -45,6 +47,13 @@ export async function GET(request: NextRequest) {
       .eq("is_active", true)
       .single();
     if (error || !post) return NextResponse.json({ error: "게시글 없음" }, { status: 404 });
+    const isMine = !!userId && post.user_id === userId;
+    // 신고가 모여 가려진 글·차단한 사람의 글은 (글쓴이 본인 말고는) 열지 않는다
+    if (!isMine) {
+      if (post.hidden_by_reports) return NextResponse.json({ error: "신고가 모여 가려진 글이에요", reason: "reported" }, { status: 404 });
+      const f = await viewerFilters(sb, userId);
+      if (f.blocked.has(post.user_id)) return NextResponse.json({ error: "차단한 사람의 글이에요", reason: "blocked" }, { status: 404 });
+    }
 
     let isLiked = false;
     let isFollowing = false;
@@ -58,7 +67,7 @@ export async function GET(request: NextRequest) {
     }
     const names = await productNames(sb, [post]);
     const products = (post.product_ids || []).filter((id: string) => names.has(id)).map((id: string) => ({ id, name: names.get(id) }));
-    return NextResponse.json({ post: { ...publicPost(post), products, is_mine: post.user_id === userId, is_liked: isLiked, is_following: isFollowing } });
+    return NextResponse.json({ post: { ...publicPost(post), products, is_mine: isMine, is_liked: isLiked, is_following: isFollowing } });
   }
 
   /* ── 피드 목록 모드 ── */
@@ -71,6 +80,18 @@ export async function GET(request: NextRequest) {
     .from("community_feed")
     .select("*", { count: "exact" })
     .eq("is_active", true);
+
+  // 보는 사람 기준으로 거르기 — 신고로 가려진 글(내 글 보기 빼고), 차단한 사람의 글, 숨긴 글
+  let filters: Awaited<ReturnType<typeof viewerFilters>>;
+  try { filters = await viewerFilters(sb, userId); } catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: 500 }); }
+  const safeIds = (set: Set<string>) => [...set].filter((v) => /^[A-Za-z0-9_-]{1,64}$/.test(v));
+  if (tab !== "mine") {
+    query = query.eq("hidden_by_reports", false);
+    const blocked = safeIds(filters.blocked);
+    if (blocked.length) query = query.not("user_id", "in", `(${blocked.join(",")})`);
+    const hidden = safeIds(filters.hidden);
+    if (hidden.length) query = query.not("id", "in", `(${hidden.join(",")})`);
+  }
 
   if (tab === "following" && userId) {
     // 팔로잉 탭: 팔로우한 사용자의 글만
@@ -131,12 +152,13 @@ export async function GET(request: NextRequest) {
 
     // 댓글 미리보기 (각 글당 최신 2개)
     promises.push(
-      sb.from("community_feed_comments").select("id, post_id, author_nickname, content, created_at")
-        .in("post_id", postIds).order("created_at", { ascending: false }).limit(50)
-        .then(({ data }: { data: { post_id: string }[] | null }) => {
+      sb.from("community_feed_comments").select("id, post_id, user_id, author_nickname, content, created_at")
+        .in("post_id", postIds).eq("is_active", true).eq("hidden_by_reports", false).order("created_at", { ascending: false }).limit(80)
+        .then(({ data }: { data: { post_id: string; user_id: string }[] | null }) => {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const map: Record<string, any[]> = {};
           for (const c of data || []) {
+            if (filters.blocked.has(c.user_id)) continue;
             if (!map[c.post_id]) map[c.post_id] = [];
             if (map[c.post_id]!.length < 2) map[c.post_id]!.push(c);
           }
@@ -238,7 +260,10 @@ export async function POST(request: NextRequest) {
     const content = typeof body.content === "string" ? body.content.trim().slice(0, 1000) : "";
     if (body.meal_data && JSON.stringify(body.meal_data).length > 60_000) return NextResponse.json({ error: "식단이 너무 커요" }, { status: 400 });
     const meal_data = cleanMealData(body.meal_data);
-    if (!content && !meal_data) return NextResponse.json({ error: "내용이나 식단을 넣어 주세요" }, { status: 400 });
+    // 사진은 우리 저장소(/api/community/upload 가 올린 것)만 받는다
+    const imgPrefix = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/community/`;
+    const image_url = typeof body.image_url === "string" && body.image_url.startsWith(imgPrefix) && !body.image_url.includes("..") ? body.image_url.slice(0, 400) : null;
+    if (!content && !meal_data && !image_url) return NextResponse.json({ error: "내용이나 식단·사진을 넣어 주세요" }, { status: 400 });
     const product_ids = Array.isArray(body.product_ids) ? body.product_ids.filter((id: unknown) => typeof id === "string" && UUID.test(id)).slice(0, 3) : [];
     const tags = isTopic(topic) ? [topic] : [];
     const author_nickname = typeof body.author_nickname === "string" && body.author_nickname.trim() ? body.author_nickname.trim().slice(0, 20) : "익명";
@@ -255,6 +280,7 @@ export async function POST(request: NextRequest) {
         meal_type: ["breakfast", "lunch", "dinner", "snack"].includes(meal_type) ? meal_type : null,
         meal_data: meal_data || null,
         product_ids: product_ids.length ? product_ids : null,
+        image_url,
         tags,
         author_nickname,
         // 건강 관심사·목표·나이대는 글에 붙이지 않는다 (마이페이지에서 나만 본다)
@@ -270,4 +296,19 @@ export async function POST(request: NextRequest) {
   } catch {
     return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
   }
+}
+
+/** DELETE /api/community/feed?id= — 내 글 지우기 (보이지 않게만 하고 기록은 남긴다) */
+export async function DELETE(request: NextRequest) {
+  const actor = await getActorId();
+  if (!actor) return noActor();
+  const id = request.nextUrl.searchParams.get("id");
+  if (!id || !UUID.test(id)) return NextResponse.json({ error: "id 필수" }, { status: 400 });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sb = createServiceRoleClient() as any;
+  const { data, error } = await sb.from("community_feed").update({ is_active: false, updated_at: new Date().toISOString() })
+    .eq("id", id).eq("user_id", actor).select("id");
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (!data?.length) return NextResponse.json({ error: "내 글만 지울 수 있어요" }, { status: 403 });
+  return NextResponse.json({ ok: true });
 }

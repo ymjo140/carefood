@@ -12,6 +12,7 @@ import { getOrCreateNickname } from "@/lib/nickname";
 /**
  * 피드 (쓰레드형) — 맨 위 바로 쓰기 줄 → 보기(추천·팔로잉·모임·내 글) → 줄로 나눈 글 목록
  * ds-wiring-drop: /api/community/follow — 팔로우는 글 상세에서 (목록의 카드마다 있던 채운 버튼을 뺌)
+ * 글마다 ··· 메뉴: 숨기기·차단·신고·(내 글) 지우기 → 목록에서 바로 뺀다
  */
 type Tab = "recommend" | "following" | "topic" | "mine";
 
@@ -167,7 +168,10 @@ export default function CommunityPage() {
             <ThreadCard key={post.id} post={post}
               onLike={() => handleLike(post.id)}
               onCopy={() => handleCopy(post.id)}
-              onReply={() => router.push(`/community/${post.id}#reply`)} />
+              onReply={() => router.push(`/community/${post.id}#reply`)}
+              onMenuDone={(what) => setPosts((prev) => (what === "blocked"
+                ? prev.filter((p) => p.user_id !== post.user_id) // 그 사람 글 전부
+                : prev.filter((p) => p.id !== post.id)))} />
           ))
         )}
 

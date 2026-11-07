@@ -1,9 +1,9 @@
 {
-  "checkedAt": "2026-11-07T10:54:33.186Z",
-  "files": 92,
+  "checkedAt": "2026-11-07T11:52:45.791Z",
+  "files": 96,
   "total": 0,
   "warnTotal": 0,
-  "allowedCount": 42,
+  "allowedCount": 43,
   "rules": [
     {
       "id": "hex-color",
@@ -335,6 +335,15 @@
       "snippet": "try { hasHealth = !!localStorage.getItem(\"carefood_health\"); } catch { /* 건강검진 기록 없음으로 본다 */ } // ds-allow: 보조 표시"
     },
     {
+      "file": "src/app/notifications/NotificationList.tsx",
+      "line": 30,
+      "rule": "silent-catch",
+      "level": "warn",
+      "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
+      "match": ".catch(() => {})",
+      "snippet": ".catch(() => {}); // ds-allow: 읽음 표시는 보조 — 다음에 다시 적는다"
+    },
+    {
       "file": "src/app/onboarding/page.tsx",
       "line": 193,
       "rule": "silent-catch",
@@ -426,7 +435,7 @@
     },
     {
       "file": "src/components/Header.tsx",
-      "line": 43,
+      "line": 46,
       "rule": "silent-catch",
       "level": "warn",
       "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",

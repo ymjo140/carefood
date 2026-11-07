@@ -59,7 +59,8 @@ export function Sheet({
   if (!mounted) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+    // 시트 안을 누른 게 시트를 띄운 바깥(누르면 이동하는 글 등)으로 번지지 않게
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" onClick={(e) => e.stopPropagation()}>
       <div className={cn("absolute inset-0 bg-scrim", leaving ? "animate-fade-out" : "animate-fade-in")} onClick={onClose} aria-hidden="true" />
       <div
         ref={panelRef}

@@ -7,7 +7,8 @@ import {
 import { COMMUNITY_TOPICS } from "@/lib/community-topics";
 
 /**
- * 글쓰기 시트 — 글 + 붙이기(기록한 끼니 · 저장한 식단 · 제품 태그) + 모임.
+ * 글쓰기 시트 — 글 + 붙이기(사진 · 기록한 끼니 · 저장한 식단 · 제품 태그) + 모임.
+ * 사진은 /api/community/upload 가 위치 정보 같은 메타데이터를 지우고 줄여서 올린다.
  * 작성자 건강 관심사는 붙이지 않는다 (서버도 받지 않음).
  */
 export type Attach = "meal" | "plan" | "product";
@@ -60,6 +61,46 @@ export default function PostComposer({ isOpen, initialAttach, nickname, onClose,
   const [products, setProducts] = useState<Hit[]>([]);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [retry, setRetry] = useState(0);
+  // 사진 한 장
+  const [photo, setPhoto] = useState<{ status: "idle" | "uploading" | "done"; url?: string; preview?: string }>({ status: "idle" });
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const pickPhoto = async (picked: File | undefined) => {
+    if (!picked) return;
+    // 서버로 보낼 수 있는 크기(약 4MB)를 넘으면 브라우저에서 먼저 줄인다
+    let file: Blob = picked;
+    if (picked.size > 3.5 * 1024 * 1024) {
+      try {
+        const bmp = await createImageBitmap(picked, { imageOrientation: "from-image" });
+        const scale = Math.min(1, 2000 / Math.max(bmp.width, bmp.height));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(bmp.width * scale); canvas.height = Math.round(bmp.height * scale);
+        canvas.getContext("2d")!.drawImage(bmp, 0, 0, canvas.width, canvas.height);
+        file = await new Promise<Blob>((ok, no) => canvas.toBlob((b) => (b ? ok(b) : no(new Error("줄이지 못했어요"))), "image/jpeg", 0.85));
+      } catch {
+        toast.show("사진이 너무 커요. 더 작은 사진으로 해 주세요", { tone: "danger" });
+        return;
+      }
+      if (file.size > 4 * 1024 * 1024) { toast.show("사진이 너무 커요. 더 작은 사진으로 해 주세요", { tone: "danger" }); return; }
+    }
+    const preview = URL.createObjectURL(file);
+    setPhoto({ status: "uploading", preview });
+    try {
+      const fd = new FormData();
+      fd.append("file", file, "photo");
+      const r = await fetch("/api/community/upload", { method: "POST", body: fd });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error);
+      setPhoto({ status: "done", url: d.url, preview });
+    } catch (e) {
+      URL.revokeObjectURL(preview);
+      setPhoto({ status: "idle" });
+      toast.show(e instanceof Error && e.message ? e.message : "사진을 올리지 못했어요. 다시 시도해 주세요", { tone: "danger" });
+    } finally {
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  };
+  const dropPhoto = () => { if (photo.preview) URL.revokeObjectURL(photo.preview); setPhoto({ status: "idle" }); };
 
   // 시트를 열 때 고른 붙이기로 시작
   const [lastOpen, setLastOpen] = useState(false);
@@ -105,7 +146,7 @@ export default function PostComposer({ isOpen, initialAttach, nickname, onClose,
   }, []);
 
   const reset = () => {
-    setContent(""); setAttach(null); setTopic(""); setPicked([]); setPlan(null); setProducts([]); setQ("");
+    setContent(""); setAttach(null); setTopic(""); setPicked([]); setPlan(null); setProducts([]); setQ(""); dropPhoto();
     setHits({ status: "idle", items: [] }); if (days[0]) setDay(days[0].iso);
   };
   const close = () => { reset(); onClose(); };
@@ -117,7 +158,7 @@ export default function PostComposer({ isOpen, initialAttach, nickname, onClose,
   };
 
   const hasMeal = picked.length > 0;
-  const canPost = !posting && (content.trim().length > 0 || hasMeal || !!plan);
+  const canPost = !posting && photo.status !== "uploading" && (content.trim().length > 0 || hasMeal || !!plan || !!photo.url);
 
   const submit = async () => {
     setPosting(true);
@@ -145,6 +186,7 @@ export default function PostComposer({ isOpen, initialAttach, nickname, onClose,
           meal_type: hasMeal && !plan ? mealType : null,
           meal_data,
           product_ids: products.map((p) => p.id),
+          image_url: photo.url ?? null,
           topic: topic || null,
           author_nickname: nickname,
         }),
@@ -175,8 +217,17 @@ export default function PostComposer({ isOpen, initialAttach, nickname, onClose,
         </Field>
 
         {/* 붙인 것 */}
-        {(hasMeal || plan || products.length > 0) && (
+        {(hasMeal || plan || products.length > 0 || photo.status !== "idle") && (
           <div className="flex flex-col gap-2">
+            {photo.status !== "idle" && (
+              <div className="relative self-start">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={photo.preview} alt="붙인 사진" className={cn("h-32 w-auto max-w-full rounded-md border border-line object-cover", photo.status === "uploading" && "opacity-50")} />
+                {photo.status === "uploading"
+                  ? <p className="text-caption text-ink-2 mt-1">사진을 올리고 있어요</p>
+                  : <Button size="sm" variant="ghost" className="mt-1 -ml-2" onClick={dropPhoto}>사진 빼기</Button>}
+              </div>
+            )}
             {plan && (
               <div className="flex items-center gap-3 rounded-md bg-sunken px-3 py-2.5">
                 <Icon name="calendar" size={18} className="text-ink-2" />
@@ -206,6 +257,11 @@ export default function PostComposer({ isOpen, initialAttach, nickname, onClose,
         <div className="flex flex-col gap-2">
           <span className="text-label font-medium text-ink">붙이기</span>
           <ChipRow>
+            <Chip disabled={photo.status !== "idle"} onClick={() => fileRef.current?.click()}>
+              <Icon name="camera" size={16} />사진
+            </Chip>
+            <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" className="sr-only" tabIndex={-1} aria-hidden="true"
+              name="photo" onChange={(e) => pickPhoto(e.target.files?.[0])} />
             {([["meal", "notebook", "기록한 끼니"], ["plan", "calendar", "저장한 식단"], ["product", "tag", "제품 태그"]] as const).map(([k, icon, label]) => (
               <Chip key={k} selected={attach === k} onClick={() => setAttach(attach === k ? null : k)}>
                 <Icon name={icon} size={16} />{label}

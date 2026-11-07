@@ -2,6 +2,7 @@
 
 import { MealAttach, PlanAttach, PostAction, PostActions, ProductTagLinks, ThreadItem } from "@/components/ui";
 import { isTopic } from "@/lib/community-topics";
+import PostMenu, { type MenuDone } from "./PostMenu";
 
 type Food = { name: string; calories?: number; protein_g?: number; carbs_g?: number; fat_g?: number };
 export type FeedPostData = {
@@ -17,6 +18,7 @@ export type FeedPostData = {
     plan?: { title?: string; day_kcal?: (number | null)[]; avg_kcal?: number; avg_protein?: number } | null;
   } | null;
   tags?: string[] | null;
+  image_url?: string | null;
   products?: { id: string; name: string }[];
   like_count: number;
   comment_count: number;
@@ -31,11 +33,13 @@ export type FeedPostData = {
  * 피드·상세에서 같은 모양으로 그리는 글 하나 (쓰레드형).
  * detail 이면 글로 이동하지 않고, 답글 미리보기 대신 아래 답글 목록을 쓴다.
  */
-export default function ThreadCard({ post, onLike, onCopy, onReply, detail = false }: {
+export default function ThreadCard({ post, onLike, onCopy, onReply, onMenuDone, detail = false }: {
   post: FeedPostData;
   onLike: () => void;
   onCopy?: () => void;
   onReply?: () => void;
+  /** 숨기기·차단·지우기·신고 뒤 화면 정리 */
+  onMenuDone?: (what: MenuDone) => void;
   detail?: boolean;
 }) {
   const href = detail ? undefined : `/community/${post.id}`;
@@ -51,6 +55,7 @@ export default function ThreadCard({ post, onLike, onCopy, onReply, detail = fal
       createdAt={post.created_at}
       href={href}
       reply={!detail && latest ? { nickname: latest.author_nickname, content: latest.content, more: Math.max(0, post.comment_count - 1) } : null}
+      menu={onMenuDone ? <PostMenu kind="post" id={post.id} authorId={post.user_id} authorNick={post.author_nickname} isMine={!!post.is_mine} onDone={onMenuDone} /> : undefined}
       actions={
         <PostActions variant="thread">
           <PostAction icon="heart" label="좋아요" count={post.like_count} active={!!post.is_liked} onClick={onLike} />
@@ -60,6 +65,11 @@ export default function ThreadCard({ post, onLike, onCopy, onReply, detail = fal
       }
     >
       {post.content && <p className={detail ? "text-body text-ink whitespace-pre-line" : "text-body text-ink whitespace-pre-line line-clamp-6"}>{post.content}</p>}
+      {post.image_url && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={post.image_url} alt={post.content ? `${post.author_nickname} 님이 올린 사진` : "올린 사진"} loading="lazy"
+          className="w-full max-h-96 object-cover rounded-md border border-line bg-sunken" />
+      )}
       {md?.plan ? (
         <PlanAttach title={md.plan.title || "저장한 식단"} dayKcal={md.plan.day_kcal || []} avgKcal={md.plan.avg_kcal} avgProtein={md.plan.avg_protein} />
       ) : md?.foods && md.foods.length > 0 ? (

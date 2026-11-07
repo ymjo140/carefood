@@ -106,6 +106,16 @@ export default function PrivacyPage() {
                 <td className="py-2 pr-3">개인화 추천 정확도 향상</td>
                 <td className="py-2 pr-3">선택</td>
               </tr>
+              <tr className="border-b border-line">
+                <td className="py-2 pr-3">커뮤니티 글·답글·사진, 커뮤니티 이름</td>
+                <td className="py-2 pr-3">커뮤니티 이용 (공개). 사진은 위치 등 촬영 정보를 지운 뒤 저장합니다. 건강 관심사·목표는 글에 붙이지 않습니다</td>
+                <td className="py-2 pr-3">선택</td>
+              </tr>
+              <tr className="border-b border-line">
+                <td className="py-2 pr-3">신고·숨기기·차단 기록</td>
+                <td className="py-2 pr-3">커뮤니티 운영 (신고한 사람은 다른 이용자에게 알리지 않습니다)</td>
+                <td className="py-2 pr-3">선택</td>
+              </tr>
             </tbody>
           </table></div>
         </section>

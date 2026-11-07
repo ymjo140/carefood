@@ -1,12 +1,12 @@
 {
-  "measuredAt": "2026-11-07T10:54:33.088Z",
-  "files": 67,
+  "measuredAt": "2026-11-07T11:52:45.678Z",
+  "files": 71,
   "distinctColors": 2,
-  "gradients": 0,
+  "gradients": 1,
   "shadows": 1,
   "fontSizeKinds": 5,
   "radiusKinds": 4,
-  "buttonShapeKinds": 1,
+  "buttonShapeKinds": 3,
   "inlineStyles": 7,
   "topColors": [
     [
@@ -21,15 +21,15 @@
   "fontSizes": [
     [
       "ds:label",
-      173
+      178
     ],
     [
       "ds:caption",
-      157
+      162
     ],
     [
       "ds:body",
-      77
+      80
     ],
     [
       "ds:title",
@@ -43,7 +43,7 @@
   "radii": [
     [
       "md",
-      34
+      37
     ],
     [
       "full",
@@ -130,6 +130,13 @@
       }
     ],
     [
+      "src/app/admin/reports/page.tsx",
+      {
+        "colors": 0,
+        "inline": 0
+      }
+    ],
+    [
       "src/app/auth/actions.ts",
       {
         "colors": 0,
@@ -152,13 +159,6 @@
     ],
     [
       "src/app/community/[id]/PostDetail.tsx",
-      {
-        "colors": 0,
-        "inline": 0
-      }
-    ],
-    [
-      "src/app/community/[id]/page.tsx",
       {
         "colors": 0,
         "inline": 0

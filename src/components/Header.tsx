@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { IconLink, cn } from "@/components/ui";
-import { getNotifSeen } from "@/lib/notif-seen";
 
 /**
  * 머리 줄 — 왼쪽 로고 · (넓은 화면) 주 메뉴 · 오른쪽 알림 → 마이페이지
@@ -34,19 +33,22 @@ export default function Header() {
   const [latest, setLatest] = useState<number | null>(null);
   const [seen, setSeen] = useState(0);
 
-  // 새 소식 점 — 처음 열 때, 다시 이 창으로 돌아올 때 확인
+  // 새 소식 점 — 처음 열 때, 다시 이 창으로 돌아올 때 확인. 본 시각은 서버가 사람 기준으로 기억한다
   useEffect(() => {
     let alive = true;
     const check = () => fetch("/api/notifications?latest=1")
       .then((r) => (r.ok ? r.json() : null))
-      .then((d) => { if (alive && d) setLatest(d.latest_at ? Date.parse(d.latest_at) : null); })
+      .then((d) => {
+        if (!alive || !d) return;
+        setLatest(d.latest_at ? Date.parse(d.latest_at) : null);
+        setSeen(d.seen_at ? Date.parse(d.seen_at) : 0);
+      })
       .catch(() => {}); // ds-allow: 점 표시는 보조 — 못 불러오면 점 없이 둔다
-    const syncSeen = () => setSeen(getNotifSeen());
-    syncSeen();
+    const onSeen = (e: Event) => setSeen((e as CustomEvent<number>).detail || Date.now());
     check();
     window.addEventListener("focus", check);
-    window.addEventListener("cf-notif-seen", syncSeen);
-    return () => { alive = false; window.removeEventListener("focus", check); window.removeEventListener("cf-notif-seen", syncSeen); };
+    window.addEventListener("cf-notif-seen", onSeen);
+    return () => { alive = false; window.removeEventListener("focus", check); window.removeEventListener("cf-notif-seen", onSeen); };
   }, []);
 
   const isActive = (href: string) => (href === "/" ? pathname === "/" || pathname === "/products" : pathname === href || pathname.startsWith(href + "/"));
