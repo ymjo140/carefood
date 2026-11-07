@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { connection } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { adminOnly } from "@/lib/actor-server";
+import { removeImages } from "@/lib/community-images";
 
 /**
  * GET  /api/admin/reports — 검토할 신고 (글·답글마다 묶음)
@@ -58,7 +59,14 @@ export async function POST(request: NextRequest) {
   const table = kind === "post" ? "community_feed" : "community_feed_comments";
   const col = kind === "post" ? "post_id" : "comment_id";
 
-  const update = action === "keep" ? { hidden_by_reports: false, report_count: 0 } : { is_active: false, hidden_by_reports: true };
+  // 글을 내리면 사진 파일도 지운다
+  if (action === "remove" && kind === "post") {
+    const { data: p } = await sb.from("community_feed").select("image_url").eq("id", id).maybeSingle();
+    const imgErr = await removeImages(sb, [p?.image_url]);
+    if (imgErr) console.error("사진 파일을 지우지 못했어요:", imgErr);
+  }
+  const update = action === "keep" ? { hidden_by_reports: false, report_count: 0 }
+    : kind === "post" ? { is_active: false, hidden_by_reports: true, image_url: null } : { is_active: false, hidden_by_reports: true };
   const { data: target, error: tErr } = await sb.from(table).update(update).eq("id", id).select(kind === "post" ? "id" : "id, post_id, is_active").single();
   if (tErr) return NextResponse.json({ error: tErr.message }, { status: 500 });
   if (action === "remove" && kind === "comment" && target?.post_id) {

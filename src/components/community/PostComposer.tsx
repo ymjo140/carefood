@@ -100,7 +100,15 @@ export default function PostComposer({ isOpen, initialAttach, nickname, onClose,
       if (fileRef.current) fileRef.current.value = "";
     }
   };
-  const dropPhoto = () => { if (photo.preview) URL.revokeObjectURL(photo.preview); setPhoto({ status: "idle" }); };
+  // 글에 쓰지 않은 사진은 저장소에서도 지운다 (올린 뒤 빼거나 글쓰기를 취소했을 때)
+  const dropPhoto = (discardUpload = true) => {
+    if (photo.preview) URL.revokeObjectURL(photo.preview);
+    if (discardUpload && photo.url) {
+      fetch("/api/community/upload", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url: photo.url }) })
+        .catch(() => {}); // ds-allow: 정리는 보조 — 남아도 글에는 안 나온다
+    }
+    setPhoto({ status: "idle" });
+  };
 
   // 시트를 열 때 고른 붙이기로 시작
   const [lastOpen, setLastOpen] = useState(false);
@@ -145,8 +153,8 @@ export default function PostComposer({ isOpen, initialAttach, nickname, onClose,
     }, 300);
   }, []);
 
-  const reset = () => {
-    setContent(""); setAttach(null); setTopic(""); setPicked([]); setPlan(null); setProducts([]); setQ(""); dropPhoto();
+  const reset = (posted = false) => {
+    setContent(""); setAttach(null); setTopic(""); setPicked([]); setPlan(null); setProducts([]); setQ(""); dropPhoto(!posted);
     setHits({ status: "idle", items: [] }); if (days[0]) setDay(days[0].iso);
   };
   const close = () => { reset(); onClose(); };
@@ -194,7 +202,7 @@ export default function PostComposer({ isOpen, initialAttach, nickname, onClose,
       const d = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(d.error);
       toast.show("올렸어요");
-      reset();
+      reset(true);
       onPosted();
       onClose();
     } catch {
@@ -225,7 +233,7 @@ export default function PostComposer({ isOpen, initialAttach, nickname, onClose,
                 <img src={photo.preview} alt="붙인 사진" className={cn("h-32 w-auto max-w-full rounded-md border border-line object-cover", photo.status === "uploading" && "opacity-50")} />
                 {photo.status === "uploading"
                   ? <p className="text-caption text-ink-2 mt-1">사진을 올리고 있어요</p>
-                  : <Button size="sm" variant="ghost" className="mt-1 -ml-2" onClick={dropPhoto}>사진 빼기</Button>}
+                  : <Button size="sm" variant="ghost" className="mt-1 -ml-2" onClick={() => dropPhoto()}>사진 빼기</Button>}
               </div>
             )}
             {plan && (

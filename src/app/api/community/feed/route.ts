@@ -4,6 +4,7 @@ import { createServiceRoleClient } from "@/lib/supabase/server";
 import { getActorId, noActor } from "@/lib/actor-server";
 import { isTopic } from "@/lib/community-topics";
 import { viewerFilters } from "@/lib/community-safety";
+import { imagePrefix, removeImages } from "@/lib/community-images";
 
 
 /**
@@ -261,7 +262,7 @@ export async function POST(request: NextRequest) {
     if (body.meal_data && JSON.stringify(body.meal_data).length > 60_000) return NextResponse.json({ error: "식단이 너무 커요" }, { status: 400 });
     const meal_data = cleanMealData(body.meal_data);
     // 사진은 우리 저장소(/api/community/upload 가 올린 것)만 받는다
-    const imgPrefix = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/community/`;
+    const imgPrefix = imagePrefix();
     const image_url = typeof body.image_url === "string" && body.image_url.startsWith(imgPrefix) && !body.image_url.includes("..") ? body.image_url.slice(0, 400) : null;
     if (!content && !meal_data && !image_url) return NextResponse.json({ error: "내용이나 식단·사진을 넣어 주세요" }, { status: 400 });
     const product_ids = Array.isArray(body.product_ids) ? body.product_ids.filter((id: unknown) => typeof id === "string" && UUID.test(id)).slice(0, 3) : [];
@@ -306,9 +307,14 @@ export async function DELETE(request: NextRequest) {
   if (!id || !UUID.test(id)) return NextResponse.json({ error: "id 필수" }, { status: 400 });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sb = createServiceRoleClient() as any;
-  const { data, error } = await sb.from("community_feed").update({ is_active: false, updated_at: new Date().toISOString() })
-    .eq("id", id).eq("user_id", actor).select("id");
+  const { data: before, error: bErr } = await sb.from("community_feed").select("image_url").eq("id", id).eq("user_id", actor).maybeSingle();
+  if (bErr) return NextResponse.json({ error: bErr.message }, { status: 500 });
+  if (!before) return NextResponse.json({ error: "내 글만 지울 수 있어요" }, { status: 403 });
+  const { error } = await sb.from("community_feed").update({ is_active: false, image_url: null, updated_at: new Date().toISOString() })
+    .eq("id", id).eq("user_id", actor);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  if (!data?.length) return NextResponse.json({ error: "내 글만 지울 수 있어요" }, { status: 403 });
+  // 사진 파일도 지운다 (남겨 두지 않음)
+  const imgErr = await removeImages(sb, [before.image_url]);
+  if (imgErr) console.error("사진 파일을 지우지 못했어요:", imgErr);
   return NextResponse.json({ ok: true });
 }

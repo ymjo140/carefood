@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import sharp from "sharp";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { getActorId, noActor } from "@/lib/actor-server";
+import { IMAGE_BUCKET, imagePaths, removeImages } from "@/lib/community-images";
 
 /**
  * POST /api/community/upload — 글에 붙일 사진 한 장 (multipart: file)
@@ -52,8 +53,25 @@ export async function POST(request: NextRequest) {
   const sb = createServiceRoleClient() as any;
   const now = new Date();
   const path = `${actor}/${now.getUTCFullYear()}${String(now.getUTCMonth() + 1).padStart(2, "0")}/${crypto.randomUUID()}.webp`;
-  const { error } = await sb.storage.from("community").upload(path, out, { contentType: "image/webp", cacheControl: "31536000", upsert: false });
+  const { error } = await sb.storage.from(IMAGE_BUCKET).upload(path, out, { contentType: "image/webp", cacheControl: "31536000", upsert: false });
   if (error) return NextResponse.json({ error: `사진을 올리지 못했어요: ${error.message}` }, { status: 500 });
-  const { data: pub } = sb.storage.from("community").getPublicUrl(path);
+  const { data: pub } = sb.storage.from(IMAGE_BUCKET).getPublicUrl(path);
   return NextResponse.json({ url: pub.publicUrl, width, height });
+}
+
+/** DELETE /api/community/upload { url } — 올렸다가 글에 안 쓴 내 사진 지우기 (내 폴더 것만) */
+export async function DELETE(request: NextRequest) {
+  const actor = await getActorId();
+  if (!actor) return noActor();
+  const { url } = await request.json().catch(() => ({}));
+  const [path] = imagePaths([url]);
+  if (!path || !path.startsWith(`${actor}/`)) return NextResponse.json({ error: "내 사진만 지울 수 있어요" }, { status: 403 });
+  // 이미 글에 쓴 사진이면 지우지 않는다
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sb = createServiceRoleClient() as any;
+  const { data: used } = await sb.from("community_feed").select("id").eq("image_url", url).eq("is_active", true).limit(1);
+  if (used?.length) return NextResponse.json({ error: "글에 쓰고 있는 사진이에요" }, { status: 409 });
+  const err = await removeImages(sb, [url]);
+  if (err) return NextResponse.json({ error: err }, { status: 500 });
+  return NextResponse.json({ ok: true });
 }

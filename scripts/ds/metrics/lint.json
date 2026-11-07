@@ -1,9 +1,9 @@
 {
-  "checkedAt": "2026-11-07T11:52:45.791Z",
+  "checkedAt": "2026-11-07T12:03:33.818Z",
   "files": 96,
   "total": 0,
   "warnTotal": 0,
-  "allowedCount": 43,
+  "allowedCount": 44,
   "rules": [
     {
       "id": "hex-color",
@@ -540,6 +540,15 @@
       "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
       "match": "catch {       }",
       "snippet": "} catch { /* */ } // ds-allow: 클릭 추적 실패는 알리지 않음"
+    },
+    {
+      "file": "src/components/community/PostComposer.tsx",
+      "line": 108,
+      "rule": "silent-catch",
+      "level": "warn",
+      "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
+      "match": ".catch(() => {})",
+      "snippet": ".catch(() => {}); // ds-allow: 정리는 보조 — 남아도 글에는 안 나온다"
     }
   ]
 }
