@@ -38,10 +38,12 @@ type SuggestedGroupBuy = {
 export async function GET(req: NextRequest) {
   const sp = req.nextUrl.searchParams;
   const userId = sp.has("mine") || sp.has("user_id") ? await getActorId() : null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sb = createServiceRoleClient() as any;
 
   // ── 1. 영양 목표 가져오기 ──
-  let goalCalories = 2000, goalProtein = 60, goalSodiumMax = 2000, goalSugarMax = 50, goalFiber = 25;
+  const goalFiber = 25;
+  let goalCalories = 2000, goalProtein = 60, goalSodiumMax = 2000, goalSugarMax = 50;
 
   if (userId) {
     const { data: goals } = await sb

@@ -1,5 +1,7 @@
 "use client";
 
+// 지금은 어디에도 붙어 있지 않다 (홈을 추천 + 탐색으로 합치며 뺌). 비슷한 사람 추천을 다시 쓸 때 여기서 가져간다.
+
 import { useState, useEffect } from "react";
 import { PLATFORM_LABELS } from "@/lib/platforms";
 import Link from "next/link";

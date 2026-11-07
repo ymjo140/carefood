@@ -15,7 +15,7 @@ import { viewerFilters } from "@/lib/community-safety";
  * 응답의 seen_at = 마지막으로 알림 화면을 연 시각 (사람 기준 — 로그인하면 기기가 달라도 같다)
  * POST /api/notifications — 지금 다 봤다고 적는다
  */
-type Item = { id: string; type: "comment" | "reply" | "like" | "follow"; at: string; who: string; count?: number; text?: string; post_id?: string; post_excerpt?: string };
+type Item = { id: string; type: "comment" | "reply" | "like" | "follow"; at: string; who: string; count?: number; text?: string; post_id?: string; post_excerpt?: string; user_id?: string };
 
 export async function GET(request: NextRequest) {
   await connection();
@@ -93,7 +93,7 @@ export async function GET(request: NextRequest) {
     ]);
     for (const r of [...(fp.data || []), ...(fc.data || [])]) if (r.author_nickname && !names.has(r.user_id)) names.set(r.user_id, r.author_nickname);
   }
-  for (const f of followers.filter((x) => !blocked.has(x.follower_id))) items.push({ id: `f-${f.id}`, type: "follow", at: f.created_at, who: names.get(f.follower_id) || "누군가" });
+  for (const f of followers.filter((x) => !blocked.has(x.follower_id))) items.push({ id: `f-${f.id}`, type: "follow", at: f.created_at, who: names.get(f.follower_id) || "누군가", user_id: names.has(f.follower_id) ? f.follower_id : undefined });
 
   items.sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
   if (latestOnly) return NextResponse.json({ latest_at: items[0]?.at ?? null, seen_at });

@@ -59,6 +59,7 @@ export default function ThreadCard({ post, onLike, onCopy, onReply, onMenuDone, 
       topic={topic}
       createdAt={post.created_at}
       href={href}
+      authorHref={`/community/u/${encodeURIComponent(post.user_id)}`}
       reply={!detail && latest ? { nickname: latest.author_nickname, content: latest.content, more: Math.max(0, post.comment_count - 1) } : null}
       menu={onMenuDone ? <PostMenu kind="post" id={post.id} authorId={post.user_id} authorNick={post.author_nickname} isMine={!!post.is_mine} onDone={onMenuDone} /> : undefined}
       actions={

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Button, Card, EmptyState, Icon, LinkButton, SkeletonList, cn, type IconName } from "@/components/ui";
 import { timeAgo } from "@/components/ui/FeedPost";
 
-type Item = { id: string; type: "comment" | "reply" | "like" | "follow"; at: string; who: string; count?: number; text?: string; post_id?: string; post_excerpt?: string };
+type Item = { id: string; type: "comment" | "reply" | "like" | "follow"; at: string; who: string; count?: number; text?: string; post_id?: string; post_excerpt?: string; user_id?: string };
 
 const ICON: Record<Item["type"], IconName> = { comment: "message", reply: "message", like: "heart", follow: "user" };
 
@@ -75,8 +75,8 @@ export function NotificationList() {
         );
         return (
           <li key={n.id} className="border-b border-line">
-            {n.post_id ? (
-              <Link href={`/community/${n.post_id}`} className="flex gap-3 py-3.5 hover:bg-sunken -mx-2 px-2 rounded-md transition-colors">{body}</Link>
+            {n.post_id || n.user_id ? (
+              <Link href={n.post_id ? `/community/${n.post_id}` : `/community/u/${encodeURIComponent(n.user_id!)}`} className="flex gap-3 py-3.5 hover:bg-sunken -mx-2 px-2 rounded-md transition-colors">{body}</Link>
             ) : (
               <div className="flex gap-3 py-3.5">{body}</div>
             )}

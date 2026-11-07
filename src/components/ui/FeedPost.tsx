@@ -111,9 +111,11 @@ export function PostActions({ children, className, variant = "card" }: { childre
  * href 가 있으면 빈 곳을 눌러 글로 간다 (버튼·링크를 누른 경우는 제외). 키보드는 시간 링크로 간다.
  */
 export function ThreadItem({
-  nickname, topic, createdAt, href, children, actions, reply, menu, className,
+  nickname, topic, createdAt, href, authorHref, children, actions, reply, menu, className,
 }: {
   nickname: string; topic?: string | null; createdAt?: string; href?: string;
+  /** 작성자 프로필로 가는 주소 — 있으면 아바타·이름을 누를 수 있다 */
+  authorHref?: string;
   children?: ReactNode; actions?: ReactNode; menu?: ReactNode; className?: string;
   /** 답글 미리보기 — 한 개 + 더 보기 */
   reply?: { nickname: string; content: string; more?: number } | null;
@@ -128,13 +130,17 @@ export function ThreadItem({
       }}
     >
       <div className="flex flex-col items-center gap-1.5 shrink-0">
-        <Avatar name={nickname} />
+        {authorHref
+          ? <Link href={authorHref} aria-label={`${nickname} 님 프로필`} className="rounded-full"><Avatar name={nickname} /></Link>
+          : <Avatar name={nickname} />}
         {reply && <span aria-hidden="true" className="flex-1 w-0.5 rounded-full bg-line" />}
         {reply && <Avatar name={reply.nickname} size="xs" />}
       </div>
       <div className="flex-1 min-w-0 flex flex-col gap-2.5">
         <div className="flex items-center gap-1.5 min-w-0">
-          <span className="text-label font-bold text-ink truncate">{nickname}</span>
+          {authorHref
+            ? <Link href={authorHref} className="inline-flex items-center min-h-8 text-label font-bold text-ink truncate hover:underline underline-offset-4">{nickname}</Link>
+            : <span className="text-label font-bold text-ink truncate">{nickname}</span>}
           {topic && <span className="text-caption text-ink-2 truncate">{topic}</span>}
           {createdAt && (href
             ? <Link href={href} className="inline-flex items-center min-h-8 px-1 -mx-1 text-caption text-ink-3 shrink-0 hover:underline">· {timeAgo(createdAt)}</Link>

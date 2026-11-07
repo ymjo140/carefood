@@ -9,7 +9,7 @@ import { imagePrefix, removeImages } from "@/lib/community-images";
 
 /**
  * GET /api/community/feed — 식단 피드
- *   ?tab=recommend(기본)|following|topic(&topic=모임 이름)|mine   ?id= 글 하나
+ *   ?tab=recommend(기본)|following|topic(&topic=모임 이름)|mine|user(&user_id=, &only=plan)   ?id= 글 하나
  * POST /api/community/feed — 새 글 작성
  *
  * 작성자의 건강 관심사·목표·나이대는 응답에 넣지 않는다 (민감정보 — 예전 글에 남아 있어도 보이지 않게).
@@ -114,6 +114,12 @@ export async function GET(request: NextRequest) {
   } else if (tab === "mine") {
     if (!userId) return NextResponse.json({ posts: [], total: 0, page, hasMore: false });
     query = query.eq("user_id", userId).order("created_at", { ascending: false });
+  } else if (tab === "user") {
+    // 작성자 프로필 — ?user_id= (&only=plan 이면 공유한 일주일 식단만)
+    const author = searchParams.get("user_id") || "";
+    if (!/^[A-Za-z0-9_-]{3,64}$/.test(author) || filters.blocked.has(author)) return NextResponse.json({ posts: [], total: 0, page, hasMore: false });
+    query = query.eq("user_id", author).order("created_at", { ascending: false });
+    if (searchParams.get("only") === "plan") query = query.not("meal_data->plan", "is", null);
   } else {
     // 추천 탭: 인기 + 최신 가중
     query = query.order("created_at", { ascending: false });

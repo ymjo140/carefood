@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
 import ThreadCard, { type FeedPostData } from "@/components/community/ThreadCard";
 import PostMenu from "@/components/community/PostMenu";
 import { Avatar, BottomBar, Button, Chip, EmptyState, Icon, Input, Page, PageLoading, SectionHeader, useToast } from "@/components/ui";
@@ -217,7 +218,7 @@ function CommentRow({ c, postAuthor, nested = false, last = false, hasChildren =
       </div>
       <div className="flex-1 min-w-0 pb-3">
         <div className="flex items-center gap-1.5 min-w-0">
-          <span className="text-label font-bold text-ink truncate">{c.author_nickname}</span>
+          <Link href={`/community/u/${encodeURIComponent(c.user_id)}`} className="inline-flex items-center min-h-8 text-label font-bold text-ink truncate hover:underline underline-offset-4">{c.author_nickname}</Link>
           {c.user_id === postAuthor && <span className="text-caption text-brand-ink shrink-0">글쓴이</span>}
           <span className="text-caption text-ink-3 shrink-0">· {timeAgo(c.created_at)}</span>
           <span className="ml-auto shrink-0">

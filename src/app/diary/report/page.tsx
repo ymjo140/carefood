@@ -8,7 +8,6 @@ import {
   Spinner, TextLink, buttonClass, cn,
 } from "@/components/ui";
 import { getClientActorId } from "@/lib/actor-client";
-import { InterestList } from "./InterestList";
 
 /* ───── 타입 ───── */
 type NutrientGrade = {
@@ -237,8 +236,13 @@ function ReportContent() {
         </Card>
       )}
 
-      {/* ── 관심 제품 (공구는 판매를 열기 전까지 관심 표시만) ── */}
-      {groupBuys.length > 0 && <InterestList items={groupBuys} />}
+      {/* ── 공구 — 목록·관심 표시는 공구 탭이 맡는다 (여기엔 한 줄만)
+           ds-wiring-drop: /api/community/group-buy/join — 공구 탭에서 관심 표시 ── */}
+      {groupBuys.length > 0 && (
+        <p className="text-label text-ink-2">
+          부족한 영양소와 관련된 공구 <span className="num font-bold text-ink">{groupBuys.length}</span>개가 관심을 모으고 있어요 · <TextLink href="/group-buy">공구 탭</TextLink>
+        </p>
+      )}
 
       {/* ── CTA ── */}
       <div className="flex gap-3">

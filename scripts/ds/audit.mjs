@@ -81,6 +81,10 @@ async function resolveDynamic(route) {
       const r = await fetch(`${BASE}/api/community/feed?tab=recommend&page=1`).then((x) => x.json());
       const id = r.posts?.[0]?.id; return id ? `/community/${id}` : null;
     }
+    if (route === "/community/u/[id]") {
+      const r = await fetch(`${BASE}/api/community/feed?tab=recommend&page=1`).then((x) => x.json());
+      const id = r.posts?.[0]?.user_id; return id ? `/community/u/${encodeURIComponent(id)}` : null;
+    }
   } catch { /* */ }
   return null;
 }
