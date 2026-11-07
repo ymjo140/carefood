@@ -59,8 +59,7 @@ export default function HomeTop() {
               <span className="num font-bold text-ink">341,860</span>개 식품의 영양 성분으로 골라요. 질문 몇 개면 돼요
             </p>
           </div>
-          {/* 채운 '시작하기'는 머리 줄에 이미 있다 — 여기는 보조 */}
-          <LinkButton href="/onboarding" variant="secondary" className="sm:shrink-0">목표 알려 주기</LinkButton>
+          <LinkButton href="/onboarding" className="sm:shrink-0">목표 알려 주기</LinkButton>
         </Card>
       )}
     </>

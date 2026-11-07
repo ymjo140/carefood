@@ -1,9 +1,9 @@
 {
-  "checkedAt": "2026-11-07T10:32:36.697Z",
-  "files": 87,
+  "checkedAt": "2026-11-07T10:54:33.186Z",
+  "files": 92,
   "total": 0,
   "warnTotal": 0,
-  "allowedCount": 43,
+  "allowedCount": 42,
   "rules": [
     {
       "id": "hex-color",
@@ -162,15 +162,6 @@
       "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
       "match": "catch {       }",
       "snippet": "} catch { /* */ } // ds-allow: 로컬 저장"
-    },
-    {
-      "file": "src/app/community/page.tsx",
-      "line": 50,
-      "rule": "silent-catch",
-      "level": "warn",
-      "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
-      "match": "catch {       }",
-      "snippet": "} catch { /* */ } // ds-allow: 로컬 프로필 저장"
     },
     {
       "file": "src/app/diary/page.tsx",
@@ -335,17 +326,17 @@
       "snippet": "__html: `if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(()=>{})}`, // ds-allow: 서비스 워커 등록 실패는 화면에 영향 없음"
     },
     {
-      "file": "src/app/onboarding/page.tsx",
-      "line": 261,
+      "file": "src/app/me/MeView.tsx",
+      "line": 46,
       "rule": "silent-catch",
       "level": "warn",
       "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
-      "match": "catch {              }",
-      "snippet": "} catch { /* silent */ } // ds-allow: 로컬 저장"
+      "match": "catch {                       }",
+      "snippet": "try { hasHealth = !!localStorage.getItem(\"carefood_health\"); } catch { /* 건강검진 기록 없음으로 본다 */ } // ds-allow: 보조 표시"
     },
     {
       "file": "src/app/onboarding/page.tsx",
-      "line": 294,
+      "line": 193,
       "rule": "silent-catch",
       "level": "warn",
       "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
@@ -354,7 +345,7 @@
     },
     {
       "file": "src/app/onboarding/page.tsx",
-      "line": 296,
+      "line": 195,
       "rule": "silent-catch",
       "level": "warn",
       "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
@@ -432,6 +423,15 @@
       "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
       "match": ".catch(() => {})",
       "snippet": ".catch(() => {}); // ds-allow: 초기 즐겨찾기 상태는 꺼진 채로 둠"
+    },
+    {
+      "file": "src/components/Header.tsx",
+      "line": 43,
+      "rule": "silent-catch",
+      "level": "warn",
+      "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
+      "match": ".catch(() => {})",
+      "snippet": ".catch(() => {}); // ds-allow: 점 표시는 보조 — 못 불러오면 점 없이 둔다"
     },
     {
       "file": "src/components/HomePersonalized.tsx",
@@ -531,15 +531,6 @@
       "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
       "match": "catch {       }",
       "snippet": "} catch { /* */ } // ds-allow: 클릭 추적 실패는 알리지 않음"
-    },
-    {
-      "file": "src/components/community/PostComposer.tsx",
-      "line": 50,
-      "rule": "silent-catch",
-      "level": "warn",
-      "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
-      "match": ".catch(() => {})",
-      "snippet": ".catch(() => {}); // ds-allow: 보조 목록(오늘 기록)은 없으면 비움"
     }
   ]
 }

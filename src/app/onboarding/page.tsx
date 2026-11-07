@@ -2,9 +2,7 @@
 
 import { useState, useEffect, useMemo, Suspense, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import type { HealthConcern, SensitivityLevel, TasteLevel } from "@/types/database";
-import { createClient } from "@/lib/supabase/client";
-import { saveProfile } from "@/app/auth/actions";
+import type { SensitivityLevel, TasteLevel } from "@/types/database";
 import {
   calculateNutritionGoals,
   calculateBMI,
@@ -23,6 +21,7 @@ import {
 } from "@/components/ui";
 import { ChoiceCard } from "@/components/ui/ChoiceCard";
 import { getClientActorId } from "@/lib/actor-client";
+import { ALLERGIES, DIET_OPTIONS, DISEASE_GOALS, EATING_OUT_OPTIONS, MAIN_GOALS, TASTE_CONFIG, buildProfile, persistProfile, readLocalProfile } from "@/lib/profile-options";
 
 /* ════════════════════════════════════════════
    타입 & 상수
@@ -56,49 +55,6 @@ const STEP_META: Record<StepKey, { title: string; sub: string }> = {
   tastes: { title: "맛 선호", sub: "입맛에 맞는 식품을 찾아요" },
   result: { title: "분석 결과", sub: "나만의 영양 전략" },
 };
-
-const MAIN_GOALS: HealthGoal[] = ["balanced", "weight_loss", "muscle", "gut_health", "skin", "energy"];
-const DISEASE_GOALS: HealthGoal[] = ["diabetes", "blood_pressure", "kidney"];
-
-const ALLERGIES = [
-  { key: "egg", label: "계란" },
-  { key: "milk", label: "우유" },
-  { key: "wheat", label: "밀" },
-  { key: "soybean", label: "대두" },
-  { key: "peanut", label: "땅콩" },
-  { key: "treenut", label: "견과류" },
-  { key: "shellfish", label: "갑각류" },
-  { key: "fish", label: "생선" },
-  { key: "buckwheat", label: "메밀" },
-  { key: "peach", label: "복숭아" },
-  { key: "sulfite", label: "아황산류" },
-];
-
-const TASTE_CONFIG = [
-  { key: "salty" as const, label: "짠맛",
-    benchmarks: [{ lv: 2, name: "흰밥" }, { lv: 4, name: "계란찜" }, { lv: 6, name: "김치찌개" }, { lv: 8, name: "라면" }, { lv: 10, name: "간장게장" }] },
-  { key: "sweet" as const, label: "단맛",
-    benchmarks: [{ lv: 2, name: "우유" }, { lv: 4, name: "식빵" }, { lv: 6, name: "콜라" }, { lv: 8, name: "아이스크림" }, { lv: 10, name: "초콜릿" }] },
-  { key: "spicy" as const, label: "매운맛",
-    benchmarks: [{ lv: 2, name: "짜장면" }, { lv: 4, name: "김치" }, { lv: 6, name: "떡볶이" }, { lv: 8, name: "신라면" }, { lv: 10, name: "불닭볶음면" }] },
-  { key: "fatty" as const, label: "고소한맛",
-    benchmarks: [{ lv: 2, name: "닭가슴살" }, { lv: 4, name: "두부" }, { lv: 6, name: "계란찜" }, { lv: 8, name: "삼겹살" }, { lv: 10, name: "버터" }] },
-];
-
-const EATING_OUT_OPTIONS = [
-  { key: "daily", label: "거의 매일" },
-  { key: "3_4", label: "주 3~4회" },
-  { key: "1_2", label: "주 1~2회" },
-  { key: "rarely", label: "거의 안 함" },
-];
-
-const DIET_OPTIONS: { key: DietType; label: string; desc: string }[] = [
-  { key: "normal", label: "일반 식사", desc: "특별한 식단 제한 없음" },
-  { key: "diet", label: "다이어트 중", desc: "칼로리 조절 중이에요" },
-  { key: "exercise", label: "운동 병행", desc: "근력 운동이나 유산소를 해요" },
-  { key: "vegetarian", label: "채식 위주", desc: "채식 또는 반채식 식단" },
-  { key: "pregnant", label: "임산부·수유부", desc: "임신 중이거나 수유 중이에요" },
-];
 
 const SENSITIVITY_LABELS: Record<number, string> = {
   1: "둔감한 편",
@@ -213,71 +169,14 @@ function OnboardingContent() {
     if (step > 0) setStep((s) => s - 1);
   };
 
+  // ds-wiring-drop: /api/profile — 저장은 src/lib/profile-options.ts persistProfile (마이페이지와 같이 씀)
   const handleComplete = async () => {
-    const concernMap: Record<string, HealthConcern> = {
-      gut_health: "gut_health",
-      skin: "skin",
-      weight_loss: "weight",
-      energy: "energy",
-    };
-    const concerns: HealthConcern[] = state.goals
-      .map((g) => concernMap[g])
-      .filter(Boolean) as HealthConcern[];
-    if (concerns.length === 0) concerns.push("energy");
-
-    const nutritionCache = nutritionGoals
-      ? {
-          bmi: nutritionGoals.bmi,
-          dailyCalories: nutritionGoals.dailyCalories,
-          dailyProteinG: nutritionGoals.dailyProteinG,
-          maxSodiumMg: nutritionGoals.maxSodiumMg,
-          maxSugarG: nutritionGoals.maxSugarG,
-          perMealCalMax: nutritionGoals.perMeal.caloriesMax,
-          perMealSodiumMax: nutritionGoals.perMeal.maxSodiumMg,
-          perMealSugarMax: nutritionGoals.perMeal.maxSugarG,
-          strategyTags: nutritionGoals.strategyTags,
-        }
-      : undefined;
-
-    const profile = {
-      goals: state.goals,
-      gender: state.gender,
-      birthYear: state.birthYear,
-      heightCm: state.heightCm,
-      weightKg: state.weightKg,
-      diet_type: state.dietType,
-      meals_per_day: state.mealsPerDay,
-      eating_out_freq: state.eatingOutFreq,
-      nutrition_goals: nutritionCache,
-      concerns,
-      conditions: state.goals.filter((g) => DISEASE_GOALS.includes(g)),
-      sensitivity: state.sensitivity,
-      allergies: state.allergies,
-      tastes: state.tastes,
-    };
-
+    // 닉네임 같은 다른 키는 이어받는다
+    const profile = buildProfile(state, nutritionGoals, readLocalProfile() || {});
     try {
-      localStorage.setItem("carefood_profile", JSON.stringify(profile));
-    } catch { /* silent */ } // ds-allow: 로컬 저장
-
-    try {
-      let userId: string | null = null;
-      const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        userId = user.id;
-        await saveProfile(JSON.stringify(profile));
-      } else {
-        userId = getClientActorId(); // 서버는 쿠키로 확인한다
-      }
+      await persistProfile(profile);
+      const userId = getClientActorId();
       if (userId) {
-        // 프로필 저장
-        await fetch("/api/profile", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ user_id: userId, ...profile }),
-        });
-
         // 맛 선호를 user_taste_preferences 테이블에도 저장 (차트 연동)
         await fetch("/api/taste", {
           method: "POST",

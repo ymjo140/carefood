@@ -3,12 +3,12 @@ import { cn } from "./cn";
 import { Icon, type IconName } from "./Icon";
 
 /** 프로필 동그라미 — 이름 첫 글자 */
-export function Avatar({ name, size = "md", className }: { name?: string | null; size?: "sm" | "md"; className?: string }) {
+export function Avatar({ name, size = "md", className }: { name?: string | null; size?: "xs" | "sm" | "md" | "lg"; className?: string }) {
   const ch = (name || "?").trim().charAt(0) || "?";
   return (
     <span aria-hidden="true"
       className={cn("inline-flex items-center justify-center rounded-full bg-sunken text-ink-2 font-bold shrink-0",
-        size === "sm" ? "size-8 text-caption" : "size-10 text-label", className)}>
+        size === "xs" ? "size-6 text-caption" : size === "sm" ? "size-8 text-caption" : size === "lg" ? "size-14 text-title" : "size-10 text-label", className)}>
       {ch}
     </span>
   );

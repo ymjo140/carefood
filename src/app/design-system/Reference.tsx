@@ -2,11 +2,11 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
-  Badge, Button, Card, CardActions, Chip, ChipRow, ConfirmSheet, EmptyState, Field, Icon, ICON_NAMES, IconButton,
+  Badge, Button, Card, CardActions, Chip, ChipRow, ConfirmSheet, EmptyState, Field, Icon, ICON_NAMES, IconButton, IconLink,
   Input, Kcal, LinkButton, ListRow, MacroGrid, MacroInline, MealSlot, MealTag, Notice, Estimate, Page, PageHeader, Price,
   ProgressBar, SearchField, SectionHeader, Select, Sheet, Spinner, Stat, Steps, Tabs, Textarea, TextLink, Thumb,
   Avatar, useToast, cn, type BadgeTone,
-  BottomNavItems, SkeletonList, FoodEntryForm, DragArea, DragGhost, DragHandle, useDragItem, useDropTarget, type DragData, ChoiceCard, ChoiceList, LinkTabs, RatingStars, RatingInput, ScaleInput, QuickRating, PostAuthor, PostAction, PostActions, PostTags,
+  BottomNavItems, SkeletonList, FoodEntryForm, DragArea, DragGhost, DragHandle, useDragItem, useDropTarget, type DragData, ChoiceCard, ChoiceList, LinkTabs, RatingStars, RatingInput, ScaleInput, QuickRating, PostAuthor, PostAction, PostActions, PostTags, ThreadItem, MealAttach, PlanAttach, ProductTagLinks,
 } from "@/components/ui";
 
 // 서버(UTC)와 브라우저 시간대가 달라도 같은 글자가 나오도록 한국 시간으로 고정
@@ -559,6 +559,12 @@ export default function Reference({ status }: { status: DsStatus }) {
               <IconButton icon="close" label="닫기" tone="secondary" size="sm" />
             </div>
           </Demo>
+          <Demo label="아이콘 링크 — 머리 줄 알림·마이페이지 (dot = 새 소식)" code='<IconLink href icon="bell" label="알림" dot />'>
+            <div className="flex gap-1 items-center">
+              <IconLink href="#buttons" icon="bell" label="알림" dot />
+              <IconLink href="#buttons" icon="user" label="마이페이지" />
+            </div>
+          </Demo>
           <Demo label="링크 버튼 · 글자 링크" code="<LinkButton> <TextLink>">
             <div className="flex flex-wrap gap-3 items-center">
               <LinkButton href="#buttons" variant="secondary" iconRight="arrow-right">식단 리스트 보기</LinkButton>
@@ -720,7 +726,7 @@ export default function Reference({ status }: { status: DsStatus }) {
           </Demo>
           <Demo label="커뮤니티 글 — 작성자 줄 · 태그 · 동작 줄" code="<PostAuthor/> <PostTags/> <PostActions><PostAction/></PostActions>" className="p-0 overflow-hidden">
             <div className="p-4 flex flex-col gap-3">
-              <PostAuthor nickname="건강한사자12" ageGroup="30s" concerns={["muscle"]} right={<span className="text-caption text-ink-3 shrink-0">2시간 전</span>} onFollow={() => toast.show("팔로우했어요")} />
+              <PostAuthor nickname="건강한사자12" right={<span className="text-caption text-ink-3 shrink-0">2시간 전</span>} onFollow={() => toast.show("팔로우했어요")} />
               <p className="text-body text-ink">운동 후라 단백질 위주로 챙겼어요</p>
               <PostTags tags={["고단백", "간편식"]} />
             </div>
@@ -729,6 +735,24 @@ export default function Reference({ status }: { status: DsStatus }) {
               <PostAction icon="message" label="댓글" count={3} />
               <PostAction icon="copy" label="따라하기" count={4} onClick={() => toast.show("식단 리스트에 담았어요")} />
             </PostActions>
+          </Demo>
+          <Demo label="쓰레드형 글 — 카드 없이 줄로 · 끼니/일주일 식단/제품 첨부 · 답글 미리보기" code="<ThreadItem reply> <MealAttach/> <PlanAttach/> <ProductTagLinks/> <PostActions variant='thread'>" className="px-4 py-0">
+            <ThreadItem nickname="지민" topic="저염 식단"
+              reply={{ nickname: "하늘", content: "드레싱 반만 쓰는 거 저도 해 볼게요", more: 5 }}
+              actions={
+                <PostActions variant="thread">
+                  <PostAction icon="heart" label="좋아요" count={24} />
+                  <PostAction icon="message" label="답글" count={6} />
+                  <PostAction icon="copy" label="따라하기" count={3} />
+                </PostActions>
+              }>
+              <p className="text-body text-ink">드레싱은 따로 담아서 반만 뿌렸어요</p>
+              <MealAttach mealType="lunch" foods={[{ name: "닭가슴살 샐러드" }, { name: "현미밥 105g" }, { name: "오리엔탈 드레싱 15g" }]} total={{ calories: 512, protein_g: 38, carbs_g: 52, fat_g: 14 }} />
+              <ProductTagLinks products={[{ id: "00000000-0000-0000-0000-000000000000", name: "훈제 닭가슴살 100g" }]} />
+            </ThreadItem>
+            <ThreadItem nickname="유나" topic="고단백">
+              <PlanAttach title="이번 주 식단" dayKcal={[1600, 1500, 1700, 1600, 1600, 1900, 1400]} avgKcal={1614} avgProtein={104} />
+            </ThreadItem>
           </Demo>
         </div>
       </Section>

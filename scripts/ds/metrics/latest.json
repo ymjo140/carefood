@@ -1,9 +1,9 @@
 {
-  "measuredAt": "2026-11-07T10:32:36.608Z",
-  "files": 62,
+  "measuredAt": "2026-11-07T10:54:33.088Z",
+  "files": 67,
   "distinctColors": 2,
   "gradients": 0,
-  "shadows": 3,
+  "shadows": 1,
   "fontSizeKinds": 5,
   "radiusKinds": 4,
   "buttonShapeKinds": 1,
@@ -21,19 +21,19 @@
   "fontSizes": [
     [
       "ds:label",
-      167
+      173
     ],
     [
       "ds:caption",
-      148
+      157
     ],
     [
       "ds:body",
-      75
+      77
     ],
     [
       "ds:title",
-      26
+      27
     ],
     [
       "ds:display",
@@ -43,11 +43,11 @@
   "radii": [
     [
       "md",
-      30
+      34
     ],
     [
       "full",
-      18
+      20
     ],
     [
       "lg",

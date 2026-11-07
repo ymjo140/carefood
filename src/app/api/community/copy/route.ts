@@ -22,6 +22,26 @@ export async function POST(request: NextRequest) {
       .eq("id", post_id)
       .single();
 
+    // 저장한 식단(일주일)을 공유한 글 — 7일 그리드를 통째로 담는다
+    const sharedPlan = post?.meal_data?.plan as { title?: string; grid?: Record<string, unknown>; avg_kcal?: number; avg_protein?: number; days?: number } | undefined;
+    if (sharedPlan?.grid && typeof sharedPlan.grid === "object") {
+      const { data: saved, error: pErr } = await sb.from("saved_meal_plans").insert({
+        user_id,
+        title: `${post.author_nickname || "커뮤니티"}의 ${sharedPlan.title || "식단"}`.slice(0, 60),
+        grid: sharedPlan.grid,
+        tags: ["따라하기"],
+        total_price: 0,
+        avg_daily_calories: Math.round(sharedPlan.avg_kcal || 0),
+        avg_daily_protein: Math.round(sharedPlan.avg_protein || 0),
+        product_count: 0,
+        eating_out_count: 0,
+        source: "community_copy",
+      }).select("id, title").single();
+      if (pErr) return NextResponse.json({ error: pErr.message }, { status: 500 });
+      await sb.rpc("increment_feed_count", { p_column: "copy_count", p_id: post_id });
+      return NextResponse.json({ ok: true, plan_id: saved.id, title: saved.title });
+    }
+
     if (!post?.meal_data?.foods || post.meal_data.foods.length === 0) {
       return NextResponse.json({ error: "식단 데이터 없음" }, { status: 400 });
     }

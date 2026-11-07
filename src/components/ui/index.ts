@@ -5,7 +5,7 @@
  */
 export { cn } from "./cn";
 export { Icon, ICON_NAMES, type IconName } from "./Icon";
-export { Button, LinkButton, IconButton, TextLink, buttonClass, type ButtonVariant, type ButtonSize } from "./Button";
+export { Button, LinkButton, IconButton, IconLink, TextLink, buttonClass, type ButtonVariant, type ButtonSize } from "./Button";
 export { Badge, type BadgeTone } from "./Badge";
 export { Chip, ChipRow } from "./Chip";
 export { Card, CardActions } from "./Card";
@@ -23,6 +23,6 @@ export { ChoiceCard } from "./ChoiceCard";
 export { ChoiceList, type ChoiceTone } from "./ChoiceList";
 export { LinkTabs, ADMIN_TABS } from "./LinkTabs";
 export { RatingStars, RatingInput, ScaleInput, QuickRating, QUICK_RATINGS } from "./Rating";
-export { PostAuthor, PostAction, PostActions, PostTags, timeAgo, AGE_GROUP_LABELS, CONCERN_LABELS } from "./FeedPost";
+export { PostAuthor, PostAction, PostActions, PostTags, ThreadItem, MealAttach, PlanAttach, ProductTagLinks, timeAgo, AGE_GROUP_LABELS, CONCERN_LABELS } from "./FeedPost";
 export { DragArea, DragHandle, DragGhost, useDragItem, useDropTarget, dropClass, type DragData } from "./Drag";
 export { FoodEntryForm, type FoodBase, type FoodEntry } from "./FoodEntry";

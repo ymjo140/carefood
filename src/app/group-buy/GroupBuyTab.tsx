@@ -37,6 +37,11 @@ export function GroupBuyTab() {
   const [busy, setBusy] = useState<string | null>(null);
   const [suggestOpen, setSuggestOpen] = useState(false);
 
+  // 마이페이지 '관심 표시한 공구'에서 들어오면 내 관심부터
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("view") === "mine") setView("mine"); // eslint-disable-line react-hooks/set-state-in-effect -- 주소는 화면을 그린 뒤에 읽는다
+  }, []);
+
   useEffect(() => {
     let alive = true;
     setState((s) => ({ ...s, status: "loading" })); // eslint-disable-line react-hooks/set-state-in-effect -- 보기를 바꿀 때마다 다시 불러온다

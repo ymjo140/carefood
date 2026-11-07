@@ -59,7 +59,8 @@ export async function GET(
   }
 
   return NextResponse.json({
-    plan: { ...plan, is_liked: isLiked },
+    // 작성자 건강 관심사·나이대는 내보내지 않는다 (민감정보)
+    plan: { ...plan, author_concerns: undefined, author_goals: undefined, author_age_group: undefined, is_liked: isLiked },
     comments: comments || [],
     relatedGroupBuys,
   });

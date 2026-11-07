@@ -107,6 +107,27 @@ export function IconButton({
   );
 }
 
+/** 아이콘만 있는 링크 — 머리 줄의 알림·마이페이지처럼 화면을 옮기는 것. dot 은 새 소식 표시(앰버 점) */
+export function IconLink({
+  icon, label, dot = false, active = false, className, ...rest
+}: { icon: IconName; label: string; dot?: boolean; active?: boolean } & Omit<ComponentProps<typeof Link>, "children">) {
+  return (
+    <Link
+      aria-label={dot ? `${label} — 새 소식 있음` : label}
+      title={label}
+      className={cn(
+        "press relative inline-flex items-center justify-center rounded-full shrink-0 size-11",
+        active ? "text-brand-ink" : "text-ink-2 hover:text-ink hover:bg-sunken",
+        className,
+      )}
+      {...rest}
+    >
+      <Icon name={icon} size={22} />
+      {dot && <span aria-hidden="true" className="absolute top-2.5 right-2.5 size-2 rounded-full bg-brand ring-2 ring-canvas" />}
+    </Link>
+  );
+}
+
 /** 글자 링크 — 카드 안 "전체 보기 →" 같은 보조 이동 */
 export function TextLink({ className, children, ...rest }: ComponentProps<typeof Link>) {
   return (

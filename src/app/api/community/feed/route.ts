@@ -2,11 +2,30 @@ import { NextRequest, NextResponse } from "next/server";
 import { connection } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { getActorId, noActor } from "@/lib/actor-server";
+import { isTopic } from "@/lib/community-topics";
 
 /**
  * GET /api/community/feed — 식단 피드
+ *   ?tab=recommend(기본)|following|topic(&topic=모임 이름)|mine   ?id= 글 하나
  * POST /api/community/feed — 새 글 작성
+ *
+ * 작성자의 건강 관심사·목표·나이대는 응답에 넣지 않는다 (민감정보 — 예전 글에 남아 있어도 보이지 않게).
+ * 글에 붙은 제품(product_ids)은 이름을 같이 돌려준다 → products: [{ id, name }]
  */
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function publicPost({ author_concerns, author_goals, author_age_group, ...rest }: Record<string, any>) {
+  void author_concerns; void author_goals; void author_age_group;
+  return rest;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function productNames(sb: any, posts: { product_ids?: string[] | null }[]) {
+  const ids = [...new Set(posts.flatMap((p) => p.product_ids || []))].slice(0, 200);
+  if (!ids.length) return new Map<string, string>();
+  const { data } = await sb.from("products").select("id, name").in("id", ids);
+  return new Map<string, string>((data || []).map((p: { id: string; name: string }) => [p.id, p.name]));
+}
 
 export async function GET(request: NextRequest) {
   await connection();
@@ -37,12 +56,14 @@ export async function GET(request: NextRequest) {
       isLiked = !!likeRes.data;
       isFollowing = !!followRes.data;
     }
-    return NextResponse.json({ post: { ...post, is_liked: isLiked, is_following: isFollowing } });
+    const names = await productNames(sb, [post]);
+    const products = (post.product_ids || []).filter((id: string) => names.has(id)).map((id: string) => ({ id, name: names.get(id) }));
+    return NextResponse.json({ post: { ...publicPost(post), products, is_mine: post.user_id === userId, is_liked: isLiked, is_following: isFollowing } });
   }
 
   /* ── 피드 목록 모드 ── */
   const tab = searchParams.get("tab") || "recommend";
-  const concern = searchParams.get("concern");
+  const topic = searchParams.get("topic");
   const page = Number(searchParams.get("page") || 1);
   const limit = 20;
 
@@ -64,10 +85,13 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ posts: [], total: 0, page, hasMore: false });
     }
     query = query.order("created_at", { ascending: false });
-  } else if (tab === "concern" && concern) {
-    // 관심사 탭
-    query = query.contains("author_concerns", [concern]);
+  } else if (tab === "topic" && isTopic(topic)) {
+    // 모임 탭 — 글쓴이가 고른 모임
+    query = query.contains("tags", [topic]);
     query = query.order("created_at", { ascending: false });
+  } else if (tab === "mine") {
+    if (!userId) return NextResponse.json({ posts: [], total: 0, page, hasMore: false });
+    query = query.eq("user_id", userId).order("created_at", { ascending: false });
   } else {
     // 추천 탭: 인기 + 최신 가중
     query = query.order("created_at", { ascending: false });
@@ -124,8 +148,11 @@ export async function GET(request: NextRequest) {
   }
 
   // 추천탭: 인기도 기반 재정렬
-  let result = (posts || []).map((p: { id: string }) => ({
-    ...p,
+  const names = await productNames(sb, posts || []);
+  const result = (posts || []).map((p: { id: string; user_id: string; product_ids?: string[] | null }) => ({
+    ...publicPost(p),
+    products: (p.product_ids || []).filter((id) => names.has(id)).map((id) => ({ id, name: names.get(id) })),
+    is_mine: !!userId && p.user_id === userId,
     is_liked: likedIds.has(p.id),
     is_bookmarked: bookmarkedIds.has(p.id),
     preview_comments: commentMap[p.id] || [],
@@ -153,14 +180,68 @@ export async function GET(request: NextRequest) {
   });
 }
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * 글에 붙은 식단은 '따라하기'로 다른 사람의 식단 리스트에 그대로 복사된다 —
+ * 아는 칸만 남기고, 링크는 https 만 받는다.
+ */
+const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? Math.round(v * 10) / 10 : undefined);
+const str = (v: unknown, max: number) => (typeof v === "string" ? v.slice(0, max) : undefined);
+function cleanCell(c: unknown) {
+  if (!c || typeof c !== "object") return null;
+  const o = c as Record<string, unknown>;
+  const url = typeof o.url === "string" && /^https:\/\//.test(o.url) ? o.url.slice(0, 500) : null;
+  return {
+    product_id: typeof o.product_id === "string" && UUID.test(o.product_id) ? o.product_id : null,
+    name: str(o.name, 80) ?? null,
+    calories: num(o.calories), protein_g: num(o.protein_g), carbs_g: num(o.carbs_g), fat_g: num(o.fat_g), price: num(o.price),
+    platform: str(o.platform, 20) ?? null,
+    url,
+    type: o.type === "eating_out" ? "eating_out" : "product",
+    _foods: Array.isArray(o._foods) ? o._foods.slice(0, 20).map(cleanFood) : undefined,
+  };
+}
+function cleanFood(f: unknown) {
+  const o = (f && typeof f === "object" ? f : {}) as Record<string, unknown>;
+  return { name: str(o.name, 80) ?? "음식", calories: num(o.calories), protein_g: num(o.protein_g), carbs_g: num(o.carbs_g), fat_g: num(o.fat_g) };
+}
+function cleanMealData(md: unknown) {
+  if (!md || typeof md !== "object") return null;
+  const o = md as Record<string, unknown>;
+  const plan = o.plan as Record<string, unknown> | undefined;
+  if (plan && typeof plan === "object") {
+    const grid: Record<string, Record<string, unknown>> = {};
+    const g = (plan.grid || {}) as Record<string, Record<string, unknown>>;
+    for (const d of ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]) {
+      grid[d] = {};
+      for (const m of ["breakfast", "lunch", "dinner", "supplement"]) grid[d][m] = cleanCell(g?.[d]?.[m]);
+    }
+    const dayKcal = Array.isArray(plan.day_kcal) ? plan.day_kcal.slice(0, 7).map((v) => num(v) ?? null) : [];
+    return { plan: { title: str(plan.title, 40) ?? "저장한 식단", grid, day_kcal: dayKcal, avg_kcal: num(plan.avg_kcal), avg_protein: num(plan.avg_protein), days: num(plan.days) } };
+  }
+  if (!Array.isArray(o.foods) || o.foods.length === 0) return null;
+  const t = (o.total || {}) as Record<string, unknown>;
+  return {
+    foods: o.foods.slice(0, 30).map(cleanFood),
+    total: { calories: num(t.calories) ?? 0, protein_g: num(t.protein_g) ?? 0, carbs_g: num(t.carbs_g) ?? 0, fat_g: num(t.fat_g) ?? 0 },
+  };
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { post_type, content, meal_type, meal_data, product_ids, tags,
-            author_nickname, author_age_group, author_concerns, author_goals } = body;
+    const { post_type, meal_type, topic } = body;
     const user_id = await getActorId();
     if (!user_id) return noActor();
-    if (!content && !meal_data) return NextResponse.json({ error: "내용 또는 식단 데이터 필수" }, { status: 400 });
+
+    const content = typeof body.content === "string" ? body.content.trim().slice(0, 1000) : "";
+    if (body.meal_data && JSON.stringify(body.meal_data).length > 60_000) return NextResponse.json({ error: "식단이 너무 커요" }, { status: 400 });
+    const meal_data = cleanMealData(body.meal_data);
+    if (!content && !meal_data) return NextResponse.json({ error: "내용이나 식단을 넣어 주세요" }, { status: 400 });
+    const product_ids = Array.isArray(body.product_ids) ? body.product_ids.filter((id: unknown) => typeof id === "string" && UUID.test(id)).slice(0, 3) : [];
+    const tags = isTopic(topic) ? [topic] : [];
+    const author_nickname = typeof body.author_nickname === "string" && body.author_nickname.trim() ? body.author_nickname.trim().slice(0, 20) : "익명";
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const sb = createServiceRoleClient() as any;
@@ -169,22 +250,23 @@ export async function POST(request: NextRequest) {
       .from("community_feed")
       .insert({
         user_id,
-        post_type: post_type || "daily",
+        post_type: post_type === "meal" && meal_data ? "meal" : "daily",
         content: content || null,
-        meal_type: meal_type || null,
+        meal_type: ["breakfast", "lunch", "dinner", "snack"].includes(meal_type) ? meal_type : null,
         meal_data: meal_data || null,
-        product_ids: product_ids || null,
-        tags: tags || [],
-        author_nickname: author_nickname || "익명",
-        author_age_group: author_age_group || null,
-        author_concerns: author_concerns || [],
-        author_goals: author_goals || [],
+        product_ids: product_ids.length ? product_ids : null,
+        tags,
+        author_nickname,
+        // 건강 관심사·목표·나이대는 글에 붙이지 않는다 (마이페이지에서 나만 본다)
+        author_age_group: null,
+        author_concerns: [],
+        author_goals: [],
       })
       .select()
       .single();
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    return NextResponse.json({ post: data });
+    return NextResponse.json({ post: publicPost(data) });
   } catch {
     return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
   }

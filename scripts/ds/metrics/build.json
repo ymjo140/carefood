@@ -1,7 +1,7 @@
 {
-  "builtAt": "2026-11-07T10:32:36.555Z",
-  "sha": "8be83b638161daff452b64287f8fcef9d969218d",
-  "message": "가격 비교: 같은 제품의 가장 싼 가격의 2배를 넘는 가격은 보기에서 뺌(대부분 묶음 상품) + 60일 지난 가격 숨김 — v_all_prices 뷰. 추천의 구매 가능 판단은 제품의 is_purchasable 로(",
+  "builtAt": "2026-11-07T10:54:33.040Z",
+  "sha": "3e9e0356afb18578b7578a8efad8c786c75799ea",
+  "message": "디자인 시스템 수치 갱신",
   "branch": "main",
   "env": "local"
 }
