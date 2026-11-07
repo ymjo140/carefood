@@ -14,7 +14,8 @@ import { getAuthUser, needLogin } from "@/lib/actor-server";
 export async function GET(request: NextRequest) {
   try {
     const userId = (await getAuthUser())?.id;
-    if (!userId) return needLogin();
+    // 로그인 전엔 가족이 없는 것과 같다 (목록 읽기라 오류로 보지 않음)
+    if (!userId) return NextResponse.json({ profiles: [], login: false });
 
     const supabase = createServiceRoleClient();
     const { data, error } = await (supabase

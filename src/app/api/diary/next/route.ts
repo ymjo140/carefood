@@ -18,6 +18,9 @@ type Row = {
 };
 
 const MEALS = new Set(["breakfast", "lunch", "dinner", "snack"]);
+// 한 끼로 먹는 종류만 (원물 식재료·소스·영양제·분말은 빼고). 간식은 그 반대쪽만 뺀다
+const MEAL_CATS = ["rice", "soup", "noodle", "grill", "salad", "set", "bread", "side"];
+const NOT_SNACK = ["supplement", "powder", "sauce", "ingredient", "seafood", "rice", "soup", "noodle", "set"];
 
 export async function GET(request: NextRequest) {
   await connection();
@@ -41,6 +44,8 @@ export async function GET(request: NextRequest) {
     sb.from("products")
       .select("id, name, manufacturer, calories, protein_g, sodium_mg, serving_size_g, nutrient_base_g, dish_category, image_url")
       .eq("is_purchasable", true).gt("calories", 0).gte("protein_g", meal === "snack" ? 3 : 6)
+      // 1회 제공량이 포장 전체로 잘못 들어간 제품이 많아 350g 이하만
+      .gt("serving_size_g", 0).lte("serving_size_g", 350)
       .order("health_score", { ascending: false, nullsFirst: false }).limit(400),
     sb.from("user_profiles").select("allergies").eq("user_id", me).maybeSingle(),
   ]);
@@ -52,10 +57,12 @@ export async function GET(request: NextRequest) {
 
   const picks = ((rows || []) as Row[])
     .filter((r) => !exclude.has(r.id))
+    .filter((r) => meal === "snack" ? !NOT_SNACK.includes(r.dish_category || "") : MEAL_CATS.includes(r.dish_category || ""))
     .filter((r) => !allergyWords.some((w) => (r.name || "").includes(w)))
     .map((r) => perServing(r))
     .filter((r) => (r.calories || 0) >= minKcal && (r.calories || 0) <= maxKcal)
     .filter((r) => !sodium || (r.sodium_mg || 0) <= sodium)
+    .filter((r) => (r.protein_g || 0) <= 60) // 한 끼 단백질이 이보다 많으면 데이터 오류일 가능성
     .map((r) => {
       const c = r.calories || 1, p = r.protein_g || 0;
       // 남은 단백질을 많이 채우면서 칼로리 예산 안에서 — 단백질 충족 비율 + kcal 당 단백질

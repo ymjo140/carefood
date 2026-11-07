@@ -949,6 +949,7 @@ export default function DiaryPage() {
             remainKcal={goalCalories - consumed}
             remainProtein={goalProtein - (data.totals.protein_g || 0)}
             remainSodium={maxSodium - (data.totals.sodium_mg || 0)}
+            goalKcal={goalCalories}
             meal={meal} mainLeft={mainLeft}
             exclude={allEntries.map((e) => e.product_id).filter((x): x is string => !!x)}
             onLog={logToMeal}
@@ -1003,7 +1004,8 @@ export default function DiaryPage() {
                     {entries.length > 0 && (
                       <div className="-mx-4 divide-y divide-line border-t border-line mt-2">
                         {entries.map((e) => (
-                          <div key={e.id} className="flex items-center gap-3 pl-4 pr-2 py-2.5">
+                          <div key={e.id} className="pl-4 pr-2 py-2.5">
+                          <div className="flex items-center gap-3">
                             <div className="flex-1 min-w-0">
                               <p className="text-body font-medium text-ink line-clamp-1">
                                 {e.product_id
@@ -1017,12 +1019,14 @@ export default function DiaryPage() {
                                 {e.sodium_mg != null && e.sodium_mg > 600 && <span className="font-bold text-sodium">나트륨 <span className="num">{e.sodium_mg}</span>mg</span>}
                                 {e.fat_g != null && e.fat_g > 15 && !e.sodium_mg && <span>지방 <span className="num">{e.fat_g}</span>g</span>}
                               </div>
-                              {e.product_id && ratings[e.product_id] == null && (
-                                <QuickRating className="mt-1.5" onPick={(v) => rateTaste(e.product_id as string, v)} />
-                              )}
+
                             </div>
                             <span className="num text-label font-bold text-ink shrink-0">{e.calories || 0}</span>
                             <IconButton icon="trash" label={`${e.food_name} 삭제하기`} size="sm" onClick={() => setDeleteConfirmId(e.id)} />
+                          </div>
+                          {e.product_id && ratings[e.product_id] == null && (
+                            <QuickRating className="mt-2" onPick={(v) => rateTaste(e.product_id as string, v)} />
+                          )}
                           </div>
                         ))}
                       </div>

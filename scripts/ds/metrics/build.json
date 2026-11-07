@@ -1,7 +1,7 @@
 {
-  "builtAt": "2026-11-04T08:59:30.999Z",
-  "sha": "c0a521c2f4d0beb8ec0a04ebee1fbd6a3e992272",
-  "message": "fix(ci): 화면 검사는 운영 주소로 — 배포별 주소는 Vercel 보호로 로그인 창이 찍힘",
+  "builtAt": "2026-11-07T04:01:05.679Z",
+  "sha": "70c1cb44fe81ee93b5ea4f3ac6e1f53bfca4ac20",
+  "message": "홈 추천 세 칸(가장 잘 맞음·건강식단 서비스·새로 시도), 온보딩을 마치면 이번 주 식단을 바로 채움, 기록 3일째 로그인 안내, 가족 기준으로 AI 채우기, DESIGN.md 추천 이유·추정 문구 규칙",
   "branch": "main",
   "env": "local"
 }

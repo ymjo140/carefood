@@ -1,18 +1,18 @@
 {
-  "auditedAt": "2026-11-04T08:38:32.228Z",
+  "auditedAt": "2026-11-07T03:57:38.597Z",
   "base": "http://localhost:3100",
-  "commit": "fedac951e1bfdd089b1506da12e0178a967d8343",
-  "ignored": "cdn\\.011st\\.com",
-  "pages": 24,
+  "commit": "70c1cb44fe81ee93b5ea4f3ac6e1f53bfca4ac20",
+  "ignored": null,
+  "pages": 25,
   "variants": [
     "데스크톱",
     "모바일",
     "모바일 다크"
   ],
-  "screenshots": 72,
-  "seconds": 196,
+  "screenshots": 75,
+  "seconds": 165,
   "totals": {
-    "error": 0,
+    "error": 13,
     "overflow": 0,
     "off-color": 0,
     "contrast": 0,
@@ -20,7 +20,7 @@
     "tiny-text": 0,
     "touch-target": 2
   },
-  "blocking": 0,
+  "blocking": 13,
   "byPage": [
     {
       "route": "/",
@@ -35,6 +35,11 @@
     {
       "route": "/admin/insights",
       "url": "/admin/insights",
+      "issues": 0
+    },
+    {
+      "route": "/admin/metrics",
+      "url": "/admin/metrics",
       "issues": 0
     },
     {
@@ -115,17 +120,17 @@
     {
       "route": "/products",
       "url": "/products",
-      "issues": 0
+      "issues": 5
     },
     {
       "route": "/products/[id]",
-      "url": "/products/14accb63-c5c7-4dc9-a35a-880307cc93a8",
+      "url": "/products/a92c7b15-a804-44c2-9a49-5bdf760790ea",
       "issues": 0
     },
     {
       "route": "/recommend",
       "url": "/recommend",
-      "issues": 0
+      "issues": 2
     },
     {
       "route": "/terms",
@@ -140,7 +145,7 @@
     {
       "route": "/weekly-box",
       "url": "/weekly-box",
-      "issues": 0
+      "issues": 6
     }
   ]
 }

@@ -22,13 +22,14 @@ export function pickNextMeal(filled: Record<string, boolean>, hour: number) {
  * 기록 직후 '다음 끼니' — 오늘 남은 칼로리·단백질 한 줄 + 후보 3개.
  * 남은 값은 화면이 가진 오늘 합계·목표로 계산하고, 후보는 /api/diary/next 가 고른다.
  */
-export function NextMeal({ remainKcal, remainProtein, remainSodium, meal, mainLeft, exclude, onLog, version }: {
-  remainKcal: number; remainProtein: number; remainSodium: number;
+export function NextMeal({ remainKcal, remainProtein, remainSodium, goalKcal, meal, mainLeft, exclude, onLog, version }: {
+  remainKcal: number; remainProtein: number; remainSodium: number; goalKcal: number;
   meal: string; mainLeft: number; exclude: string[];
   onLog: (c: NextCandidate, meal: string) => Promise<void>;
   version: number; // 기록이 바뀌면 다시 불러온다
 }) {
-  const perMealKcal = Math.round(meal === "snack" ? Math.min(remainKcal, 300) : remainKcal / mainLeft);
+  // 남은 칼로리를 남은 끼니로 나누되, 한 끼는 하루 목표의 45% 를 넘기지 않게
+  const perMealKcal = Math.round(meal === "snack" ? Math.min(remainKcal, 300) : Math.min(remainKcal / mainLeft, goalKcal * 0.45));
   const perMealProtein = Math.round(Math.max(0, remainProtein) / mainLeft);
   const perMealSodium = Math.round(Math.max(0, remainSodium) / mainLeft);
   const [state, setState] = useState<{ status: "loading" | "error" | "done"; items: NextCandidate[] }>({ status: "loading", items: [] });

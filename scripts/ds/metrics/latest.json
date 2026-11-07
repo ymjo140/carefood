@@ -1,6 +1,6 @@
 {
-  "measuredAt": "2026-11-04T08:59:31.114Z",
-  "files": 54,
+  "measuredAt": "2026-11-07T04:01:05.737Z",
+  "files": 59,
   "distinctColors": 2,
   "gradients": 0,
   "shadows": 3,
@@ -21,19 +21,19 @@
   "fontSizes": [
     [
       "ds:label",
-      160
+      172
     ],
     [
       "ds:caption",
-      147
+      155
     ],
     [
       "ds:body",
-      72
+      74
     ],
     [
       "ds:title",
-      27
+      26
     ],
     [
       "ds:display",
@@ -95,6 +95,20 @@
       }
     ],
     [
+      "src/app/admin/layout.tsx",
+      {
+        "colors": 0,
+        "inline": 0
+      }
+    ],
+    [
+      "src/app/admin/metrics/page.tsx",
+      {
+        "colors": 0,
+        "inline": 0
+      }
+    ],
+    [
       "src/app/admin/odm/page.tsx",
       {
         "colors": 0,
@@ -145,20 +159,6 @@
     ],
     [
       "src/app/community/[id]/page.tsx",
-      {
-        "colors": 0,
-        "inline": 0
-      }
-    ],
-    [
-      "src/app/community/page.tsx",
-      {
-        "colors": 0,
-        "inline": 0
-      }
-    ],
-    [
-      "src/app/family/layout.tsx",
       {
         "colors": 0,
         "inline": 0
