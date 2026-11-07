@@ -8,6 +8,9 @@
 3. 쿠팡 파트너스 검색(1분 per-minute 회) → 이름·총중량이 맞는 것 중 가장 싼 것
 4. 찾으면 product_prices(platform=coupang) 에 넣고, 찾든 못 찾든 coupang_lookups 에 기록
 5. 403·rCode 오류면 6시간 쉬게 표시하고 끝낸다 (반복되면 API 가 제한될 수 있음)
+6. 대기열이 비면 '재확인': 가격을 찾은 지 --refresh-days 일이 지난 제품을 오래된 순으로 다시 검색한다
+   - 처음 찾은 그 쿠팡 상품(productId)이 결과에 있으면 가격·링크·확인 시각을 새로 쓴다
+   - 없으면 한 번은 그대로 두고(miss1), 다음 재확인에서도 없으면 쿠팡 가격을 숨긴다(is_available=false, gone)
 """
 import argparse, json, os, re, sys, time, urllib.error, urllib.parse, urllib.request
 sys.path.insert(0, os.path.dirname(__file__))
@@ -18,6 +21,7 @@ ap = argparse.ArgumentParser()
 ap.add_argument("--max", type=int, default=1700); ap.add_argument("--per-minute", type=float, default=30)
 ap.add_argument("--dry", action="store_true", help="DB 에 쓰지 않음")
 ap.add_argument("--minutes", type=float, default=0, help="이 시간이 지나면 남은 것은 다음 실행으로 (0 = 끝까지)")
+ap.add_argument("--refresh-days", type=float, default=14, help="대기열이 비면 이 일수보다 오래된 쿠팡 가격을 다시 확인 (0 = 안 함)")
 a = ap.parse_args()
 
 SB = (os.environ.get("SUPABASE_URL") or os.environ.get("NEXT_PUBLIC_SUPABASE_URL") or "").rstrip("/") + "/rest/v1/"
@@ -84,19 +88,34 @@ def next_batch():
 
 SEEN = set()
 def items():
-    """기록에 실패한 제품이 대기열에 남아도 같은 실행에서 다시 돌지 않게"""
+    """기록에 실패한 제품이 대기열에 남아도 같은 실행에서 다시 돌지 않게. 대기열이 비면 재확인 대상으로."""
     global batch, stop
     while not stop:
         batch = [p for p in next_batch() if p["id"] not in SEEN]
-        if not batch: return
+        if not batch: break
         for p in batch:
             if stop: return
             SEEN.add(p["id"])
-            yield p
+            yield p, None
+    if a.refresh_days <= 0: return
+    cutoff = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() - a.refresh_days * 86400))
+    while not stop:
+        looks = [l for l in (rest("GET", f"coupang_lookups?status=in.(found,miss1)&checked_at=lt.{cutoff}&select=product_id,keyword,coupang_product_id,status&order=checked_at.asc&limit=500") or []) if l["product_id"] not in SEEN]
+        print("재확인 대상", len(looks), "개", flush=True)
+        if not looks: return
+        ids = ",".join(l["product_id"] for l in looks)
+        prods = {p["id"]: p for p in (rest("GET", f"products?id=in.({ids})&select=id,name,manufacturer,serving_size_g,total_weight_g") or [])}
+        for l in looks:
+            if stop: return
+            SEEN.add(l["product_id"])
+            p = prods.get(l["product_id"])
+            if p: yield p, l
 
-for p in items():
+for p, old in items():
     started = time.time()
     tg = target(p)
+    old_keyword = old["keyword"] if old else None
+    if old_keyword: tg["keyword"] = old_keyword  # 재확인: 처음 찾을 때 쓴 검색어 그대로
     look = {"product_id": p["id"], "keyword": tg["keyword"], "checked_at": NOW()}
     try:
         d = search(tg["keyword"], 10)
@@ -106,8 +125,12 @@ for p in items():
             if rc in ("401", "403", "429") or "limit" in str(d.get("rMessage")).lower():
                 pause(6, msg); stop = True; break
             raise ValueError(msg)  # 검색어 문제 등 — 이 제품만 건너뛴다
-        items = ((d.get("data") or {}).get("productData")) or []
-        ok = [it for it in items if accept(tg, it)[0]]
+        results = ((d.get("data") or {}).get("productData")) or []
+        if old:
+            # 재확인: 처음 찾은 그 쿠팡 상품이 검색 결과에 아직 있는지로 판단 (이름 규칙을 다시 적용하지 않음)
+            ok = [it for it in results if str(it.get("productId")) == str(old.get("coupang_product_id"))]
+        else:
+            ok = [it for it in results if accept(tg, it)[0]]
         if ok:
             best = min(ok, key=lambda x: float(x.get("productPrice") or 9e9))
             look.update({"status": "found", "coupang_product_id": best.get("productId"), "coupang_name": (best.get("productName") or "")[:200],
@@ -120,8 +143,16 @@ for p in items():
                 # 가격이 생겼으니 탐색 '구매 가능만'·AI 추천에 나오게
                 rest("PATCH", f"products?id=eq.{p['id']}&is_purchasable=eq.false", {"is_purchasable": True}, prefer="return=minimal")
             found += 1
+        elif old and old.get("status") == "found":
+            # 재확인에서 한 번 못 찾음 — 검색 순위에서 밀렸을 수도 있어 가격은 두고 다음 재확인 때 한 번 더 본다
+            look.update({"status": "miss1", "coupang_product_id": old.get("coupang_product_id"), "reason": f"재확인 1회 못 찾음 (결과 {len(results)}개)"})
+        elif old:
+            # 두 번 연속 못 찾음 — 품절·판매 종료로 보고 쿠팡 가격을 숨긴다
+            look.update({"status": "gone", "coupang_product_id": old.get("coupang_product_id"), "reason": f"재확인 2회 연속 못 찾음 (결과 {len(results)}개)"})
+            if not a.dry:
+                rest("PATCH", f"product_prices?product_id=eq.{p['id']}&platform=eq.coupang", {"is_available": False, "last_crawled_at": NOW()}, prefer="return=minimal")
         else:
-            look.update({"status": "none", "reason": f"결과 {len(items)}개 중 맞는 것 없음"})
+            look.update({"status": "none", "reason": f"결과 {len(results)}개 중 맞는 것 없음"})
     except urllib.error.HTTPError as e:
         if "coupang" in (e.url or "") or e.code in (401, 403, 429):
             pause(6, f"HTTP {e.code}"); stop = True; break
