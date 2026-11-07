@@ -1,6 +1,6 @@
 {
-  "checkedAt": "2026-11-07T15:40:29.350Z",
-  "files": 97,
+  "checkedAt": "2026-11-07T16:42:39.427Z",
+  "files": 101,
   "total": 0,
   "warnTotal": 0,
   "allowedCount": 44,
@@ -543,7 +543,7 @@
     },
     {
       "file": "src/components/community/PostComposer.tsx",
-      "line": 118,
+      "line": 123,
       "rule": "silent-catch",
       "level": "warn",
       "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
