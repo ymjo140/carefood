@@ -6,7 +6,7 @@ import {
   Input, Kcal, LinkButton, ListRow, MacroGrid, MacroInline, MealSlot, MealTag, Notice, Estimate, Page, PageHeader, Price,
   ProgressBar, SearchField, SectionHeader, Select, Sheet, Spinner, Stat, Steps, Tabs, Textarea, TextLink, Thumb,
   Avatar, useToast, cn, type BadgeTone,
-  BottomNavItems, SkeletonList, FoodEntryForm, DragArea, DragGhost, DragHandle, useDragItem, useDropTarget, type DragData, ChoiceCard, ChoiceList, LinkTabs, RatingStars, RatingInput, ScaleInput, PostAuthor, PostAction, PostActions, PostTags,
+  BottomNavItems, SkeletonList, FoodEntryForm, DragArea, DragGhost, DragHandle, useDragItem, useDropTarget, type DragData, ChoiceCard, ChoiceList, LinkTabs, RatingStars, RatingInput, ScaleInput, QuickRating, PostAuthor, PostAction, PostActions, PostTags,
 } from "@/components/ui";
 
 // 서버(UTC)와 브라우저 시간대가 달라도 같은 글자가 나오도록 한국 시간으로 고정
@@ -679,6 +679,9 @@ export default function Reference({ status }: { status: DsStatus }) {
               <ScaleInput label="짠맛 체감" value={scale} onChange={setScale} />
               <div className="flex items-center gap-2 text-label text-ink-2"><RatingStars value={4.2} /> <span className="num font-bold text-ink">4.2</span> · 리뷰 <span className="num">18</span></div>
             </div>
+          </Demo>
+          <Demo label="한 번 누르는 맛 평가 — 기록 화면의 음식 아래" code="<QuickRating onPick/>">
+            <QuickRating onPick={(v) => setStars(v)} />
           </Demo>
         </div>
       </Section>

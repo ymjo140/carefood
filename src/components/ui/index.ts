@@ -22,7 +22,7 @@ export { Avatar, ListRow, Thumb, Notice, Steps, Estimate } from "./Misc";
 export { ChoiceCard } from "./ChoiceCard";
 export { ChoiceList, type ChoiceTone } from "./ChoiceList";
 export { LinkTabs, ADMIN_TABS } from "./LinkTabs";
-export { RatingStars, RatingInput, ScaleInput } from "./Rating";
+export { RatingStars, RatingInput, ScaleInput, QuickRating, QUICK_RATINGS } from "./Rating";
 export { PostAuthor, PostAction, PostActions, PostTags, timeAgo, AGE_GROUP_LABELS, CONCERN_LABELS } from "./FeedPost";
 export { DragArea, DragHandle, DragGhost, useDragItem, useDropTarget, dropClass, type DragData } from "./Drag";
 export { FoodEntryForm, type FoodBase, type FoodEntry } from "./FoodEntry";

@@ -3,9 +3,10 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import Link from "next/link";
 import {
-  Badge, Button, Card, Chip, ConfirmSheet, EmptyState, Field, Icon, IconButton, Input, Kcal, LinkButton, ListRow, MacroGrid, MealSlot, Page, PageHeader, PageLoading, SectionHeader, Spinner, Tabs, buttonClass, cn, useToast, SkeletonList,
+  Badge, Button, Card, Chip, ConfirmSheet, EmptyState, Field, Icon, IconButton, Input, Kcal, LinkButton, ListRow, MacroGrid, MealSlot, Page, PageHeader, PageLoading, SectionHeader, Spinner, Tabs, buttonClass, cn, useToast, SkeletonList, QuickRating,
 } from "@/components/ui";
 import { getClientActorId } from "@/lib/actor-client";
+import { NextMeal, pickNextMeal, type NextCandidate } from "./NextMeal";
 
 /* ── 타입 ── */
 type DiaryEntry = {
@@ -261,6 +262,18 @@ export default function DiaryPage() {
     suggestions: { nutrient_gap: string; gap_label: string; severity: string; product_id: string; product_name: string; nutrient_value: number; nutrient_unit: string; health_score: number | null; price: number | null; reason: string }[];
   } | null>(null);
 
+  // 내가 맛 평가를 남긴 제품 (product_id → 별점)
+  const [ratings, setRatings] = useState<Record<string, number>>({});
+  const allEntries = data ? Object.values(data.byMeal).flat() : [];
+  const entryProductIds = [...new Set(allEntries.map((e) => e.product_id).filter(Boolean))].sort().join(",");
+  useEffect(() => {
+    if (!entryProductIds) return;
+    fetch(`/api/reviews?mine=1&product_ids=${entryProductIds}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d?.ratings) setRatings((m) => ({ ...m, ...d.ratings })); })
+      .catch(() => {}); // ds-allow: 평가 여부를 못 불러오면 '맛 어땠어요?'를 그대로 보여 준다
+  }, [entryProductIds]);
+
   /* ── 초기화 ── */
   useEffect(() => {
     setUserId(getUserId());
@@ -377,7 +390,7 @@ export default function DiaryPage() {
 
   useEffect(() => {
     if (!userId) return;
-    fetch(`/api/community/group-buy/suggest?user_id=${userId}`)
+    fetch(`/api/community/group-buy/suggest?mine=1`)
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d) setGapSuggestions(d); })
       .catch(() => {}); // ds-allow: 공구 제안은 없으면 숨김
@@ -402,18 +415,47 @@ export default function DiaryPage() {
     setSearching(false);
   };
 
+  /** 다음 끼니 후보를 바로 그 끼니에 기록 */
+  const logToMeal = async (c: NextCandidate, meal: string) => {
+    const res = await fetch("/api/diary", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ date, meal_type: meal, product_id: c.id, food_name: c.name, serving_g: c.serving_size_g || 100, serving_multiplier: 1 }),
+    }).catch(() => null);
+    if (!res?.ok) { toast.show("기록하지 못했어요. 다시 시도해 주세요", { tone: "danger" }); return; }
+    toast.show("식단에 기록했어요");
+    fetchDiary();
+    loadWeeklyTrend();
+  };
+
+  /** 기록한 제품의 맛을 한 번에 — 별점 칸에 저장 (자세한 리뷰는 제품 페이지) */
+  const rateTaste = async (productId: string, rating: number) => {
+    setRatings((m) => ({ ...m, [productId]: rating }));
+    const res = await fetch("/api/reviews", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ product_id: productId, rating }),
+    }).catch(() => null);
+    if (!res?.ok) {
+      setRatings((m) => { const n = { ...m }; delete n[productId]; return n; });
+      toast.show("맛 평가를 남기지 못했어요. 다시 시도해 주세요", { tone: "danger" });
+      return;
+    }
+    toast.show("맛 평가를 남겼어요");
+  };
+
   const addFromProduct = async (product: SearchResult) => {
     if (!addingMeal) return;
-    await fetch("/api/diary", {
+    const res = await fetch("/api/diary", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        user_id: userId, date, meal_type: addingMeal,
+        date, meal_type: addingMeal,
         product_id: product.id, food_name: product.name,
         serving_g: product.serving_size_g || 100,
         serving_multiplier: servingMultiplier,
       }),
-    });
+    }).catch(() => null);
+    if (!res?.ok) { toast.show("기록하지 못했어요. 다시 시도해 주세요", { tone: "danger" }); return; }
     setAddingMeal(null);
     setSearchQuery("");
     setSearchResults([]);
@@ -604,17 +646,7 @@ export default function DiaryPage() {
   const consumed = data?.totals.calories || 0;
   const filledCount = data ? Object.values(data.byMeal).filter(arr => arr.length > 0).length : 0;
 
-  // 첫 번째 빈 슬롯에 추천 표시 (저녁 우선)
-  const firstEmptySlot = useMemo(() => {
-    if (!data) return null;
-    const priority = ["dinner", "lunch", "breakfast", "snack"];
-    for (const key of priority) {
-      if (!data.byMeal[key] || data.byMeal[key].length === 0) return key;
-    }
-    return null;
-  }, [data]);
 
-  const topSuggestion = gapSuggestions?.suggestions?.[0] || null;
   const topGap = gapSuggestions?.gaps?.[0] || null;
 
   /* ══════════════════ RENDER ══════════════════ */
@@ -892,6 +924,23 @@ export default function DiaryPage() {
         />
       </Card>
 
+      {/* ━━ 기록 직후: 남은 양 + 다음 끼니 후보 ━━ */}
+      {isToday && data && allEntries.length > 0 && (() => {
+        const filled = Object.fromEntries(Object.entries(data.byMeal).map(([k, v]) => [k, v.length > 0]));
+        const { meal, mainLeft } = pickNextMeal(filled, new Date().getHours());
+        return (
+          <NextMeal
+            remainKcal={goalCalories - consumed}
+            remainProtein={goalProtein - (data.totals.protein_g || 0)}
+            remainSodium={maxSodium - (data.totals.sodium_mg || 0)}
+            meal={meal} mainLeft={mainLeft}
+            exclude={allEntries.map((e) => e.product_id).filter((x): x is string => !!x)}
+            onLog={logToMeal}
+            version={allEntries.length}
+          />
+        );
+      })()}
+
       {/* ━━ 끼니별 기록 ━━ */}
       <SectionHeader
         title={isToday ? "오늘의 식사" : formatDate(date)}
@@ -908,7 +957,6 @@ export default function DiaryPage() {
             const mealAlert = entries.length > 0 ? getMealAlert(entries) : null;
             const isEmpty = entries.length === 0;
             const isAdding = addingMeal === meal.key;
-            const showSuggestion = isEmpty && meal.key === firstEmptySlot && topSuggestion;
             const toggleAdd = () => {
               setAddingMeal(isAdding ? null : meal.key);
               setAddTab("search"); setSearchQuery(""); setSearchResults([]);
@@ -953,6 +1001,9 @@ export default function DiaryPage() {
                                 {e.sodium_mg != null && e.sodium_mg > 600 && <span className="font-bold text-sodium">나트륨 <span className="num">{e.sodium_mg}</span>mg</span>}
                                 {e.fat_g != null && e.fat_g > 15 && !e.sodium_mg && <span>지방 <span className="num">{e.fat_g}</span>g</span>}
                               </div>
+                              {e.product_id && ratings[e.product_id] == null && (
+                                <QuickRating className="mt-1.5" onPick={(v) => rateTaste(e.product_id as string, v)} />
+                              )}
                             </div>
                             <span className="num text-label font-bold text-ink shrink-0">{e.calories || 0}</span>
                             <IconButton icon="trash" label={`${e.food_name} 삭제하기`} size="sm" onClick={() => setDeleteConfirmId(e.id)} />
@@ -965,28 +1016,6 @@ export default function DiaryPage() {
                   </MealSlot>
                 )}
 
-                {/* 빈 끼니 추천 */}
-                {showSuggestion && !isAdding && (
-                  <Card tone="brand" interactive onClick={() => { setAddingMeal(meal.key); setAddTab("search"); }}>
-                    <div className="flex items-center gap-2 mb-2">
-                      <Badge tone="brand">{meal.label} 추천</Badge>
-                      {topGap?.label && <span className="text-caption text-brand-ink">{topGap.label} 보충</span>}
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-body font-bold text-ink line-clamp-1">{topSuggestion.product_name}</p>
-                        <p className="text-caption text-ink-2 mt-0.5 line-clamp-1">{topSuggestion.reason || `${topGap?.label || ""} 보충에 적합해요`}</p>
-                      </div>
-                      <Button
-                        size="sm"
-                        icon="plus"
-                        onClick={(e) => { e.stopPropagation(); addFromProduct({ id: topSuggestion.product_id, name: topSuggestion.product_name, manufacturer: null, calories: null, protein_g: null, serving_size_g: null }); }}
-                      >
-                        기록하기
-                      </Button>
-                    </div>
-                  </Card>
-                )}
               </div>
             );
           })}

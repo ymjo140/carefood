@@ -64,3 +64,29 @@ export function ScaleInput({ value, onChange, min = 1, max = 5, label }: {
     </div>
   );
 }
+
+/**
+ * 한 번 누르는 맛 평가 — 기록 화면처럼 자세히 쓸 여유가 없는 곳에서 별점 대신.
+ * 아쉬워요 2 · 괜찮아요 3 · 맛있어요 5 (별점 칸에 그대로 저장)
+ */
+export const QUICK_RATINGS = [
+  { value: 2, label: "아쉬워요" },
+  { value: 3, label: "괜찮아요" },
+  { value: 5, label: "맛있어요" },
+] as const;
+
+export function QuickRating({ onPick, disabled = false, label = "맛 어땠어요?", className }: {
+  onPick: (rating: number) => void; disabled?: boolean; label?: string; className?: string;
+}) {
+  return (
+    <div role="group" aria-label={label} className={cn("flex flex-wrap items-center gap-1.5", className)}>
+      <span className="text-caption text-ink-2 mr-0.5">{label}</span>
+      {QUICK_RATINGS.map((q) => (
+        <button key={q.value} type="button" disabled={disabled} onClick={() => onPick(q.value)}
+          className="press inline-flex items-center h-8 px-3 rounded-full border border-line bg-surface text-caption font-medium text-ink-2 hover:border-line-strong hover:text-ink transition-colors disabled:opacity-50">
+          {q.label}
+        </button>
+      ))}
+    </div>
+  );
+}
