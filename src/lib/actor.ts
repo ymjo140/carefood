@@ -4,14 +4,20 @@
  * 브라우저가 보내는 user_id 는 믿지 않는다. proxy 가 서명한 쿠키(cf_uid = "<id>.<서명>")를 발급하고,
  * API 는 그 쿠키에서만 사용자를 꺼낸다. 로그인하면 계정에 묶인 id 로 쿠키를 바꿔 다른 기기에서도 같은 기록을 본다.
  *
- * 쿠키는 httpOnly 가 아니다 — 화면이 "내 글인지" 비교하려고 id 를 읽는다. 서명이 있어 고쳐 쓸 수 없다.
+ * cf_uid 는 httpOnly(스크립트가 못 읽음). 화면이 "내 글인지" 비교할 id 는 따로 cf_me(서명 없는 id)로 내려준다 —
+ * 서버는 cf_me 를 믿지 않는다.
  * 서명 키: SESSION_SECRET (없으면 SUPABASE_SERVICE_ROLE_KEY 에서 파생)
  */
 export const ACTOR_COOKIE = "cf_uid";
+export const ACTOR_ID_COOKIE = "cf_me";
 export const ACTOR_MAX_AGE = 400 * 24 * 3600; // 브라우저가 허용하는 최대
 
 const enc = new TextEncoder();
 let keyPromise: Promise<CryptoKey> | null = null;
+
+export function hasActorSecret() {
+  return !!(process.env.SESSION_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY);
+}
 
 function secret() {
   const s = process.env.SESSION_SECRET || (process.env.SUPABASE_SERVICE_ROLE_KEY ? `carefood-actor-v1:${process.env.SUPABASE_SERVICE_ROLE_KEY}` : "");
@@ -62,6 +68,12 @@ export const actorCookieOptions = {
   path: "/",
   sameSite: "lax" as const,
   secure: process.env.NODE_ENV === "production",
-  httpOnly: false,
+  httpOnly: true,
   maxAge: ACTOR_MAX_AGE,
 };
+
+/** 화면용 id 쿠키 (스크립트가 읽음, 서버는 믿지 않음) */
+export const actorIdCookieOptions = { ...actorCookieOptions, httpOnly: false };
+
+/** 서명 쿠키 값 → id 부분 (서명 확인 없이 — 화면용 쿠키를 맞출 때만) */
+export const idPart = (signed: string) => signed.slice(0, signed.lastIndexOf("."));

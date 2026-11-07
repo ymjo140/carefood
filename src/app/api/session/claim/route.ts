@@ -22,6 +22,16 @@ export async function POST(request: NextRequest) {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sb = createServiceRoleClient() as any;
+
+  // 공개 화면(글·댓글·리뷰·공구·팔로우)에 드러난 ID 는 남이 보고 가져갈 수 있어 옮기지 않는다
+  const PUBLIC: [string, string][] = [
+    ["community_feed", "user_id"], ["community_feed_comments", "user_id"], ["product_reviews", "user_id"],
+    ["group_buys", "creator_id"], ["meal_plan_comments", "user_id"], ["shared_meal_plans", "user_id"], ["community_follows", "following_id"],
+  ];
+  const seen = await Promise.all(PUBLIC.map(([t, c]) => sb.from(t).select(c, { count: "exact", head: true }).eq(c, legacy_id)));
+  if (seen.some((r: { error: unknown }) => r.error)) return NextResponse.json({ error: "확인하지 못했어요" }, { status: 500 });
+  if (seen.some((r: { count: number | null }) => (r.count || 0) > 0)) return NextResponse.json({ moved: 0, public: true });
+
   // 먼저 기록을 남겨 같은 ID 를 두 번 옮기지 못하게 (기본 키)
   const { error: claimErr } = await sb.from("actor_claims").insert({ legacy_id, actor_id: actor });
   if (claimErr) {

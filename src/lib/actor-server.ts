@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { ACTOR_COOKIE, actorCookieOptions, newActorId, signActor, verifyActor } from "@/lib/actor";
+import { ACTOR_COOKIE, ACTOR_ID_COOKIE, actorCookieOptions, actorIdCookieOptions, newActorId, signActor, verifyActor } from "@/lib/actor";
 import { createServerSupabaseClient, createServiceRoleClient } from "@/lib/supabase/server";
 
 /** 지금 요청의 기록 주인 id (proxy 가 발급한 서명 쿠키). 없거나 서명이 틀리면 null */
@@ -17,6 +17,7 @@ export function noActor() {
 async function setActorCookie(id: string) {
   const c = await cookies();
   c.set(ACTOR_COOKIE, await signActor(id), actorCookieOptions);
+  c.set(ACTOR_ID_COOKIE, id, actorIdCookieOptions);
 }
 
 /**
@@ -31,8 +32,15 @@ export async function linkActorToAccount(authUserId: string) {
   const { data: link, error } = await sb.from("account_links").select("actor_id").eq("auth_user_id", authUserId).maybeSingle();
   if (error) throw new Error(`계정 연결을 확인하지 못했어요: ${error.message}`);
 
+  // 이 기기의 id 가 이미 다른 계정에 묶여 있으면(공용 기기에서 로그아웃 안 한 경우) 그 기록은 합치지 않는다
+  let currentIsOtherAccount = false;
+  if (current) {
+    const { data: owner } = await sb.from("account_links").select("auth_user_id").eq("actor_id", current).maybeSingle();
+    currentIsOtherAccount = !!owner && owner.auth_user_id !== authUserId;
+  }
+
   if (link?.actor_id) {
-    if (current && current !== link.actor_id) {
+    if (current && current !== link.actor_id && !currentIsOtherAccount) {
       const { error: mErr } = await sb.rpc("merge_actor", { from_id: current, to_id: link.actor_id });
       if (mErr) throw new Error(`기록을 계정으로 옮기지 못했어요: ${mErr.message}`);
     }
@@ -40,13 +48,17 @@ export async function linkActorToAccount(authUserId: string) {
     return link.actor_id as string;
   }
 
-  let actor = current || newActorId();
+  let actor = current && !currentIsOtherAccount ? current : newActorId();
   const { error: insErr } = await sb.from("account_links").insert({ auth_user_id: authUserId, actor_id: actor });
   if (insErr) {
-    // 이 기기 id 가 이미 다른 계정에 묶여 있으면(같은 기기에서 다른 계정) 새 id 로 시작한다
-    actor = newActorId();
-    const { error: again } = await sb.from("account_links").insert({ auth_user_id: authUserId, actor_id: actor });
-    if (again) throw new Error(`계정을 연결하지 못했어요: ${again.message}`);
+    // 같은 계정이 동시에 처음 로그인해 먼저 묶였으면 그 id 를 쓴다
+    const { data: again } = await sb.from("account_links").select("actor_id").eq("auth_user_id", authUserId).maybeSingle();
+    if (again?.actor_id) actor = again.actor_id;
+    else {
+      actor = newActorId();
+      const { error: e2 } = await sb.from("account_links").insert({ auth_user_id: authUserId, actor_id: actor });
+      if (e2) throw new Error(`계정을 연결하지 못했어요: ${e2.message}`);
+    }
   }
   await setActorCookie(actor);
   return actor;

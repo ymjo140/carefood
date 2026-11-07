@@ -17,7 +17,7 @@ export default function SessionSync() {
     fetch("/api/session/claim", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ legacy_id: legacy }) })
       .then((r) => r.json().then((d) => ({ ok: r.ok, d })))
       .then(({ ok, d }) => {
-        if (!ok && !d?.already) return; // 실패면 저장소를 남겨 다음 접속에 다시
+        if (!ok && !d?.already) return; // 실패면 저장소를 남겨 다음 접속에 다시 (공개된 ID 라 옮기지 않은 경우도 ok 로 와서 정리)
         done();
         if (d?.moved > 0) window.location.reload();
       })

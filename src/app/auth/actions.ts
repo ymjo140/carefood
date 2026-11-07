@@ -6,7 +6,11 @@ import { linkActorToAccount, resetActor } from "@/lib/actor-server";
 
 /** 로그인 뒤 돌아갈 곳 — 이 사이트 안의 경로만 */
 function safePath(p: string | null | undefined) {
-  return p && p.startsWith("/") && !p.startsWith("//") ? p : "/";
+  if (!p || !p.startsWith("/") || p.startsWith("//") || /[\\\u0000-\u001f]|%5c|%2f%2f/i.test(p)) return "/";
+  try {
+    const u = new URL(p, "https://carefood.local");
+    return u.origin === "https://carefood.local" ? u.pathname + u.search + u.hash : "/";
+  } catch { return "/"; }
 }
 
 /**
