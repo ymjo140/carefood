@@ -1,41 +1,45 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
+import { searchDishes } from "@/lib/dishes";
+import { getActorId, noActor } from "@/lib/actor-server";
 
 /**
- * POST /api/diary/photo
- * 사진 기반 음식 인식 API
- *
- * 1단계: HuggingFace Food-101 모델로 음식 분류 (무료, 자체 호스팅 가능)
- * 2단계: 분류 결과를 한국어 매핑 → common_foods / products DB 매칭
- * 3단계: 없으면 빈 결과 → 사용자가 직접 입력
- *
- * 폴백: HF 안 되면 ANTHROPIC_API_KEY로 Claude Vision 사용
+ * POST /api/diary/photo — 사진으로 음식 후보 찾기 (식단 기록)
+ * 사진은 분석에만 쓰고 저장하지 않는다.
+ */
+/**
+ * 순서: Claude Vision(ANTHROPIC_API_KEY 가 있으면 — 한식에 강함) → HuggingFace Food-101(HF_TOKEN 이 있으면, 서양 음식 101종)
+ * 둘 다 없으면 configured:false — 화면은 검색·직접 입력으로 안내한다.
+ * 인식한 이름은 대표 메뉴(common_foods) + 식약처 음식 830개(dishes.json) + 제품 이름에 맞춰 후보로 돌려준다.
  */
 export async function POST(req: NextRequest) {
   try {
+    // 외부 AI 호출 비용이 드는 API — 사이트에서 발급한 쿠키가 있는 요청만
+    if (!(await getActorId())) return noActor();
     const { image } = await req.json();
 
-    if (!image) {
-      return NextResponse.json({ error: "image required" }, { status: 400 });
+    if (!image || typeof image !== "string" || !image.startsWith("data:image/") || image.length > 3_000_000) {
+      return NextResponse.json({ error: "사진을 읽지 못했어요" }, { status: 400 });
+    }
+
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    const hfToken = process.env.HF_TOKEN;
+    if (!apiKey && !hfToken) {
+      return NextResponse.json({ recognized: [], matched: { commonFoods: [], products: [] }, hasAI: false, configured: false });
     }
 
     let recognizedFoods: { name: string; confidence: number }[] = [];
-
-    // 1순위: HuggingFace Food-101 (무료)
-    try {
-      recognizedFoods = await recognizeWithHuggingFace(image);
-    } catch (e) {
-      console.error("HuggingFace error:", e);
-
-      // 2순위 폴백: Claude Vision (API 키 있을 때만)
-      const apiKey = process.env.ANTHROPIC_API_KEY;
-      if (apiKey) {
-        try {
-          recognizedFoods = await recognizeWithClaude(image, apiKey);
-        } catch (e2) {
-          console.error("Claude Vision fallback error:", e2);
-        }
-      }
+    let failed = false;
+    if (apiKey) {
+      try { recognizedFoods = await recognizeWithClaude(image, apiKey); }
+      catch (e) { console.error("Claude Vision error:", e); failed = true; }
+    }
+    if (recognizedFoods.length === 0 && hfToken) {
+      try { recognizedFoods = await recognizeWithHuggingFace(image); failed = false; }
+      catch (e) { console.error("HuggingFace error:", e); failed = true; }
+    }
+    if (failed && recognizedFoods.length === 0) {
+      return NextResponse.json({ error: "사진을 분석하지 못했어요. 잠시 뒤 다시 시도하거나 검색으로 추가해 주세요" }, { status: 502 });
     }
 
     // DB 매칭
@@ -45,10 +49,11 @@ export async function POST(req: NextRequest) {
       recognized: recognizedFoods,
       matched,
       hasAI: true,
+      configured: true,
     });
   } catch (e) {
     console.error("Photo API error:", e);
-    return NextResponse.json({ error: "처리 중 오류가 발생했습니다" }, { status: 500 });
+    return NextResponse.json({ error: "사진을 분석하지 못했어요. 다시 시도해 주세요" }, { status: 500 });
   }
 }
 
@@ -169,16 +174,14 @@ async function recognizeWithHuggingFace(
   const imageData = base64Image.replace(/^data:image\/\w+;base64,/, "");
   const buffer = Buffer.from(imageData, "base64");
 
-  const hfToken = process.env.HF_TOKEN; // 선택사항 (public 모델)
   const headers: Record<string, string> = {
     "Content-Type": "application/octet-stream",
+    Authorization: `Bearer ${process.env.HF_TOKEN}`,
   };
-  if (hfToken) {
-    headers["Authorization"] = `Bearer ${hfToken}`;
-  }
 
+  // HF Inference 는 router 주소로 옮겨졌고 토큰이 필요하다
   const response = await fetch(
-    "https://api-inference.huggingface.co/models/nateraw/food",
+    "https://router.huggingface.co/hf-inference/models/nateraw/food",
     {
       method: "POST",
       headers,
@@ -219,7 +222,7 @@ async function recognizeWithClaude(
       "anthropic-version": "2023-06-01",
     },
     body: JSON.stringify({
-      model: "claude-sonnet-4-20250514",
+      model: process.env.PHOTO_MODEL || "claude-haiku-5-5",
       max_tokens: 512,
       messages: [
         {
@@ -235,11 +238,11 @@ async function recognizeWithClaude(
             },
             {
               type: "text",
-              text: `이 사진에서 음식을 인식해주세요. 한국어 음식 이름으로 답해주세요.
+              text: `이 사진에 보이는 음식을 한국어 일반 메뉴 이름으로 알려주세요 (예: 김치찌개, 쌀밥, 제육볶음, 닭가슴살 샐러드).
+한 접시에 여러 음식이 있으면 각각, 가장 확실한 것부터 최대 5개.
+포장 제품이면 포장에 적힌 제품명을 그대로 적어 주세요.
 JSON 배열로만 응답하세요. 다른 텍스트 없이 순수 JSON만:
 [{"name": "음식명", "confidence": 0.0~1.0}]
-
-예시: [{"name": "김치찌개", "confidence": 0.95}, {"name": "밥", "confidence": 0.9}]
 
 음식이 아니면 빈 배열: []`,
             },
@@ -301,7 +304,8 @@ async function matchFoodsFromDB(
   const allProducts: Map<string, unknown> = new Map();
 
   for (const food of recognized.slice(0, 5)) {
-    const pattern = `%${food.name}%`;
+    const pattern = `%${String(food.name || "").replace(/[%_,()]/g, "")}%`;
+    if (pattern === "%%") continue;
 
     // common_foods 검색
     const { data: common } = await (sb as any)
@@ -312,6 +316,10 @@ async function matchFoodsFromDB(
 
     for (const c of common || []) {
       if (!allCommon.has(c.id)) allCommon.set(c.id, c);
+    }
+    // 식약처 음식 830개 — 1인분 영양이 있는 일반 메뉴 (상위 2개)
+    for (const d of searchDishes(food.name, 2)) {
+      if (![...allCommon.values()].some((c) => (c as { name: string }).name.replace(/\s/g, "") === d.name.replace(/\s/g, ""))) allCommon.set(d.id, d);
     }
 
     // products 검색

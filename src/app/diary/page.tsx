@@ -246,6 +246,8 @@ export default function DiaryPage() {
       products: SearchResult[];
     };
     hasAI: boolean;
+    configured?: boolean; // false = 서버에 사진 인식 키가 없음
+    error?: string;
   } | null>(null);
   const [userId, setUserId] = useState("");
   const toast = useToast();
@@ -561,9 +563,10 @@ export default function DiaryPage() {
         body: JSON.stringify({ image: resized }),
       });
       const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
       setPhotoResults(data);
-    } catch {
-      setPhotoResults({ recognized: [], matched: { commonFoods: [], products: [] }, hasAI: false });
+    } catch (err) {
+      setPhotoResults({ recognized: [], matched: { commonFoods: [], products: [] }, hasAI: false, configured: true, error: (err as Error).message || "사진을 분석하지 못했어요. 다시 시도해 주세요" });
     } finally {
       setPhotoAnalyzing(false);
     }
@@ -813,8 +816,12 @@ export default function DiaryPage() {
 
                     {photoResults.matched.commonFoods.length === 0 && photoResults.matched.products.length === 0 && (
                       <div className="flex flex-col items-center text-center gap-3 py-2">
-                        <p className="text-label text-ink-2">
-                          {photoResults.hasAI ? "맞는 음식을 찾지 못했어요" : "사진을 저장했어요. 음식을 골라 주세요"}
+                        <p className={cn("text-label", photoResults.error ? "text-danger" : "text-ink-2")}>
+                          {photoResults.error
+                            ? photoResults.error
+                            : photoResults.configured === false
+                              ? "사진으로 찾기는 아직 준비 중이에요. 검색이나 직접 입력으로 추가해 주세요"
+                              : "사진에서 맞는 음식을 찾지 못했어요"}
                         </p>
                         <div className="flex gap-2 justify-center">
                           <Button size="sm" onClick={() => setAddTab("search")}>검색해서 추가하기</Button>
