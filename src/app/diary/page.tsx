@@ -423,7 +423,7 @@ export default function DiaryPage() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ date, meal_type: meal, product_id: c.id, food_name: c.name, serving_g: c.serving_size_g || 100, serving_multiplier: 1 }),
-    }).catch(() => null);
+    }).catch(() => null); // ds-allow: 네트워크 실패는 바로 아래 !res?.ok 에서 알림
     if (!res?.ok) { toast.show("기록하지 못했어요. 다시 시도해 주세요", { tone: "danger" }); return; }
     toast.show("식단에 기록했어요");
     fetchDiary();
@@ -436,7 +436,7 @@ export default function DiaryPage() {
     const res = await fetch("/api/reviews", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ product_id: productId, rating }),
-    }).catch(() => null);
+    }).catch(() => null); // ds-allow: 네트워크 실패는 바로 아래 !res?.ok 에서 알림
     if (!res?.ok) {
       setRatings((m) => { const n = { ...m }; delete n[productId]; return n; });
       toast.show("맛 평가를 남기지 못했어요. 다시 시도해 주세요", { tone: "danger" });
@@ -456,7 +456,7 @@ export default function DiaryPage() {
         serving_g: product.serving_size_g || 100,
         serving_multiplier: servingMultiplier,
       }),
-    }).catch(() => null);
+    }).catch(() => null); // ds-allow: 네트워크 실패는 바로 아래 !res?.ok 에서 알림
     if (!res?.ok) { toast.show("기록하지 못했어요. 다시 시도해 주세요", { tone: "danger" }); return; }
     setAddingMeal(null);
     setSearchQuery("");

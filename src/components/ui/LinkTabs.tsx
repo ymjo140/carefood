@@ -34,6 +34,7 @@ export function LinkTabs({ items, current, label, className }: {
 }
 
 export const ADMIN_TABS = [
+  { href: "/admin/metrics", label: "지표" },
   { href: "/admin", label: "데이터 현황" },
   { href: "/admin/insights", label: "시장 인사이트" },
   { href: "/admin/odm", label: "ODM 수요 분석" },
