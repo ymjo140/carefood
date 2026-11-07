@@ -1,9 +1,9 @@
 {
-  "checkedAt": "2026-11-07T04:05:31.423Z",
-  "files": 84,
+  "checkedAt": "2026-11-07T10:32:36.697Z",
+  "files": 87,
   "total": 0,
   "warnTotal": 0,
-  "allowedCount": 46,
+  "allowedCount": 43,
   "rules": [
     {
       "id": "hex-color",
@@ -443,35 +443,8 @@
       "snippet": "} catch { /* silent */ } // ds-allow: 로컬 프로필 읽기"
     },
     {
-      "file": "src/components/HomeTodayWidget.tsx",
-      "line": 48,
-      "rule": "silent-catch",
-      "level": "warn",
-      "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
-      "match": ".catch(() => null)",
-      "snippet": "fetch(`/api/diary?date=${today}&user_id=${userId}`).then(r => r.json()).catch(() => null), // ds-allow: 위젯 일부는 없으면 숨김"
-    },
-    {
-      "file": "src/components/HomeTodayWidget.tsx",
-      "line": 50,
-      "rule": "silent-catch",
-      "level": "warn",
-      "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
-      "match": ".catch(() => null)",
-      "snippet": "fetch(\"/api/community/group-buy?status=recruiting\").then(r => r.json()).catch(() => null), // ds-allow: 위젯 일부는 없으면 숨김"
-    },
-    {
-      "file": "src/components/HomeTodayWidget.tsx",
-      "line": 52,
-      "rule": "silent-catch",
-      "level": "warn",
-      "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
-      "match": ".catch(() => null)",
-      "snippet": "fetch(`/api/diary/report?user_id=${userId}`).then(r => r.json()).catch(() => null), // ds-allow: 위젯 일부는 없으면 숨김"
-    },
-    {
       "file": "src/components/ProductExplorer.tsx",
-      "line": 534,
+      "line": 540,
       "rule": "silent-catch",
       "level": "warn",
       "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
