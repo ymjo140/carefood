@@ -54,7 +54,8 @@ except urllib.error.HTTPError as e:
     # 기록 테이블이 아직 없으면 (scripts/verify/sql/002_coupang_sync.sql 실행 전) 조용히 끝낸다
     print("coupang_sync_state 를 읽지 못했어요 — 002_coupang_sync.sql 을 먼저 실행해 주세요", e.code); raise SystemExit(0)
 if state.get("paused_until") and state["paused_until"] > time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime()):
-    raise SystemExit(f"쉬는 중 ({state['paused_until']} 까지): {state.get('note')}")
+    # 일부러 쉬는 것이라 실패로 끝내지 않는다 (실패로 끝내면 GitHub 가 매시간 실패 메일을 보낸다)
+    print(f"쉬는 중 ({state['paused_until']} 까지): {state.get('note')} — 이번 실행은 건너뛰어요"); raise SystemExit(0)
 
 QUEUE_SQL = "coupang_queue?select=id,name,manufacturer,serving_size_g,total_weight_g,mall_name,volume,priority&order=priority.asc,id.asc&limit=1000"
 # Supabase 는 한 번에 1,000줄까지만 준다 → 1,000개씩 받아 가며 계속 (처리한 제품은 coupang_lookups 에 기록돼 대기열에서 빠진다)
@@ -137,8 +138,16 @@ def items():
             if p: yield p, l
 
 class Paused(Exception): pass
+class ServerBusy(Exception): pass
 def do_search(kw):
-    d = search(kw, 10)
+    # 쿠팡 쪽 5xx(504 등)는 잠깐의 서버 문제 — 20초·1분·2분 쉬고 다시. 그래도 안 되면 이 제품만 넘긴다
+    for wait in (20, 60, 120, None):
+        try:
+            d = search(kw, 10); break
+        except urllib.error.HTTPError as e:
+            if e.code < 500: raise
+            if wait is None: raise ServerBusy(f"HTTP {e.code}")
+            print(f"쿠팡 HTTP {e.code} — {wait}초 뒤 다시", flush=True); time.sleep(wait)
     rc = str(d.get("rCode"))
     if rc != "0":
         msg = f"rCode {rc} {d.get('rMessage')}"
@@ -146,8 +155,10 @@ def do_search(kw):
         raise ValueError(msg)  # 검색어 문제 등 — 이 제품만 건너뛴다
     return ((d.get("data") or {}).get("productData")) or []
 
+busy_streak = 0
 for p, old in items():
     started = time.time()
+    skip = False
     rechk = bool(old and old.get("recheck"))
     if rechk: old = None
     tg = target(p)
@@ -156,6 +167,7 @@ for p, old in items():
     look = {"product_id": p["id"], "keyword": tg["keyword"], "checked_at": NOW()}
     try:
         results = do_search(tg["keyword"])
+        busy_streak = 0
         if old:
             # 재확인: 처음 찾은 그 쿠팡 상품이 검색 결과에 아직 있는지로 판단 (이름 규칙을 다시 적용하지 않음)
             ok = [it for it in results if str(it.get("productId")) == str(old.get("coupang_product_id"))]
@@ -198,12 +210,19 @@ for p, old in items():
             look.update({"status": "none", "reason": f"결과 {len(results)}개 중 맞는 것 없음"})
     except Paused as e:
         pause(6, str(e)); stop = True; break
+    except ServerBusy as e:
+        # 기록을 남기지 않는다 → 원래 상태(찾음·다시 확인 등)가 그대로 남아 다음 실행에서 다시 본다
+        busy_streak += 1; skip = True
+        print(f"쿠팡 {e} — 이 제품은 다음 실행으로", flush=True)
+        if busy_streak >= 5:  # 계속 5xx 면 쿠팡이 오래 아픈 것 — 30분만 쉰다
+            pause(0.5, f"{e} 연속 {busy_streak}번"); stop = True; break
     except urllib.error.HTTPError as e:
         if "coupang" in (e.url or "") or e.code in (401, 403, 429):
             pause(6, f"HTTP {e.code}"); stop = True; break
         look.update({"status": "error", "reason": f"HTTP {e.code}"})
     except Exception as e:
         look.update({"status": "error", "reason": str(e)[:200]})
+    if skip: time.sleep(gap); continue
     if not a.dry:
         rest("POST", "coupang_lookups?on_conflict=product_id", look, prefer="resolution=merge-duplicates,return=minimal")
     done += 1
