@@ -2,9 +2,11 @@ name: 미량영양소 보강
 
 on:
   workflow_dispatch:
-  schedule:
-    # 매주 일요일 KST 06:00 (UTC 21:00)
-    - cron: "0 21 * * 0"
+  # 자동 실행 꺼 둠 (2026-11) — 쓰던 data.go.kr API(HtfbInfoService02)가 없어져 "NO_OPENAPI_SERVICE_ERROR" 로 응답하고,
+  # GitHub 에 MFDS_API_KEY 비밀값도 없어 매주 실패했다. 앱 화면은 미량영양소 칸을 쓰지 않는다.
+  # 다시 쓰려면 새 API 주소로 스크립트를 고치고 비밀값을 넣은 뒤 아래 schedule 을 되살린다.
+  # schedule:
+  #   - cron: "0 21 * * 0"
 
 jobs:
   enrich:
