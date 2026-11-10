@@ -330,7 +330,7 @@ class StatsAccumulator:
             self.has_fat += 1
         if product["sugar_g"] is not None:
             self.has_sugar += 1
-        if product["fiber_g"] is not None:
+        if product.get("fiber_g") is not None:
             self.has_fiber += 1
         if product["spicy_score"] > 0:
             self.spicy_gt0 += 1
@@ -622,20 +622,15 @@ def transform_row(row: dict) -> dict:
         # 다른 번호로 넘어가는 대체(or AMT_NUM13 …)는 다른 성분이 들어갈 수 있어 쓰지 않는다
         "sugar_g":          safe_numeric(row.get("AMT_NUM7") or row.get("NUTR_CONT5")),
         "sodium_mg":        safe_numeric(row.get("AMT_NUM8") or row.get("NUTR_CONT6")),
-        "saturated_fat_g":  safe_numeric(row.get("AMT_NUM10") or row.get("NUTR_CONT8")),
-        # 넣지 않는 필드 — 값이 맞지 않았다 (supabase/migrations/20261110_clear_misread_nutrients.sql)
-        #   AMT_NUM2 → 식이섬유로 넣었으나 100g 당 중앙값 68g (수분으로 보임)
-        #   AMT_NUM9 → 콜레스테롤로 넣었으나 우유 100mg (칼슘으로 보임)
-        #   AMT_NUM11 → 트랜스지방으로 넣었으나 100g 당 중앙값 73g
-        "cholesterol_mg":   None,
-        "trans_fat_g":      None,
+        # 넣지 않는 필드 — 이 API 번호로는 값이 맞지 않았다 (supabase/migrations/20261110_clear_misread_nutrients.sql)
+        #   AMT_NUM2(수분으로 보임) · AMT_NUM9(칼슘으로 보임) · AMT_NUM11
+        #   식이섬유·콜레스테롤·트랜스지방·포화지방은 scripts/enrich_mfds03.py 가 Info03 에서 채운다 → 여기서는 키를 아예 넣지 않아 덮어쓰지 않는다
 
         # 미제공 → null (추후 보강)
         "potassium_mg":     None,
         "calcium_mg":       None,
         "phosphorus_mg":    None,
         "iron_mg":          None,
-        "fiber_g":          None,
         "vitamin_a_ug":     None,
         "vitamin_c_mg":     None,
         "vitamin_d_ug":     None,
