@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { addDays, todayKst, weekday } from "@/lib/day";
 import { ORDERING_ENABLED } from "@/lib/features";
 import { Button, Card, EmptyState, Field, Icon, Input, LinkButton, Page, PageHeader, PageLoading, Price, TextLink, useToast } from "@/components/ui";
 import { getClientActorId } from "@/lib/actor-client";
@@ -127,8 +128,8 @@ function OrderFlow() {
     setOrdering(true);
 
     const userId = getUserId();
-    const nextMonday = new Date();
-    nextMonday.setDate(nextMonday.getDate() + (8 - nextMonday.getDay()) % 7);
+    const today = todayKst();
+    const nextMonday = addDays(today, (8 - weekday(today)) % 7); // 오늘이 월요일이면 오늘
 
     try {
       const res = await fetch("/api/orders", {
@@ -143,7 +144,7 @@ function OrderFlow() {
             meal_type: it.slot,
             quantity: 1,
           })),
-          delivery_week_start: nextMonday.toISOString().slice(0, 10),
+          delivery_week_start: nextMonday,
           delivery_preference: { note: address.note },
         }),
       });

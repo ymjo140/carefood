@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { todayKst } from "@/lib/day";
 import { Button, Sheet, MealTag, useToast } from "@/components/ui";
 import { getClientActorId } from "@/lib/actor-client";
 
@@ -34,7 +35,7 @@ export default function MealLogButton({ productId, productName }: { productId: s
           product_id: productId,
           food_name: productName || "제품",
           meal_type: mealType,
-          date: new Date().toISOString().slice(0, 10),
+          date: todayKst(),
         }),
       });
       if (res.ok) {

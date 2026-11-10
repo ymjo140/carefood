@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connection } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
+import { addDays, todayKst } from "@/lib/day";
 import { getActorId, noActor } from "@/lib/actor-server";
-import { addDays, isoDay, runProgress, type ChallengeMetric, type DiaryRow } from "@/lib/challenges";
+import { runProgress, type ChallengeMetric, type DiaryRow } from "@/lib/challenges";
 
 /**
  * GET /api/community/challenges — 챌린지 목록 + 지금 하는 사람 수 + (참여했으면) 내 진행
@@ -15,7 +16,7 @@ type Member = { challenge_id: string; user_id: string; started_on: string; finis
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function load(sb: any, actor: string | null) {
-  const today = isoDay(new Date());
+  const today = todayKst();
   const { data: rows, error } = await sb.from("community_challenges").select("id, slug, title, rule, metric, target, days, sort").eq("is_active", true).order("sort");
   if (error) throw new Error(error.message);
   const challenges = (rows || []) as Row[];
@@ -70,7 +71,7 @@ export async function POST(request: NextRequest) {
   const { data: c, error: cErr } = await sb.from("community_challenges").select("id, days").eq("id", challenge_id).eq("is_active", true).maybeSingle();
   if (cErr) return NextResponse.json({ error: cErr.message }, { status: 500 });
   if (!c) return NextResponse.json({ error: "없는 챌린지예요" }, { status: 404 });
-  const today = isoDay(new Date());
+  const today = todayKst();
   const { data: cur, error: mErr } = await sb.from("community_challenge_members").select("started_on, finished_runs").eq("challenge_id", challenge_id).eq("user_id", actor).maybeSingle();
   if (mErr) return NextResponse.json({ error: mErr.message }, { status: 500 });
   if (cur && addDays(cur.started_on, c.days - 1) >= today) return NextResponse.json({ error: "이미 하고 있어요" }, { status: 409 });

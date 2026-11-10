@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { addDays, monthDay, todayKst, weekday } from "@/lib/day";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { getActorId, noActor } from "@/lib/actor-server";
 
@@ -10,14 +11,10 @@ export async function GET(req: NextRequest) {
   const supabase = createServiceRoleClient();
   const sb = supabase as any;
 
-  // 최근 7일
-  const today = new Date();
+  // 최근 7일 (한국 날짜)
+  const today = todayKst();
   const days: string[] = [];
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date(today);
-    d.setDate(d.getDate() - i);
-    days.push(d.toISOString().slice(0, 10));
-  }
+  for (let i = 6; i >= 0; i--) days.push(addDays(today, -i));
 
   const { data: entries } = await sb
     .from("meal_diary")
@@ -74,11 +71,11 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     days: days.map(d => {
       const dd = dailyMap[d];
-      const dayLabel = new Date(d + "T00:00:00");
+      const md = monthDay(d);
       return {
         date: d,
-        label: `${dayLabel.getMonth() + 1}/${dayLabel.getDate()}`,
-        dayOfWeek: ["일", "월", "화", "수", "목", "금", "토"][dayLabel.getDay()],
+        label: `${md.month}/${md.date}`,
+        dayOfWeek: ["일", "월", "화", "수", "목", "금", "토"][weekday(d)],
         calories: Math.round(dd.calories),
         protein_g: Math.round(dd.protein_g * 10) / 10,
         sodium_mg: Math.round(dd.sodium_mg),

@@ -1,8 +1,10 @@
 /**
  * 커뮤니티 챌린지 — 정해 둔 규칙을 참여한 날부터 N일 동안 채운다.
  * 하루 달성 여부는 그날 식단 기록(meal_diary)의 성분 합계로만 본다 (기록이 없으면 못 한 날).
- * 날짜는 식단 기록 화면과 같은 기준(YYYY-MM-DD, toISOString)을 쓴다.
+ * 날짜는 식단 기록 화면과 같은 한국 날짜(YYYY-MM-DD, lib/day)를 쓴다.
  */
+import { addDays } from "./day";
+
 export type ChallengeMetric = "sodium_max" | "protein_min" | "sugar_max" | "meals_min" | "kcal_max";
 export type DayState = "done" | "missed" | "today" | "future";
 
@@ -16,8 +18,7 @@ export const METRIC_META: Record<ChallengeMetric, { label: string; unit: string;
   meals_min: { label: "기록한 끼니", unit: "끼", max: false },
 };
 
-export function isoDay(d: Date) { return d.toISOString().slice(0, 10); }
-export function addDays(iso: string, n: number) { return isoDay(new Date(Date.parse(`${iso}T00:00:00Z`) + n * 86400e3)); }
+export { addDays };
 
 /** 그날 값 — 성분 합계, 끼니 규칙은 아침·점심·저녁 중 기록한 끼니 수. 기록이 없으면 null */
 export function dayValue(metric: ChallengeMetric, rows: DiaryRow[]): number | null {

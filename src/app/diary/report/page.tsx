@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, Suspense } from "react";
+import { weekday } from "@/lib/day";
 import Link from "next/link";
 import ShareButton from "@/components/ShareButton";
 import {
@@ -141,7 +142,7 @@ function ReportContent() {
         <div className="flex items-end gap-1.5 h-32">
           {dailyData.map((d, i) => {
             const pct = d.calories / maxCal * 100;
-            const dayName = DAY_NAMES[new Date(d.date).getDay()];
+            const dayName = DAY_NAMES[weekday(d.date)];
             return (
               <div key={i} className="flex-1 h-full flex flex-col items-center justify-end gap-1 min-w-0">
                 <span className="num text-caption text-ink-2">{d.calories}</span>

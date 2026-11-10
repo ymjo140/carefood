@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { kstDay } from "@/lib/day";
 import { connection } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { adminOnly } from "@/lib/actor-server";
@@ -102,7 +103,7 @@ export async function GET(_request: NextRequest) {
 
   const dailyActions: Record<string, { views: number; clicks: number; reviews: number }> = {};
   for (const i of (recentInteractions || [])) {
-    const day = new Date(i.created_at).toISOString().slice(0, 10);
+    const day = kstDay(i.created_at);
     if (!dailyActions[day]) dailyActions[day] = { views: 0, clicks: 0, reviews: 0 };
     if (i.action === "view") dailyActions[day].views++;
     else if (i.action === "click_price") dailyActions[day].clicks++;

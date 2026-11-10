@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { addDays, todayKst } from "@/lib/day";
 import { connection } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { getActorId, noActor } from "@/lib/actor-server";
@@ -49,16 +50,15 @@ export async function GET(request: NextRequest) {
   const sb = createServiceRoleClient() as any;
 
   // ── 1. 최근 7일 식단 기록 ──
-  const today = new Date();
-  const weekAgo = new Date(today);
-  weekAgo.setDate(weekAgo.getDate() - 7);
+  const today = todayKst();
+  const weekAgo = addDays(today, -7);
 
   const { data: entries } = await sb
     .from("meal_diary")
     .select("date, meal_type, food_name, product_id, calories, protein_g, carbs_g, fat_g, sodium_mg, sugar_g, fiber_g")
     .eq("user_id", userId)
-    .gte("date", weekAgo.toISOString().slice(0, 10))
-    .lte("date", today.toISOString().slice(0, 10))
+    .gte("date", weekAgo)
+    .lte("date", today)
     .order("date", { ascending: true });
 
   if (!entries || entries.length === 0) {
@@ -236,8 +236,8 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     hasData: true,
     period: {
-      start: weekAgo.toISOString().slice(0, 10),
-      end: today.toISOString().slice(0, 10),
+      start: weekAgo,
+      end: today,
     },
     daysWithData,
     totalEntries: entries.length,

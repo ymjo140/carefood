@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { todayKst } from "@/lib/day";
 import { Button, Skeleton, TextLink } from "@/components/ui";
 
 /**
@@ -19,7 +20,7 @@ export default function HomeTodayWidget() {
   useEffect(() => {
     let alive = true;
     // 식단 기록 화면과 같은 날짜 기준
-    const date = new Date().toISOString().slice(0, 10);
+    const date = todayKst();
     fetch(`/api/diary?date=${date}`)
       .then(async (r) => {
         const d = await r.json();

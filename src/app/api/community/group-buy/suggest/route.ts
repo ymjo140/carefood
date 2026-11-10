@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { addDays, todayKst } from "@/lib/day";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { getActorId, noActor } from "@/lib/actor-server";
 
@@ -65,16 +66,15 @@ export async function GET(req: NextRequest) {
   let daysWithData = 0;
 
   if (userId) {
-    const today = new Date();
-    const weekAgo = new Date(today);
-    weekAgo.setDate(weekAgo.getDate() - 7);
+    const today = todayKst();
+    const weekAgo = addDays(today, -7);
 
     const { data: entries } = await sb
       .from("meal_diary")
       .select("date, calories, protein_g, sodium_mg, sugar_g, fiber_g")
       .eq("user_id", userId)
-      .gte("date", weekAgo.toISOString().slice(0, 10))
-      .lte("date", today.toISOString().slice(0, 10));
+      .gte("date", weekAgo)
+      .lte("date", today);
 
     if (entries && entries.length > 0) {
       // 일별 합계

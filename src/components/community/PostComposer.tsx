@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { addDays, monthDay, todayKst } from "@/lib/day";
 import {
   Button, Chip, ChipRow, IconButton, Field, Icon, Input, Kcal, Select, Sheet, SkeletonList, Textarea, cn, useToast,
 } from "@/components/ui";
@@ -24,10 +25,11 @@ const MEAL_TYPES = [
 const DAY_KEYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
 
 function lastDays(n = 7) {
+  const today = todayKst();
   return Array.from({ length: n }, (_, i) => {
-    const d = new Date(Date.now() - i * 86400e3);
-    const iso = d.toISOString().slice(0, 10); // 식단 기록 화면과 같은 날짜 기준
-    return { iso, label: i === 0 ? "오늘" : i === 1 ? "어제" : `${d.getMonth() + 1}/${d.getDate()}` };
+    const iso = addDays(today, -i); // 식단 기록 화면과 같은 한국 날짜
+    const md = monthDay(iso);
+    return { iso, label: i === 0 ? "오늘" : i === 1 ? "어제" : `${md.month}/${md.date}` };
   });
 }
 

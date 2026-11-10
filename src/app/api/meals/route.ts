@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { kstDay } from "@/lib/day";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { getActorId, noActor } from "@/lib/actor-server";
 
@@ -98,7 +99,7 @@ export async function GET(request: NextRequest) {
     }> = {};
 
     for (const log of entries) {
-      const date = new Date(log.eaten_at).toISOString().slice(0, 10);
+      const date = kstDay(log.eaten_at);
       if (!dailyMap[date]) {
         dailyMap[date] = { date, count: 0, calories: 0, protein_g: 0, fat_g: 0, sugar_g: 0, sodium_mg: 0, fiber_g: 0 };
       }

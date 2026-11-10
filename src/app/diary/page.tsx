@@ -6,6 +6,7 @@ import {
   Badge, Button, Card, Chip, ConfirmSheet, EmptyState, Field, Icon, IconButton, Input, Kcal, LinkButton, ListRow, MacroGrid, MealSlot, Page, PageHeader, PageLoading, SectionHeader, Spinner, Tabs, buttonClass, cn, useToast, SkeletonList, QuickRating, Notice, TextLink,
 } from "@/components/ui";
 import { getClientActorId } from "@/lib/actor-client";
+import { addDays, kstHour, monthDay, todayKst, weekday } from "@/lib/day";
 import { NextMeal, pickNextMeal, type NextCandidate } from "./NextMeal";
 
 /* ── 타입 ── */
@@ -119,8 +120,8 @@ function getUserId(): string {
 }
 
 function formatDate(dateStr: string): string {
-  const d = new Date(dateStr + "T00:00:00");
-  return `${d.getMonth() + 1}월 ${d.getDate()}일 (${DAY_NAMES[d.getDay()]})`;
+  const { month, date } = monthDay(dateStr);
+  return `${month}월 ${date}일 (${DAY_NAMES[weekday(dateStr)]})`;
 }
 
 /** 끼니별 영양소 경고 판단 — 가장 문제되는 영양소 하나 반환 */
@@ -288,7 +289,7 @@ export default function DiaryPage() {
   /* ── 초기화 ── */
   useEffect(() => {
     setUserId(getUserId());
-    setDate(new Date().toISOString().slice(0, 10));
+    setDate(todayKst());
   }, []);
 
   useEffect(() => {
@@ -625,13 +626,9 @@ export default function DiaryPage() {
   };
 
   /* ── 날짜 이동 ── */
-  const moveDate = (days: number) => {
-    const d = new Date(date + "T00:00:00");
-    d.setDate(d.getDate() + days);
-    setDate(d.toISOString().slice(0, 10));
-  };
+  const moveDate = (days: number) => setDate(addDays(date, days));
 
-  const todayStr = typeof window !== "undefined" ? new Date().toISOString().slice(0, 10) : "";
+  const todayStr = typeof window !== "undefined" ? todayKst() : "";
   const isToday = date === todayStr;
 
   /* ── 주간 스트립 데이터 ── */
@@ -639,15 +636,13 @@ export default function DiaryPage() {
     if (!date) return [];
     const goalCal = data?.goals?.daily_calories || weeklyTrend?.goalCalories || 2000;
     return Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(date + "T00:00:00");
-      d.setDate(d.getDate() + (i - 3));
-      const ds = d.toISOString().slice(0, 10);
+      const ds = addDays(date, i - 3);
       const trendDay = weeklyTrend?.days.find(td => td.date === ds);
       const cal = trendDay?.calories || 0;
       const count = trendDay?.count || 0;
       const ratio = goalCal > 0 ? cal / goalCal : 0;
       const isFuture = ds > todayStr;
-      return { dateStr: ds, day: d.getDate(), dow: DAY_NAMES[d.getDay()], cal, count, ratio, isFuture, isActive: ds === date };
+      return { dateStr: ds, day: monthDay(ds).date, dow: DAY_NAMES[weekday(ds)], cal, count, ratio, isFuture, isActive: ds === date };
     });
   }, [date, weeklyTrend, data, todayStr]);
 
@@ -943,7 +938,7 @@ export default function DiaryPage() {
       {/* ━━ 기록 직후: 남은 양 + 다음 끼니 후보 ━━ */}
       {isToday && data && allEntries.length > 0 && (() => {
         const filled = Object.fromEntries(Object.entries(data.byMeal).map(([k, v]) => [k, v.length > 0]));
-        const { meal, mainLeft } = pickNextMeal(filled, new Date().getHours());
+        const { meal, mainLeft } = pickNextMeal(filled, kstHour());
         return (
           <NextMeal
             remainKcal={goalCalories - consumed}

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { todayKst } from "@/lib/day";
 import { connection } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { getActorId, noActor } from "@/lib/actor-server";
@@ -158,7 +159,7 @@ export async function POST(request: NextRequest) {
 
     for (const [service, serviceItems] of Object.entries(serviceGroups)) {
       // 기존 발주가 있으면 합치고, 없으면 새로 생성
-      const deliveryDate = delivery_week_start || new Date().toISOString().slice(0, 10);
+      const deliveryDate = delivery_week_start || todayKst();
 
       const { data: existingPO } = await sb
         .from("purchase_orders")

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { addDays, todayKst } from "@/lib/day";
 import { connection } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { adminOnly } from "@/lib/actor-server";
@@ -23,7 +24,7 @@ export async function GET() {
   const { data: diaryEntries } = await sb
     .from("meal_diary")
     .select("user_id, date, calories, protein_g, fiber_g, sodium_mg, sugar_g, carbs_g, fat_g")
-    .gte("date", new Date(Date.now() - 14 * 86400000).toISOString().slice(0, 10));
+    .gte("date", addDays(todayKst(), -14));
 
   // 일별 합산
   const userDaily: Record<string, Record<string, {

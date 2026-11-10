@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isDay, todayKst } from "@/lib/day";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { getActorId, noActor } from "@/lib/actor-server";
 
@@ -33,7 +34,8 @@ export async function GET(req: NextRequest) {
   }
 
   // ── 기본 모드: 특정 날짜 식단 조회 ──
-  const date = req.nextUrl.searchParams.get("date") || new Date().toISOString().slice(0, 10);
+  const qd = req.nextUrl.searchParams.get("date");
+  const date = isDay(qd) ? qd : todayKst();
 
   const { data: entries, error } = await sb
     .from("meal_diary")
@@ -170,7 +172,7 @@ export async function POST(req: NextRequest) {
     .from("meal_diary")
     .insert({
       user_id,
-      date: date || new Date().toISOString().slice(0, 10),
+      date: isDay(date) ? date : todayKst(),
       meal_type,
       product_id: product_id || null,
       food_name,
