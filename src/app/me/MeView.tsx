@@ -145,6 +145,7 @@ export function MeView() {
         <ul className="flex flex-col">
           <Row icon="feed" title="내가 쓴 글" href="/community?tab=mine" />
           <Row icon="bell" title="알림" href="/notifications" />
+          <Row icon="bell" title="알림 설정" meta="끼니 기록·주간 요약·커뮤니티 소식" href="/me/notifications" />
           <Row icon="user" title="차단한 사람" meta="차단을 풀 수 있어요" href="/me/blocked" />
           <Row icon="users" title="관심 표시한 공구" href="/group-buy?view=mine" />
           <Row icon="notebook" title="주간 식단 리포트" href="/diary/report" />

@@ -8,6 +8,7 @@ import {
 import { getClientActorId } from "@/lib/actor-client";
 import { addDays, kstHour, monthDay, todayKst, weekday } from "@/lib/day";
 import { NextMeal, pickNextMeal, type NextCandidate } from "./NextMeal";
+import PushPrompt from "@/components/PushPrompt";
 
 /* ── 타입 ── */
 type DiaryEntry = {
@@ -934,6 +935,9 @@ export default function DiaryPage() {
           targets={{ protein: goalProtein, carbs: 300, fat: 65, sodium: maxSodium }}
         />
       </Card>
+
+      {/* ━━ 첫 기록 뒤 한 번: 알림 켜기 ━━ */}
+      {isToday && allEntries.length > 0 && <PushPrompt className="mt-3" />}
 
       {/* ━━ 기록 직후: 남은 양 + 다음 끼니 후보 ━━ */}
       {isToday && data && allEntries.length > 0 && (() => {

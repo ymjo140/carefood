@@ -27,3 +27,4 @@ export { PostAuthor, PostAction, PostActions, PostTags, ThreadItem, MealAttach, 
 export { DragArea, DragHandle, DragGhost, useDragItem, useDropTarget, dropClass, type DragData } from "./Drag";
 export { FoodEntryForm, type FoodBase, type FoodEntry } from "./FoodEntry";
 export { DayDots, type DayDot } from "./Challenge";
+export { Switch } from "./Switch";

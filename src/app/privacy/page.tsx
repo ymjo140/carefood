@@ -117,6 +117,11 @@ export default function PrivacyPage() {
                 <td className="py-2 pr-3">선택</td>
               </tr>
               <tr className="border-b border-line">
+                <td className="py-2 pr-3">알림을 켠 기기의 푸시 구독 정보(브라우저가 만든 주소·암호 키), 알림 종류 설정, 보낸 알림 기록</td>
+                <td className="py-2 pr-3">이용자가 켠 알림(끼니 기록·주간 요약·커뮤니티 소식·챌린지) 발송. 알림을 끄면 그 기기의 구독 정보를 지웁니다</td>
+                <td className="py-2 pr-3">선택</td>
+              </tr>
+              <tr className="border-b border-line">
                 <td className="py-2 pr-3">투표 선택, 챌린지 참여·시작일</td>
                 <td className="py-2 pr-3">투표 결과(비율·참여자 수)와 챌린지 진행 계산. 누가 무엇을 골랐는지, 챌린지 달성 기록은 다른 이용자에게 보이지 않습니다</td>
                 <td className="py-2 pr-3">선택</td>

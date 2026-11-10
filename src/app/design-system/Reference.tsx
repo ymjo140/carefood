@@ -6,7 +6,7 @@ import {
   Input, Kcal, LinkButton, ListRow, MacroGrid, MacroInline, MealSlot, MealTag, Notice, Estimate, Page, PageHeader, Price,
   ProgressBar, SearchField, SectionHeader, Select, Sheet, Spinner, Stat, Steps, Tabs, Textarea, TextLink, Thumb,
   Avatar, useToast, cn, type BadgeTone,
-  BottomNavItems, SkeletonList, FoodEntryForm, DragArea, DragGhost, DragHandle, useDragItem, useDropTarget, type DragData, ChoiceCard, ChoiceList, LinkTabs, RatingStars, RatingInput, ScaleInput, QuickRating, PostAuthor, PostAction, PostActions, PostTags, ThreadItem, MealAttach, PlanAttach, ProductTagLinks, PhotoGrid, PollAttach, DayDots,
+  BottomNavItems, SkeletonList, FoodEntryForm, DragArea, DragGhost, DragHandle, useDragItem, useDropTarget, type DragData, ChoiceCard, ChoiceList, LinkTabs, RatingStars, RatingInput, ScaleInput, QuickRating, PostAuthor, PostAction, PostActions, PostTags, ThreadItem, MealAttach, PlanAttach, ProductTagLinks, PhotoGrid, PollAttach, DayDots, Switch,
 } from "@/components/ui";
 
 // 서버(UTC)와 브라우저 시간대가 달라도 같은 글자가 나오도록 한국 시간으로 고정
@@ -665,6 +665,9 @@ export default function Reference({ status }: { status: DsStatus }) {
               <label className="flex items-center gap-2 min-h-11 text-body text-ink"><input type="checkbox" className="ds-check" defaultChecked /> 알레르기 성분 제외</label>
             </div>
           </Demo>
+          <Demo label="켜고 끄기 — 알림 설정처럼 바로 저장되는 설정 (한 줄 전체를 누름)" code="<Switch checked onChange label description />">
+            <SwitchDemo />
+          </Demo>
           <Demo label="선택 카드 — 칩보다 큰 선택지 (온보딩 목표·성별·끼니 수)" code="<ChoiceCard selected title description />">
             <div className="grid gap-2">
               {[["muscle", "근력강화", "고단백 식단"], ["weight", "체중관리", "건강한 다이어트"], ["gut", "장건강", "소화가 편한 식품"]].map(([v, t, d]) => (
@@ -1057,6 +1060,18 @@ function PollDemo() {
     <div className="flex flex-col gap-4">
       <PollAttach options={["현미밥 도시락", "샐러드 도시락", "곤약밥 도시락"]} counts={counts} myChoice={mine} closed={false} note="2일 남았어요" onVote={setMine} />
       <PollAttach options={["아침에 먹어요", "점심에 먹어요"]} counts={[18, 9]} myChoice={null} closed note="마감했어요" />
+    </div>
+  );
+}
+
+/** 켜고 끄기 데모 */
+function SwitchDemo() {
+  const [a, setA] = useState(true);
+  const [b, setB] = useState(false);
+  return (
+    <div className="flex flex-col divide-y divide-line">
+      <Switch label="끼니 기록 알림" description="점심 1시·저녁 8시가 지나도 그 끼니 기록이 없을 때" checked={a} onChange={setA} />
+      <Switch label="주간 요약" description="월요일 아침, 지난주 기록한 날 수와 하루 평균" checked={b} onChange={setB} />
     </div>
   );
 }

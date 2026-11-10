@@ -1,7 +1,7 @@
 {
-  "builtAt": "2026-11-10T07:10:18.112Z",
-  "sha": "2d98b4eaf00a64e1ae3f114a06ac4a054369dc54",
-  "message": "미량영양소 보강: 자동 실행 끄기 — API 가 없어져 매주 실패하던 것",
+  "builtAt": "2026-11-10T07:32:00.948Z",
+  "sha": "fe12012e0573071a1f9b7b88ba4254071a42abb2",
+  "message": "디자인 시스템 수치 갱신",
   "branch": "main",
   "env": "local"
 }

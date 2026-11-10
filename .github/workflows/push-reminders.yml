@@ -1,0 +1,27 @@
+name: 알림 보내기
+
+# 30분마다 /api/push/run 을 부른다 — 보낼 때가 된 끼니·챌린지·주간 요약·커뮤니티 알림을 서버가 골라 보낸다.
+# 비밀값 없이 GitHub OIDC 토큰으로 확인한다 (서버는 이 저장소 main 의 이 워크플로가 만든 토큰만 받는다).
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "5,35 * * * *"
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: push-reminders
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: 알림 보내기
+        run: |
+          TOKEN=$(curl -fsS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=carefood-push" | jq -r .value)
+          curl -fsS --max-time 280 -X POST -H "Authorization: Bearer $TOKEN" https://carefood-iota.vercel.app/api/push/run
+          echo
