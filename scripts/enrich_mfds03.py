@@ -104,7 +104,10 @@ def check(path):
 def apply(path):
     recs, mine, hit = check(path)
     rows = []
-    for c, r, (pid, _) in hit:
+    for c, r, (pid, our_na) in hit:
+        # 같은 제품인지 나트륨으로 확인 — 둘 다 있으면 2% 안에서 같아야 넣는다
+        na = r["sodium_mg"]
+        if na is not None and our_na is not None and abs(float(our_na) - na) > max(1, 0.02 * na): continue
         row = {"id": pid}
         ok = False
         for k in ("fiber_g", "saturated_fat_g", "trans_fat_g", "cholesterol_mg"):
@@ -122,11 +125,37 @@ def apply(path):
     print("올림 끝 — 이제 SQL 로 products 에 반영", flush=True)
 
 
+def bounded(k, v):
+    if v is None or v < 0: return None
+    if k == "cholesterol_mg": return v if v <= 3000 else None
+    return v if v <= (80 if k == "fiber_g" else 100) else None
+
+
+def sodium(path):
+    """나트륨이 Info03 과 다른 제품 → products_sodium_patch (나트륨 + 네 칸).
+    예전 가져오기가 나트륨 칸에 AMT_NUM8(식이섬유)을 읽었다 — 그게 비었을 때만 진짜 나트륨으로 넘어갔다."""
+    recs, mine = load(path), ours()
+    rows = []
+    for code, r in recs.items():
+        if code not in mine or r["sodium_mg"] is None: continue
+        pid, our = mine[code]
+        if our is not None and abs(float(our) - r["sodium_mg"]) <= max(1, 0.02 * r["sodium_mg"]): continue
+        if our is None: continue  # 비어 있던 것은 이번 범위 밖
+        row = {"id": pid, "sodium_mg": r["sodium_mg"]}
+        for k in ("fiber_g", "saturated_fat_g", "trans_fat_g", "cholesterol_mg"): row[k] = bounded(k, r[k])
+        rows.append(row)
+    print(f"나트륨 고칠 제품 {len(rows)}개", flush=True)
+    for i in range(0, len(rows), 1000):
+        rest("POST", "products_sodium_patch?on_conflict=id", rows[i:i + 1000])
+    print("올림 끝", flush=True)
+
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=["fetch", "check", "apply"])
+    ap.add_argument("cmd", choices=["fetch", "check", "apply", "sodium"])
     ap.add_argument("--out"); ap.add_argument("--in", dest="inp")
     a = ap.parse_args()
     if a.cmd == "fetch": fetch(a.out)
     elif a.cmd == "check": check(a.inp)
+    elif a.cmd == "sodium": sodium(a.inp)
     else: apply(a.inp)
