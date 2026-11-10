@@ -116,7 +116,7 @@ export const DIET_PURPOSE_ORDER: Record<string, { column: string; ascending: boo
   diet: { column: "calories", ascending: true },
   muscle: { column: "protein_g", ascending: false },
   exercise: { column: "protein_g", ascending: false },
-  gut_health: { column: "fiber_g", ascending: false },
+  gut_health: { column: "health_score", ascending: false }, // 식이섬유 값이 비어 있어(2026-11 정리) 건강 점수로
   skin: { column: "protein_g", ascending: false },
   energy: { column: "health_score", ascending: false },
   balanced: { column: "health_score", ascending: false },

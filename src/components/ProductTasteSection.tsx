@@ -26,6 +26,7 @@ type Props = {
     carbs_g: number | null;
     fat_g: number | null;
     fiber_g: number | null;
+    sugar_g?: number | null;
     sodium_mg: number | null;
     spicy_score: number | null;
   };
@@ -69,7 +70,7 @@ function predictTasteFromNutrition(n: Props["nutrition"]) {
 
 /**
  * 영양 데이터를 1~5 스케일로 변환
- * 단백질/섬유질: 높을수록 좋음
+ * 단백질: 높을수록 좋음 · 저당(당류)·저염도: 낮을수록 좋음
  * 탄수/지방: 적당하면 좋음
  * 나트륨: 낮을수록 좋음
  */
@@ -88,9 +89,10 @@ function toNutritionProfile(n: Props["nutrition"]) {
     ? Math.min(5, Math.max(1, Math.round(fatVal / 5) + 1))
     : Math.max(1, 5 - Math.round((fatVal - 20) / 10));
 
-  const fiber = n.fiber_g != null
-    ? Math.min(5, Math.max(1, Math.round(n.fiber_g / 2.5) + 1))
-    : 1;
+  // 넷째 축은 저당 — 식이섬유는 DB 에 믿을 만한 값이 없어(2026-11 정리) 당류로 바꿨다. 값이 없으면 가운데
+  const fiber = n.sugar_g != null
+    ? Math.min(5, Math.max(1, 5 - Math.round(n.sugar_g / 6)))
+    : 3;
 
   const balance = n.sodium_mg != null
     ? Math.min(5, Math.max(1, 5 - Math.round(n.sodium_mg / 400)))

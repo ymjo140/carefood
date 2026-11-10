@@ -7,7 +7,7 @@ import { Badge, cn, type BadgeTone } from "@/components/ui";
  *
  * 두 개의 오각형이 겹쳐서 보이며, 제품/사용자의 맛·영양 매칭 상태를 한눈에 보여줌.
  * - 맛 프로필: 매운맛 · 단맛 · 짠맛 · 감칠맛 · 신맛 (1~5)
- * - 영양 프로필: 단백질 · 탄수화물 · 지방 · 섬유질 · 균형 (1~5 스코어)
+ * - 영양 프로필: 단백질 · 탄수화물 · 지방 · 저당 · 저염도 (1~5 스코어, 넷째 칸 키 이름은 fiber 그대로)
  */
 
 type TasteProfile = {
@@ -48,7 +48,7 @@ type DualRadarChartProps = {
 // 맛 프로필: 영양성분에서 확실히 알 수 있는 것만
 // (나중에 캡사이신·글루탐산 데이터 확보 시 매운맛·감칠맛 추가)
 const TASTE_LABELS = ["짠맛", "단맛", "고소함", "담백함", "매운맛"];
-const NUTRITION_LABELS = ["단백", "탄수", "지방", "섬유질", "저염도"];
+const NUTRITION_LABELS = ["단백", "탄수", "지방", "저당", "저염도"];
 
 function polarToCartesian(cx: number, cy: number, r: number, angleDeg: number) {
   const rad = ((angleDeg - 90) * Math.PI) / 180;

@@ -1,7 +1,7 @@
 {
-  "builtAt": "2026-11-10T07:32:00.948Z",
-  "sha": "fe12012e0573071a1f9b7b88ba4254071a42abb2",
-  "message": "디자인 시스템 수치 갱신",
+  "builtAt": "2026-11-10T08:12:30.090Z",
+  "sha": "961f94e32f6f7b4a62f4cbf7e816ec5f3c11ae32",
+  "message": "웹 푸시 키를 넣어 다시 배포",
   "branch": "main",
   "env": "local"
 }

@@ -541,13 +541,11 @@ def transform_row(row: dict) -> dict:
       1회 섭취 영양값 = DB영양값 × (1회섭취참고량 / 영양성분함량기준량)
       예: 녹차 단백질 = 27.9g × (2g / 100g) = 0.56g
 
-    추정 필드 (실제 응답으로 확인 필요 → --discover 참고):
+    운영 데이터로 확인한 필드:
       AMT_NUM7    = 당류 (g)
       AMT_NUM8    = 나트륨 (mg)
-      AMT_NUM9    = 콜레스테롤 (mg)
-      AMT_NUM10   = 포화지방산 (g)
-      AMT_NUM11   = 트랜스지방산 (g)
-      AMT_NUM2    = 수분 또는 식이섬유 (g)
+    쓰지 않는 필드 (값이 맞지 않음 — 20261110_clear_misread_nutrients.sql):
+      AMT_NUM2 (수분으로 보임) · AMT_NUM9 (칼슘으로 보임) · AMT_NUM11
       FOOD_CD     = 식품코드
       MAKER_NM    = 제조사명
       RAWMTRL_NM  = 원재료명
@@ -620,30 +618,24 @@ def transform_row(row: dict) -> dict:
         "fat_g":            safe_numeric(row.get("AMT_NUM4")
                             or row.get("NUTR_CONT4")),
 
-        # 추정 필드 — 다수 후보 시도
-        "sugar_g":          safe_numeric(row.get("AMT_NUM7")
-                            or row.get("AMT_NUM5")
-                            or row.get("NUTR_CONT5")),
-        "sodium_mg":        safe_numeric(row.get("AMT_NUM8")
-                            or row.get("AMT_NUM13")
-                            or row.get("NUTR_CONT6")),
-        "cholesterol_mg":   safe_numeric(row.get("AMT_NUM9")
-                            or row.get("AMT_NUM14")
-                            or row.get("NUTR_CONT7")),
-        "saturated_fat_g":  safe_numeric(row.get("AMT_NUM10")
-                            or row.get("AMT_NUM15")
-                            or row.get("NUTR_CONT8")),
-        "trans_fat_g":      safe_numeric(row.get("AMT_NUM11")
-                            or row.get("AMT_NUM16")
-                            or row.get("NUTR_CONT9")),
+        # 확인한 필드만 넣는다 (2026-11 운영 데이터로 확인: 우유 나트륨 50mg · 신라면 1,455mg · 당류 정상)
+        # 다른 번호로 넘어가는 대체(or AMT_NUM13 …)는 다른 성분이 들어갈 수 있어 쓰지 않는다
+        "sugar_g":          safe_numeric(row.get("AMT_NUM7") or row.get("NUTR_CONT5")),
+        "sodium_mg":        safe_numeric(row.get("AMT_NUM8") or row.get("NUTR_CONT6")),
+        "saturated_fat_g":  safe_numeric(row.get("AMT_NUM10") or row.get("NUTR_CONT8")),
+        # 넣지 않는 필드 — 값이 맞지 않았다 (supabase/migrations/20261110_clear_misread_nutrients.sql)
+        #   AMT_NUM2 → 식이섬유로 넣었으나 100g 당 중앙값 68g (수분으로 보임)
+        #   AMT_NUM9 → 콜레스테롤로 넣었으나 우유 100mg (칼슘으로 보임)
+        #   AMT_NUM11 → 트랜스지방으로 넣었으나 100g 당 중앙값 73g
+        "cholesterol_mg":   None,
+        "trans_fat_g":      None,
 
         # 미제공 → null (추후 보강)
         "potassium_mg":     None,
         "calcium_mg":       None,
         "phosphorus_mg":    None,
         "iron_mg":          None,
-        "fiber_g":          safe_numeric(row.get("AMT_NUM2")
-                            or row.get("AMT_NUM12")),
+        "fiber_g":          None,
         "vitamin_a_ug":     None,
         "vitamin_c_mg":     None,
         "vitamin_d_ug":     None,

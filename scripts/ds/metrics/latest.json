@@ -1,5 +1,5 @@
 {
-  "measuredAt": "2026-11-10T07:32:01.031Z",
+  "measuredAt": "2026-11-10T08:12:30.175Z",
   "files": 78,
   "distinctColors": 2,
   "gradients": 1,
@@ -21,7 +21,7 @@
   "fontSizes": [
     [
       "ds:label",
-      187
+      182
     ],
     [
       "ds:caption",
@@ -29,7 +29,7 @@
     ],
     [
       "ds:body",
-      82
+      81
     ],
     [
       "ds:title",
@@ -43,7 +43,7 @@
   "radii": [
     [
       "md",
-      40
+      39
     ],
     [
       "full",

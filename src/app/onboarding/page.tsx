@@ -16,7 +16,7 @@ import {
   type NutritionGoals,
 } from "@/lib/nutrition";
 import {
-  Badge, BottomBar, Button, Card, Chip, Field, Icon, Input, MacroGrid, Notice, Page, PageLoading, Stat, Steps, cn,
+  Badge, BottomBar, Button, Card, Chip, Field, Icon, Input, MacroGrid, Notice, Page, PageLoading, Stat, Steps, TextLink, cn,
   type BadgeTone,
 } from "@/components/ui";
 import { ChoiceCard } from "@/components/ui/ChoiceCard";
@@ -43,11 +43,11 @@ type OnboardingState = {
   tastes: { salty: TasteLevel; sweet: TasteLevel; spicy: TasteLevel; fatty: TasteLevel };
 };
 
-const STEPS = ["consent", "goals", "body", "pattern", "allergies", "tastes", "result"] as const;
+// 동의는 첫 화면이 아니라, 질환 관심을 고를 때 그 자리에서 받는다 (마이페이지 > 관심사와 같은 방식)
+const STEPS = ["goals", "body", "pattern", "allergies", "tastes", "result"] as const;
 type StepKey = (typeof STEPS)[number];
 
 const STEP_META: Record<StepKey, { title: string; sub: string }> = {
-  consent: { title: "시작하기 전에", sub: "맞춤 추천을 위한 동의" },
   goals: { title: "건강 목표", sub: "어떤 건강을 관리할까요?" },
   body: { title: "신체 정보", sub: "맞춤 영양 분석에 활용해요" },
   pattern: { title: "식사 패턴", sub: "추천 구성을 조절해요" },
@@ -148,10 +148,9 @@ function OnboardingContent() {
 
   const canProceed = (): boolean => {
     switch (currentStepKey) {
-      case "consent":
-        return state.sensitiveDataConsent;
       case "goals":
-        return state.goals.length > 0;
+        // 질환 관심을 골랐으면 그 자리의 동의가 있어야 한다
+        return state.goals.length > 0 && (!state.goals.some((g) => DISEASE_GOALS.includes(g)) || state.sensitiveDataConsent);
       default:
         return true;
     }
@@ -199,7 +198,6 @@ function OnboardingContent() {
   };
 
   const isResultStep = currentStepKey === "result";
-  const isConsentStep = currentStepKey === "consent";
   const canSkip = currentStepKey === "body" || currentStepKey === "allergies" || currentStepKey === "pattern";
 
   return (
@@ -207,9 +205,9 @@ function OnboardingContent() {
       {/* ── 진행 표시 ── */}
       {!isResultStep && (
         <div className="sticky top-14 z-30 -mx-4 px-4 pt-4 pb-3 mb-6 bg-canvas border-b border-line">
-          {!isConsentStep && <Steps total={totalSteps - 1} current={step - 1} className="mb-2.5" />}
+          <Steps total={totalSteps - 1} current={step} className="mb-2.5" />
           <p className="text-caption text-ink-2">
-            {!isConsentStep && <span className="num font-bold text-brand-ink mr-1.5">{step}/{totalSteps - 2}</span>}
+            <span className="num font-bold text-brand-ink mr-1.5">{step + 1}/{totalSteps - 1}</span>
             {STEP_META[currentStepKey].sub}
           </p>
         </div>
@@ -217,14 +215,6 @@ function OnboardingContent() {
       {isResultStep && <div className="h-6" />}
 
       {/* ── 단계 내용 ── */}
-      {currentStepKey === "consent" && (
-        <StepConsent
-          agreed={state.sensitiveDataConsent}
-          onToggle={() =>
-            setState((prev) => ({ ...prev, sensitiveDataConsent: !prev.sensitiveDataConsent }))
-          }
-        />
-      )}
       {currentStepKey === "goals" && (
         <StepGoals
           selected={state.goals}
@@ -238,6 +228,8 @@ function OnboardingContent() {
           onToggleDisease={() =>
             setState((prev) => ({ ...prev, showDiseaseGoals: !prev.showDiseaseGoals }))
           }
+          consent={state.sensitiveDataConsent}
+          onConsent={(v) => setState((prev) => ({ ...prev, sensitiveDataConsent: v }))}
         />
       )}
       {currentStepKey === "body" && (
@@ -366,58 +358,6 @@ function GroupLabel({ children, right }: { children: ReactNode; right?: ReactNod
 }
 
 /* ════════════════════════════════════════════
-   Step 0: 민감정보 수집 동의
-   ════════════════════════════════════════════ */
-
-function StepConsent({ agreed, onToggle }: { agreed: boolean; onToggle: () => void }) {
-  return (
-    <div>
-      <StepTitle title="시작하기 전에" description="맞춤 식품 추천을 위해 아래 정보 수집에 동의해 주세요" />
-
-      <Card className="mb-3">
-        <p className="text-label font-bold text-ink mb-2">수집하는 정보</p>
-        <div className="grid grid-cols-2 gap-2">
-          {["건강 목표", "신체 정보 (선택)", "식사 패턴", "알레르기·맛 선호"].map((label) => (
-            <div key={label} className="rounded-md bg-sunken px-3 py-2.5 text-label text-ink">
-              {label}
-            </div>
-          ))}
-        </div>
-
-        <div className="border-t border-line mt-4 pt-3">
-          <p className="text-label font-bold text-ink">이용 목적</p>
-          <p className="text-label text-ink-2">식품 영양성분 기반 맞춤 추천 및 영양 분석 제공</p>
-        </div>
-        <div className="border-t border-line mt-3 pt-3">
-          <p className="text-label font-bold text-ink">보관 및 파기</p>
-          <p className="text-label text-ink-2">기기 내 로컬 저장 · 회원가입 시 서버 저장 · 탈퇴 시 즉시 파기</p>
-        </div>
-      </Card>
-
-      <Notice tone="caution" title="민감정보(건강정보) 수집 안내" className="mb-3">
-        건강 목표·질환 관심사·신체 정보는 개인정보보호법 제23조에 따른 민감정보에 해당합니다.
-        해당 정보는 식품 성분 매칭에만 사용되며, 제3자에게 제공되지 않습니다.
-      </Notice>
-
-      <Notice className="mb-5">
-        본 서비스는 식약처 영양성분 데이터베이스 기반 정보 제공 서비스이며,
-        의학적 진단·치료·처방을 대체하지 않습니다.
-      </Notice>
-
-      <label
-        className={cn(
-          "flex items-center gap-3 rounded-lg border px-4 py-4 cursor-pointer transition-colors",
-          agreed ? "border-brand bg-brand-soft" : "border-line bg-surface hover:border-line-strong",
-        )}
-      >
-        <input type="checkbox" className="ds-check shrink-0" checked={agreed} onChange={onToggle} />
-        <span className="text-body font-bold text-ink">민감정보(건강정보) 수집·이용에 동의합니다</span>
-      </label>
-    </div>
-  );
-}
-
-/* ════════════════════════════════════════════
    Step 1: 건강 목표
    ════════════════════════════════════════════ */
 
@@ -426,11 +366,15 @@ function StepGoals({
   showDisease,
   onToggle,
   onToggleDisease,
+  consent,
+  onConsent,
 }: {
   selected: HealthGoal[];
   showDisease: boolean;
   onToggle: (g: HealthGoal) => void;
   onToggleDisease: () => void;
+  consent: boolean;
+  onConsent: (v: boolean) => void;
 }) {
   const hasDiseaseGoal = selected.some((g) => DISEASE_GOALS.includes(g));
 
@@ -493,7 +437,17 @@ function StepGoals({
               );
             })}
             {hasDiseaseGoal && (
-              <Notice tone="caution">의료 행위가 아닌, 성분 정보 기반 참고용이에요</Notice>
+              <>
+                <Notice tone="caution">의료 행위가 아닌, 성분 정보 기반 참고용이에요</Notice>
+                {/* 질환 관심은 민감정보 — 고른 그 자리에서 동의를 받는다 */}
+                <label className="flex items-start gap-3 rounded-lg border border-line bg-surface px-4 py-3 cursor-pointer">
+                  <input type="checkbox" className="ds-check shrink-0 mt-0.5" checked={consent} onChange={(e) => onConsent(e.target.checked)} />
+                  <span className="text-label text-ink">
+                    질환 관심(민감정보)을 맞춤 추천에만 쓰는 데 동의해요. 진단이 아니라 성분 정보로 고르는 데 쓰고, 다른 곳에 주지 않아요{" "}
+                    <TextLink href="/privacy">개인정보처리방침</TextLink>
+                  </span>
+                </label>
+              </>
             )}
           </div>
         )}

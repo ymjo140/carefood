@@ -350,7 +350,7 @@ function FilterPanel({
             { key: "calories_max" as const, label: "칼로리", unit: "kcal", op: "≤", presets: NUTRITION_PRESETS.calories_max },
             { key: "sodium_max" as const, label: "나트륨", unit: "mg", op: "≤", presets: NUTRITION_PRESETS.sodium_max },
             { key: "sugar_max" as const, label: "당류", unit: "g", op: "≤", presets: NUTRITION_PRESETS.sugar_max },
-            { key: "fiber_min" as const, label: "식이섬유", unit: "g", op: "≥", presets: NUTRITION_PRESETS.fiber_min },
+            // 식이섬유 거르기는 뺐다 — DB 에 믿을 만한 값이 없다(2026-11 정리). URL 의 fiber_min 은 계속 받는다
           ]).map(n => (
             <NutritionRow key={n.key} label={n.label} op={n.op} unit={n.unit} value={nutrition[n.key]} presets={n.presets}
               onChange={v => updateNutrition(n.key, v)} />

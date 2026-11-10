@@ -161,7 +161,8 @@ export async function GET(request: NextRequest) {
     gradeNutrient("protein", "단백질", "g", avg.protein_g, target.protein_g, false),
     gradeNutrient("carbs", "탄수화물", "g", avg.carbs_g, target.carbs_g, false),
     gradeNutrient("fat", "지방", "g", avg.fat_g, target.fat_g, false),
-    gradeNutrient("fiber", "식이섬유", "g", avg.fiber_g, target.fiber_g, false),
+    // 식이섬유는 제품 DB 에 믿을 만한 값이 없어(2026-11 정리) 평가하지 않는다 — 기록에 값이 있을 때만
+    ...(dailyData.some((d) => d.fiber_g > 0) ? [gradeNutrient("fiber", "식이섬유", "g", avg.fiber_g, target.fiber_g, false)] : []),
     gradeNutrient("sodium", "나트륨", "mg", avg.sodium_mg, target.sodium_mg, true),
     gradeNutrient("sugar", "당류", "g", avg.sugar_g, target.sugar_g, true),
   ];
