@@ -1,5 +1,5 @@
 {
-  "checkedAt": "2026-11-07T16:42:39.427Z",
+  "checkedAt": "2026-11-10T07:10:18.325Z",
   "files": 101,
   "total": 0,
   "warnTotal": 0,
@@ -165,7 +165,7 @@
     },
     {
       "file": "src/app/diary/page.tsx",
-      "line": 276,
+      "line": 277,
       "rule": "silent-catch",
       "level": "warn",
       "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
@@ -174,7 +174,7 @@
     },
     {
       "file": "src/app/diary/page.tsx",
-      "line": 311,
+      "line": 312,
       "rule": "silent-catch",
       "level": "warn",
       "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
@@ -183,7 +183,7 @@
     },
     {
       "file": "src/app/diary/page.tsx",
-      "line": 314,
+      "line": 315,
       "rule": "silent-catch",
       "level": "warn",
       "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
@@ -192,7 +192,7 @@
     },
     {
       "file": "src/app/diary/page.tsx",
-      "line": 348,
+      "line": 349,
       "rule": "silent-catch",
       "level": "warn",
       "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
@@ -201,7 +201,7 @@
     },
     {
       "file": "src/app/diary/page.tsx",
-      "line": 374,
+      "line": 375,
       "rule": "silent-catch",
       "level": "warn",
       "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
@@ -210,7 +210,7 @@
     },
     {
       "file": "src/app/diary/page.tsx",
-      "line": 386,
+      "line": 387,
       "rule": "silent-catch",
       "level": "warn",
       "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
@@ -219,7 +219,7 @@
     },
     {
       "file": "src/app/diary/page.tsx",
-      "line": 397,
+      "line": 398,
       "rule": "silent-catch",
       "level": "warn",
       "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
@@ -228,7 +228,7 @@
     },
     {
       "file": "src/app/diary/page.tsx",
-      "line": 407,
+      "line": 408,
       "rule": "silent-catch",
       "level": "warn",
       "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
@@ -237,7 +237,7 @@
     },
     {
       "file": "src/app/diary/page.tsx",
-      "line": 435,
+      "line": 436,
       "rule": "silent-catch",
       "level": "warn",
       "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
@@ -246,7 +246,7 @@
     },
     {
       "file": "src/app/diary/page.tsx",
-      "line": 448,
+      "line": 449,
       "rule": "silent-catch",
       "level": "warn",
       "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
@@ -255,7 +255,7 @@
     },
     {
       "file": "src/app/diary/page.tsx",
-      "line": 468,
+      "line": 469,
       "rule": "silent-catch",
       "level": "warn",
       "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
@@ -363,7 +363,7 @@
     },
     {
       "file": "src/app/order/page.tsx",
-      "line": 118,
+      "line": 119,
       "rule": "silent-catch",
       "level": "warn",
       "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
@@ -543,7 +543,7 @@
     },
     {
       "file": "src/components/community/PostComposer.tsx",
-      "line": 123,
+      "line": 125,
       "rule": "silent-catch",
       "level": "warn",
       "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
