@@ -173,9 +173,10 @@ export function scoreProduct(
   const pro100 = (p.protein_g as number) || 0;
   const sug100 = (p.sugar_g as number) ?? 99;
   // 나트륨을 모르면 null — 0 으로 치면 '저나트륨' 보너스를 받아 버린다
-  // 한 끼·반찬인데 0 이면 빠진 값으로 본다 (scripts/health_score.py 와 같게)
+  // 빠진 값으로 본다: 한 끼인데 20mg 미만, 반찬인데 0 (scripts/health_score.py missing_sodium 과 같게)
   const sodRaw = p.sodium_mg == null ? null : Number(p.sodium_mg);
-  const sod100: number | null = sodRaw === 0 && (p.meal_role === "meal" || p.meal_role === "side") ? null : sodRaw;
+  const sodMissing = sodRaw !== null && ((p.meal_role === "meal" && sodRaw < 20) || (p.meal_role === "side" && sodRaw <= 0));
+  const sod100: number | null = sodMissing ? null : sodRaw;
   const fib100 = (p.fiber_g as number) || 0;
   // per-serving 값 (식사 충족 비교용)
   const calories = Math.round(cal100 * servingRatio * 10) / 10;
