@@ -74,7 +74,7 @@ export default function VendorApplyPage() {
 
   return (
     <Page>
-      <TextLink href="/" className="mb-3"><Icon name="chevron-left" size={16} /> 홈</TextLink>
+      <TextLink href="/" className="mb-3 min-h-11"><Icon name="chevron-left" size={16} /> 홈</TextLink>
       <PageHeader title="업체 입점 신청" description="케어푸드에서 34만 식품 DB 사용자에게 제품을 노출하세요" />
 
       {/* 혜택 */}

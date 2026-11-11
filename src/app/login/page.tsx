@@ -57,6 +57,10 @@ function LoginContent() {
             />
           </Field>
 
+          {mode === "login" && (
+            <TextLink href="/auth/forgot" className="self-end -mt-2">비밀번호를 잊었어요</TextLink>
+          )}
+
           {/* 에러 메시지 */}
           {state?.error && <Notice tone="danger">{state.error}</Notice>}
 

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { limitRequest } from "@/lib/rate-limit";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { getActorId, noActor } from "@/lib/actor-server";
 
@@ -103,6 +104,8 @@ function avg(arr: any[], key: string): number | null {
 
 /* ── POST: 리뷰 작성/수정 ── */
 export async function POST(request: NextRequest) {
+  const limited = await limitRequest(request, "review");
+  if (limited) return limited;
   try {
     const body = await request.json();
     const { product_id, rating, would_rebuy,

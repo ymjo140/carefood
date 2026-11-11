@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { limitRequest } from "@/lib/rate-limit";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { searchDishes } from "@/lib/dishes";
 import { getActorId, noActor } from "@/lib/actor-server";
@@ -13,6 +14,8 @@ import { getActorId, noActor } from "@/lib/actor-server";
  * 인식한 이름은 대표 메뉴(common_foods) + 식약처 음식 830개(dishes.json) + 제품 이름에 맞춰 후보로 돌려준다.
  */
 export async function POST(req: NextRequest) {
+  const limited = await limitRequest(req, "photo");
+  if (limited) return limited;
   try {
     // 외부 AI 호출 비용이 드는 API — 사이트에서 발급한 쿠키가 있는 요청만
     if (!(await getActorId())) return noActor();

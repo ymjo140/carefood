@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { limitRequest } from "@/lib/rate-limit";
 import { isDay, todayKst } from "@/lib/day";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { getActorId, noActor } from "@/lib/actor-server";
@@ -165,6 +166,8 @@ function givenNutrients(body: Record<string, unknown>, mult: number): Nutrients 
 
 // POST: 식단 기록 추가
 export async function POST(req: NextRequest) {
+  const limited = await limitRequest(req, "diary");
+  if (limited) return limited;
   const user_id = await getActorId();
   if (!user_id) return noActor();
   const body = await req.json().catch(() => null);
@@ -218,6 +221,8 @@ export async function POST(req: NextRequest) {
  *   제품 기록은 제품 값 × 새 그램 × 새 배수로 다시 계산, 일반 음식·직접 입력은 지금 값을 (새 배수 ÷ 예전 배수)·(새 그램 ÷ 예전 그램) 만큼
  */
 export async function PATCH(req: NextRequest) {
+  const limited = await limitRequest(req, "diary");
+  if (limited) return limited;
   const userId = await getActorId();
   if (!userId) return noActor();
   const body = await req.json().catch(() => null);

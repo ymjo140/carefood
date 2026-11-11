@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { limitRequest } from "@/lib/rate-limit";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { byRank, parseProfile, scoreAndRank, loadFeedback } from "@/lib/recommend";
 import { getActorId } from "@/lib/actor-server";
@@ -335,6 +336,8 @@ export async function GET(request: NextRequest) {
    ════════════════════════════════════════════ */
 
 export async function POST(request: NextRequest) {
+  const limited = await limitRequest(request, "recommend");
+  if (limited) return limited;
   let body: Record<string, unknown>;
   try { body = await request.json(); } catch { return NextResponse.json({ error: "잘못된 요청" }, { status: 400 }); }
   const params = parseSearchParams(request.nextUrl.searchParams);

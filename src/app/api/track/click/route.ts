@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { limitRequest } from "@/lib/rate-limit";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { getActorId, noActor } from "@/lib/actor-server";
 
@@ -9,6 +10,8 @@ import { getActorId, noActor } from "@/lib/actor-server";
  * B2B 가치: 어떤 제품이 얼마나 구매 전환을 만드는지 데이터.
  */
 export async function POST(request: NextRequest) {
+  const limited = await limitRequest(request, "track");
+  if (limited) return limited;
   try {
     const { product_id, platform, click_url, referrer_page, placement } = await request.json();
     const user_id = await getActorId();

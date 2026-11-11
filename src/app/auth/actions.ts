@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { linkActorToAccount, resetActor } from "@/lib/actor-server";
 
@@ -149,4 +150,41 @@ export async function saveProfile(profileJson: string): Promise<{ error: string 
   }
 
   return { error: null };
+}
+
+/**
+ * 비밀번호 재설정 메일 — 가입한 이메일인지 아닌지는 알려 주지 않는다 (가입 여부를 캐내지 못하게)
+ * 메일의 링크 → /auth/callback (세션) → /auth/reset 에서 새 비밀번호
+ * Supabase 인증 설정의 Redirect URL 목록에 /auth/callback 이 있어야 한다
+ */
+export async function requestPasswordReset(
+  prevState: { error: string | null; sent?: boolean },
+  formData: FormData,
+): Promise<{ error: string | null; sent?: boolean }> {
+  const email = String(formData.get("email") || "").trim();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { error: "이메일을 확인해 주세요" };
+  const h = await headers();
+  const origin = `${h.get("x-forwarded-proto") || "https"}://${h.get("x-forwarded-host") || h.get("host")}`;
+  const supabase = await createServerSupabaseClient();
+  const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: `${origin}/auth/callback?next=/auth/reset` });
+  if (error && /rate|limit|seconds/i.test(error.message)) return { error: "메일을 너무 자주 보냈어요. 잠시 뒤 다시 시도해 주세요" };
+  if (error) console.error("비밀번호 재설정 메일:", error.message);
+  return { error: null, sent: true };
+}
+
+/** 새 비밀번호 저장 — 메일 링크로 들어와 세션이 있을 때만 */
+export async function updatePassword(
+  prevState: { error: string | null },
+  formData: FormData,
+): Promise<{ error: string | null }> {
+  const password = String(formData.get("password") || "");
+  const confirm = String(formData.get("confirm") || "");
+  if (password.length < 6) return { error: "비밀번호는 6자 이상으로 정해 주세요" };
+  if (password !== confirm) return { error: "두 비밀번호가 달라요" };
+  const supabase = await createServerSupabaseClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "링크가 만료됐어요. 비밀번호 찾기를 다시 해 주세요" };
+  const { error } = await supabase.auth.updateUser({ password });
+  if (error) return { error: "비밀번호를 바꾸지 못했어요. 다시 시도해 주세요" };
+  redirect("/me");
 }

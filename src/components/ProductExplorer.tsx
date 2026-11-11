@@ -460,7 +460,7 @@ function ProductCard({ product, isFavorite, onToggleFavorite }: {
       <div className="flex-1 min-w-0 flex flex-col">
         <div className="flex items-start gap-2 mb-1.5 pr-8">
           <div className="flex-1 min-w-0">
-            <Link href={href} className="block py-1 text-body font-bold text-ink hover:text-brand-ink transition-colors line-clamp-2">
+            <Link href={href} data-ds-allow-break className="block py-1 text-body font-bold text-ink hover:text-brand-ink transition-colors line-clamp-2">
               {product.name}
             </Link>
             {product.manufacturer && (

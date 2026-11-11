@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { limitRequest } from "@/lib/rate-limit";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { getActorId, noActor } from "@/lib/actor-server";
 
@@ -7,6 +8,8 @@ import { getActorId, noActor } from "@/lib/actor-server";
  * 사용자 행동 기록 (조회, 클릭, 박스 추가 등)
  */
 export async function POST(request: NextRequest) {
+  const limited = await limitRequest(request, "track");
+  if (limited) return limited;
   try {
     const body = await request.json();
     const { product_id, action, metadata } = body;

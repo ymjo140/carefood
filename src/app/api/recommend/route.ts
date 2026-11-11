@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { limitRequest } from "@/lib/rate-limit";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { getActorId } from "@/lib/actor-server";
 import {
@@ -34,6 +35,8 @@ function purchasableFrom(rows: Record<string, unknown>[]): Set<string> {
 }
 
 export async function POST(request: NextRequest) {
+  const limited = await limitRequest(request, "recommend");
+  if (limited) return limited;
   try {
     const body = await request.json();
 

@@ -1,12 +1,15 @@
 /**
- * 커뮤니티 횟수 제한 — 서버에서만 쓴다.
+ * 횟수 제한 — 서버에서만 쓴다. 커뮤니티 쓰기(rateLimit)와 그 밖의 쓰기·무거운 API(limitRequest).
  * 기록 주인 id 는 쿠키라 지우면 새 사람이 된다 → 같은 사람(id)과 같은 연결(IP) 둘 다로 센다.
  * IP 는 그대로 두지 않고 비밀값을 섞은 해시로만 남기고, 이틀 지난 기록은 지운다.
  */
 import { NextResponse, type NextRequest } from "next/server";
+import { getActorId } from "@/lib/actor-server";
+import { createServiceRoleClient } from "@/lib/supabase/server";
 
 type Sb = any; // eslint-disable-line @typescript-eslint/no-explicit-any
-export type RateAction = "post" | "comment" | "like" | "report" | "upload" | "copy";
+export type RateAction = "post" | "comment" | "like" | "report" | "upload" | "copy"
+  | "diary" | "review" | "track" | "plan" | "favorite" | "recommend" | "photo" | "error" | "push";
 
 /** [기간(초), 같은 사람, 같은 연결] — 같은 연결은 집·회사 와이파이처럼 여럿이 함께 쓸 수 있어 넉넉히 */
 const LIMITS: Record<RateAction, [number, number, number][]> = {
@@ -16,6 +19,16 @@ const LIMITS: Record<RateAction, [number, number, number][]> = {
   report: [[86_400, 10, 30]],
   upload: [[600, 20, 60]],
   copy: [[600, 20, 60]],
+  // 커뮤니티 밖 — 보통 쓰는 양의 몇 배로 넉넉히, 기계적인 반복만 막는다
+  diary: [[600, 60, 200], [86_400, 400, 1500]],
+  review: [[600, 30, 100]],
+  track: [[600, 300, 1000]],
+  plan: [[600, 30, 100]],
+  favorite: [[600, 60, 200]],
+  recommend: [[600, 60, 200]],
+  photo: [[600, 10, 30], [86_400, 50, 150]],
+  error: [[600, 20, 60]],
+  push: [[600, 20, 60]],
 };
 
 async function ipHash(request: NextRequest): Promise<string> {
@@ -50,4 +63,18 @@ export async function rateLimit(sb: Sb, request: NextRequest, actor: string, act
     if (dErr) console.error("횟수 기록을 정리하지 못했어요:", dErr.message);
   }
   return null;
+}
+
+/**
+ * 커뮤니티 밖 API 용 — 기록 주인 id 를 스스로 읽는다(없으면 연결로만 센다).
+ * 횟수 기록 표가 잠깐 안 되면 막지 않고 통과시킨다 (식단 기록 같은 기본 기능을 멈추지 않게).
+ */
+export async function limitRequest(request: NextRequest, action: RateAction): Promise<NextResponse | null> {
+  try {
+    const actor = (await getActorId()) || "anon";
+    return await rateLimit(createServiceRoleClient(), request, actor, action);
+  } catch (e) {
+    console.error("횟수 제한을 확인하지 못했어요 — 통과시켜요:", (e as Error).message);
+    return null;
+  }
 }

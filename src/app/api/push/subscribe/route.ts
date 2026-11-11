@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { limitRequest } from "@/lib/rate-limit";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { getActorId, noActor } from "@/lib/actor-server";
 
@@ -13,6 +14,8 @@ function okEndpoint(s: unknown): s is string {
 }
 
 export async function POST(request: NextRequest) {
+  const limited = await limitRequest(request, "push");
+  if (limited) return limited;
   const actor = await getActorId();
   if (!actor) return noActor();
   const body = await request.json().catch(() => ({}));

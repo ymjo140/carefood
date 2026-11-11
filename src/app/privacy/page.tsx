@@ -9,7 +9,7 @@ export default function PrivacyPage() {
   return (
     <Page width="default">
       <h1 className="text-title font-bold text-ink mb-1">개인정보처리방침</h1>
-      <p className="text-label text-ink-2 mb-8">시행일: 2026년 11월 7일</p>
+      <p className="text-label text-ink-2 mb-8">시행일: 2026년 11월 11일</p>
 
       <div className="flex flex-col gap-8 text-label text-ink-2">
         {/* 1조 */}
@@ -58,6 +58,16 @@ export default function PrivacyPage() {
                 <td className="py-2 pr-3">첫 접속 시</td>
               </tr>
               <tr className="border-b border-line">
+                <td className="py-2 pr-3">이용 횟수 확인</td>
+                <td className="py-2 pr-3">접속 IP를 비밀값과 섞어 원래 값으로 되돌릴 수 없게 만든 값, 이용한 기능 종류와 시각 — 도배·자동 반복을 막는 데만 쓰고 2일 뒤 지웁니다</td>
+                <td className="py-2 pr-3">글쓰기·기록 등 이용 시</td>
+              </tr>
+              <tr className="border-b border-line">
+                <td className="py-2 pr-3">오류 기록</td>
+                <td className="py-2 pr-3">오류가 난 화면 주소, 오류 내용, 브라우저 종류 — 기기 식별자는 붙이지 않고 30일 뒤 지웁니다</td>
+                <td className="py-2 pr-3">오류가 났을 때</td>
+              </tr>
+              <tr className="border-b border-line">
                 <td className="py-2 pr-3">구매 링크 이용</td>
                 <td className="py-2 pr-3">누른 제품, 판매처, 누른 화면, 시각</td>
                 <td className="py-2 pr-3">판매처 링크를 누를 때</td>
@@ -77,54 +87,54 @@ export default function PrivacyPage() {
               <tr className="border-b border-line-strong">
                 <th className="text-left py-2 pr-3 font-bold text-ink">항목</th>
                 <th className="text-left py-2 pr-3 font-bold text-ink">목적</th>
-                <th className="text-left py-2 pr-3 font-bold text-ink">필수 여부</th>
+                <th className="text-left py-2 pr-3 font-bold text-ink whitespace-nowrap">필수 여부</th>
               </tr>
             </thead>
             <tbody>
               <tr className="border-b border-line">
                 <td className="py-2 pr-3">건강 목표 (체중관리, 장건강 등)</td>
                 <td className="py-2 pr-3">맞춤 식품 매칭</td>
-                <td className="py-2 pr-3">필수</td>
+                <td className="py-2 pr-3 whitespace-nowrap">필수</td>
               </tr>
               <tr className="border-b border-line">
                 <td className="py-2 pr-3">질환 관심 (당뇨·혈압·신장)</td>
                 <td className="py-2 pr-3">성분 기준 식품 필터링</td>
-                <td className="py-2 pr-3">선택</td>
+                <td className="py-2 pr-3 whitespace-nowrap">선택</td>
               </tr>
               <tr className="border-b border-line">
                 <td className="py-2 pr-3">성별, 출생연도, 키, 체중</td>
                 <td className="py-2 pr-3">BMI·영양 분석</td>
-                <td className="py-2 pr-3">선택</td>
+                <td className="py-2 pr-3 whitespace-nowrap">선택</td>
               </tr>
               <tr className="border-b border-line">
                 <td className="py-2 pr-3">알레르기 정보</td>
                 <td className="py-2 pr-3">알레르기 유발 식품 필터링</td>
-                <td className="py-2 pr-3">선택</td>
+                <td className="py-2 pr-3 whitespace-nowrap">선택</td>
               </tr>
               <tr className="border-b border-line">
                 <td className="py-2 pr-3">식사 패턴, 맛 선호도</td>
                 <td className="py-2 pr-3">개인화 추천 정확도 향상</td>
-                <td className="py-2 pr-3">선택</td>
+                <td className="py-2 pr-3 whitespace-nowrap">선택</td>
               </tr>
               <tr className="border-b border-line">
                 <td className="py-2 pr-3">커뮤니티 글·답글·사진, 커뮤니티 이름</td>
                 <td className="py-2 pr-3">커뮤니티 이용 (공개). 사진은 위치 등 촬영 정보를 지운 뒤 저장합니다. 건강 관심사·목표는 글에 붙이지 않습니다</td>
-                <td className="py-2 pr-3">선택</td>
+                <td className="py-2 pr-3 whitespace-nowrap">선택</td>
               </tr>
               <tr className="border-b border-line">
                 <td className="py-2 pr-3">신고·숨기기·차단 기록</td>
                 <td className="py-2 pr-3">커뮤니티 운영 (신고한 사람은 다른 이용자에게 알리지 않습니다)</td>
-                <td className="py-2 pr-3">선택</td>
+                <td className="py-2 pr-3 whitespace-nowrap">선택</td>
               </tr>
               <tr className="border-b border-line">
                 <td className="py-2 pr-3">알림을 켠 기기의 푸시 구독 정보(브라우저가 만든 주소·암호 키), 알림 종류 설정, 보낸 알림 기록</td>
                 <td className="py-2 pr-3">이용자가 켠 알림(끼니 기록·주간 요약·커뮤니티 소식·챌린지) 발송. 알림을 끄면 그 기기의 구독 정보를 지웁니다</td>
-                <td className="py-2 pr-3">선택</td>
+                <td className="py-2 pr-3 whitespace-nowrap">선택</td>
               </tr>
               <tr className="border-b border-line">
                 <td className="py-2 pr-3">투표 선택, 챌린지 참여·시작일</td>
                 <td className="py-2 pr-3">투표 결과(비율·참여자 수)와 챌린지 진행 계산. 누가 무엇을 골랐는지, 챌린지 달성 기록은 다른 이용자에게 보이지 않습니다</td>
-                <td className="py-2 pr-3">선택</td>
+                <td className="py-2 pr-3 whitespace-nowrap">선택</td>
               </tr>
             </tbody>
           </table></div>
@@ -157,6 +167,9 @@ export default function PrivacyPage() {
             <li>
               <strong className="text-ink">법정 보존:</strong> 전자상거래법에 따른 거래 기록 5년, 소비자 불만 3년.
             </li>
+            <li>
+              <strong className="text-ink">자동 수집:</strong> 이용 횟수 확인 값은 2일, 오류 기록은 30일 뒤 지웁니다.
+            </li>
           </ul>
         </section>
 
@@ -185,6 +198,50 @@ export default function PrivacyPage() {
             회사는 이때 이용자의 개인정보를 판매처에 넘기지 않습니다. 쿠팡 파트너스 링크는 쿠팡이 자체 쿠키로
             구매 여부를 확인하며, 그 처리는 쿠팡의 개인정보처리방침을 따릅니다.
           </p>
+        </section>
+
+        {/* 6조의2 */}
+        <section>
+          <h2 className="text-body font-bold text-ink mb-2">제6조의2 (개인정보 처리의 위탁과 국외 이전)</h2>
+          <p className="mb-2">회사는 서비스 운영을 위해 아래 업체에 개인정보 처리를 맡기고 있습니다.</p>
+          <div className="overflow-x-auto">
+          <table className="w-full text-caption border-collapse">
+            <thead>
+              <tr className="border-b border-line-strong">
+                <th className="text-left py-2 pr-3 font-bold text-ink whitespace-nowrap">맡은 곳</th>
+                <th className="text-left py-2 pr-3 font-bold text-ink">맡긴 일</th>
+                <th className="text-left py-2 pr-3 font-bold text-ink">보관 위치</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr className="border-b border-line">
+                <td className="py-2 pr-3">Supabase Inc.</td>
+                <td className="py-2 pr-3">데이터베이스, 회원 인증, 커뮤니티 사진 저장</td>
+                <td className="py-2 pr-3">대한민국 (서울 리전)</td>
+              </tr>
+              <tr className="border-b border-line">
+                <td className="py-2 pr-3">Vercel Inc.</td>
+                <td className="py-2 pr-3">웹 서비스 운영(서버 실행은 서울 리전), 접속 기록 처리</td>
+                <td className="py-2 pr-3">대한민국·미국</td>
+              </tr>
+              <tr className="border-b border-line">
+                <td className="py-2 pr-3">이용자 브라우저의 푸시 서비스 (Google·Apple·Mozilla 등)</td>
+                <td className="py-2 pr-3">이용자가 켠 알림 전달</td>
+                <td className="py-2 pr-3">각 회사의 국외 서버</td>
+              </tr>
+            </tbody>
+          </table></div>
+          <h3 className="text-label font-bold text-ink mt-4 mb-1">국외 이전 (개인정보보호법 제28조의8)</h3>
+          <ul className="list-disc pl-5 flex flex-col gap-1">
+            <li>
+              <strong className="text-ink">Vercel Inc. (미국)</strong> — 이전 항목: 접속 IP, 요청한 주소, 접속 시각 · 이전 시점과 방법: 서비스를 이용할 때 네트워크로 ·
+              목적: 서비스 운영과 장애 대응 · 보유 기간: Vercel의 로그 보관 기간 · 거부하려면 서비스 이용을 멈추면 되며, 거부하면 서비스를 이용할 수 없습니다.
+            </li>
+            <li>
+              <strong className="text-ink">브라우저 푸시 서비스 (미국 등)</strong> — 이전 항목: 푸시 구독 주소, 알림 문구 · 이전 시점과 방법: 알림을 보낼 때 네트워크로 ·
+              목적: 알림 전달 · 보유 기간: 전달이 끝날 때까지 · 거부하려면 마이페이지 › 알림 설정에서 알림을 끄면 됩니다.
+            </li>
+          </ul>
         </section>
 
         {/* 7조 */}

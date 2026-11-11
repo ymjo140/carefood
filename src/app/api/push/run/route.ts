@@ -7,8 +7,11 @@ import { addDays, daysBetween, kstHour, mondayOf, todayKst, weekday } from "@/li
 import { buildNotifications } from "@/lib/notifications";
 
 /**
- * POST /api/push/run — 보낼 때가 된 알림을 보낸다. GitHub Actions(.github/workflows/push-reminders.yml)가 30분마다 부른다.
- * 비밀값 없이 GitHub 이 발급한 OIDC 토큰(이 저장소 main 의 그 워크플로)인지 확인한다. 관리자는 직접 불러 볼 수 있다(?dry=1 은 보내지 않고 세기만).
+ * POST /api/push/run — 보낼 때가 된 알림을 보낸다. Supabase 예약 작업(pg_cron + pg_net, 30분마다)이 부른다.
+ *   GitHub Actions 예약은 실제로 4~6시간 간격으로만 돌아 끼니 알림에 쓸 수 없었다 (2026-11-11 확인) — 수동 실행용으로만 남긴다.
+ * 누가 부를 수 있나: x-cron-secret 헤더가 Supabase Vault 의 push_cron_secret 과 같을 때(예약 작업 — 비밀값은 DB 밖으로 나오지 않고
+ *   cron_secret_ok() 로 맞는지만 묻는다) ·
+ *   GitHub OIDC 토큰(이 저장소 main 의 push-reminders.yml) · 관리자(?dry=1 은 보내지 않고 세기만).
  *
  * 언제 무엇을 (한국 시간, 밤 10시~아침 8시는 보내지 않음 · 같은 알림은 push_log 로 한 번만)
  *   - 점심 13~15시: 오늘 점심 기록이 없으면 · 저녁 20~22시: 오늘 저녁 기록이 없으면
@@ -21,6 +24,13 @@ const JWKS = createRemoteJWKSet(new URL("https://token.actions.githubusercontent
 const REPO = "ymjo140/carefood";
 
 async function authorized(req: NextRequest): Promise<boolean> {
+  const cron = req.headers.get("x-cron-secret") || "";
+  if (/^[0-9a-f]{64}$/.test(cron)) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (createServiceRoleClient() as any).rpc("cron_secret_ok", { p: cron });
+    if (error) console.error("예약 작업 비밀값을 확인하지 못했어요:", error.message);
+    return data === true;
+  }
   const token = (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
   if (token) {
     try {

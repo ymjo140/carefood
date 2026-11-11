@@ -222,6 +222,8 @@ function inPageChecks(names) {
   for (let node = walker.nextNode(); node && checked < 4000; node = walker.nextNode()) {
     const text = node.textContent;
     if (!/[가-힣]/.test(text) || !node.parentElement || !visible(node.parentElement)) continue;
+    // 데이터로 오는 제품 이름처럼 띄어쓰기 없는 긴 이름은 좁은 칸에서 나뉠 수밖에 없다 — 표시한 곳만 건너뛴다
+    if (node.parentElement.closest("[data-ds-allow-break]")) continue;
     const re = /[가-힣A-Za-z0-9]*[가-힣][가-힣A-Za-z0-9]*/g;
     let m;
     while ((m = re.exec(text)) && checked < 4000) {
