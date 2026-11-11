@@ -57,8 +57,31 @@ if state.get("paused_until") and state["paused_until"] > time.strftime("%Y-%m-%d
     # 일부러 쉬는 것이라 실패로 끝내지 않는다 (실패로 끝내면 GitHub 가 매시간 실패 메일을 보낸다)
     print(f"쉬는 중 ({state['paused_until']} 까지): {state.get('note')} — 이번 실행은 건너뛰어요"); raise SystemExit(0)
 
-QUEUE_SQL = "coupang_queue?select=id,name,manufacturer,serving_size_g,total_weight_g,mall_name,volume,priority&order=priority.asc,id.asc&limit=1000"
-# Supabase 는 한 번에 1,000줄까지만 준다 → 1,000개씩 받아 가며 계속 (처리한 제품은 coupang_lookups 에 기록돼 대기열에서 빠진다)
+# 대기열 — 아직 쿠팡에서 찾아보지 않은 제품 (coupang_lookups 에 없는 것)
+# 전에는 coupang_queue 뷰를 우선순위로 정렬해 받았는데, 34만 제품 전체를 가격 뷰와 합쳐 정렬하느라 7초가 넘게 걸려
+# API 제한(8초)에 걸려 500 으로 끝났다 (2026-11-10 부터). 이제 단계마다 가벼운 질의로 id 순서대로 받는다:
+#   0) 컬리 라벨로 확인된 제품  1) 살 수 있거나 한 끼인 제품  2) 나머지
+# coupang_lookups!left(product_id) + coupang_lookups=is.null 은 '기록이 없는 제품'(anti join)이다.
+QCOLS = "id,name,manufacturer,serving_size_g,total_weight_g,coupang_lookups!left(product_id)"
+TIERS = [("살 수 있거나 한 끼", "&or=(is_purchasable.eq.true,is_meal.eq.true)"), ("나머지", "")]
+QSTATE = {"kurly": False, "tier": 0, "last": "00000000-0000-0000-0000-000000000000"}
+
+def kurly_batch():
+    """컬리 라벨로 확인된 제품 중 아직 안 찾은 것 (판매처 이름으로 찾는다)"""
+    labels, last = {}, ""
+    while True:
+        part = rest("GET", "kurly_products?select=matched_product_id,name,volume&verify_status=in.(same,relink)&matched_product_id=not.is.null"
+                    + (f"&matched_product_id=gt.{last}" if last else "") + "&order=matched_product_id.asc&limit=1000") or []
+        for k in part: labels.setdefault(k["matched_product_id"], k)
+        if len(part) < 1000: break
+        last = part[-1]["matched_product_id"]
+    ids, out = list(labels), []
+    for i in range(0, len(ids), 150):
+        for p in rest("GET", f"products?select={QCOLS}&coupang_lookups=is.null&is_active=eq.true&id=in.({','.join(ids[i:i + 150])})") or []:
+            p.pop("coupang_lookups", None)
+            k = labels[p["id"]]
+            p.update({"mall_name": k["name"], "volume": k.get("volume")}); out.append(p)
+    return out
 
 def short_maker(m):
     s = re.sub(r"\(주\)|㈜|주식회사|유한회사|농업회사법인|영농조합법인|\(유\)|[0-9]*\s*공장|본사|지점|센터", " ", m or "")
@@ -94,9 +117,23 @@ found = 0; done = 0; t0 = time.time(); stop = False; out_of_time = False; batch 
 NOW = lambda: time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
 def next_batch():
-    b = rest("GET", QUEUE_SQL) or []
-    print("대기열에서", len(b), "개 받음", flush=True)
-    return b
+    if not QSTATE["kurly"]:
+        QSTATE["kurly"] = True
+        b = kurly_batch()
+        if b:
+            print("대기열(컬리 확인)에서", len(b), "개 받음", flush=True)
+            return b
+    while QSTATE["tier"] < len(TIERS):
+        label, flt = TIERS[QSTATE["tier"]]
+        b = rest("GET", f"products?select={QCOLS}&coupang_lookups=is.null&is_active=eq.true{flt}&id=gt.{QSTATE['last']}&order=id.asc&limit=1000") or []
+        if b:
+            QSTATE["last"] = b[-1]["id"]
+            for p in b: p.pop("coupang_lookups", None)
+            print(f"대기열({label})에서", len(b), "개 받음", flush=True)
+            return b
+        QSTATE["tier"] += 1; QSTATE["last"] = "00000000-0000-0000-0000-000000000000"
+    print("대기열이 비었어요", flush=True)
+    return []
 
 SEEN = set()
 def items():
@@ -117,8 +154,9 @@ def items():
             p = prods.get(l["product_id"])
             if p: yield p, {"recheck": True}
     while not stop:
-        batch = [p for p in next_batch() if p["id"] not in SEEN]
-        if not batch: break
+        raw = next_batch()
+        if not raw: break
+        batch = [p for p in raw if p["id"] not in SEEN]
         for p in batch:
             if stop: return
             SEEN.add(p["id"])
