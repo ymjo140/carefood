@@ -110,8 +110,8 @@ function buildProductQuery(supabase: any, params: ReturnType<typeof parseSearchP
     .from("products")
     .select("*", { count: "exact" })
     .eq("is_active", true)
-    .not("health_score", "is", null)
-    .order(orderBy.column, { ascending: orderBy.ascending });
+    // 건강 점수가 없는 제품(나트륨이 빠진 한 끼 등)도 탐색에는 보인다 — 점수 순이면 맨 뒤로
+    .order(orderBy.column, { ascending: orderBy.ascending, nullsFirst: false });
 
   // 맛 필터
   if (salty >= 1 && salty <= 10) {
