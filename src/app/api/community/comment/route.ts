@@ -3,10 +3,13 @@ import { connection } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { getActorId, noActor } from "@/lib/actor-server";
 import { viewerFilters } from "@/lib/community-safety";
+import { syncCount } from "@/lib/community-counts";
+import { rateLimit } from "@/lib/rate-limit";
+import { ensureNickname } from "@/lib/community-profile";
 
 /**
  * GET    /api/community/comment?post_id= — 답글 목록 (지운 것·신고로 가려진 것·차단한 사람 것 빼고). parent_id 로 한 단계 답글
- * POST   /api/community/comment { post_id, content, parent_id?, author_nickname } — 답글 쓰기
+ * POST   /api/community/comment { post_id, content, parent_id?, author_nickname } — 답글 쓰기 (이름은 서버에 둔 이름, 횟수 제한)
  * DELETE /api/community/comment?id= — 내 답글 지우기
  */
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -46,11 +49,12 @@ export async function POST(request: NextRequest) {
     if (!user_id) return noActor();
     const post_id = body.post_id || body.plan_id;
     const content = typeof body.content === "string" ? body.content.trim().slice(0, 500) : "";
-    const author_nickname = typeof body.author_nickname === "string" && body.author_nickname.trim() ? body.author_nickname.trim().slice(0, 20) : "익명";
     if (!post_id || !content) return NextResponse.json({ error: "post_id, content 필수" }, { status: 400 });
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const sb = createServiceRoleClient() as any;
+    const limited = await rateLimit(sb, request, user_id, "comment");
+    if (limited) return limited;
 
     // 글쓴이가 나를 차단했으면 답글을 달 수 없다
     const { data: post } = await sb.from("community_feed").select("user_id, is_active").eq("id", post_id).maybeSingle();
@@ -66,6 +70,7 @@ export async function POST(request: NextRequest) {
       parent_id = parent.parent_id || parent.id;
     }
 
+    const author_nickname = await ensureNickname(sb, user_id, body.author_nickname);
     const { data: comment, error } = await sb
       .from("community_feed_comments")
       .insert({ user_id, post_id, parent_id, content, author_nickname })
@@ -73,8 +78,8 @@ export async function POST(request: NextRequest) {
       .single();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-    await sb.rpc("increment_feed_count", { p_column: "comment_count", p_id: post_id });
-    return NextResponse.json({ comment: { ...comment, is_mine: true }, ok: true });
+    const comment_count = await syncCount(sb, post_id, "comment_count");
+    return NextResponse.json({ comment: { ...comment, is_mine: true }, comment_count, ok: true });
   } catch {
     return NextResponse.json({ error: "답글을 남기지 못했어요" }, { status: 400 });
   }
@@ -91,6 +96,6 @@ export async function DELETE(request: NextRequest) {
     .eq("id", id).eq("user_id", actor).eq("is_active", true).select("post_id");
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   if (!data?.length) return NextResponse.json({ error: "내 답글만 지울 수 있어요" }, { status: 403 });
-  await sb.rpc("decrement_feed_count", { p_column: "comment_count", p_id: data[0].post_id });
+  try { await syncCount(sb, data[0].post_id, "comment_count"); } catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: 500 }); }
   return NextResponse.json({ ok: true });
 }

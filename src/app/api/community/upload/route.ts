@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import sharp from "sharp";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { getActorId, noActor } from "@/lib/actor-server";
+import { rateLimit } from "@/lib/rate-limit";
 import { IMAGE_BUCKET, imagePaths, removeImages } from "@/lib/community-images";
 
 /**
@@ -34,6 +35,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "사진을 읽지 못했어요" }, { status: 400 });
   }
   if (!file) return NextResponse.json({ error: "사진을 골라 주세요" }, { status: 400 });
+  {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const limited = await rateLimit(createServiceRoleClient() as any, request, actor, "upload");
+    if (limited) return limited;
+  }
   if (file.size > MAX_IN) return NextResponse.json({ error: "10MB 이하 사진만 올릴 수 있어요" }, { status: 413 });
 
   const input = new Uint8Array(await file.arrayBuffer());

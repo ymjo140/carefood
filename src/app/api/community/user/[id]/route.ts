@@ -28,14 +28,15 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   ]);
   for (const r of [posts, plans, followers, following, last, lastC]) if (r.error) return NextResponse.json({ error: r.error.message }, { status: 500 });
 
-  // 이름 — 가장 최근 글·답글의 이름
+  // 이름 — 서버에 둔 이름, 없으면 가장 최근 글·답글의 이름
+  const { data: prof } = await sb.from("community_profiles").select("nickname").eq("actor_id", id).maybeSingle();
   const cands = [...(last.data || []), ...(lastC.data || [])] as { author_nickname: string; created_at: string }[];
   cands.sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
   if (!cands.length) return NextResponse.json({ error: "아직 글이나 답글이 없는 사람이에요" }, { status: 404 });
 
   return NextResponse.json({
     user_id: id,
-    nickname: cands[0].author_nickname || "이름 없음",
+    nickname: prof?.nickname || cands[0].author_nickname || "이름 없음",
     post_count: posts.count || 0,
     plan_count: plans.count || 0,
     follower_count: followers.count || 0,

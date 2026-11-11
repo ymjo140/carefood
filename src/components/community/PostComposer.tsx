@@ -35,9 +35,13 @@ function lastDays(n = 7) {
 
 type Load<T> = { status: "idle" | "loading" | "error" | "done"; items: T[] };
 
-export default function PostComposer({ isOpen, initialAttach, nickname, onClose, onPosted }: {
+/** 기록·식단 리스트에서 '나누기'로 열 때 미리 고를 것 — 그 날짜·끼니의 기록, 또는 그 식단 */
+export type ComposerPreset = { day?: string; meal?: string; planId?: string };
+
+export default function PostComposer({ isOpen, initialAttach, preset, nickname, onClose, onPosted }: {
   isOpen: boolean;
   initialAttach?: Attach | null;
+  preset?: ComposerPreset | null;
   nickname: string;
   onClose: () => void;
   onPosted: () => void;
@@ -138,12 +142,15 @@ export default function PostComposer({ isOpen, initialAttach, nickname, onClose,
 
   // 시트를 열 때 고른 붙이기로 시작
   const [lastOpen, setLastOpen] = useState(false);
+  const [pending, setPending] = useState<ComposerPreset | null>(null);
   if (isOpen !== lastOpen) {
     setLastOpen(isOpen);
     if (isOpen) {
       const d = lastDays();
       setDays(d);
-      setDay(d[0].iso);
+      setDay(preset?.day && d.some((x) => x.iso === preset.day) ? preset.day : d[0].iso);
+      setPending(preset ?? null);
+      setEntries({ status: "idle", items: [] }); // 지난번 연 날짜의 목록으로 미리 고르지 않게
       setAttach(initialAttach === "poll" ? null : initialAttach ?? null);
       if (initialAttach === "poll") setPollOn(true);
     }
@@ -158,6 +165,18 @@ export default function PostComposer({ isOpen, initialAttach, nickname, onClose,
       .catch(() => { if (alive) setEntries({ status: "error", items: [] }); });
     return () => { alive = false; };
   }, [isOpen, attach, day, retry]);
+
+  // 미리 고를 것 — 목록이 오면 한 번만 적용
+  if (pending?.meal && entries.status === "done") {
+    const hit = entries.items.filter((e) => e.meal_type === pending.meal);
+    setPending(null);
+    if (hit.length) { setPicked(hit); setMealType(pending.meal === "supplement" ? "snack" : pending.meal); }
+  }
+  if (pending?.planId && plans.status === "done") {
+    const hit = plans.items.find((x) => x.id === pending.planId);
+    setPending(null);
+    if (hit) { setPlan(hit); setPicked([]); }
+  }
 
   useEffect(() => {
     if (!isOpen || attach !== "plan" || plans.status === "done") return;
@@ -240,7 +259,8 @@ export default function PostComposer({ isOpen, initialAttach, nickname, onClose,
       onClose();
     } catch (e) {
       const known = ["선택지를 서로 다르게 2개 이상 적어 주세요", "투표 질문을 내용에 적어 주세요"];
-      toast.show(e instanceof Error && known.includes(e.message) ? e.message : "올리지 못했어요. 다시 시도해 주세요", { tone: "danger" });
+      const msg = e instanceof Error ? e.message : "";
+      toast.show(known.includes(msg) || msg.startsWith("짧은 시간에") ? msg : "올리지 못했어요. 다시 시도해 주세요", { tone: "danger" }); // 횟수 제한은 언제 다시 하면 되는지까지
     } finally { setPosting(false); }
   };
 

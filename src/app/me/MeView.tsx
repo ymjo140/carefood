@@ -9,6 +9,7 @@ import { logout } from "@/app/auth/actions";
 import { HEALTH_GOAL_LABELS, type HealthGoal } from "@/lib/nutrition";
 import { ALLERGIES, readLocalProfile } from "@/lib/profile-options";
 import { getOrCreateNickname, setNickname, validNickname } from "@/lib/nickname";
+import { nicknameProblem } from "@/lib/nickname-rules";
 
 /**
  * 마이페이지 — 머리 줄 오른쪽 사람 아이콘
@@ -55,6 +56,12 @@ export function MeView() {
     });
     setNick(getOrCreateNickname());
     /* eslint-enable react-hooks/set-state-in-effect */
+    // 커뮤니티에 이미 쓰는 이름이 있으면 그 이름이 기준 (서버에 둔다)
+    let alive = true;
+    fetch("/api/community/me")
+      .then(async (r) => { const d = await r.json(); if (r.ok && alive && d.nickname) { setNickname(d.nickname); setNick(d.nickname); } })
+      .catch(() => {}); // ds-allow: 못 받으면 이 기기 이름을 그대로 보여 준다
+    return () => { alive = false; };
   }, []);
 
   useEffect(() => {
@@ -65,12 +72,23 @@ export function MeView() {
     return () => { alive = false; };
   }, [attempt]);
 
-  const saveNick = () => {
+  const [nickSaving, setNickSaving] = useState(false);
+  const [nickError, setNickError] = useState("");
+  const saveNick = async () => {
     if (!validNickname(nickDraft)) return;
-    setNickname(nickDraft);
-    setNick(nickDraft.trim());
-    setNickOpen(false);
-    toast.show("이름을 바꿨어요. 다음에 쓰는 글부터 이 이름으로 보여요");
+    setNickSaving(true); setNickError("");
+    try {
+      const r = await fetch("/api/community/me", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nickname: nickDraft.trim() }) });
+      const d = await r.json().catch(() => ({}));
+      if (r.status === 400 && d.error) { setNickError(d.error); return; } // 이미 쓰는 이름 등 — 시트에 그대로
+      if (!r.ok) throw new Error(d.error);
+      setNickname(d.nickname);
+      setNick(d.nickname);
+      setNickOpen(false);
+      toast.show("이름을 바꿨어요. 예전에 쓴 글에도 이 이름으로 보여요");
+    } catch {
+      toast.show("이름을 바꾸지 못했어요. 다시 시도해 주세요", { tone: "danger" });
+    } finally { setNickSaving(false); }
   };
 
   const doLogout = () => startTransition(async () => {
@@ -182,16 +200,16 @@ export function MeView() {
       )}
 
       <Sheet open={nickOpen} onClose={() => setNickOpen(false)} title="이름 바꾸기"
-        description="커뮤니티에 보이는 이름이에요. 이미 쓴 글의 이름은 그대로예요"
+        description="커뮤니티에 보이는 이름이에요. 이미 쓴 글에도 바뀐 이름으로 보여요"
         footer={
           <>
             <Button variant="secondary" block onClick={() => setNickOpen(false)}>취소</Button>
-            <Button block disabled={!validNickname(nickDraft)} onClick={saveNick}>저장하기</Button>
+            <Button block disabled={!validNickname(nickDraft)} loading={nickSaving} onClick={saveNick}>저장하기</Button>
           </>
         }>
         <Field label="이름" hint="2~12자 · 한글·영문·숫자·밑줄"
-          error={nickDraft && !validNickname(nickDraft) ? "2~12자의 한글·영문·숫자·밑줄만 쓸 수 있어요" : undefined}>
-          <Input value={nickDraft} name="nickname" maxLength={12} onChange={(e) => setNickDraft(e.target.value)} />
+          error={(nickDraft && nicknameProblem(nickDraft)) || nickError || undefined}>
+          <Input value={nickDraft} name="nickname" maxLength={12} onChange={(e) => { setNickDraft(e.target.value); setNickError(""); }} />
         </Field>
       </Sheet>
     </>

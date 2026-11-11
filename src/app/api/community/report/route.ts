@@ -2,10 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { getActorId, noActor } from "@/lib/actor-server";
 import { REPORT_HIDE_AT, REPORT_REASONS } from "@/lib/community-safety";
+import { rateLimit } from "@/lib/rate-limit";
 
 /**
  * POST /api/community/report — 글이나 답글 신고 { post_id | comment_id, reason, detail? }
- * 같은 사람이 같은 걸 두 번 신고하면 already. 신고가 REPORT_HIDE_AT 건이 되면 모두에게서 가린다 (관리자 검토 전까지)
+ * 같은 사람이 같은 걸 두 번 신고하면 already. 로그인한 사람의 신고가 REPORT_HIDE_AT 건이 되면 모두에게서 가린다 (관리자 검토 전까지)
+ * 로그인 안 한 신고는 관리자 신고 목록에만 쌓인다 — 쿠키를 지우면 새 사람이 되어 한 사람이 혼자 남의 글을 가릴 수 있었다.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -21,6 +23,8 @@ export async function POST(request: NextRequest) {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const sb = createServiceRoleClient() as any;
+    const limited = await rateLimit(sb, request, actor, "report");
+    if (limited) return limited;
     const table = post_id ? "community_feed" : "community_feed_comments";
     const id = post_id || comment_id;
 
@@ -36,10 +40,17 @@ export async function POST(request: NextRequest) {
     }
 
     const col = post_id ? "post_id" : "comment_id";
-    const { count, error: cErr } = await sb.from("community_reports").select("id", { count: "exact", head: true }).eq(col, id).eq("status", "pending");
+    const { data: pending, error: cErr } = await sb.from("community_reports").select("reporter_id").eq(col, id).eq("status", "pending").limit(500);
     if (cErr) return NextResponse.json({ error: cErr.message }, { status: 500 });
-    const hidden = (count || 0) >= REPORT_HIDE_AT;
-    const { error: uErr } = await sb.from(table).update({ report_count: count || 0, ...(hidden ? { hidden_by_reports: true } : {}) }).eq("id", id);
+    const reporters = [...new Set((pending || []).map((r: { reporter_id: string }) => r.reporter_id))];
+    let signedIn = 0;
+    if (reporters.length) {
+      const { count: n, error: aErr } = await sb.from("account_links").select("actor_id", { count: "exact", head: true }).in("actor_id", reporters);
+      if (aErr) return NextResponse.json({ error: aErr.message }, { status: 500 });
+      signedIn = n || 0;
+    }
+    const hidden = signedIn >= REPORT_HIDE_AT;
+    const { error: uErr } = await sb.from(table).update({ report_count: reporters.length, ...(hidden ? { hidden_by_reports: true } : {}) }).eq("id", id);
     if (uErr) return NextResponse.json({ error: uErr.message }, { status: 500 });
 
     return NextResponse.json({ ok: true, hidden });

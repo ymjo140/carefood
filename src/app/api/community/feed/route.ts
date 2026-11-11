@@ -6,6 +6,8 @@ import { isTopic } from "@/lib/community-topics";
 import { viewerFilters } from "@/lib/community-safety";
 import { imagePrefix, removeImages } from "@/lib/community-images";
 import { cleanPoll, withPolls } from "@/lib/community-poll";
+import { rateLimit } from "@/lib/rate-limit";
+import { ensureNickname } from "@/lib/community-profile";
 
 
 /**
@@ -30,6 +32,17 @@ async function productNames(sb: any, posts: { product_ids?: string[] | null }[])
   if (!ids.length) return new Map<string, string>();
   const { data } = await sb.from("products").select("id, name").in("id", ids);
   return new Map<string, string>((data || []).map((p: { id: string; name: string }) => [p.id, p.name]));
+}
+
+/** 추천 탭이 줄 세우는 최근 글 수 */
+const RECOMMEND_WINDOW = 300;
+
+/** 추천 점수 — 반응(따라하기 3 · 좋아요 2 · 답글 1) + 1 을 글이 된 시간으로 나눈다. 반응이 없어도 새 글은 위로 */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function rankScore(p: any): number {
+  const score = 1 + (p.like_count || 0) * 2 + (p.copy_count || 0) * 3 + (p.comment_count || 0);
+  const ageH = (Date.now() - new Date(p.created_at).getTime()) / 3_600_000;
+  return score / Math.max(1, Math.log2(ageH + 2));
 }
 
 export async function GET(request: NextRequest) {
@@ -125,18 +138,27 @@ export async function GET(request: NextRequest) {
     query = query.eq("user_id", author).order("created_at", { ascending: false });
     if (searchParams.get("only") === "plan") query = query.not("meal_data->plan", "is", null);
   } else {
-    // 추천 탭: 인기 + 최신 가중
+    // 추천 탭: 최근 글 RECOMMEND_WINDOW 개를 모두 점수로 줄 세운 뒤 쪽을 나눈다
+    //   (전에는 최신 20개를 받아 그 안에서만 다시 줄 세워, 2쪽의 더 인기 있는 글이 위로 못 왔다)
     query = query.order("created_at", { ascending: false });
   }
 
   const from = (page - 1) * limit;
-  query = query.range(from, from + limit - 1);
+  const recommend = !["following", "topic", "mine", "user"].includes(tab) || (tab === "topic" && !isTopic(topic));
+  query = recommend ? query.range(0, RECOMMEND_WINDOW - 1) : query.range(from, from + limit - 1);
 
-  const { data: posts, count, error } = await query;
+  const { data: fetched, count: fetchedCount, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  let posts = fetched || [];
+  let count = fetchedCount || 0;
+  if (recommend) {
+    const ranked = [...posts].sort((a, b) => rankScore(b) - rankScore(a));
+    count = ranked.length;
+    posts = ranked.slice(from, from + limit);
+  }
 
   // 좋아요 상태 + 댓글 미리보기 병렬 로드
-  const postIds = (posts || []).map((p: { id: string }) => p.id);
+  const postIds = posts.map((p: { id: string }) => p.id);
   let likedIds = new Set<string>();
   let bookmarkedIds = new Set<string>();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -181,8 +203,8 @@ export async function GET(request: NextRequest) {
   }
 
   // 추천탭: 인기도 기반 재정렬
-  const names = await productNames(sb, posts || []);
-  const result = (posts || []).map((p: { id: string; user_id: string; product_ids?: string[] | null }) => ({
+  const names = await productNames(sb, posts);
+  const result = posts.map((p: { id: string; user_id: string; product_ids?: string[] | null }) => ({
     ...publicPost(p),
     products: (p.product_ids || []).filter((id) => names.has(id)).map((id) => ({ id, name: names.get(id) })),
     is_mine: !!userId && p.user_id === userId,
@@ -191,28 +213,14 @@ export async function GET(request: NextRequest) {
     preview_comments: commentMap[p.id] || [],
   }));
 
-  if (tab === "recommend") {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    result.sort((a: any, b: any) => {
-      const scoreA = (a.like_count || 0) * 2 + (a.copy_count || 0) * 3 + (a.comment_count || 0);
-      const scoreB = (b.like_count || 0) * 2 + (b.copy_count || 0) * 3 + (b.comment_count || 0);
-      // 최신 글에 약간의 부스트
-      const ageA = (Date.now() - new Date(a.created_at).getTime()) / (3600 * 1000);
-      const ageB = (Date.now() - new Date(b.created_at).getTime()) / (3600 * 1000);
-      const finalA = scoreA / Math.max(1, Math.log2(ageA + 2));
-      const finalB = scoreB / Math.max(1, Math.log2(ageB + 2));
-      return finalB - finalA;
-    });
-  }
-
   let polled;
   try { polled = await withPolls(sb, result, userId); } catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: 500 }); }
 
   return NextResponse.json({
     posts: polled,
-    total: count || 0,
+    total: count,
     page,
-    hasMore: from + limit < (count || 0),
+    hasMore: from + limit < count,
   });
 }
 
@@ -286,10 +294,13 @@ export async function POST(request: NextRequest) {
     if (poll && !content) return NextResponse.json({ error: "투표 질문을 내용에 적어 주세요" }, { status: 400 });
     const product_ids = Array.isArray(body.product_ids) ? body.product_ids.filter((id: unknown) => typeof id === "string" && UUID.test(id)).slice(0, 3) : [];
     const tags = isTopic(topic) ? [topic] : [];
-    const author_nickname = typeof body.author_nickname === "string" && body.author_nickname.trim() ? body.author_nickname.trim().slice(0, 20) : "익명";
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const sb = createServiceRoleClient() as any;
+    const limited = await rateLimit(sb, request, user_id, "post");
+    if (limited) return limited;
+    // 이름은 서버에 둔 이 사람의 이름 (보낸 이름은 처음 한 번만 — lib/community-profile.ts)
+    const author_nickname = await ensureNickname(sb, user_id, body.author_nickname);
 
     const { data, error } = await sb
       .from("community_feed")

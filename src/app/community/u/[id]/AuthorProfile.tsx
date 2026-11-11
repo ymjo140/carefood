@@ -49,7 +49,7 @@ export function AuthorProfile() {
       const r = await fetch(`/api/community/feed?${q}`);
       const d = await r.json();
       if (!r.ok) throw new Error(d.error);
-      setPosts((s) => ({ status: "done", items: append ? [...s.items, ...(d.posts || [])] : d.posts || [], hasMore: !!d.hasMore, page }));
+      setPosts((s) => ({ status: "done", items: append ? [...s.items, ...((d.posts || []) as FeedPostData[]).filter((p) => !s.items.some((q) => q.id === p.id))] : d.posts || [], hasMore: !!d.hasMore, page }));
     } catch {
       setPosts((s) => ({ ...s, status: "error" }));
     }
@@ -91,6 +91,8 @@ export function AuthorProfile() {
     try {
       const r = await fetch("/api/community/like", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ post_id: postId }) });
       if (!r.ok) throw new Error(String(r.status));
+      const d = await r.json().catch(() => null); // ds-allow: 숫자 맞추기는 보조 — 좋아요는 이미 반영됐다
+      if (d && typeof d.like_count === "number") setPosts((s) => ({ ...s, items: s.items.map((p) => (p.id === postId ? { ...p, is_liked: !!d.liked, like_count: d.like_count } : p)) }));
     } catch {
       setPosts((s) => ({ ...s, items: s.items.map(flip) }));
       toast.show("좋아요를 남기지 못했어요. 다시 시도해 주세요", { tone: "danger" });

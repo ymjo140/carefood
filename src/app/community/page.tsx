@@ -4,11 +4,11 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import ThreadCard, { type FeedPostData } from "@/components/community/ThreadCard";
-import PostComposer, { type Attach } from "@/components/community/PostComposer";
+import PostComposer, { type Attach, type ComposerPreset } from "@/components/community/PostComposer";
 import ChallengeEntry from "@/components/community/ChallengeEntry";
 import { Avatar, Button, Chip, ChipRow, EmptyState, Icon, Page, PageHeader, SkeletonPost, Spinner, Tabs, useToast } from "@/components/ui";
 import { COMMUNITY_TOPICS } from "@/lib/community-topics";
-import { getOrCreateNickname } from "@/lib/nickname";
+import { getOrCreateNickname, setNickname } from "@/lib/nickname";
 
 /**
  * 피드 (쓰레드형) — 맨 위 바로 쓰기 줄 → 챌린지 한 줄 → 보기(추천·팔로잉·모임·내 글) → 줄로 나눈 글 목록
@@ -32,7 +32,7 @@ export default function CommunityPage() {
   const [loadError, setLoadError] = useState(false);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
-  const [composer, setComposer] = useState<{ open: boolean; attach: Attach | null }>({ open: false, attach: null });
+  const [composer, setComposer] = useState<{ open: boolean; attach: Attach | null; preset?: ComposerPreset | null }>({ open: false, attach: null });
   const [nickname, setNick] = useState("");
   const toast = useToast();
   const sentinelRef = useRef<HTMLDivElement>(null);
@@ -41,8 +41,19 @@ export default function CommunityPage() {
   useEffect(() => {
     /* eslint-disable react-hooks/set-state-in-effect -- 이 기기 저장소·주소는 화면을 그린 뒤에 읽는다 */
     setNick(getOrCreateNickname());
-    const t = new URLSearchParams(window.location.search).get("tab");
+    // 서버에 둔 이름이 기준 — 다른 기기에서 바꿨을 수 있다
+    fetch("/api/community/me")
+      .then(async (r) => { const d = await r.json(); if (r.ok && d.nickname) { setNickname(d.nickname); setNick(d.nickname); } })
+      .catch(() => {}); // ds-allow: 못 받으면 이 기기 이름으로 보여 준다 (글을 올릴 때는 서버 이름이 붙는다)
+    const qs = new URLSearchParams(window.location.search);
+    const t = qs.get("tab");
     if (t === "mine" || t === "following" || t === "topic") setTab(t);
+    // 기록·식단 리스트의 '나누기' — ?compose=meal&date=&meal= 또는 ?compose=plan&plan=
+    const compose = qs.get("compose");
+    if (compose === "meal" || compose === "plan") {
+      setComposer({ open: true, attach: compose, preset: { day: qs.get("date") || undefined, meal: qs.get("meal") || undefined, planId: qs.get("plan") || undefined } });
+      window.history.replaceState(null, "", "/community"); // 새로 고침해도 다시 열리지 않게
+    }
     /* eslint-enable react-hooks/set-state-in-effect */
   }, []);
 
@@ -57,7 +68,8 @@ export default function CommunityPage() {
       if (!res.ok) throw new Error(String(res.status));
       const data = await res.json();
       const incoming: FeedPostData[] = data.posts || [];
-      setPosts((prev) => (append ? [...prev, ...incoming] : incoming));
+      // 쪽을 나눈 사이 새 글이 올라오면 같은 글이 다시 올 수 있다 — 이미 있는 글은 빼고 붙인다
+      setPosts((prev) => (append ? [...prev, ...incoming.filter((p) => !prev.some((q) => q.id === p.id))] : incoming));
       setHasMore(data.hasMore ?? false);
       setPage(pg);
     } catch {
@@ -88,6 +100,9 @@ export default function CommunityPage() {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ post_id: postId }),
       });
       if (!res.ok) throw new Error(String(res.status));
+      const d = await res.json().catch(() => null); // ds-allow: 숫자 맞추기는 보조 — 좋아요는 이미 반영됐다
+      // 서버가 센 실제 숫자로 맞춘다 (빠르게 두 번 누른 경우 등)
+      if (d && typeof d.like_count === "number") setPosts((prev) => prev.map((p) => (p.id === postId ? { ...p, is_liked: !!d.liked, like_count: d.like_count } : p)));
     } catch {
       setPosts((prev) => prev.map(flip)); // 되돌림
       toast.show("좋아요를 남기지 못했어요. 다시 시도해 주세요", { tone: "danger" });
@@ -192,6 +207,7 @@ export default function CommunityPage() {
       <PostComposer
         isOpen={composer.open}
         initialAttach={composer.attach}
+        preset={composer.preset}
         nickname={nickname || "익명"}
         onClose={() => setComposer({ open: false, attach: null })}
         onPosted={() => { if (tab !== "recommend" && tab !== "mine") setTab("recommend"); else fetchFeed(1, false); }}

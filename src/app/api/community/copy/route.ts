@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { getActorId, noActor } from "@/lib/actor-server";
+import { rateLimit } from "@/lib/rate-limit";
 
 /**
  * POST /api/community/copy — "따라하기": 커뮤니티 식단을 내 식단 리스트(saved_meal_plans)에 저장
@@ -14,6 +15,8 @@ export async function POST(request: NextRequest) {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const sb = createServiceRoleClient() as any;
+    const limited = await rateLimit(sb, request, user_id, "copy");
+    if (limited) return limited;
 
     // 게시글의 meal_data + 작성자 정보 로드
     const { data: post } = await sb

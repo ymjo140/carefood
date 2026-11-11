@@ -4,12 +4,9 @@
  * 커뮤니티 이름(닉네임) — 이 기기 프로필(carefood_profile.nickname)에 둔다.
  * 처음엔 '건강한사자12' 같은 이름을 지어 주고, 마이페이지에서 바꿀 수 있다.
  */
-const ADJ = ["건강한", "활기찬", "든든한", "상쾌한", "깔끔한", "씩씩한", "발랄한", "포근한", "산뜻한", "튼튼한"];
-const ANIMAL = ["사자", "호랑이", "토끼", "곰", "여우", "다람쥐", "펭귄", "고래", "부엉이", "사슴"];
+import { makeNickname, validNickname } from "./nickname-rules";
 
-function makeNickname() {
-  return `${ADJ[Math.floor(Math.random() * ADJ.length)]}${ANIMAL[Math.floor(Math.random() * ANIMAL.length)]}${Math.floor(Math.random() * 100)}`;
-}
+export { validNickname };
 
 function readProfile(): Record<string, unknown> {
   try {
@@ -34,10 +31,7 @@ export function getOrCreateNickname(): string {
   return nick;
 }
 
-/** 2~12자, 글자·숫자·밑줄만 */
-export function validNickname(v: string) {
-  return /^[가-힣a-zA-Z0-9_]{2,12}$/.test(v.trim());
-}
+
 
 export function setNickname(nick: string) {
   writeProfile({ ...readProfile(), nickname: nick.trim() });

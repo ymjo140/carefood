@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import Link from "next/link";
 import {
-  Badge, Button, Card, Chip, ConfirmSheet, EmptyState, Field, Icon, IconButton, Input, Kcal, LinkButton, ListRow, MacroGrid, MealSlot, Page, PageHeader, PageLoading, SectionHeader, Spinner, Tabs, buttonClass, cn, useToast, SkeletonList, QuickRating, Notice, TextLink,
+  Badge, Button, Card, Chip, ConfirmSheet, IconLink, EmptyState, Field, Icon, IconButton, Input, Kcal, LinkButton, ListRow, MacroGrid, MealSlot, Page, PageHeader, PageLoading, SectionHeader, Spinner, Tabs, buttonClass, cn, useToast, SkeletonList, QuickRating, Notice, TextLink,
 } from "@/components/ui";
 import { getClientActorId } from "@/lib/actor-client";
 import { addDays, kstHour, monthDay, todayKst, weekday } from "@/lib/day";
@@ -989,6 +989,10 @@ export default function DiaryPage() {
                       <div className="flex items-center gap-2">
                         {mealAlert && <Badge tone="caution">{mealAlert.label}</Badge>}
                         {mealCal > 0 && <Kcal value={Math.round(mealCal)} className="text-label" />}
+                        {entries.length > 0 && !isAdding && (
+                          <IconLink icon="share" label={`${meal.label} 피드에 나누기`} className="size-9"
+                            href={`/community?compose=meal&date=${date}&meal=${meal.key}`} />
+                        )}
                         <IconButton
                           icon={isAdding ? "close" : "plus"}
                           label={isAdding ? "추가 닫기" : `${meal.label}에 음식 추가하기`}

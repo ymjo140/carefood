@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { syncCount } from "@/lib/community-counts";
 import { connection } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { adminOnly } from "@/lib/actor-server";
@@ -70,7 +71,7 @@ export async function POST(request: NextRequest) {
   const { data: target, error: tErr } = await sb.from(table).update(update).eq("id", id).select(kind === "post" ? "id" : "id, post_id, is_active").single();
   if (tErr) return NextResponse.json({ error: tErr.message }, { status: 500 });
   if (action === "remove" && kind === "comment" && target?.post_id) {
-    await sb.rpc("decrement_feed_count", { p_column: "comment_count", p_id: target.post_id });
+    try { await syncCount(sb, target.post_id, "comment_count"); } catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: 500 }); }
   }
   const { error } = await sb.from("community_reports").update({ status: action === "keep" ? "kept" : "removed", reviewed_at: new Date().toISOString() })
     .eq(col, id).eq("status", "pending");

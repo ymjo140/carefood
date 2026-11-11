@@ -1076,6 +1076,9 @@ export default function WeeklyBoxPage() {
                     {single
                       ? <Button size="sm" variant="ghost" icon="calendar" onClick={() => setPlaceTarget(p)}>요일에 넣기</Button>
                       : <Button size="sm" variant="ghost" icon="refresh" onClick={() => loadPlan(p.id)}>불러오기</Button>}
+                    {p.source !== "community_copy" && (
+                      <LinkButton size="sm" variant="ghost" icon="share" href={`/community?compose=plan&plan=${p.id}`}>나누기</LinkButton>
+                    )}
                     <Button size="sm" variant="ghost" icon="trash" className="ml-auto" onClick={() => setDeleteTarget(p)}>삭제하기</Button>
                   </CardActions>
                 </Card>

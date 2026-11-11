@@ -72,6 +72,8 @@ export default function PostDetail() {
     try {
       const res = await fetch("/api/community/like", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ post_id: id }) });
       if (!res.ok) throw new Error(String(res.status));
+      const d = await res.json().catch(() => null); // ds-allow: 숫자 맞추기는 보조 — 좋아요는 이미 반영됐다
+      if (d && typeof d.like_count === "number") setPost((p) => (p ? { ...p, is_liked: !!d.liked, like_count: d.like_count } : p));
     } catch {
       setPost(flip);
       toast.show("좋아요를 남기지 못했어요. 다시 시도해 주세요", { tone: "danger" });
@@ -115,14 +117,15 @@ export default function PostDetail() {
         body: JSON.stringify({ post_id: id, content: commentText.trim(), parent_id: replyTo?.id ?? null, author_nickname: getOrCreateNickname() }),
       });
       const data = await res.json();
-      if (!res.ok || !data.comment) throw new Error(String(res.status));
+      if (!res.ok || !data.comment) throw new Error(res.status === 429 && data.error ? data.error : String(res.status));
       setComments((prev) => [...prev, data.comment]);
-      setPost((p) => (p ? { ...p, comment_count: (p.comment_count || 0) + 1 } : p));
+      setPost((p) => (p ? { ...p, comment_count: typeof data.comment_count === "number" ? data.comment_count : (p.comment_count || 0) + 1 } : p));
       setCommentText("");
       setReplyTo(null);
       toast.show("답글을 남겼어요");
-    } catch {
-      toast.show("답글을 남기지 못했어요. 다시 시도해 주세요", { tone: "danger" });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "";
+      toast.show(msg.startsWith("짧은 시간에") ? msg : "답글을 남기지 못했어요. 다시 시도해 주세요", { tone: "danger" });
     } finally { setSending(false); }
   };
 
