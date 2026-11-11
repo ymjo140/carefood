@@ -173,7 +173,9 @@ export function scoreProduct(
   const pro100 = (p.protein_g as number) || 0;
   const sug100 = (p.sugar_g as number) ?? 99;
   // 나트륨을 모르면 null — 0 으로 치면 '저나트륨' 보너스를 받아 버린다
-  const sod100: number | null = p.sodium_mg == null ? null : Number(p.sodium_mg);
+  // 한 끼·반찬인데 0 이면 빠진 값으로 본다 (scripts/health_score.py 와 같게)
+  const sodRaw = p.sodium_mg == null ? null : Number(p.sodium_mg);
+  const sod100: number | null = sodRaw === 0 && (p.meal_role === "meal" || p.meal_role === "side") ? null : sodRaw;
   const fib100 = (p.fiber_g as number) || 0;
   // per-serving 값 (식사 충족 비교용)
   const calories = Math.round(cal100 * servingRatio * 10) / 10;
@@ -182,21 +184,31 @@ export function scoreProduct(
   const sodiumMg: number | null = sod100 === null ? null : Math.round(sod100 * servingRatio * 10) / 10;
   const fiberG = Math.round(fib100 * servingRatio * 10) / 10;
 
-  // 식품 특성 기반 보너스 (per-100g: "이 식품이 고단백인가?")
-  if (profile.goals.includes("muscle") && pro100 >= 20) {
-    relevance *= 1.15;
-    if (!reasons.includes("고단백")) { reasons.push("고단백"); reasonDetails.push(`단백질 ${proteinG}g/1회 — 근력 강화에 적합`); }
+  // 목표별 가중 — 100g 당 성분으로 ×0.8~1.2 (직선). 1회 제공량은 믿기 어려워 밀도로 본다.
+  //   전에는 '한 끼 기준 이하면 ×1.1' 하나뿐이라 거의 모든 제품이 받았고, 균형·혈압·혈당 목표의 추천이 같았다 (scripts/eval_recommend.mjs)
+  const lerp = (v: number, good: number, bad: number) => {
+    const t = Math.max(0, Math.min(1, (v - good) / (bad - good)));
+    return 1.2 - 0.4 * t;
+  };
+  if (profile.goals.includes("muscle")) {
+    relevance *= lerp(pro100, 20, 4);
+    if (pro100 >= 15 && !reasons.includes("고단백")) { reasons.push("고단백"); reasonDetails.push(`단백질 ${proteinG}g/1회`); }
   }
-  // perMeal 비교 (per-serving: "이 한끼가 칼로리 예산에 맞는가?")
-  if (profile.goals.includes("weight_loss") && calories > 0 && calories <= profile.perMeal.caloriesMax) {
-    relevance *= 1.1;
-    if (!reasons.includes("칼로리 적정")) { reasons.push("칼로리 적정"); reasonDetails.push(`${calories}kcal/1회 — 끼니당 ${profile.perMeal.caloriesMax}kcal 이하`); }
+  if (profile.goals.includes("weight_loss")) {
+    relevance *= cal100 > 0 ? lerp(cal100, 90, 250) : 1;
+    if (calories > 0 && calories <= profile.perMeal.caloriesMax && !reasons.includes("칼로리 적정")) {
+      reasons.push("칼로리 적정"); reasonDetails.push(`${calories}kcal/1회 · 끼니당 ${profile.perMeal.caloriesMax}kcal 이하`);
+    }
   }
-  if (profile.goals.includes("diabetes") && sugarG <= profile.perMeal.maxSugarG) {
-    relevance *= 1.1;
+  if (profile.goals.includes("diabetes")) {
+    relevance *= sug100 < 99 ? lerp(sug100, 1, 12) : 0.9;
+    if (sugarG <= 5 && !reasons.includes("당류 적음")) { reasons.push("당류 적음"); reasonDetails.push(`당류 ${sugarG}g/1회`); }
   }
-  if (profile.goals.includes("blood_pressure") && sodiumMg !== null && sodiumMg <= profile.perMeal.maxSodiumMg) {
-    relevance *= 1.1;
+  if (profile.goals.includes("blood_pressure") || profile.goals.includes("kidney")) {
+    relevance *= sod100 !== null ? lerp(sod100, 120, 800) : 0.9;
+    if (sodiumMg !== null && sodiumMg <= profile.perMeal.maxSodiumMg / 2 && !reasons.includes("나트륨 적음")) {
+      reasons.push("나트륨 적음"); reasonDetails.push(`나트륨 ${Math.round(sodiumMg)}mg/1회 · 한 끼 기준의 절반 이하`);
+    }
   }
 
   // perMeal 적합성 보너스 (per-serving 기준)

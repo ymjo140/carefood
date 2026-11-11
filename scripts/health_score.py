@@ -18,7 +18,7 @@ NS → 0~100: 등급 구간을 점수 구간에 그대로 옮긴다 (구간 안�
 화면의 80 이상 '좋음'·60 이상 '보통'과 맞물린다.
 
 값이 없을 때
-  열량이 없으면 점수도 없다(None).
+  열량이 없으면 점수도 없다(None). 한 끼·반찬인데 나트륨이 비었거나 0 이어도 없다(빠진 값을 0 으로 치지 않는다).
   포화지방이 없으면 지방의 30% 로 잡는다(없으면 0). 나트륨·당류가 없으면 0 — 이런 제품은 적다(0.3% 미만).
   식이섬유는 대부분 비어 있어 0 으로 친다 — 식이섬유가 많은 제품은 점수가 조금 덜 나온다.
 의료 판단이 아니라 성분 정보를 한 숫자로 줄인 것이다.
@@ -101,6 +101,8 @@ def is_beverage(p, role):
 
 
 def health_score(p, role=None, ingredients=""):
+    # 한 끼·반찬인데 나트륨이 비었거나 0 — 거의 늘 빠진 값이다. 0 으로 치면 점수가 부풀어 '저염' 1등이 된다
+    if role in ("meal", "side") and not (_num(p, "sodium_mg") or 0) > 0: return None
     bev = is_beverage(p, role)
     sweet = bev and has_sweetener(p, ingredients)
     ns = nutri_ns(p, beverage=bev, sweetener=sweet)

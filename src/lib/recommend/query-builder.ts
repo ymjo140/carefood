@@ -105,6 +105,8 @@ async function executeQuery(
 
   // ── 정렬 ──
   const order = getOrderBy(profile);
+  // 나트륨 적은 순이면 0(거의 늘 빠진 값)이 맨 앞에 몰린다 — 0 은 뺀다
+  if (order.column === "sodium_mg") query = query.gt("sodium_mg", 0);
   query = query.order(order.column as "name", { ascending: order.ascending });
 
   // ── 제한 ──
