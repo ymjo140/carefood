@@ -34,10 +34,13 @@ export function dedupeFamilies<T extends Record<string, unknown>>(rows: T[]): (T
   const out: (T & { variant_count: number })[] = [];
   for (const r of rows) {
     const k = familyKey(r);
-    const hit = first.get(k);
+    // 같은 제품이 판매처마다 제조사 칸만 달리(또는 비워) 들어온 것 — 이름이 같으면 같은 묶음
+    const nameKey = `name|${String(r.name || "").replace(/\s/g, "").toLowerCase()}`;
+    const hit = first.get(k) || first.get(nameKey);
     if (hit) { hit.variant_count += 1; continue; }
     const row = { ...r, variant_count: 0 };
     first.set(k, row);
+    first.set(nameKey, row);
     out.push(row);
   }
   return out;
