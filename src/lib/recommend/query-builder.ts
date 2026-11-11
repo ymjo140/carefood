@@ -146,17 +146,11 @@ function applyMustFilters(query: SupabaseQuery, profile: UserProfile) {
 // ── Should 필터: perMeal 기반 개인화 ──
 
 function applyShouldFilters(query: SupabaseQuery, profile: UserProfile, relaxFactor: number) {
-  const pm = profile.perMeal;
-
-  // 칼로리 범위 (식단유형에 따라 다름)
-  const calMin = Math.round(pm.caloriesMin / relaxFactor);
-  const calMax = Math.round(pm.caloriesMax * relaxFactor);
-
-  // 칼로리 필터 (너무 빡빡하지 않게: 하한은 50 이상일 때만)
-  if (calMin >= 50) {
-    query = query.gte("calories", calMin);
-  }
-  query = query.lte("calories", calMax);
+  // 열량 밀도 (100g 당) — DB 값은 100g 당이라 한 끼 목표(400~800kcal)와 바로 견주면 안 된다.
+  //   전에는 calories ≥ 한 끼 하한(≈433)으로 걸러 100g 당 433kcal 넘는 마른 것(볶은 콩·김)만 남았다 (scripts/eval_recommend.mjs)
+  //   한 끼 양은 순위(scoring.ts 의 1회 제공량 환산)에서 본다. 여기서는 마른 간식만 뺀다.
+  const lighter = profile.goals.includes("weight_loss") || profile.dietType === "diet";
+  query = query.lte("calories", Math.round((lighter ? 250 : 350) * relaxFactor));
 
   // 혈당 경계 (Must보단 느슨)
   if (profile.healthRisks.glucose === "borderline") {

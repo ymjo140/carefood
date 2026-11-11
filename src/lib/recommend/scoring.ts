@@ -85,7 +85,9 @@ export function scoreProduct(
   // DB 값은 모두 nutrient_base_g(보통 100g) 기준
   // perMeal 비교 시 per-serving 값으로 변환
   const baseG = (p.nutrient_base_g as number) || 100;
-  const servingG = (p.serving_size_g as number) || 100;
+  // 1회 제공량에 포장 전체 무게(1kg·3kg…)가 들어간 제품이 많다 — 20~500g 밖이면 한 끼 300g·그 밖 100g 으로 본다
+  const rawServing = Number(p.serving_size_g) || 0;
+  const servingG = rawServing >= 20 && rawServing <= 500 ? rawServing : p.meal_role === "meal" ? 300 : 100;
   const servingRatio = baseG > 0 ? servingG / baseG : 1;
 
   // ─── 1. Health Base (0.4 ~ 1.0) ───
@@ -224,7 +226,7 @@ export function scoreProduct(
   // ─── 3. Preference (맛 + 구매 + 민감도, 0.7 ~ 1.3) ───
   let preference = 1.0;
 
-  // 맛 — 짠·단·고소·매운 4축을 1~10 단계로 비교해 순위에 ×0.85~1.15 (lib/recommend/taste.ts)
+  // 맛 — 짠·단·고소·매운 4축을 1~10 단계로 비교해 순위에 ×0.8~1.25 (lib/recommend/taste.ts)
   const fit = tasteFit(profile.tastes, p);
   preference *= tasteMultiplier(fit);
   const tasteLine = tasteReason(fit);

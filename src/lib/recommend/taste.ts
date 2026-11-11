@@ -99,9 +99,10 @@ export function tasteFit(userRaw: Partial<Tastes>, p: Record<string, unknown>): 
   return { score: axes ? Math.round((1 - dist / axes) * 100) : null, axes, close, stronger };
 }
 
-/** 순위에 곱하는 값 — 맛 점수 0 이면 ×0.85, 100 이면 ×1.15, 모르면 ×1 */
+/** 순위에 곱하는 값 — 맛 점수 0 이면 ×0.8, 100 이면 ×1.25, 모르면 ×1
+ *  (×0.85~1.15 로는 건강 점수(×0.3~1.0)에 묻혀 '매운맛 8'을 골라도 매운 제품이 10개 중 1개뿐이었다 — scripts/eval_recommend.mjs) */
 export function tasteMultiplier(fit: TasteFit): number {
-  return fit.score === null ? 1 : 0.85 + 0.3 * (fit.score / 100);
+  return fit.score === null ? 1 : 0.8 + 0.45 * (fit.score / 100);
 }
 
 /** 이유 한 줄 — "짠맛·매운맛이 고른 입맛과 가까워요" (가까운 축이 2개 이상일 때만) */

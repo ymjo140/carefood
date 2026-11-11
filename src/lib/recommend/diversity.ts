@@ -6,13 +6,14 @@
 
 import type { ScoredProduct } from "./types";
 import type { UserInteractions } from "./interactions";
-import { byRank } from "./scoring";
 
 // ── 3-1. 카테고리 다양성 보장 ──
 
 /**
- * 라운드 로빈 방식으로 카테고리 다양성을 보장한다.
- * 점수 순서를 대체로 유지하되, 같은 카테고리/제조사가 연속되지 않도록 재배열.
+ * 점수 순서를 지키며 같은 카테고리·제조사가 잇따르지 않게만 미룬다.
+ * 앞에서부터 보며, 바로 앞 N개와 카테고리(또는 제조사)가 모두 같으면 그 제품은 건너뛰고 다음 것을 먼저 놓는다.
+ * (전에는 카테고리마다 1등을 돌아가며 놓는 라운드 로빈이라, 점수가 낮은 카테고리의 1등이
+ *  점수가 높은 카테고리의 2등보다 앞에 섰다 — 상위 10개에 건강 점수 8점 과자가 끼었다. scripts/eval_recommend.mjs)
  */
 export function diversifyResults(
   products: ScoredProduct[],
@@ -20,82 +21,22 @@ export function diversifyResults(
   maxSameManufacturer: number = 2,
 ): ScoredProduct[] {
   if (products.length <= 3) return products;
-
-  // 카테고리별 그룹핑 (각 그룹은 점수순 유지)
-  const catGroups = new Map<string, ScoredProduct[]>();
-  for (const p of products) {
-    const cat = (p.dish_category as string) || "other";
-    if (!catGroups.has(cat)) catGroups.set(cat, []);
-    catGroups.get(cat)!.push(p);
-  }
-
-  // 카테고리를 대표 제품 점수순으로 정렬
-  const sortedCats = Array.from(catGroups.entries())
-    .sort((a, b) => byRank(a[1][0], b[1][0]))
-    .map(([cat]) => cat);
-
-  // 각 카테고리의 현재 인덱스 (라운드 로빈용)
-  const catIdx = new Map<string, number>();
-  for (const cat of sortedCats) catIdx.set(cat, 0);
-
+  const catOf = (p: ScoredProduct) => (p.dish_category as string) || "other";
+  const mfrOf = (p: ScoredProduct) => (p.manufacturer as string) || "";
+  const pool = [...products];
   const result: ScoredProduct[] = [];
-  const totalProducts = products.length;
-  let staleRounds = 0; // 무한루프 방지
-
-  while (result.length < totalProducts && staleRounds < totalProducts) {
-    let placed = false;
-
-    for (const cat of sortedCats) {
-      const group = catGroups.get(cat)!;
-      const idx = catIdx.get(cat)!;
-      if (idx >= group.length) continue; // 이 카테고리는 다 소진됨
-
-      const candidate = group[idx];
-      const candidateCat = (candidate.dish_category as string) || "other";
-      const candidateMfr = (candidate.manufacturer as string) || "";
-
-      // 연속 카테고리 체크
-      const recentCats = result.slice(-maxConsecutiveSameCategory).map(
-        (r) => (r.dish_category as string) || "other"
-      );
-      if (recentCats.length >= maxConsecutiveSameCategory &&
-          recentCats.every((c) => c === candidateCat)) {
-        continue; // 이 카테고리는 이번 라운드 스킵
-      }
-
-      // 연속 제조사 체크
-      if (candidateMfr) {
-        const recentMfrs = result.slice(-maxSameManufacturer).map(
-          (r) => (r.manufacturer as string) || ""
-        );
-        if (recentMfrs.length >= maxSameManufacturer &&
-            recentMfrs.every((m) => m === candidateMfr)) {
-          continue; // 이 제조사는 이번 라운드 스킵
-        }
-      }
-
-      result.push(candidate);
-      catIdx.set(cat, idx + 1);
-      placed = true;
-    }
-
-    if (!placed) {
-      // 제약으로 아무것도 못 넣었으면 → 제약 무시하고 다음 하나 강제 삽입
-      staleRounds++;
-      for (const cat of sortedCats) {
-        const group = catGroups.get(cat)!;
-        const idx = catIdx.get(cat)!;
-        if (idx < group.length) {
-          result.push(group[idx]);
-          catIdx.set(cat, idx + 1);
-          break;
-        }
-      }
-    } else {
-      staleRounds = 0;
-    }
+  const fits = (c: ScoredProduct) => {
+    const cats = result.slice(-maxConsecutiveSameCategory).map(catOf);
+    if (cats.length >= maxConsecutiveSameCategory && cats.every((x) => x === catOf(c))) return false;
+    const m = mfrOf(c);
+    if (!m) return true;
+    const mfrs = result.slice(-maxSameManufacturer).map(mfrOf);
+    return !(mfrs.length >= maxSameManufacturer && mfrs.every((x) => x === m));
+  };
+  while (pool.length) {
+    const i = pool.findIndex(fits);
+    result.push(pool.splice(i < 0 ? 0 : i, 1)[0]); // 맞는 게 없으면 점수 1등을 그대로
   }
-
   return result;
 }
 
