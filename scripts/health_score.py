@@ -100,10 +100,16 @@ SEASONED = re.compile(r"볶음|덮밥|불닭|양념|돈까스|돈가스|까스|�
                       r"갈비|떡볶이|만두|피자|버거|샌드위치|햄|소시지|어묵|조림|구이|튀김|치킨|강정|마라|매운|매콤|짭짤|간장|된장|고추장")
 
 
+# 간을 안 하고 파는 국물 — 나트륨이 적은 게 맞는 값이라 그대로 둔다
+UNSALTED = re.compile(r"곰탕|곰국|설렁탕|도가니|우족|꼬리탕|사골|백숙|삼계탕|수육")
+
+
 def missing_sodium(p, role):
     if role not in ("meal", "side"): return False
     sod = _num(p, "sodium_mg")
-    return sod is None or (sod < 20 and bool(SEASONED.search(p.get("name") or "")))
+    if sod is None: return True
+    name = p.get("name") or ""
+    return sod < 20 and bool(SEASONED.search(name)) and not UNSALTED.search(name)
 
 
 def is_beverage(p, role):
