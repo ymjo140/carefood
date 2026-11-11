@@ -18,7 +18,7 @@ NS → 0~100: 등급 구간을 점수 구간에 그대로 옮긴다 (구간 안�
 화면의 80 이상 '좋음'·60 이상 '보통'과 맞물린다.
 
 값이 없을 때
-  열량이 없으면 점수도 없다(None). 한 끼인데 나트륨이 100g 당 20mg 미만이거나, 반찬인데 0·없음이어도 없다(빠진 값을 0 으로 치지 않는다).
+  열량이 없으면 점수도 없다(None). 한 끼·반찬인데 나트륨이 없거나, 간이 된 요리 이름(볶음·덮밥·돈까스…)인데 100g 당 20mg 미만이어도 없다(빠진 값을 0 으로 치지 않는다).
   포화지방이 없으면 지방의 30% 로 잡는다(없으면 0). 나트륨·당류가 없으면 0 — 이런 제품은 적다(0.3% 미만).
   식이섬유는 대부분 비어 있어 0 으로 친다 — 식이섬유가 많은 제품은 점수가 조금 덜 나온다.
 의료 판단이 아니라 성분 정보를 한 숫자로 줄인 것이다.
@@ -95,11 +95,15 @@ def _band(ns, bands):
     return 0
 
 
+# 간이 된 요리 — 이런 이름인데 100g 당 나트륨이 20mg 도 안 되면 빠진 값이다 (흰밥·두부·이유식 죽은 정말 적다)
+SEASONED = re.compile(r"볶음|덮밥|불닭|양념|돈까스|돈가스|까스|짬뽕|라면|우동|크림|소스|찌개|탕$|국$|국밥|스테이크|치즈|카레|커리|짜장|김치|불고기|제육|"
+                      r"갈비|떡볶이|만두|피자|버거|샌드위치|햄|소시지|어묵|조림|구이|튀김|치킨|강정|마라|매운|매콤|짭짤|간장|된장|고추장")
+
+
 def missing_sodium(p, role):
+    if role not in ("meal", "side"): return False
     sod = _num(p, "sodium_mg")
-    if role == "meal": return sod is None or sod < 20
-    if role == "side": return sod is None or sod <= 0
-    return False
+    return sod is None or (sod < 20 and bool(SEASONED.search(p.get("name") or "")))
 
 
 def is_beverage(p, role):
@@ -108,8 +112,7 @@ def is_beverage(p, role):
 
 
 def health_score(p, role=None, ingredients=""):
-    # 나트륨이 빠진 값 — 한 끼인데 100g 당 20mg 미만(샌드위치 0.1mg 같은 것), 반찬인데 0·없음.
-    # 0 으로 치면 점수가 부풀어 '저염' 1등이 된다 (흰밥처럼 정말 적은 것은 반찬이라 남는다)
+    # 나트륨이 빠진 값 — 0 으로 치면 점수가 부풀어 '저염' 1등이 된다 (missing_sodium)
     if missing_sodium(p, role): return None
     bev = is_beverage(p, role)
     sweet = bev and has_sweetener(p, ingredients)
