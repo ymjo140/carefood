@@ -26,6 +26,7 @@ type QuickProduct = {
   dish_category?: string | null;
   is_exploration?: boolean;
   meal_role?: string | null;
+  variant_count?: number;
   slot?: string;
   reason_detail: string | null;
   match_reasons?: string[];
@@ -59,13 +60,23 @@ function pickSlots(list: QuickProduct[]): QuickProduct[] {
  * 홈 개인화 섹션 — 재방문 사용자에게 빠른 추천 카드 표시
  * 이너케어 방식: concerns 기반
  */
-export default function HomePersonalized() {
+export default function HomePersonalized({ cold = false }: { cold?: boolean }) {
   const [profile, setProfile] = useState<any>(null);
   const [products, setProducts] = useState<QuickProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [hasHealthData, setHasHealthData] = useState(false);
+  const [learned, setLearned] = useState(0);
 
   useEffect(() => {
+    // 첫 방문: 프로필 없이 '지금 살 수 있는 건강한 한 끼' (적합도 없음)
+    if (cold) {
+      fetch("/api/recommend", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cold: true }) })
+        .then((r) => r.json())
+        .then((data) => setProducts((data.recommendations || []).slice(0, 6)))
+        .catch(console.error) // ds-allow: 첫 방문 추천은 보조 — 못 불러오면 칸을 숨긴다
+        .finally(() => setLoading(false));
+      return;
+    }
     try {
       // 건강검진 데이터 유무 확인
       const healthRaw = localStorage.getItem("carefood_health");
@@ -100,13 +111,25 @@ export default function HomePersonalized() {
         .then((r) => r.json())
         .then((data) => {
           setProducts(pickSlots(data.recommendations || []));
+          setLearned(data.learned?.samples || 0);
         })
         .catch(console.error)
         .finally(() => setLoading(false));
     } catch {
       setLoading(false);
     }
-  }, []);
+  }, [cold]);
+
+  if (cold) {
+    if (loading || products.length === 0) return null;
+    return (
+      <section className="pt-8">
+        <SectionHeader title="지금 살 수 있는 건강한 한 끼" />
+        <p className="text-label text-ink-2 -mt-1 mb-3">건강 점수가 높은 한 끼·반찬이에요. 목표를 알려 주면 맞춰 골라요</p>
+        <ProductCards products={products} showMatch={false} />
+      </section>
+    );
+  }
 
   if (loading || !profile) return null;
 
@@ -130,40 +153,8 @@ export default function HomePersonalized() {
       {/* 전체 목록은 바로 아래 '전체 제품'이 맡는다 */}
       <SectionHeader title={`${sectionLabel} 추천`} />
 
-      {/* 가로 스크롤 제품 카드 */}
-      {products.length > 0 && (
-        <div className="flex gap-3 scroll-row -mx-4 px-4 pb-2">
-          {products.map((p) => {
-            const prices = p.product_prices?.filter((pp) => pp.price > 0) || [];
-            const bestPrice = prices.length > 0 ? Math.min(...prices.map((pp) => pp.price)) : null;
-            const imageUrl = prices.find((pp) => pp.image_url)?.image_url;
-            const bestPlatform = prices[0]
-              ? PLATFORM_LABELS[prices[0].platform] || prices[0].platform
-              : null;
-
-            return (
-              <Link
-                key={p.id}
-                href={`/products/${p.id}`}
-                className="block w-44 shrink-0 rounded-lg border border-line bg-surface overflow-hidden transition-colors hover:border-line-strong"
-              >
-                <div className="h-28 bg-sunken relative">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  {imageUrl && <img src={imageUrl} alt="" className="w-full h-full object-cover" loading="lazy" />}
-                  <Badge tone="brand" className="absolute top-2 left-2">적합도 <span className="num">{p.match_score}</span></Badge>
-                </div>
-                <div className="p-3">
-                  {p.slot && <p className="text-caption font-medium text-brand-ink mb-0.5">{p.slot}</p>}
-                  <h3 className="text-label font-medium text-ink line-clamp-2 mb-1.5">{p.name}</h3>
-                  {p.reason_detail && <p className="text-caption text-ink-2 line-clamp-2 mb-1">{p.reason_detail}</p>}
-                  {bestPrice && <Price value={bestPrice} className="text-body" />}
-                  {bestPlatform && <p className="text-caption text-ink-2">{bestPlatform} 외</p>}
-                </div>
-              </Link>
-            );
-          })}
-        </div>
-      )}
+      {products.length > 0 && <ProductCards products={products} showMatch />}
+      {learned > 0 && <p className="text-caption text-ink-2 mt-1">맛 평가 <span className="num">{learned}</span>개로 입맛을 맞춰 골랐어요</p>}
 
       {/* 건강검진 입력 유도 — 추천을 가리지 않게 한 줄로 */}
       {!hasHealthData && (
@@ -172,5 +163,43 @@ export default function HomePersonalized() {
         </p>
       )}
     </section>
+  );
+}
+
+/** 가로로 넘기는 제품 카드 — 홈 추천·첫 방문 추천이 같이 쓴다 */
+function ProductCards({ products, showMatch }: { products: QuickProduct[]; showMatch: boolean }) {
+  return (
+    <div className="flex gap-3 scroll-row -mx-4 px-4 pb-2">
+    {products.map((p) => {
+      const prices = p.product_prices?.filter((pp) => pp.price > 0) || [];
+      const bestPrice = prices.length > 0 ? Math.min(...prices.map((pp) => pp.price)) : null;
+      const imageUrl = prices.find((pp) => pp.image_url)?.image_url;
+      const bestPlatform = prices[0]
+        ? PLATFORM_LABELS[prices[0].platform] || prices[0].platform
+        : null;
+
+      return (
+        <Link
+          key={p.id}
+          href={`/products/${p.id}`}
+          className="block w-44 shrink-0 rounded-lg border border-line bg-surface overflow-hidden transition-colors hover:border-line-strong"
+        >
+          <div className="h-28 bg-sunken relative">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            {imageUrl && <img src={imageUrl} alt="" className="w-full h-full object-cover" loading="lazy" />}
+            {showMatch && <Badge tone="brand" className="absolute top-2 left-2">적합도 <span className="num">{p.match_score}</span></Badge>}
+          </div>
+          <div className="p-3">
+            {p.slot && <p className="text-caption font-medium text-brand-ink mb-0.5">{p.slot}</p>}
+            <h3 className="text-label font-medium text-ink line-clamp-2 mb-1.5">{p.name}</h3>
+            {p.reason_detail && <p className="text-caption text-ink-2 line-clamp-2 mb-1">{p.reason_detail}</p>}
+            {bestPrice && <Price value={bestPrice} className="text-body" />}
+            {bestPlatform && <p className="text-caption text-ink-2">{bestPlatform} 외</p>}
+            {!!p.variant_count && <p className="text-caption text-ink-2">다른 맛·용량 <span className="num">{p.variant_count}</span>가지 더</p>}
+          </div>
+        </Link>
+      );
+    })}
+  </div>
   );
 }

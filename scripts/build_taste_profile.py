@@ -50,7 +50,11 @@ ING_KW = {
 SUPPLEMENT = re.compile(r"(\d+\s?정|\S정$|\S정\s|캡슐|타블렛|츄어블|글루타치온|아르기닌|비오틴|루테인|오메가\s?3|밀크씨슬|프로바이오틱스|락토바실러스|비타민\s?[A-Za-z0-9]|멀티비타민|홍삼정|스피루리나|클로렐라|프로폴리스|쏘팔메토|크릴오일|MSM|NMN|코엔자임|엽산\s|철분제|칼슘\s?마그네슘|아연\s|셀레늄|글루코사민|콘드로이친|히알루론산|레스베라트롤|퀘르세틴|가르시니아|카테킨|잔티젠|보스웰리아|맥주효모|\d+\s?mg\b)", re.I)
 # 분류(dish_category)가 '밥'·'반찬'이어도 이름으로 보면 간식·식재료인 것
 SNACK_NAME = re.compile(r"(과자|스낵|칩$|칩\s|튀밥|뻥튀기|쿠키|강정|크래커|볶은\s?(서리태|콩|검은콩|아몬드|땅콩|병아리콩)|볶음\s?(서리태|콩)|견과|바\b|바$|젤리|사탕|캔디|초콜릿|누룽지\s?(과자|칩|스낵))")
-INGREDIENT_NAME = re.compile(r"(가루|분말|사리$|당면$|소면$|중면$|국수$|국수면|떡국떡|떡볶이떡|밀가루|부침가루|튀김가루|빵가루|전분|생면$|건면$|쌀$|현미$|잡곡$|귀리$|오트$)")
+INGREDIENT_NAME = re.compile(r"(가루|분말|사리$|당면$|소면$|중면$|국수$|국수면|떡국떡|떡볶이떡|밀가루|부침가루|튀김가루|빵가루|전분|생면$|건면$|쌀$|현미$|잡곡$|귀리$|오트$"
+                             r"|김밥용|용김$|두부피|유부$|만두피|라이스페이퍼)")
+# 마른 파스타 — 끝이 면 이름이고 소스·요리 이름이 없을 때만 (토마토 스파게티 같은 완제품은 한 끼)
+PASTA_RAW = re.compile(r"(스파게티|스파게티니|펜네|푸실리|링귀니|마카로니|파스타면|파스타|리가토니|탈리아텔레|페투치네|파르팔레)\s*$")
+PASTA_DISH = re.compile(r"토마토|크림|로제|알리오|까르보|볼로네제|미트|봉골레|나폴리탄|소스|오일|바질|치즈|새우|베이컨")
 CONDIMENT_NAME = re.compile(r"(소스|드레싱|오일|기름|식초|간장|양념|시럽|잼|케찹|케첩|마요네즈|머스타드|조미료|맛술|액젓|된장|고추장|쌈장|다시다)$")
 
 
@@ -118,6 +122,8 @@ def role(p, food_type):
     if cat in ("beverage", "powder"): return "drink"
     if SNACK_NAME.search(name): return "snack"
     if INGREDIENT_NAME.search(name.strip()): return "ingredient"
+    bare = re.sub(r"\([^)]*\)|\d+(\.\d+)?\s*(g|kg)\b", " ", name).strip()
+    if PASTA_RAW.search(bare) and not PASTA_DISH.search(bare): return "ingredient"
     if cat in ("rice", "noodle", "soup", "stew", "set", "grill"): return "meal"
     if cat in ("side", "salad", "seafood"): return "side"
     if cat in ("snack", "bread", "dairy"): return "snack"

@@ -44,6 +44,24 @@ export async function fetchRecommendPool(
   };
 }
 
+/**
+ * 첫 방문(프로필 없음) 후보 — 지금 살 수 있는 한 끼·반찬 중 건강 점수가 높은 것.
+ * 인기 순위를 만들 이용 기록이 아직 없어 건강 점수로 고른다.
+ */
+export async function fetchColdPool(supabase: SupabaseClient, limit = 300): Promise<Record<string, unknown>[]> {
+  const { data, error } = await (supabase
+    .from("products")
+    .select("*")
+    .eq("is_active", true)
+    .eq("is_purchasable", true)
+    .in("meal_role", ["meal", "side"])
+    .not("health_score", "is", null)
+    .order("health_score", { ascending: false })
+    .limit(limit) as unknown as Promise<{ data: Record<string, unknown>[] | null; error: { message: string } | null }>);
+  if (error) throw new Error(error.message);
+  return data || [];
+}
+
 // ── 쿼리 실행 ──
 
 type QueryMode = "full" | "no_nice" | "relaxed" | "must_only";

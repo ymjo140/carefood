@@ -15,6 +15,7 @@ import {
 } from "./constants";
 import { tasteFit, tasteMultiplier, tasteReason } from "./taste";
 import { isAllergenic } from "./allergy";
+import { feedbackMultiplier, type Feedback } from "./feedback";
 
 // ── 유틸 ──
 
@@ -60,6 +61,7 @@ export function scoreProduct(
   reviewStats?: Record<string, ProductReviewStats>,
   timeOfDay?: number, // KST 시간 (0~23)
   cfBoosts?: CFBoost[],
+  feedback?: Feedback, // 내 맛 평가 (feedback.ts)
 ): ScoredProduct {
   const reasons: string[] = [];
   const reasonDetails: string[] = [];
@@ -343,8 +345,15 @@ export function scoreProduct(
     }
   }
 
+  // ─── 7. 내 평가 — 싫어한 제품은 빼고, 같은 묶음은 낮추고, 좋아한 묶음은 올린다 ───
+  const fbMul = feedbackMultiplier(p, feedback);
+  if (fbMul < 0) {
+    return { ...p, match_score: -1, rank_score: -1, taste_score: 0, nutrition_score: 0, match_reasons: [], reason_detail: null, dish_keyword: "", is_excluded_allergy: true } as ScoredProduct;
+  }
+  if (fbMul > 1) { reasons.push("좋아한 제품과 비슷"); reasonDetails.push("좋다고 평가한 제품의 다른 맛이에요"); }
+
   // ─── 종합 매칭 점수 ───
-  const rawScore = healthBase * relevance * preference * interactionMul * reviewMul * cfMul;
+  const rawScore = healthBase * relevance * preference * interactionMul * reviewMul * cfMul * fbMul;
 
   return {
     ...p,
@@ -380,11 +389,12 @@ export function scoreAndRank(
   reviewStats?: Record<string, ProductReviewStats>,
   timeOfDay?: number,
   cfBoosts?: CFBoost[],
+  feedback?: Feedback,
 ): ScoredProduct[] {
   const scored = products.map((p) =>
-    scoreProduct(p, profile, purchasableIds.has(p.id as string), interactions, reviewStats, timeOfDay, cfBoosts)
+    scoreProduct(p, profile, purchasableIds.has(p.id as string), interactions, reviewStats, timeOfDay, cfBoosts, feedback)
   );
-  // 알레르기 제외 제품 필터링
+  // 알레르기·싫어한 제품 빼기
   const filtered = scored.filter((p) => !p.is_excluded_allergy);
   filtered.sort(byRank);
   return filtered;

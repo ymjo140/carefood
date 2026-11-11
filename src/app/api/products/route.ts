@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
-import { byRank, parseProfile, scoreAndRank } from "@/lib/recommend";
+import { byRank, parseProfile, scoreAndRank, loadFeedback } from "@/lib/recommend";
+import { getActorId } from "@/lib/actor-server";
 import { TASTE_RANGES } from "@/lib/recommend/constants";
 import { isAllergenic } from "@/lib/recommend/allergy";
 
@@ -341,6 +342,11 @@ export async function POST(request: NextRequest) {
   params.sort = "recommend";
   const profile = parseProfile(body);
   const supabase = createServiceRoleClient();
+  // 내 맛 평가로 입맛 보정 · 싫어한 제품 빼기 — 홈 추천과 같은 방식
+  const actor = await getActorId();
+  let feedback;
+  try { feedback = actor ? await loadFeedback(supabase, actor, profile.tastes) : undefined; } catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: 500 }); }
+  if (feedback) Object.assign(profile.tastes, feedback.learned);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error, count } = await buildProductQuery(supabase, params, true) as { data: any[] | null; error: any; count: number | null };
@@ -358,7 +364,7 @@ export async function POST(request: NextRequest) {
 
   const purchasable = new Set(rows.filter((p) => p.is_purchasable).map((p) => p.id as string));
   const kstHour = new Date(Date.now() + 9 * 3600e3).getUTCHours();
-  const scored = scoreAndRank(rows, { ...profile, allergies }, purchasable, undefined, undefined, kstHour);
+  const scored = scoreAndRank(rows, { ...profile, allergies }, purchasable, undefined, undefined, kstHour, undefined, feedback);
   if (rank === "taste_desc") scored.sort((a, b) => (b.taste_score ?? 0) - (a.taste_score ?? 0) || byRank(a, b));
   else if (rank === "nutrition_desc") scored.sort((a, b) => (b.nutrition_score ?? 0) - (a.nutrition_score ?? 0) || byRank(a, b));
 

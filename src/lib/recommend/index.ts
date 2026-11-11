@@ -10,6 +10,8 @@ export { loadUserInteractions } from "./interactions";
 export { loadProductReviewStats } from "./reviews";
 export { diversifyResults, insertExplorationSlots } from "./diversity";
 export { getCFBoosts } from "./collaborative";
+export { loadFeedback, learnFromReviews, EMPTY_FEEDBACK, type Feedback } from "./feedback";
+export { familyKey, dedupeFamilies } from "./family";
 export type { UserProfile, ScoredProduct, HealthConcern, HealthGoal, RiskLevel } from "./types";
 export type { PriceInfo } from "./query-builder";
 export type { UserInteractions } from "./interactions";

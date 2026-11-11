@@ -62,6 +62,8 @@ export default function HomeTop() {
           <LinkButton href="/onboarding" className="sm:shrink-0">목표 알려 주기</LinkButton>
         </Card>
       )}
+      {/* 첫 방문: 프로필 없이도 볼 수 있는 한 끼 */}
+      {hasProfile === false && <HomePersonalized cold />}
     </>
   );
 }

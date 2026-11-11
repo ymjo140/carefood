@@ -82,13 +82,27 @@ function toNutritionProfile(n: Props["nutrition"]) {
 export default function ProductTasteSection({ nutrition, reviewTaste, scoreRow }: Props) {
   // 내 프로필 — 홈 추천·탐색과 같은 carefood_profile (입맛 1~10) · carefood_health
   const [mine, setMine] = useState<{ profile: Record<string, unknown>; health: Record<string, unknown> | null } | null>(null);
+  const [learnedFrom, setLearnedFrom] = useState(0);
 
   useEffect(() => {
+    let alive = true;
     try {
       const raw = localStorage.getItem("carefood_profile");
       const health = localStorage.getItem("carefood_health");
-      if (raw) setMine({ profile: JSON.parse(raw), health: health ? JSON.parse(health) : null }); // eslint-disable-line react-hooks/set-state-in-effect -- 브라우저 저장소는 그린 뒤에만 읽을 수 있다
+      if (!raw) return;
+      const profile = JSON.parse(raw);
+      setMine({ profile, health: health ? JSON.parse(health) : null }); // eslint-disable-line react-hooks/set-state-in-effect -- 브라우저 저장소는 그린 뒤에만 읽을 수 있다
+      // 내 맛 평가로 맞춘 입맛 — 목록의 적합도와 같은 값이 나오게
+      fetch("/api/recommend/taste", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tastes: profile.tastes }) })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          if (!alive || !d?.samples) return;
+          setLearnedFrom(d.samples);
+          setMine((m) => (m ? { ...m, profile: { ...m.profile, tastes: d.tastes } } : m));
+        })
+        .catch(() => {}); // ds-allow: 보정 못 하면 고른 입맛 그대로 보인다
     } catch { /* ds-allow: 저장된 프로필을 못 읽으면 영양 점수만 보인다 */ }
+    return () => { alive = false; };
   }, []);
 
   // 맛 프로필: 영양성분 예측 + 리뷰 체감 보정
@@ -183,6 +197,9 @@ export default function ProductTasteSection({ nutrition, reviewTaste, scoreRow }
         </Estimate>
         <TextLink href="#reviews">맛 평가 남기기</TextLink>
       </div>
+      {learnedFrom > 0 && (
+        <p className="text-caption text-ink-2 mt-1">내 맛 평가 <span className="num">{learnedFrom}</span>개로 입맛을 맞춰 계산했어요</p>
+      )}
     </section>
   );
 }
