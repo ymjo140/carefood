@@ -6,16 +6,17 @@ import { Badge, cn, type BadgeTone } from "@/components/ui";
  * DualRadarChart — 맛 프로필 + 영양 프로필 이중 오각형 레이더 차트
  *
  * 두 개의 오각형이 겹쳐서 보이며, 제품/사용자의 맛·영양 매칭 상태를 한눈에 보여줌.
- * - 맛 프로필: 매운맛 · 단맛 · 짠맛 · 감칠맛 · 신맛 (1~5)
+ * - 맛 프로필: 짠맛 · 단맛 · 고소함 · 매운맛 · 새콤함 · 감칠맛 (1~5, 육각형)
  * - 영양 프로필: 단백질 · 탄수화물 · 지방 · 저당 · 저염도 (1~5 스코어, 넷째 칸 키 이름은 fiber 그대로)
  */
 
 type TasteProfile = {
-  salty: number;    // 짠맛 (나트륨 기반)
-  sweet: number;    // 단맛 (당류 기반)
-  savory: number;   // 고소함 (지방 기반)
-  light: number;    // 담백함 (단백질÷칼로리 비율)
-  spicy: number;     // 매운맛 (spicy_score 기반)
+  salty: number;    // 짠맛
+  sweet: number;    // 단맛
+  savory: number;   // 고소함
+  spicy: number;    // 매운맛
+  sour: number;     // 새콤함
+  umami: number;    // 감칠맛
 };
 
 type NutritionProfile = {
@@ -45,9 +46,8 @@ type DualRadarChartProps = {
   mode?: "taste" | "nutrition" | "dual";
 };
 
-// 맛 프로필: 영양성분에서 확실히 알 수 있는 것만
-// (나중에 캡사이신·글루탐산 데이터 확보 시 매운맛·감칠맛 추가)
-const TASTE_LABELS = ["짠맛", "단맛", "고소함", "담백함", "매운맛"];
+// 맛 프로필 — lib/recommend/taste 의 제품 맛 단계(영양 수치 + 원재료 + 이름)를 1~5 로
+const TASTE_LABELS = ["짠맛", "단맛", "고소함", "매운맛", "새콤함", "감칠맛"];
 const NUTRITION_LABELS = ["단백", "탄수", "지방", "저당", "저염도"];
 
 function polarToCartesian(cx: number, cy: number, r: number, angleDeg: number) {
@@ -163,9 +163,9 @@ export default function DualRadarChart({
 }: DualRadarChartProps) {
   const showTaste = mode === "taste" || mode === "dual";
 
-  const tasteValues = [taste.salty, taste.sweet, taste.savory, taste.light, taste.spicy];
+  const tasteValues = [taste.salty, taste.sweet, taste.savory, taste.spicy, taste.sour, taste.umami];
   const userTasteValues = userTaste
-    ? [userTaste.salty, userTaste.sweet, userTaste.savory, userTaste.light, userTaste.spicy]
+    ? [userTaste.salty, userTaste.sweet, userTaste.savory, userTaste.spicy, userTaste.sour, userTaste.umami]
     : null;
 
   const nutritionValues = nutrition

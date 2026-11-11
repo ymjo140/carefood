@@ -25,6 +25,7 @@ type QuickProduct = {
   category_large?: string | null;
   dish_category?: string | null;
   is_exploration?: boolean;
+  meal_role?: string | null;
   slot?: string;
   reason_detail: string | null;
   match_reasons?: string[];
@@ -42,7 +43,10 @@ function pickSlots(list: QuickProduct[]): QuickProduct[] {
   const used = new Set<string>();
   const take = (p: QuickProduct | undefined, slot: string) => { if (p && !used.has(p.id)) { used.add(p.id); out.push({ ...p, slot }); } };
   // 1칸: 추천 상위 10개 중 매칭 점수(맛 40·영양 60)가 가장 높은 것 — 라벨과 숫자가 어긋나지 않게
-  const top = list.filter((p) => !p.is_exploration).slice(0, 10);
+  //  한 끼·반찬(meal_role)이 있으면 그중에서 — 분말·음료가 '가장 잘 맞아요'에 오르지 않게
+  const pool = list.filter((p) => !p.is_exploration).slice(0, 10);
+  const meals = pool.filter((p) => p.meal_role === "meal" || p.meal_role === "side");
+  const top = meals.length ? meals : pool;
   take(top.reduce<QuickProduct | undefined>((b, p) => (!b || p.match_score > b.match_score ? p : b), undefined) || list[0], "가장 잘 맞아요");
   take(list.find((p) => !used.has(p.id) && p.category_large === "건강식단서비스"), "건강식단 서비스");
   const firstCat = out[0]?.dish_category;

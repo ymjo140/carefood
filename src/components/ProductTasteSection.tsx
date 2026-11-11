@@ -39,18 +39,11 @@ type Props = {
  * 영양성분 + spicy_score에서 알 수 있는 5축 사용
  * 짠맛(나트륨), 단맛(당류비율), 고소함(지방), 담백함(단백질밀도), 매운맛(spicy_score)
  */
-function predictTasteFromNutrition(n: Props["nutrition"], row: Record<string, unknown>) {
-  // 짠맛·단맛·고소함·매운맛: 목록 추천과 같은 1~10 단계(lib/recommend/taste)를 1~5 로 — 모르면 가운데
+function predictTasteFromNutrition(row: Record<string, unknown>) {
+  // 목록 추천과 같은 1~10 단계(lib/recommend/taste — 저장된 맛 값 우선)를 1~5 로. 모르면 가운데
   const lv = productTaste(row);
-  const half = (v: number | undefined) => (v === undefined ? 2.5 : Math.max(1, Math.min(5, Math.round(v / 2))));
-
-  // 담백함: 단백질÷칼로리 비율. 높으면 담백 (닭가슴살=5, 과자=1)
-  const proteinDensity = n.protein_g != null && n.calories != null && n.calories > 0
-    ? (n.protein_g * 4) / n.calories  // 단백질 칼로리 비율 (0~1)
-    : 0.15;
-  const light = Math.min(5, Math.max(1, Math.round(proteinDensity * 10) + 1));
-
-  return { salty: half(lv.salty), sweet: half(lv.sweet), savory: half(lv.fatty), light, spicy: half(lv.spicy) };
+  const half = (v: number | undefined, unknown = 2.5) => (v === undefined ? unknown : Math.max(1, Math.min(5, Math.round(v / 2))));
+  return { salty: half(lv.salty), sweet: half(lv.sweet), savory: half(lv.fatty), spicy: half(lv.spicy, 1), sour: half(lv.sour, 1), umami: half(lv.umami, 1) };
 }
 
 /**
@@ -99,7 +92,7 @@ export default function ProductTasteSection({ nutrition, reviewTaste, scoreRow }
   }, []);
 
   // 맛 프로필: 영양성분 예측 + 리뷰 체감 보정
-  const predicted = predictTasteFromNutrition(nutrition, scoreRow);
+  const predicted = predictTasteFromNutrition(scoreRow);
   const reviewCount = reviewTaste?.reviewCount || 0;
   const estimated = reviewCount < 2; // 맛 평가가 2건 모이기 전엔 영양성분으로 추정한 맛
   const tasteProfile = !estimated && reviewTaste
@@ -114,7 +107,8 @@ export default function ProductTasteSection({ nutrition, reviewTaste, scoreRow }
         savory: reviewTaste.avgFatty > 0
           ? Math.round((predicted.savory * 0.3 + reviewTaste.avgFatty * 0.7) * 10) / 10
           : predicted.savory,
-        light: predicted.light, // 담백함은 리뷰에서 수집 안 함
+        sour: predicted.sour, // 새콤·감칠은 리뷰에서 수집 안 함
+        umami: predicted.umami,
         spicy: reviewTaste.avgSpicy > 0
           ? Math.round((predicted.spicy * 0.3 + reviewTaste.avgSpicy * 0.7) * 10) / 10
           : predicted.spicy,
@@ -129,8 +123,10 @@ export default function ProductTasteSection({ nutrition, reviewTaste, scoreRow }
         salty: half(ut.salty),
         sweet: half(ut.sweet),
         savory: half(ut.fatty),
-        light: Math.max(1, 6 - Math.round((half(ut.spicy) + half(ut.salty)) / 2)), // 자극 적으면 담백 선호
         spicy: half(ut.spicy),
+        // 새콤·감칠은 입맛으로 묻지 않아 비교하지 않는다 — 제품 값과 같게 그려 차이가 보이지 않게
+        sour: tasteProfile.sour,
+        umami: tasteProfile.umami,
       }
     : undefined;
 
@@ -182,7 +178,7 @@ export default function ProductTasteSection({ nutrition, reviewTaste, scoreRow }
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
         <Estimate>
           {estimated
-            ? "제품 맛은 영양성분으로 추정했어요. 맛 평가가 2건 모이면 평가를 반영해요"
+            ? "제품 맛은 영양 수치·원재료·이름으로 추정했어요. 맛 평가가 2건 모이면 평가를 반영해요"
             : <>맛 평가 <span className="num">{reviewCount}</span>건을 반영했어요</>}
         </Estimate>
         <TextLink href="#reviews">맛 평가 남기기</TextLink>

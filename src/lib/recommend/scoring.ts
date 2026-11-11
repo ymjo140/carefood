@@ -231,6 +231,11 @@ export function scoreProduct(
     reasonDetails.push(tasteLine);
   }
 
+  // 끼니 역할 (products.meal_role — scripts/build_taste_profile.py) — 한 끼·반찬을 간식·음료보다 앞에
+  const ROLE_MUL: Record<string, number> = { meal: 1.1, side: 1.0, snack: 0.9, drink: 0.88, condiment: 0.6, ingredient: 0.6, supplement: 0.5 };
+  const role = p.meal_role as string | null | undefined;
+  if (role && role in ROLE_MUL) preference *= ROLE_MUL[role];
+
   // 구매 가능 보너스
   if (isPurchasable) preference *= 1.15;
 

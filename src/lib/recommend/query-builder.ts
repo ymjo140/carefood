@@ -4,7 +4,7 @@
  */
 
 import type { UserProfile } from "./types";
-import { TASTE_RANGES, DIET_PURPOSE_ORDER } from "./constants";
+import { DIET_PURPOSE_ORDER } from "./constants";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type SupabaseClient = any;
@@ -61,7 +61,9 @@ async function executeQuery(
     .not("health_score", "is", null)
     .neq("dish_category", "sauce")
     .neq("dish_category", "ingredient")
-    .neq("dish_category", "supplement"); // 건강기능식품은 끼니 추천에서 뺀다
+    .neq("dish_category", "supplement") // 건강기능식품은 끼니 추천에서 뺀다
+    // 분류가 '기타'로 잘못 들어간 영양제·소스·식재료까지 (meal_role — scripts/build_taste_profile.py)
+    .or("meal_role.is.null,meal_role.not.in.(supplement,condiment,ingredient)");
 
   // ── Must 필터 (안전 — 항상 적용) ──
   query = applyMustFilters(query, profile);
@@ -75,6 +77,12 @@ async function executeQuery(
   // ── Nice 필터 (선호) ──
   if (mode === "full") {
     query = applyNiceFilters(query, profile);
+  }
+
+  // ── 끼니 우선: 앞 두 단계는 한 끼·반찬만 (간식·음료는 조건을 넓힐 때 들어온다)
+  //    100g 당 단백질로 정렬하면 말린 간식(먹태·육포)이 위로 오는 것을 막는다
+  if (mode === "full" || mode === "no_nice") {
+    query = query.in("meal_role", ["meal", "side"]);
   }
 
   // ── 정렬 ──
@@ -153,23 +161,17 @@ function applyShouldFilters(query: SupabaseQuery, profile: UserProfile, relaxFac
 // ── Nice 필터: 맛 선호 ──
 
 function applyNiceFilters(query: SupabaseQuery, profile: UserProfile) {
-  // 짠·단·고소: 고른 단계보다 2단계 이상 '센' 제품만 뺀다 (덜 짠 것은 남긴다 — 순위에서 맛 점수로 가린다)
-  // 매운맛: 못 먹는 사람(1~3)에게는 맵기 2 이하만, 좋아하는 사람(8~10)에게는 맵기 2 이상만
+  // 제품 맛 단계(products.taste_* — 영양 수치·원재료·이름)로 거른다
+  // 짠·단·고소: 고른 단계보다 2단계 이상 '센' 제품만 뺀다 (덜한 것은 남긴다 — 순위에서 맛 점수로 가린다)
+  // 매운맛: 못 먹는 사람(1~3)에게는 4단계 이하만, 좋아하는 사람(8~10)에게는 4단계 이상만
+  // 값을 모르면 남긴다
   const { tastes } = profile;
-  const maxTaste = 10;
-
-  if (tastes.salty >= 1 && tastes.salty <= maxTaste) {
-    query = query.or(`sodium_mg.lt.${TASTE_RANGES.salty[Math.min(maxTaste, tastes.salty + 1)][1]},sodium_mg.is.null`); // 값을 모르면 남긴다
+  for (const axis of ["salty", "sweet", "fatty"] as const) {
+    const lv = tastes[axis];
+    if (lv >= 1 && lv <= 10) query = query.or(`taste_${axis}.lte.${Math.min(10, lv + 1)},taste_${axis}.is.null`);
   }
-  if (tastes.sweet >= 1 && tastes.sweet <= maxTaste) {
-    query = query.or(`sugar_g.lt.${TASTE_RANGES.sweet[Math.min(maxTaste, tastes.sweet + 1)][1]},sugar_g.is.null`); // 값을 모르면 남긴다
-  }
-  if (tastes.fatty >= 1 && tastes.fatty <= maxTaste) {
-    query = query.or(`fat_g.lt.${TASTE_RANGES.fatty[Math.min(maxTaste, tastes.fatty + 1)][1]},fat_g.is.null`); // 값을 모르면 남긴다
-  }
-  if (tastes.spicy >= 1 && tastes.spicy <= 3) query = query.or("spicy_score.lte.2,spicy_score.is.null");
-  else if (tastes.spicy >= 8) query = query.gte("spicy_score", 2);
-
+  if (tastes.spicy >= 1 && tastes.spicy <= 3) query = query.or("taste_spicy.lte.4,taste_spicy.is.null");
+  else if (tastes.spicy >= 8) query = query.gte("taste_spicy", 4);
   return query;
 }
 

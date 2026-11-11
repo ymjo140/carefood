@@ -3,8 +3,9 @@
  * 홈 추천·탐색 추천순·제품 상세가 모두 이 파일을 쓴다 (서버·브라우저 어디서나 돌아가는 순수 함수).
  *
  * 제품 맛 단계
- *   짠맛 = 나트륨(100g당) · 단맛 = 당류 · 고소한맛 = 지방 → TASTE_RANGES 구간
- *   매운맛 = spicy_score(0~5, 원재료·이름 키워드) × 2  (0 이면 1단계)
+ *   1순위: products.taste_* (scripts/build_taste_profile.py — 영양 수치 + 원재료 + 이름, 감미료·저염 같은 말까지 본 값)
+ *   없으면: 짠맛 = 나트륨(100g당) · 단맛 = 당류 · 고소한맛 = 지방 → TASTE_RANGES 구간, 매운맛 = spicy_score × 2
+ *   새콤·감칠은 저장된 값만 (사용자 입맛에는 아직 없어 비교하지 않고 제품 맛 그림에만 쓴다)
  *   값이 없으면 그 축은 모른다 — 0 으로 치지 않는다.
  *
  * 가까움 (0~100)
@@ -15,6 +16,7 @@ import { TASTE_RANGES } from "./constants";
 
 export type TasteAxis = "salty" | "sweet" | "fatty" | "spicy";
 export type Tastes = Record<TasteAxis, number>;
+export type ProductTaste = Partial<Tastes & { sour: number; umami: number }>;
 
 export const TASTE_LABEL: Record<TasteAxis, string> = { salty: "짠맛", sweet: "단맛", fatty: "고소한맛", spicy: "매운맛" };
 
@@ -38,14 +40,22 @@ export function levelOf(axis: Exclude<TasteAxis, "spicy">, value: number): numbe
 }
 
 /** 제품 맛 단계 — 모르는 축은 빠진다 */
-export function productTaste(p: Record<string, unknown>): Partial<Tastes> {
-  const out: Partial<Tastes> = {};
+export function productTaste(p: Record<string, unknown>): ProductTaste {
+  const out: ProductTaste = {};
   for (const axis of ["salty", "sweet", "fatty"] as const) {
+    const stored = num(p[`taste_${axis}`]);
     const v = num(p[FIELD[axis]]);
-    if (v !== null && v >= 0) out[axis] = levelOf(axis, v);
+    if (stored !== null) out[axis] = stored;
+    else if (v !== null && v >= 0) out[axis] = levelOf(axis, v);
   }
+  const storedSpicy = num(p.taste_spicy);
   const sp = num(p.spicy_score);
-  if (sp !== null) out.spicy = Math.max(1, Math.min(10, Math.round(sp * 2)));
+  if (storedSpicy !== null) out.spicy = storedSpicy;
+  else if (sp !== null) out.spicy = Math.max(1, Math.min(10, Math.round(sp * 2)));
+  for (const axis of ["sour", "umami"] as const) {
+    const v = num(p[`taste_${axis}`]);
+    if (v !== null) out[axis] = v;
+  }
   return out;
 }
 

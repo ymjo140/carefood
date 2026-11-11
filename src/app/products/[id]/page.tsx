@@ -126,6 +126,8 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
     health_score: number | null;
     source: string | null;
     functional_tags: string[] | null; dish_category: string | null; is_purchasable: boolean | null;
+    taste_salty?: number | null; taste_sweet?: number | null; taste_fatty?: number | null;
+    taste_spicy?: number | null; taste_sour?: number | null; taste_umami?: number | null; meal_role?: string | null;
   };
 
   const { data: product, error } = await supabase
@@ -423,6 +425,8 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
           calories: product.calories, protein_g: product.protein_g, carbs_g: product.carbs_g, fat_g: product.fat_g,
           sugar_g: product.sugar_g, sodium_mg: product.sodium_mg, fiber_g: product.fiber_g, spicy_score: product.spicy_score,
           serving_size_g: product.serving_size_g, nutrient_base_g: product.nutrient_base_g, is_purchasable: product.is_purchasable,
+          taste_salty: product.taste_salty, taste_sweet: product.taste_sweet, taste_fatty: product.taste_fatty,
+          taste_spicy: product.taste_spicy, taste_sour: product.taste_sour, taste_umami: product.taste_umami, meal_role: product.meal_role,
         }}
       />
 
