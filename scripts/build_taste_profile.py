@@ -1,5 +1,5 @@
 """
-제품 맛 6축(짠·단·고소·매운·새콤·감칠, 1~10) + 끼니 역할(meal_role)을 계산한다.
+제품 맛 6축(짠·단·고소·매운·새콤·감칠, 1~10) + 끼니 역할(meal_role) + 건강 점수(health_score)를 계산한다.
 
 근거 (위에 있을수록 믿는다)
   1. 영양 수치 — 짠맛=나트륨, 단맛=당류, 고소=지방 (100g 당, src/lib/recommend/constants.ts TASTE_RANGES 와 같은 구간)
@@ -8,8 +8,8 @@
   3. 제품 이름 — '매콤', '레몬', '버터', '저염', '제로' 같은 말
   모르는 축은 비운다(null) — 0·1 로 채우지 않는다.
 
-끼니 역할: meal(한 끼) · side(반찬·샐러드) · snack(간식·빵·유제품) · drink(음료·선식) · supplement(영양제) · condiment(소스·기름) · ingredient(식재료)
-  영양제는 이름(…정·캡슐·글루타치온·루테인…)과 품목 유형(건강기능식품)으로 잡는다 — 분류가 '기타'·'샐러드'로 잘못 들어간 것까지.
+끼니 역할: scripts/meal_role.py — 이름 위주 규칙 (분류가 '기타'인 것이 많고 1회 제공량은 포장 무게인 것이 많다)
+건강 점수: scripts/health_score.py — 100g 당 성분으로 Nutri-Score(2023) 점수를 0~100 으로
 
   python3 scripts/build_taste_profile.py build --out /tmp/taste.jsonl   # 계산 (읽기만)
   python3 scripts/build_taste_profile.py sample --in /tmp/taste.jsonl   # 눈으로 확인
@@ -47,16 +47,8 @@ ING_KW = {
     "fatty": [(r"버터|치즈|크림|참기름|들기름|참깨|들깨|땅콩|아몬드|호두|캐슈|마요네즈|팜유|쇼트닝|코코넛오일", 2)],
 }
 
-SUPPLEMENT = re.compile(r"(\d+\s?정|\S정$|\S정\s|캡슐|타블렛|츄어블|글루타치온|아르기닌|비오틴|루테인|오메가\s?3|밀크씨슬|프로바이오틱스|락토바실러스|비타민\s?[A-Za-z0-9]|멀티비타민|홍삼정|스피루리나|클로렐라|프로폴리스|쏘팔메토|크릴오일|MSM|NMN|코엔자임|엽산\s|철분제|칼슘\s?마그네슘|아연\s|셀레늄|글루코사민|콘드로이친|히알루론산|레스베라트롤|퀘르세틴|가르시니아|카테킨|잔티젠|보스웰리아|맥주효모|\d+\s?mg\b)", re.I)
-# 분류(dish_category)가 '밥'·'반찬'이어도 이름으로 보면 간식·식재료인 것
-SNACK_NAME = re.compile(r"(과자|스낵|칩$|칩\s|튀밥|뻥튀기|쿠키|강정|크래커|볶은\s?(서리태|콩|검은콩|아몬드|땅콩|병아리콩)|볶음\s?(서리태|콩)|견과|바\b|바$|젤리|사탕|캔디|초콜릿|누룽지\s?(과자|칩|스낵))")
-INGREDIENT_NAME = re.compile(r"(가루|분말|사리$|당면$|소면$|중면$|국수$|국수면|떡국떡|떡볶이떡|밀가루|부침가루|튀김가루|빵가루|전분|생면$|건면$|쌀$|현미$|잡곡$|귀리$|오트$"
-                             r"|김밥용|용김$|두부피|유부$|만두피|라이스페이퍼)")
-# 마른 파스타 — 끝이 면 이름이고 소스·요리 이름이 없을 때만 (토마토 스파게티 같은 완제품은 한 끼)
-PASTA_RAW = re.compile(r"(스파게티|스파게티니|펜네|푸실리|링귀니|마카로니|파스타면|파스타|리가토니|탈리아텔레|페투치네|파르팔레)\s*$")
-PASTA_DISH = re.compile(r"토마토|크림|로제|알리오|까르보|볼로네제|미트|봉골레|나폴리탄|소스|오일|바질|치즈|새우|베이컨")
-CONDIMENT_NAME = re.compile(r"(소스|드레싱|오일|기름|식초|간장|양념|시럽|잼|케찹|케첩|마요네즈|머스타드|조미료|맛술|액젓|된장|고추장|쌈장|다시다)$")
-
+from meal_role import meal_role  # noqa: E402 — 같은 폴더
+from health_score import health_score  # noqa: E402
 
 def rest(method, path, body=None):
     url = os.environ["NEXT_PUBLIC_SUPABASE_URL"].rstrip("/") + "/rest/v1/" + path
@@ -113,31 +105,9 @@ def compute(p, ings):
     return out
 
 
-def role(p, food_type):
-    name = p.get("name") or ""
-    cat = p.get("dish_category") or "other"
-    if (food_type and "건강기능" in food_type) or cat == "supplement" or SUPPLEMENT.search(name): return "supplement"
-    if cat == "sauce" or CONDIMENT_NAME.search(name.strip()): return "condiment"
-    if cat == "ingredient": return "ingredient"
-    if cat in ("beverage", "powder"): return "drink"
-    if SNACK_NAME.search(name): return "snack"
-    if INGREDIENT_NAME.search(name.strip()): return "ingredient"
-    bare = re.sub(r"\([^)]*\)|\d+(\.\d+)?\s*(g|kg)\b", " ", name).strip()
-    if PASTA_RAW.search(bare) and not PASTA_DISH.search(bare): return "ingredient"
-    if cat in ("rice", "noodle", "soup", "stew", "set", "grill"): return "meal"
-    if cat in ("side", "salad", "seafood"): return "side"
-    if cat in ("snack", "bread", "dairy"): return "snack"
-    # 기타: 1회 열량으로 — 300kcal 이상이면 한 끼, 아니면 간식
-    kcal, g, base = p.get("calories"), p.get("serving_size_g"), p.get("nutrient_base_g") or 100
-    if kcal is not None and g:
-        per = float(kcal) * float(g) / float(base)
-        if per >= 300: return "meal"
-    return "snack"
-
-
 def fetch_all():
     rows, last = [], "00000000-0000-0000-0000-000000000000"
-    cols = "id,name,dish_category,category_large,calories,serving_size_g,nutrient_base_g,sodium_mg,sugar_g,fat_g,spicy_score,ingredients_raw,food_type"
+    cols = "id,name,dish_category,category_large,calories,serving_size_g,nutrient_base_g,sodium_mg,sugar_g,fat_g,saturated_fat_g,protein_g,fiber_g,spicy_score,ingredients_raw,food_type"
     while True:
         part = rest("GET", f"products?select={cols}&is_active=eq.true&id=gt.{last}&order=id.asc&limit=1000")
         if not part: break
@@ -169,8 +139,10 @@ def build(path):
             raw = p.get("ingredients_raw") or ""
             if raw and raw != "식품의약품안전처": ings = ings + [raw]
             t = compute(p, ings)
+            r = meal_role(p, ftype or p.get("food_type") or "")
             f.write(json.dumps({"id": p["id"], "name": p["name"], "cat": p.get("dish_category"), "src": "ing" if ings else "name",
-                                **{f"taste_{k}": v for k, v in t.items()}, "meal_role": role(p, ftype or p.get("food_type"))}, ensure_ascii=False) + "\n")
+                                **{f"taste_{k}": v for k, v in t.items()}, "meal_role": r,
+                                "health_score": health_score(p, r, " ".join(ings))}, ensure_ascii=False) + "\n")
     print("끝", flush=True)
 
 
@@ -179,6 +151,7 @@ def sample(path):
     from collections import Counter
     print("역할", Counter(r["meal_role"] for r in recs).most_common())
     print("원재료 근거", Counter(r["src"] for r in recs))
+    print("건강 점수(10점 구간)", sorted(Counter(None if r["health_score"] is None else min(9, r["health_score"] // 10) for r in recs).items(), key=lambda x: (x[0] is None, x[0])))
     for axis in ("salty", "sweet", "fatty", "spicy", "sour", "umami"):
         c = Counter(r[f"taste_{axis}"] for r in recs)
         print(axis, sorted(((k if k is not None else 0), v) for k, v in c.items()))
@@ -193,7 +166,7 @@ def upload(path):
     rows = []
     for l in open(path):
         r = json.loads(l)
-        rows.append({k: r[k] for k in ("id", "taste_salty", "taste_sweet", "taste_fatty", "taste_spicy", "taste_sour", "taste_umami", "meal_role")})
+        rows.append({k: r[k] for k in ("id", "taste_salty", "taste_sweet", "taste_fatty", "taste_spicy", "taste_sour", "taste_umami", "meal_role", "health_score")})
     for i in range(0, len(rows), 1000):
         rest("POST", "products_taste_patch?on_conflict=id", rows[i:i + 1000])
         if (i // 1000) % 50 == 0: print(f"  {i + 1000}/{len(rows)}", flush=True)

@@ -331,6 +331,9 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
           )}
 
           <p className="text-caption text-ink-3 mt-3">막대는 1일 기준치 대비 (2,000kcal 성인 기준)</p>
+          {product.health_score != null && (
+            <p className="text-caption text-ink-3 mt-1">건강 점수는 100g 당 열량·당류·포화지방·나트륨이 적을수록, 단백질·식이섬유가 많을수록 높아요</p>
+          )}
         </Card>
       ) : (
         <EmptyState className="mb-5" title="영양 정보 수집 중" description="해당 제품의 상세 영양 성분을 수집하고 있어요." />
