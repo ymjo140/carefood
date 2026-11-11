@@ -11,10 +11,10 @@ import {
   CONCERN_TAG_BOOSTS,
   CONCERN_RULES,
   SENSITIVITY_RULES,
-  TASTE_RANGES,
   CONCERN_CATEGORY_WEIGHT,
-  ALLERGEN_KEYWORDS,
 } from "./constants";
+import { tasteFit, tasteMultiplier, tasteReason } from "./taste";
+import { isAllergenic } from "./allergy";
 
 // ── 유틸 ──
 
@@ -64,25 +64,19 @@ export function scoreProduct(
   const reasons: string[] = [];
   const reasonDetails: string[] = [];
 
-  // ─── 알레르기 제외 ───
-  if (profile.allergies.length > 0) {
-    const productName = ((p.name as string) || "").toLowerCase();
-    for (const allergy of profile.allergies) {
-      const keywords = ALLERGEN_KEYWORDS[allergy];
-      if (keywords && keywords.some(kw => productName.includes(kw))) {
-        return {
-          ...p,
-          match_score: -1,
-          rank_score: -1,
-          taste_score: 0,
-          nutrition_score: 0,
-          match_reasons: [],
-          reason_detail: null,
-          dish_keyword: "",
-          is_excluded_allergy: true,
-        } as ScoredProduct;
-      }
-    }
+  // ─── 알레르기 제외 (이름 + 원재료) ───
+  if (isAllergenic(p, profile.allergies)) {
+    return {
+      ...p,
+      match_score: -1,
+      rank_score: -1,
+      taste_score: 0,
+      nutrition_score: 0,
+      match_reasons: [],
+      reason_detail: null,
+      dish_keyword: "",
+      is_excluded_allergy: true,
+    } as ScoredProduct;
   }
 
   // ─── 0. per-serving 보정 ───
@@ -93,7 +87,7 @@ export function scoreProduct(
   const servingRatio = baseG > 0 ? servingG / baseG : 1;
 
   // ─── 1. Health Base (0.4 ~ 1.0) ───
-  const healthScore = (p.health_score as number) || 50;
+  const healthScore = p.health_score == null ? 50 : Number(p.health_score); // 0점은 0점으로
   const healthBase = 0.3 + (healthScore / 100) * 0.7;
 
   if (healthScore >= 75) {
@@ -149,21 +143,22 @@ export function scoreProduct(
   if (timeOfDay !== undefined) {
     const cat = dishCategory;
     let timeMul = 1.0;
+    // 분류 이름은 DishCategory (types/database.ts) 그대로
     if (timeOfDay >= 6 && timeOfDay < 10) {
-      // 아침: 가벼운 식사, 유제품, 시리얼, 음료
-      if (["dairy", "cereal", "bread", "drink", "yogurt", "snack"].includes(cat)) timeMul = 1.08;
-      if (["soup", "stew", "meat"].includes(cat)) timeMul = 0.95;
+      // 아침: 가벼운 식사, 유제품, 빵, 음료·선식
+      if (["dairy", "bread", "beverage", "powder", "snack"].includes(cat)) timeMul = 1.08;
+      if (["soup", "stew", "grill"].includes(cat)) timeMul = 0.95;
     } else if (timeOfDay >= 11 && timeOfDay < 14) {
-      // 점심: 균형 식사
-      if (["rice", "noodle", "soup", "stew", "lunch_box"].includes(cat)) timeMul = 1.06;
+      // 점심: 한 끼 식사
+      if (["rice", "noodle", "soup", "stew", "set"].includes(cat)) timeMul = 1.06;
     } else if (timeOfDay >= 17 && timeOfDay < 21) {
       // 저녁: 든든한 식사
-      if (["rice", "soup", "stew", "meat", "fish"].includes(cat)) timeMul = 1.06;
-      if (["snack", "cereal"].includes(cat)) timeMul = 0.95;
+      if (["rice", "soup", "stew", "grill", "seafood", "side", "set"].includes(cat)) timeMul = 1.06;
+      if (["snack", "beverage"].includes(cat)) timeMul = 0.95;
     } else if ((timeOfDay >= 14 && timeOfDay < 17) || timeOfDay >= 21) {
       // 간식 시간
-      if (["snack", "drink", "dairy", "fruit", "nut", "dessert"].includes(cat)) timeMul = 1.08;
-      if (["rice", "noodle"].includes(cat)) timeMul = 0.95;
+      if (["snack", "beverage", "dairy", "bread"].includes(cat)) timeMul = 1.08;
+      if (["rice", "noodle", "set"].includes(cat)) timeMul = 0.95;
     }
     relevance *= timeMul;
   }
@@ -173,13 +168,14 @@ export function scoreProduct(
   const cal100 = (p.calories as number) || 0;
   const pro100 = (p.protein_g as number) || 0;
   const sug100 = (p.sugar_g as number) ?? 99;
-  const sod100 = (p.sodium_mg as number) || 0;
+  // 나트륨을 모르면 null — 0 으로 치면 '저나트륨' 보너스를 받아 버린다
+  const sod100: number | null = p.sodium_mg == null ? null : Number(p.sodium_mg);
   const fib100 = (p.fiber_g as number) || 0;
   // per-serving 값 (식사 충족 비교용)
   const calories = Math.round(cal100 * servingRatio * 10) / 10;
   const proteinG = Math.round(pro100 * servingRatio * 10) / 10;
   const sugarG = sug100 < 99 ? Math.round(sug100 * servingRatio * 10) / 10 : 99;
-  const sodiumMg = Math.round(sod100 * servingRatio * 10) / 10;
+  const sodiumMg: number | null = sod100 === null ? null : Math.round(sod100 * servingRatio * 10) / 10;
   const fiberG = Math.round(fib100 * servingRatio * 10) / 10;
 
   // 식품 특성 기반 보너스 (per-100g: "이 식품이 고단백인가?")
@@ -195,7 +191,7 @@ export function scoreProduct(
   if (profile.goals.includes("diabetes") && sugarG <= profile.perMeal.maxSugarG) {
     relevance *= 1.1;
   }
-  if (profile.goals.includes("blood_pressure") && sodiumMg <= profile.perMeal.maxSodiumMg) {
+  if (profile.goals.includes("blood_pressure") && sodiumMg !== null && sodiumMg <= profile.perMeal.maxSodiumMg) {
     relevance *= 1.1;
   }
 
@@ -207,7 +203,7 @@ export function scoreProduct(
       reasonDetails.push(`단백질 ${proteinG}g/1회 — 끼니당 ${profile.perMeal.minProteinG}g 권장 충족`);
     }
   }
-  if (sodiumMg > 0 && sodiumMg <= profile.perMeal.maxSodiumMg * 0.7) {
+  if (sodiumMg !== null && sodiumMg > 0 && sodiumMg <= profile.perMeal.maxSodiumMg * 0.7) {
     relevance *= 1.05;
   }
 
@@ -226,19 +222,13 @@ export function scoreProduct(
   // ─── 3. Preference (맛 + 구매 + 민감도, 0.7 ~ 1.3) ───
   let preference = 1.0;
 
-  // 맛 일치 (per-100g: 식품 자체의 맛 특성)
-  let tasteMatch = 0;
-  if (profile.tastes.salty >= 1 && profile.tastes.salty <= 10) {
-    const range = TASTE_RANGES.salty[profile.tastes.salty];
-    if (range && sod100 >= range[0] && sod100 < range[1]) { preference *= 1.05; tasteMatch++; }
-  }
-  if (profile.tastes.sweet >= 1 && profile.tastes.sweet <= 10 && sug100 < 99) {
-    const range = TASTE_RANGES.sweet[profile.tastes.sweet];
-    if (range && sug100 >= range[0] && sug100 < range[1]) { preference *= 1.05; tasteMatch++; }
-  }
-  if (tasteMatch >= 2) {
+  // 맛 — 짠·단·고소·매운 4축을 1~10 단계로 비교해 순위에 ×0.85~1.15 (lib/recommend/taste.ts)
+  const fit = tasteFit(profile.tastes, p);
+  preference *= tasteMultiplier(fit);
+  const tasteLine = tasteReason(fit);
+  if (tasteLine) {
     reasons.push("맛 취향 일치");
-    reasonDetails.push("선호하시는 맛 프로필에 가까워요");
+    reasonDetails.push(tasteLine);
   }
 
   // 구매 가능 보너스
@@ -264,24 +254,10 @@ export function scoreProduct(
     if (["soup", "stew", "rice"].includes(dishCategory)) preference *= 1.08;
   }
 
-  // ─── 맛 점수 (0~100): 거리 기반 연속 점수 ───
-  // 맛 프로필은 per-100g 기준 (식품 자체의 맛 특성)
+  // ─── 맛 점수 (0~100): 같은 tasteFit ───
   const fatVal = (p.fat_g as number) || 0;
-  let tasteDist = 0;
-  let tasteAxes = 0;
-  if (profile.tastes.salty >= 1 && profile.tastes.salty <= 10 && sod100 > 0) {
-    const range = TASTE_RANGES.salty[profile.tastes.salty];
-    if (range) { tasteDist += Math.min(1, Math.abs(sod100 - (range[0] + range[1]) / 2) / 1500); tasteAxes++; }
-  }
-  if (profile.tastes.sweet >= 1 && profile.tastes.sweet <= 10 && sug100 < 99) {
-    const range = TASTE_RANGES.sweet[profile.tastes.sweet];
-    if (range) { tasteDist += Math.min(1, Math.abs(sug100 - (range[0] + range[1]) / 2) / 25); tasteAxes++; }
-  }
-  if (profile.tastes.fatty >= 1 && profile.tastes.fatty <= 10) {
-    const range = TASTE_RANGES.fatty[profile.tastes.fatty];
-    if (range) { tasteDist += Math.min(1, Math.abs(fatVal - (range[0] + range[1]) / 2) / 30); tasteAxes++; }
-  }
-  const tasteScoreRaw = tasteAxes > 0 ? Math.round((1 - tasteDist / tasteAxes) * 100) : 50;
+  const tasteAxes = fit.axes;
+  const tasteScoreRaw = fit.score ?? 50;
 
   // ─── 영양 점수 (0~100): perMeal 기준 충족도 ───
   let nutritionHits = 0;
@@ -294,7 +270,7 @@ export function scoreProduct(
     nutritionTotal++;
     if (calories <= profile.perMeal.caloriesMax) nutritionHits++;
   }
-  if (profile.perMeal.maxSodiumMg > 0 && sodiumMg > 0) {
+  if (profile.perMeal.maxSodiumMg > 0 && sodiumMg !== null && sodiumMg > 0) {
     nutritionTotal++;
     if (sodiumMg <= profile.perMeal.maxSodiumMg) nutritionHits++;
   }

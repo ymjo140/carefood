@@ -1,9 +1,9 @@
 {
-  "checkedAt": "2026-11-10T08:12:30.351Z",
-  "files": 105,
+  "checkedAt": "2026-11-11T02:15:34.866Z",
+  "files": 104,
   "total": 0,
   "warnTotal": 0,
-  "allowedCount": 47,
+  "allowedCount": 46,
   "rules": [
     {
       "id": "hex-color",
@@ -282,7 +282,7 @@
     },
     {
       "file": "src/app/health/report/page.tsx",
-      "line": 237,
+      "line": 232,
       "rule": "silent-catch",
       "level": "warn",
       "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
@@ -291,7 +291,7 @@
     },
     {
       "file": "src/app/health/report/page.tsx",
-      "line": 239,
+      "line": 234,
       "rule": "silent-catch",
       "level": "warn",
       "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
@@ -480,21 +480,12 @@
     },
     {
       "file": "src/components/ProductTasteSection.tsx",
-      "line": 136,
+      "line": 98,
       "rule": "silent-catch",
       "level": "warn",
       "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
-      "match": "catch {              }",
-      "snippet": "} catch { /* silent */ } // ds-allow: 로컬 프로필 읽기"
-    },
-    {
-      "file": "src/components/ProductTasteSection.tsx",
-      "line": 139,
-      "rule": "silent-catch",
-      "level": "warn",
-      "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
-      "match": ".catch(() => {})",
-      "snippet": ".catch(() => {}); // ds-allow: 보조 정보 불러오기"
+      "match": "catch {                                           }",
+      "snippet": "} catch { /* ds-allow: 저장된 프로필을 못 읽으면 영양 점수만 보인다 */ }"
     },
     {
       "file": "src/components/ProductViewTracker.tsx",

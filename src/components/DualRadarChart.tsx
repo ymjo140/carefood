@@ -224,26 +224,3 @@ function Legend({ showUser, showNutrition, showTaste = true, estimated = false }
     </div>
   );
 }
-
-/**
- * 매칭 점수 계산 유틸
- */
-export function calcTasteMatchScore(product: TasteProfile, user: TasteProfile): number {
-  const axes: (keyof TasteProfile)[] = ["salty", "sweet", "savory", "light", "spicy"];
-  const maxDist = Math.sqrt(axes.length * 16); // 각 축 최대 차이 4, 5축
-  const dist = Math.sqrt(
-    axes.reduce((sum, k) => sum + Math.pow(product[k] - user[k], 2), 0)
-  );
-  return Math.round((1 - dist / maxDist) * 100);
-}
-
-export function calcNutritionMatchScore(nutrition: NutritionProfile): number {
-  const axes: (keyof NutritionProfile)[] = ["protein", "carbs", "fat", "fiber", "vitamins"];
-  // 1~5 스케일 평균을 0~100 점수로 변환 (5=100, 3=60, 1=20)
-  const scores = axes.map((k) => ((nutrition[k] - 1) / 4) * 100);
-  return Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
-}
-
-export function calcOverallMatchScore(tasteScore: number, nutritionScore: number): number {
-  return Math.round(tasteScore * 0.4 + nutritionScore * 0.6);
-}

@@ -60,7 +60,8 @@ async function executeQuery(
     .eq("is_active", true)
     .not("health_score", "is", null)
     .neq("dish_category", "sauce")
-    .neq("dish_category", "ingredient");
+    .neq("dish_category", "ingredient")
+    .neq("dish_category", "supplement"); // 건강기능식품은 끼니 추천에서 뺀다
 
   // ── Must 필터 (안전 — 항상 적용) ──
   query = applyMustFilters(query, profile);
@@ -152,24 +153,22 @@ function applyShouldFilters(query: SupabaseQuery, profile: UserProfile, relaxFac
 // ── Nice 필터: 맛 선호 ──
 
 function applyNiceFilters(query: SupabaseQuery, profile: UserProfile) {
+  // 짠·단·고소: 고른 단계보다 2단계 이상 '센' 제품만 뺀다 (덜 짠 것은 남긴다 — 순위에서 맛 점수로 가린다)
+  // 매운맛: 못 먹는 사람(1~3)에게는 맵기 2 이하만, 좋아하는 사람(8~10)에게는 맵기 2 이상만
   const { tastes } = profile;
   const maxTaste = 10;
 
   if (tastes.salty >= 1 && tastes.salty <= maxTaste) {
-    const low = Math.max(1, tastes.salty - 1);
-    const high = Math.min(maxTaste, tastes.salty + 1);
-    query = query.gte("sodium_mg", TASTE_RANGES.salty[low][0]).lt("sodium_mg", TASTE_RANGES.salty[high][1]);
+    query = query.or(`sodium_mg.lt.${TASTE_RANGES.salty[Math.min(maxTaste, tastes.salty + 1)][1]},sodium_mg.is.null`); // 값을 모르면 남긴다
   }
   if (tastes.sweet >= 1 && tastes.sweet <= maxTaste) {
-    const low = Math.max(1, tastes.sweet - 1);
-    const high = Math.min(maxTaste, tastes.sweet + 1);
-    query = query.gte("sugar_g", TASTE_RANGES.sweet[low][0]).lt("sugar_g", TASTE_RANGES.sweet[high][1]);
+    query = query.or(`sugar_g.lt.${TASTE_RANGES.sweet[Math.min(maxTaste, tastes.sweet + 1)][1]},sugar_g.is.null`); // 값을 모르면 남긴다
   }
   if (tastes.fatty >= 1 && tastes.fatty <= maxTaste) {
-    const low = Math.max(1, tastes.fatty - 1);
-    const high = Math.min(maxTaste, tastes.fatty + 1);
-    query = query.gte("fat_g", TASTE_RANGES.fatty[low][0]).lt("fat_g", TASTE_RANGES.fatty[high][1]);
+    query = query.or(`fat_g.lt.${TASTE_RANGES.fatty[Math.min(maxTaste, tastes.fatty + 1)][1]},fat_g.is.null`); // 값을 모르면 남긴다
   }
+  if (tastes.spicy >= 1 && tastes.spicy <= 3) query = query.or("spicy_score.lte.2,spicy_score.is.null");
+  else if (tastes.spicy >= 8) query = query.gte("spicy_score", 2);
 
   return query;
 }

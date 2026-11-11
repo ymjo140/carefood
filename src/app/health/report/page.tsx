@@ -224,13 +224,8 @@ export default function HealthReportPage() {
         fetch("/api/recommend", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            concerns: profile.concerns || [],
-            sensitivity: profile.sensitivity || { digestive: 2, additive: 2 },
-            conditions: [...new Set([...(profile.conditions || []), ...(healthData.conditions || [])])],
-            allergies: profile.allergies || [],
-            tastes: profile.tastes || { salty: 3, sweet: 3, spicy: 3, fatty: 3 },
-          }),
+          // 홈 추천과 같은 모양 — 목표·입맛·검진 수치를 그대로 보낸다
+          body: JSON.stringify({ profile, health: healthData }),
         })
           .then((r) => r.json())
           .then((data) => setTopProducts((data.recommendations || []).slice(0, 5)))

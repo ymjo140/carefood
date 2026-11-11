@@ -1,12 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import DualRadarChart, {
-  calcTasteMatchScore,
-  calcNutritionMatchScore,
-  calcOverallMatchScore,
-} from "./DualRadarChart";
+import DualRadarChart from "./DualRadarChart";
 import { Card, Estimate, Notice, SectionHeader, TextLink, cn } from "@/components/ui";
+import { parseProfile, scoreProduct } from "@/lib/recommend";
+import { productTaste, cleanTastes } from "@/lib/recommend/taste";
 
 type ReviewTasteData = {
   avgSalty: number;   // 1~5, 0=데이터없음
@@ -32,6 +30,8 @@ type Props = {
   };
   /** 리뷰 기반 맛 체감 평균 (있으면 영양 예측을 보정) */
   reviewTaste?: ReviewTasteData;
+  /** 100g 기준 제품 행 — 적합도·맛 단계를 목록과 같은 식(lib/recommend)으로 */
+  scoreRow: Record<string, unknown>;
 };
 
 /**
@@ -39,20 +39,10 @@ type Props = {
  * 영양성분 + spicy_score에서 알 수 있는 5축 사용
  * 짠맛(나트륨), 단맛(당류비율), 고소함(지방), 담백함(단백질밀도), 매운맛(spicy_score)
  */
-function predictTasteFromNutrition(n: Props["nutrition"]) {
-  // 짠맛: 나트륨 기반. 0mg=1, 200=2, 500=3, 800=4, 1200+=5
-  const salty = n.sodium_mg != null
-    ? Math.min(5, Math.max(1, Math.round(n.sodium_mg / 300) + 1))
-    : 2.5;
-
-  // 단맛: 탄수화물 중 당류 비중 추정. carbs가 높고 칼로리 대비 비율 높으면 단맛↑
-  const carbRatio = (n.carbs_g ?? 0) / Math.max(1, (n.calories ?? 100) / 100);
-  const sweet = Math.min(5, Math.max(1, Math.round(carbRatio * 0.8) + 1));
-
-  // 고소함: 지방 기반. 0g=1, 5=2, 10=3, 15=4, 20+=5
-  const savory = n.fat_g != null
-    ? Math.min(5, Math.max(1, Math.round(n.fat_g / 5) + 1))
-    : 2.5;
+function predictTasteFromNutrition(n: Props["nutrition"], row: Record<string, unknown>) {
+  // 짠맛·단맛·고소함·매운맛: 목록 추천과 같은 1~10 단계(lib/recommend/taste)를 1~5 로 — 모르면 가운데
+  const lv = productTaste(row);
+  const half = (v: number | undefined) => (v === undefined ? 2.5 : Math.max(1, Math.min(5, Math.round(v / 2))));
 
   // 담백함: 단백질÷칼로리 비율. 높으면 담백 (닭가슴살=5, 과자=1)
   const proteinDensity = n.protein_g != null && n.calories != null && n.calories > 0
@@ -60,12 +50,7 @@ function predictTasteFromNutrition(n: Props["nutrition"]) {
     : 0.15;
   const light = Math.min(5, Math.max(1, Math.round(proteinDensity * 10) + 1));
 
-  // 매운맛: spicy_score 기반 (원재료명 키워드 파싱, 0~5)
-  const spicy = n.spicy_score != null
-    ? Math.min(5, Math.max(1, n.spicy_score || 1))
-    : 1;
-
-  return { salty, sweet, savory, light, spicy };
+  return { salty: half(lv.salty), sweet: half(lv.sweet), savory: half(lv.fatty), light, spicy: half(lv.spicy) };
 }
 
 /**
@@ -101,46 +86,20 @@ function toNutritionProfile(n: Props["nutrition"]) {
   return { protein, carbs, fat, fiber, vitamins: balance };
 }
 
-export default function ProductTasteSection({ nutrition, reviewTaste }: Props) {
-  const [userTaste, setUserTaste] = useState<{ pref_spicy: number; pref_sweet: number; pref_salty: number; pref_umami: number; pref_sour: number } | null>(null);
+export default function ProductTasteSection({ nutrition, reviewTaste, scoreRow }: Props) {
+  // 내 프로필 — 홈 추천·탐색과 같은 carefood_profile (입맛 1~10) · carefood_health
+  const [mine, setMine] = useState<{ profile: Record<string, unknown>; health: Record<string, unknown> | null } | null>(null);
 
   useEffect(() => {
-    // 내 맛 선호 (서버 user_taste_preferences 우선 → 온보딩 폴백). 누구인지는 서버가 쿠키로 안다
-    fetch(`/api/taste?mine=1`)
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.preferences && d.preferences.source !== "default") {
-          setUserTaste(d.preferences);
-        } else {
-          // 테이블에 없으면 온보딩 데이터에서 폴백
-          try {
-            const profileRaw = localStorage.getItem("carefood_profile");
-            if (profileRaw) {
-              const profile = JSON.parse(profileRaw);
-              const t = profile.tastes;
-              if (t) {
-                // 온보딩: 4축(salty/sweet/spicy/fatty, 1-10) → 새 5축(1-5)
-                const salty = Math.max(1, Math.min(5, Math.round(t.salty / 2)));
-                const sweet = Math.max(1, Math.min(5, Math.round(t.sweet / 2)));
-                const spicy = Math.max(1, Math.min(5, Math.round(t.spicy / 2)));
-                const fatty = Math.max(1, Math.min(5, Math.round(t.fatty / 2)));
-                setUserTaste({
-                  pref_salty: salty,
-                  pref_sweet: sweet,
-                  pref_spicy: spicy,
-                  pref_umami: fatty, // fatty → 고소함 매핑에 활용
-                  pref_sour: 3,
-                });
-              }
-            }
-          } catch { /* silent */ } // ds-allow: 로컬 프로필 읽기
-        }
-      })
-      .catch(() => {}); // ds-allow: 보조 정보 불러오기
+    try {
+      const raw = localStorage.getItem("carefood_profile");
+      const health = localStorage.getItem("carefood_health");
+      if (raw) setMine({ profile: JSON.parse(raw), health: health ? JSON.parse(health) : null }); // eslint-disable-line react-hooks/set-state-in-effect -- 브라우저 저장소는 그린 뒤에만 읽을 수 있다
+    } catch { /* ds-allow: 저장된 프로필을 못 읽으면 영양 점수만 보인다 */ }
   }, []);
 
   // 맛 프로필: 영양성분 예측 + 리뷰 체감 보정
-  const predicted = predictTasteFromNutrition(nutrition);
+  const predicted = predictTasteFromNutrition(nutrition, scoreRow);
   const reviewCount = reviewTaste?.reviewCount || 0;
   const estimated = reviewCount < 2; // 맛 평가가 2건 모이기 전엔 영양성분으로 추정한 맛
   const tasteProfile = !estimated && reviewTaste
@@ -162,24 +121,30 @@ export default function ProductTasteSection({ nutrition, reviewTaste }: Props) {
       }
     : predicted;
 
-  // 사용자 선호: 온보딩 데이터를 새 5축으로 매핑
-  const userTasteProfile = userTaste
+  // 내 입맛 그림 — 1~10 을 1~5 로
+  const ut = mine ? cleanTastes(mine.profile.tastes) : {};
+  const half = (v: number | undefined) => (v === undefined ? 3 : Math.max(1, Math.min(5, Math.round(v / 2))));
+  const userTasteProfile = mine && Object.keys(ut).length
     ? {
-        salty: +userTaste.pref_salty,
-        sweet: +userTaste.pref_sweet,
-        savory: Math.round((+userTaste.pref_umami + (+userTaste.pref_salty > 3 ? 1 : 0)) * 0.8 + 1), // 감칠맛+짠맛 → 고소함 근사
-        light: Math.max(1, 6 - Math.round((+userTaste.pref_spicy + +userTaste.pref_salty) / 2)), // 자극 적으면 담백 선호
-        spicy: +userTaste.pref_spicy || 3, // 매운맛 선호도
+        salty: half(ut.salty),
+        sweet: half(ut.sweet),
+        savory: half(ut.fatty),
+        light: Math.max(1, 6 - Math.round((half(ut.spicy) + half(ut.salty)) / 2)), // 자극 적으면 담백 선호
+        spicy: half(ut.spicy),
       }
     : undefined;
 
   const nutritionProfile = toNutritionProfile(nutrition);
 
-  // 3가지 점수 계산
-  const tasteScore = userTasteProfile ? calcTasteMatchScore(tasteProfile, userTasteProfile) : null;
-  const nutritionScore = calcNutritionMatchScore(nutritionProfile);
-  // 종합 매칭 = 맛 40% + 영양 60% (리스트의 매칭 점수와 동일 기준)
-  const matchScore = tasteScore != null ? calcOverallMatchScore(tasteScore, nutritionScore) : null;
+  // 점수 — 목록의 적합도와 같은 식 (lib/recommend/scoring). 알레르기는 따로 경고하므로 여기선 빼고 계산
+  const scored = scoreProduct(
+    scoreRow,
+    { ...parseProfile(mine?.profile || {}, mine?.health || null), allergies: [] },
+    !!scoreRow.is_purchasable,
+  );
+  const tasteScore = mine && scored.taste_known ? scored.taste_score : null;
+  const nutritionScore = scored.nutrition_score;
+  const matchScore = mine ? scored.match_score : null;
 
   return (
     <section className="mb-8">

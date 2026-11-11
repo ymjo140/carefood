@@ -125,6 +125,7 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
     spicy_score: number; is_active: boolean;
     health_score: number | null;
     source: string | null;
+    functional_tags: string[] | null; dish_category: string | null; is_purchasable: boolean | null;
   };
 
   const { data: product, error } = await supabase
@@ -415,6 +416,14 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
           spicy_score: product.spicy_score,
         }}
         reviewTaste={reviewTaste}
+        scoreRow={{
+          // 목록과 같은 적합도를 내려고 lib/recommend 에 그대로 넘기는 100g 기준 값
+          id: product.id, name: product.name, manufacturer: product.manufacturer, health_score: product.health_score,
+          functional_tags: product.functional_tags, dish_category: product.dish_category, category_large: product.category_large,
+          calories: product.calories, protein_g: product.protein_g, carbs_g: product.carbs_g, fat_g: product.fat_g,
+          sugar_g: product.sugar_g, sodium_mg: product.sodium_mg, fiber_g: product.fiber_g, spicy_score: product.spicy_score,
+          serving_size_g: product.serving_size_g, nutrient_base_g: product.nutrient_base_g, is_purchasable: product.is_purchasable,
+        }}
       />
 
       {/* ── 건강 프로필 연동 리뷰 ── */}

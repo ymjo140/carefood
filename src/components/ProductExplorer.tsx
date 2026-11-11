@@ -592,6 +592,7 @@ export default function ProductExplorer({ variant = "page" }: { variant?: "page"
       if (userAllergies.length > 0) params.set("allergies", userAllergies.join(","));
       const needsProfile = ["recommend", "taste_desc", "nutrition_desc"].includes(sortBy);
       params.set("sort", needsProfile ? "recommend" : sortBy);
+      if (needsProfile) params.set("rank", sortBy); // 서버가 후보 전체를 이 기준으로 정렬한다
       params.set("page", String(page));
       params.set("limit", "20");
 
@@ -601,32 +602,14 @@ export default function ProductExplorer({ variant = "page" }: { variant?: "page"
         res = await fetch(`/api/products?${params.toString()}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            concerns: profile.concerns || [],
-            goals: profile.goals || [],
-            conditions: profile.conditions || [],
-            sensitivity: profile.sensitivity || { digestive: 2, additive: 2 },
-            tastes: profile.tastes || { salty: 5, sweet: 5, spicy: 5, fatty: 5 },
-            nutrition_goals: profile.nutrition_goals || undefined,
-            allergies: profile.allergies || [],
-          }),
+          // 홈 추천과 같은 프로필 그대로 — 서버가 lib/recommend 로 같은 점수를 매긴다
+          body: JSON.stringify(profile),
         });
       } else {
         res = await fetch(`/api/products?${params.toString()}`);
       }
       if (!res.ok) throw new Error(`제품 목록 ${res.status}`);
       const json: ApiResponse = await res.json();
-
-      // 맛순/영양순: 클라이언트에서 재정렬
-      if (sortBy === "taste_desc" && json.products) {
-        json.products.sort((a: Record<string, unknown>, b: Record<string, unknown>) =>
-          ((b as { taste_score?: number }).taste_score ?? 0) - ((a as { taste_score?: number }).taste_score ?? 0)
-        );
-      } else if (sortBy === "nutrition_desc" && json.products) {
-        json.products.sort((a: Record<string, unknown>, b: Record<string, unknown>) =>
-          ((b as { nutrition_score?: number }).nutrition_score ?? 0) - ((a as { nutrition_score?: number }).nutrition_score ?? 0)
-        );
-      }
 
       setData(json);
       setError(false);

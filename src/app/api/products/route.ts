@@ -1,19 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
-import { displayMatch } from "@/lib/recommend/scoring";
-import { ALLERGEN_KEYWORDS } from "@/lib/recommend/constants";
+import { byRank, parseProfile, scoreAndRank } from "@/lib/recommend";
+import { TASTE_RANGES } from "@/lib/recommend/constants";
+import { isAllergenic } from "@/lib/recommend/allergy";
 
-/** 알레르기 유발 제품 필터링 (제품명 기반) */
+/**
+ * GET /api/products — 탐색 (거르기 + 정렬 + 쪽 나누기)
+ * POST /api/products — 추천순·맛순·영양순: 프로필로 점수를 매긴다
+ *   점수는 홈 추천과 같은 lib/recommend (scoreAndRank) — 같은 제품·같은 프로필이면 어디서나 같은 적합도
+ *   전체 후보(건강 점수 상위 POOL 개)를 매긴 뒤 쪽을 나눈다 (전에는 20개짜리 한 쪽 안에서만 다시 정렬했다)
+ * 가격순도 같은 방식 — 후보 전체에 가격을 붙인 뒤 정렬하고 쪽을 나눈다
+ */
+const POOL = 300;
+
+/** 알레르기 유발 제품 거르기 (이름 + 원재료) */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function filterAllergens(products: any[], allergies: string[]): any[] {
   if (!allergies.length) return products;
-  return products.filter((p) => {
-    const name = ((p.name as string) || "").toLowerCase();
-    return !allergies.some((allergy) => {
-      const keywords = ALLERGEN_KEYWORDS[allergy];
-      return keywords && keywords.some((kw) => name.includes(kw));
-    });
-  });
+  return products.filter((p) => !isAllergenic(p, allergies));
 }
 
 /* ════════════════════════════════════════════
@@ -27,23 +31,6 @@ type MallPrice = {
   image_url: string | null;
 };
 
-// 맛 레벨 → 영양성분 범위 매핑 (10단계)
-const TASTE_RANGES: Record<string, Record<number, [number, number]>> = {
-  salty: {
-    1: [0, 100], 2: [100, 200], 3: [200, 350], 4: [350, 500], 5: [500, 650],
-    6: [650, 800], 7: [800, 1000], 8: [1000, 1200], 9: [1200, 1500], 10: [1500, 9999],
-  },
-  sweet: {
-    1: [0, 1], 2: [1, 2], 3: [2, 4], 4: [4, 6], 5: [6, 9],
-    6: [9, 12], 7: [12, 16], 8: [16, 20], 9: [20, 25], 10: [25, 99],
-  },
-  fatty: {
-    1: [0, 1], 2: [1, 3], 3: [3, 5], 4: [5, 7], 5: [7, 10],
-    6: [10, 15], 7: [15, 20], 8: [20, 25], 9: [25, 30], 10: [30, 99],
-  },
-};
-
-// 목적 → 관련 태그 매핑 (OR 조합)
 const PURPOSE_TAG_MAP: Record<string, string[]> = {
   gut_health: ["probiotics", "prebiotic"],
   skin: ["collagen", "vitamin"],
@@ -53,278 +40,6 @@ const PURPOSE_TAG_MAP: Record<string, string[]> = {
   bone: ["calcium"],
   eye: ["lutein"],
 };
-
-/* ════════════════════════════════════════════
-   추천 스코어링 (recommend 로직 포팅)
-   ════════════════════════════════════════════ */
-
-type HealthConcern = "gut_health" | "skin" | "weight" | "energy";
-
-const CONCERN_TAG_BOOSTS: Record<HealthConcern, { tag: string; score: number; reason: string }[]> = {
-  gut_health: [
-    { tag: "probiotics", score: 20, reason: "유산균 함유" },
-    { tag: "prebiotic", score: 18, reason: "식이섬유 함유" },
-  ],
-  skin: [
-    { tag: "collagen", score: 20, reason: "콜라겐 함유" },
-    { tag: "vitamin", score: 12, reason: "비타민 함유" },
-    { tag: "zinc", score: 10, reason: "아연 함유" },
-  ],
-  weight: [
-    { tag: "protein", score: 15, reason: "프로틴 제품" },
-    { tag: "diet", score: 15, reason: "다이어트 설계" },
-    { tag: "sugar_free", score: 12, reason: "무설탕" },
-  ],
-  energy: [
-    { tag: "vitamin", score: 15, reason: "비타민 함유" },
-    { tag: "iron", score: 12, reason: "철분 함유" },
-    { tag: "calcium", score: 10, reason: "칼슘 함유" },
-    { tag: "omega3", score: 10, reason: "오메가3 함유" },
-  ],
-};
-
-type NutrientRule = {
-  field: string;
-  op: "lt" | "gt" | "gte" | "lte" | "between";
-  value: number | [number, number];
-  score: number;
-  reason: string;
-};
-
-const CONCERN_RULES: Record<HealthConcern, NutrientRule[]> = {
-  gut_health: [
-    { field: "fiber_g", op: "gte", value: 3, score: 15, reason: "식이섬유 풍부" },
-    { field: "sugar_g", op: "lt", value: 8, score: 8, reason: "당류 적정" },
-    { field: "fat_g", op: "lt", value: 10, score: 5, reason: "저지방" },
-  ],
-  skin: [
-    { field: "protein_g", op: "gte", value: 10, score: 12, reason: "단백질 풍부" },
-    { field: "fat_g", op: "between", value: [3, 15], score: 8, reason: "건강한 지방" },
-    { field: "sugar_g", op: "lt", value: 5, score: 10, reason: "저당" },
-  ],
-  weight: [
-    { field: "calories", op: "lt", value: 300, score: 15, reason: "저칼로리" },
-    { field: "protein_g", op: "gte", value: 15, score: 12, reason: "고단백" },
-    { field: "fat_g", op: "lt", value: 8, score: 8, reason: "저지방" },
-    { field: "sugar_g", op: "lt", value: 5, score: 8, reason: "저당" },
-  ],
-  energy: [
-    { field: "calories", op: "between", value: [200, 500], score: 10, reason: "적정 열량" },
-    { field: "protein_g", op: "gte", value: 12, score: 12, reason: "단백질 풍부" },
-    { field: "carbs_g", op: "gte", value: 20, score: 8, reason: "탄수화물 충분" },
-  ],
-};
-
-const SENSITIVITY_RULES = {
-  digestive: [
-    { field: "fat_g", op: "lt" as const, value: 8, score: 8, reason: "소화 편한" },
-    { field: "sodium_mg", op: "lt" as const, value: 500, score: 5, reason: "자극 적은" },
-  ],
-  additive: [
-    { field: "sodium_mg", op: "lt" as const, value: 400, score: 8, reason: "저나트륨" },
-  ],
-};
-
-function checkRule(product: Record<string, unknown>, rule: { field: string; op: string; value: number | [number, number] }): boolean {
-  const v = product[rule.field] as number | null | undefined;
-  if (v === null || v === undefined) return false;
-  switch (rule.op) {
-    case "lt": return v < (rule.value as number);
-    case "gt": return v > (rule.value as number);
-    case "lte": return v <= (rule.value as number);
-    case "gte": return v >= (rule.value as number);
-    case "between": {
-      const [min, max] = rule.value as [number, number];
-      return v >= min && v <= max;
-    }
-    default: return false;
-  }
-}
-
-interface ProfileData {
-  concerns: HealthConcern[];
-  goals: string[];
-  conditions: string[];
-  sensitivity: { digestive: number; additive: number };
-  tastes: { salty: number; sweet: number; spicy: number; fatty: number };
-  nutrition_goals?: {
-    perMealCalMax?: number;
-    perMealSodiumMax?: number;
-    perMealSugarMax?: number;
-    perMealProteinMin?: number;
-  };
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function scoreProduct(p: Record<string, any>, profile: ProfileData, isPurchasable: boolean): { match_score: number; taste_score: number; nutrition_score: number; match_reasons: string[]; taste_known: boolean } {
-  const { concerns, goals, conditions, sensitivity, tastes, nutrition_goals: ng } = profile;
-
-  const healthScore = (p.health_score as number) || 50;
-  let score = Math.round(healthScore * 0.3); // 0~30
-  const reasons: string[] = [];
-
-  // per-serving 보정: DB값은 모두 100g 기준
-  const baseG = (p.nutrient_base_g as number) || 100;
-  const servG = (p.serving_size_g as number) || 100;
-  const sRatio = baseG > 0 ? servG / baseG : 1;
-
-  if (healthScore >= 70) reasons.push("건강 지표 우수");
-
-  // ── 기능성 태그 매칭 ──
-  const productTags: string[] = (p.functional_tags as string[]) || [];
-  for (const concern of concerns) {
-    const tagBoosts = CONCERN_TAG_BOOSTS[concern];
-    if (tagBoosts) {
-      for (const boost of tagBoosts) {
-        if (productTags.includes(boost.tag)) {
-          score += boost.score;
-          if (!reasons.includes(boost.reason)) reasons.push(boost.reason);
-        }
-      }
-    }
-  }
-
-  // ── 관심사 영양 매칭 ──
-  for (const concern of concerns) {
-    const rules = CONCERN_RULES[concern];
-    if (!rules) continue;
-    for (const rule of rules) {
-      if (checkRule(p, rule)) {
-        score += rule.score;
-        if (!reasons.includes(rule.reason)) reasons.push(rule.reason);
-      }
-    }
-  }
-
-  // ── 민감도 ──
-  if (sensitivity.digestive === 3) {
-    for (const rule of SENSITIVITY_RULES.digestive) {
-      if (checkRule(p, rule)) { score += rule.score; if (!reasons.includes(rule.reason)) reasons.push(rule.reason); }
-    }
-  }
-  if (sensitivity.additive === 3) {
-    for (const rule of SENSITIVITY_RULES.additive) {
-      if (checkRule(p, rule)) { score += rule.score; if (!reasons.includes(rule.reason)) reasons.push(rule.reason); }
-    }
-  }
-
-  // ── 영양 변수 ──
-  // per-100g (식품 특성 비교용)
-  const cal100 = p.calories as number | null;
-  const pro100 = p.protein_g as number | null;
-  const sug100 = p.sugar_g as number | null;
-  const sod100 = p.sodium_mg as number | null;
-  const fib100 = p.fiber_g as number | null;
-  // per-serving (식사 충족 비교용)
-  const calories = cal100 != null ? Math.round(cal100 * sRatio * 10) / 10 : null;
-  const proteinG = pro100 != null ? Math.round(pro100 * sRatio * 10) / 10 : null;
-  const sugarG = sug100 != null ? Math.round(sug100 * sRatio * 10) / 10 : null;
-  const sodiumMg = sod100 != null ? Math.round(sod100 * sRatio * 10) / 10 : null;
-  const fiberG = fib100 != null ? Math.round(fib100 * sRatio * 10) / 10 : null;
-
-  // 기본 영양 보너스 (per-serving 기준)
-  if (calories && calories > 0 && calories < 600) score += 3;
-  if (proteinG && proteinG >= 10 && !reasons.includes("단백질 풍부") && !reasons.includes("고단백")) score += 3;
-
-  // ── 건강 목표 기반 보너스 ──
-  const allGoals = [...conditions, ...goals];
-
-  // 식품 특성 판단 (per-100g): "이 음식이 저당인가?"
-  if ((allGoals.includes("diabetes") || conditions.includes("diabetes")) && sug100 !== null) {
-    if (sug100 < 3) { score += 8; if (!reasons.includes("극저당")) reasons.push("극저당"); }
-    else if (sug100 < 5) { score += 5; if (!reasons.includes("저당")) reasons.push("저당"); }
-  }
-  if ((allGoals.includes("blood_pressure") || conditions.includes("hypertension")) && sod100 !== null) {
-    if (sod100 < 300) { score += 8; if (!reasons.includes("극저나트륨")) reasons.push("극저나트륨"); }
-    else if (sod100 < 500) { score += 5; if (!reasons.includes("저나트륨")) reasons.push("저나트륨"); }
-  }
-  if ((allGoals.includes("kidney") || conditions.includes("kidney")) && pro100 !== null && pro100 < 10 && sod100 !== null && sod100 < 400) {
-    if (!reasons.includes("저단백")) reasons.push("저단백");
-    score += 6;
-  }
-  if (allGoals.includes("muscle") && pro100 !== null) {
-    if (pro100 >= 20) { score += 6; if (!reasons.includes("고단백")) reasons.push("고단백"); }
-    else if (pro100 >= 15) score += 3;
-  }
-  if (allGoals.includes("weight_loss") && calories !== null) {
-    if (calories > 0 && calories <= 350) { score += 5; if (!reasons.includes("저칼로리")) reasons.push("저칼로리"); }
-  }
-  if ((allGoals.includes("gut_health") || concerns.includes("gut_health")) && fib100 !== null && fib100 >= 5) {
-    if (!reasons.includes("고식이섬유")) reasons.push("고식이섬유");
-    score += 5;
-  }
-
-  // ── nutrition_goals 적합성 (per-serving: 한끼 충족 여부) ──
-  if (ng) {
-    if (ng.perMealSodiumMax && sodiumMg !== null && sodiumMg <= ng.perMealSodiumMax * 0.7) score += 3;
-    if (ng.perMealSugarMax && sugarG !== null && sugarG <= ng.perMealSugarMax * 0.7) score += 3;
-    if (ng.perMealProteinMin && proteinG !== null && proteinG >= ng.perMealProteinMin) score += 3;
-  }
-
-  // ── 구매 가능 보너스 ──
-  if (isPurchasable) score += 10;
-
-  // ── 맛 일치도 (per-100g: 식품 자체의 맛 특성) ──
-  let tasteMatch = 0;
-  if (tastes.salty >= 1 && tastes.salty <= 10 && sod100) {
-    const range = TASTE_RANGES.salty[tastes.salty];
-    if (range && sod100 >= range[0] && sod100 < range[1]) { score += 5; tasteMatch++; }
-  }
-  if (tastes.sweet >= 1 && tastes.sweet <= 10 && sug100 !== null) {
-    const range = TASTE_RANGES.sweet[tastes.sweet];
-    if (range && sug100 >= range[0] && sug100 < range[1]) { score += 5; tasteMatch++; }
-  }
-  // 고소함 일치 확인
-  const fatVal = (p.fat_g as number) || 0;
-  if (tastes.fatty >= 1 && tastes.fatty <= 10) {
-    const range = TASTE_RANGES.fatty[tastes.fatty];
-    if (range && fatVal >= range[0] && fatVal < range[1]) tasteMatch++;
-  }
-  if (tasteMatch >= 2 && !reasons.includes("맛 취향 일치")) reasons.push("맛 취향 일치");
-
-  // ── 맛 점수 (0~100): 거리 기반 연속 점수 (per-100g) ──
-  let tasteDist = 0;
-  let tasteAxes = 0;
-  if (tastes.salty >= 1 && tastes.salty <= 10 && sod100) {
-    const range = TASTE_RANGES.salty[tastes.salty];
-    if (range) {
-      const mid = (range[0] + range[1]) / 2;
-      const maxRange = 1500;
-      tasteDist += Math.min(1, Math.abs(sod100 - mid) / maxRange);
-      tasteAxes++;
-    }
-  }
-  if (tastes.sweet >= 1 && tastes.sweet <= 10 && sug100 !== null) {
-    const range = TASTE_RANGES.sweet[tastes.sweet];
-    if (range) {
-      const mid = (range[0] + range[1]) / 2;
-      tasteDist += Math.min(1, Math.abs(sug100 - mid) / 25);
-      tasteAxes++;
-    }
-  }
-  if (tastes.fatty >= 1 && tastes.fatty <= 10) {
-    const range = TASTE_RANGES.fatty[tastes.fatty];
-    if (range) {
-      const mid = (range[0] + range[1]) / 2;
-      tasteDist += Math.min(1, Math.abs(fatVal - mid) / 30);
-      tasteAxes++;
-    }
-  }
-  const taste_score = tasteAxes > 0
-    ? Math.round((1 - tasteDist / tasteAxes) * 100)
-    : 50;
-
-  // ── 영양 점수 (0~100) ──
-  let nHits = 0, nTotal = 0;
-  if (ng?.perMealProteinMin && ng.perMealProteinMin > 0) { nTotal++; if (proteinG && proteinG >= ng.perMealProteinMin) nHits++; }
-  if (ng?.perMealCalMax && ng.perMealCalMax > 0 && calories && calories > 0) { nTotal++; if (calories <= ng.perMealCalMax) nHits++; }
-  if (ng?.perMealSodiumMax && ng.perMealSodiumMax > 0 && sodiumMg) { nTotal++; if (sodiumMg <= ng.perMealSodiumMax) nHits++; }
-  if (ng?.perMealSugarMax && ng.perMealSugarMax > 0 && sugarG !== null) { nTotal++; if (sugarG <= ng.perMealSugarMax) nHits++; }
-  nTotal++; if (proteinG && proteinG >= 5 && (p.carbs_g as number) * sRatio >= 5 && fatVal * sRatio >= 1) nHits++;
-  const nutrition_score = nTotal > 0 ? Math.round((nHits / nTotal) * 100) : 50;
-
-  return { match_score: Math.min(score, 100), taste_score, nutrition_score, match_reasons: reasons.slice(0, 4), taste_known: tasteAxes > 0 };
-}
 
 /* ════════════════════════════════════════════
    공통: URL 파라미터 파싱
@@ -368,7 +83,7 @@ function parseSearchParams(searchParams: URLSearchParams) {
    ════════════════════════════════════════════ */
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function buildProductQuery(supabase: any, params: ReturnType<typeof parseSearchParams>) {
+function buildProductQuery(supabase: any, params: ReturnType<typeof parseSearchParams>, pool = false) {
   const {
     salty, sweet, fatty, spicy,
     search, tag, tags, purpose, dishCategory,
@@ -381,12 +96,12 @@ function buildProductQuery(supabase: any, params: ReturnType<typeof parseSearchP
   type OrderCol = "name" | "protein_g" | "calories" | "health_score";
   const sortMap: Record<string, { column: OrderCol; ascending: boolean }> = {
     name: { column: "name", ascending: true },
-    price_asc: { column: "name", ascending: true },
-    price_desc: { column: "name", ascending: true },
+    price_asc: { column: "health_score", ascending: false }, // 후보 POOL 개를 받아 가격으로 다시 정렬
+    price_desc: { column: "health_score", ascending: false },
     protein_desc: { column: "protein_g", ascending: false },
     calories_asc: { column: "calories", ascending: true },
     health_desc: { column: "health_score", ascending: false },
-    recommend: { column: "health_score", ascending: false }, // POST에서 후처리 재정렬
+    recommend: { column: "health_score", ascending: false }, // 후보 POOL 개를 받아 점수로 다시 정렬
   };
   const orderBy = sortMap[sort] || sortMap.name;
 
@@ -411,7 +126,9 @@ function buildProductQuery(supabase: any, params: ReturnType<typeof parseSearchP
     query = query.gte("fat_g", min).lt("fat_g", max);
   }
   if (spicy >= 1 && spicy <= 10) {
-    query = query.gte("spicy_score", Math.ceil(spicy / 2));
+    // 매운맛 단계(1~10) → spicy_score(0~5) 가운데 ±1. 전에는 '이상'만 걸려 '덜 맵게'를 고르면 매운 제품만 남았다
+    const target = Math.round(spicy / 2);
+    query = query.gte("spicy_score", Math.max(0, target - 1)).lte("spicy_score", Math.min(5, target + 1));
   }
 
   // 상용제품 + 건강식단서비스
@@ -463,9 +180,12 @@ function buildProductQuery(supabase: any, params: ReturnType<typeof parseSearchP
   // 검색
   if (search) query = query.ilike("name", `%${search}%`);
 
-  // 페이지네이션
-  const from = (page - 1) * limit;
-  query = query.range(from, from + limit - 1);
+  // 쪽 나누기 — pool 이면 후보 전체(POOL 개)를 받아 서버에서 정렬한 뒤 나눈다
+  if (pool) query = query.range(0, POOL - 1);
+  else {
+    const from = (page - 1) * limit;
+    query = query.range(from, from + limit - 1);
+  }
 
   return query;
 }
@@ -483,17 +203,20 @@ async function attachPricesAndFilter(supabase: any, products: any[], params: Ret
 
   const productIds = products.map((p: { id: string }) => p.id);
 
-  let priceQuery = supabase
-    .from("v_all_prices" as "product_prices")
-    .select("product_id, platform, price, url, image_url")
-    .in("product_id", productIds);
-
-  if (source && source !== "all") {
-    priceQuery = priceQuery.eq("platform", source);
-  }
-
+  // 후보가 많을 때 주소가 너무 길어지지 않게 150개씩
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: prices } = await priceQuery as { data: any[] | null };
+  const prices: any[] = [];
+  for (let i = 0; i < productIds.length; i += 150) {
+    let priceQuery = supabase
+      .from("v_all_prices" as "product_prices")
+      .select("product_id, platform, price, url, image_url")
+      .in("product_id", productIds.slice(i, i + 150));
+    if (source && source !== "all") priceQuery = priceQuery.eq("platform", source);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await priceQuery as { data: any[] | null; error: { message: string } | null };
+    if (error) throw new Error(error.message);
+    prices.push(...(data || []));
+  }
 
   const priceMap: Record<string, MallPrice[]> = {};
   if (prices) {
@@ -555,9 +278,29 @@ async function attachPricesAndFilter(supabase: any, products: any[], params: Ret
    GET: 기존 제품 탐색 (변경 없음)
    ════════════════════════════════════════════ */
 
+/** 후보 전체를 정렬한 뒤 한 쪽만 — total 은 조건에 맞는 전체 수, 쪽은 정렬한 후보(최대 POOL) 안에서 */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function pageOf(rows: any[], params: ReturnType<typeof parseSearchParams>, count: number | null) {
+  const from = (params.page - 1) * params.limit;
+  return { products: rows.slice(from, from + params.limit), total: Math.max(rows.length, count ?? 0), page: params.page, limit: params.limit, totalPages: Math.ceil(rows.length / params.limit), pooled: true };
+}
+
 export async function GET(request: NextRequest) {
   const params = parseSearchParams(request.nextUrl.searchParams);
   const supabase = createServiceRoleClient();
+
+  // 가격순: 후보 전체에 가격을 붙여 정렬한 뒤 쪽을 나눈다 (전에는 이름순 20개 안에서만 정렬)
+  if (params.sort === "price_asc" || params.sort === "price_desc") {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error, count } = await buildProductQuery(supabase, params, true) as { data: any[] | null; error: any; count: number | null };
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    try {
+      const { result, postFiltered } = await attachPricesAndFilter(supabase, filterAllergens(data || [], params.allergies), params);
+      return NextResponse.json(pageOf(result, params, postFiltered || params.allergies.length ? null : count));
+    } catch (e) {
+      return NextResponse.json({ error: (e as Error).message }, { status: 500 });
+    }
+  }
 
   const query = buildProductQuery(supabase, params);
 
@@ -572,7 +315,9 @@ export async function GET(request: NextRequest) {
   // 알레르기 필터
   const allergyFiltered = filterAllergens(products, params.allergies);
 
-  const { result, postFiltered } = await attachPricesAndFilter(supabase, allergyFiltered, params);
+  let attached;
+  try { attached = await attachPricesAndFilter(supabase, allergyFiltered, params); } catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: 500 }); }
+  const { result, postFiltered } = attached;
 
   return NextResponse.json({
     products: result,
@@ -584,70 +329,43 @@ export async function GET(request: NextRequest) {
 }
 
 /* ════════════════════════════════════════════
-   POST: 추천순 (프로필 기반 match_score 계산)
+   POST: 추천순·맛순·영양순 (프로필 → 홈 추천과 같은 점수)
+   body: 프로필(goals·tastes·allergies …), ?rank=recommend|taste_desc|nutrition_desc
    ════════════════════════════════════════════ */
 
 export async function POST(request: NextRequest) {
+  let body: Record<string, unknown>;
+  try { body = await request.json(); } catch { return NextResponse.json({ error: "잘못된 요청" }, { status: 400 }); }
+  const params = parseSearchParams(request.nextUrl.searchParams);
+  const rank = request.nextUrl.searchParams.get("rank") || "recommend";
+  params.sort = "recommend";
+  const profile = parseProfile(body);
+  const supabase = createServiceRoleClient();
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error, count } = await buildProductQuery(supabase, params, true) as { data: any[] | null; error: any; count: number | null };
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (!data?.length) return NextResponse.json({ products: [], total: 0, page: params.page, limit: params.limit, totalPages: 0 });
+
+  // 거르기(가격·100g당)가 있으면 후보 전체에 가격을 먼저 붙인다
+  const allergies = profile.allergies.length ? profile.allergies : params.allergies;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let rows: any[] = filterAllergens(data, allergies);
+  const needsPricesFirst = params.priceMin > 0 || params.priceMax > 0 || params.per100gSugarMax > 0 || params.per100gSodiumMax > 0 || params.per100gProteinMin > 0 || params.per100gCaloriesMax > 0;
   try {
-    const body = await request.json();
-    const profile: ProfileData = {
-      concerns: (body.concerns || []) as HealthConcern[],
-      goals: body.goals || [],
-      conditions: body.conditions || [],
-      sensitivity: body.sensitivity || { digestive: 2, additive: 2 },
-      tastes: body.tastes || { salty: 5, sweet: 5, spicy: 5, fatty: 5 },
-      nutrition_goals: body.nutrition_goals || undefined,
-    };
+    if (needsPricesFirst) rows = (await attachPricesAndFilter(supabase, rows, params)).result;
+  } catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: 500 }); }
 
-    // URL 쿼리 파라미터도 읽기 (필터/페이지네이션)
-    const params = parseSearchParams(request.nextUrl.searchParams);
-    // 추천순 정렬 강제 (health_score 기반 DB 정렬 → 후처리에서 match_score 재정렬)
-    params.sort = "recommend";
+  const purchasable = new Set(rows.filter((p) => p.is_purchasable).map((p) => p.id as string));
+  const kstHour = new Date(Date.now() + 9 * 3600e3).getUTCHours();
+  const scored = scoreAndRank(rows, { ...profile, allergies }, purchasable, undefined, undefined, kstHour);
+  if (rank === "taste_desc") scored.sort((a, b) => (b.taste_score ?? 0) - (a.taste_score ?? 0) || byRank(a, b));
+  else if (rank === "nutrition_desc") scored.sort((a, b) => (b.nutrition_score ?? 0) - (a.nutrition_score ?? 0) || byRank(a, b));
 
-    const supabase = createServiceRoleClient();
-    const query = buildProductQuery(supabase, params);
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: products, error, count } = await query as { data: any[] | null; error: any; count: number | null };
-
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    if (!products || products.length === 0) {
-      return NextResponse.json({ products: [], total: count, page: params.page, limit: params.limit, totalPages: Math.ceil((count || 0) / params.limit) });
-    }
-
-    // 알레르기 필터 (body에서도 받을 수 있음)
-    const allergies = body.allergies || params.allergies || [];
-    const allergyFiltered = filterAllergens(products, allergies);
-
-    const { result, postFiltered } = await attachPricesAndFilter(supabase, allergyFiltered, params);
-
-    // 구매 가능 ID 집합
-    const purchasableIds = new Set(
-      result
-        .filter((p: { product_prices: MallPrice[] }) => p.product_prices.some((pp: MallPrice) => pp.price > 0))
-        .map((p: { id: string }) => p.id)
-    );
-
-    // match_score 계산
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const scored = result.map((p: any) => {
-      const { match_score: rank_score, taste_score, nutrition_score, match_reasons, taste_known } = scoreProduct(p, profile, purchasableIds.has(p.id));
-      // 화면 점수는 절대 기준(맛 40 + 영양 60), 정렬은 목적·건강 점수까지 더한 rank_score
-      return { ...p, match_score: displayMatch(taste_score, nutrition_score, taste_known), rank_score, taste_score, nutrition_score, match_reasons };
-    });
-
-    // 추천순 정렬
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    scored.sort((a: any, b: any) => b.rank_score - a.rank_score);
-
-    return NextResponse.json({
-      products: scored,
-      total: postFiltered ? scored.length : count,
-      page: params.page,
-      limit: params.limit,
-      totalPages: Math.ceil((postFiltered ? scored.length : (count || 0)) / params.limit),
-    });
-  } catch {
-    return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
+  const page = pageOf(scored, params, needsPricesFirst || allergies.length ? null : count);
+  if (!needsPricesFirst) {
+    try { page.products = (await attachPricesAndFilter(supabase, page.products, params)).result; }
+    catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: 500 }); }
   }
+  return NextResponse.json(page);
 }

@@ -2,6 +2,7 @@
  * 프로필 파싱 — localStorage/API body에서 UserProfile 구조체로 변환
  */
 
+import { cleanTastes } from "./taste";
 import type { UserProfile, HealthConcern, HealthGoal, DietType, RiskLevel } from "./types";
 
 /** localStorage carefood_profile + carefood_health → UserProfile */
@@ -84,14 +85,10 @@ export function parseProfile(
   if (finalBP === "warning") perMeal.maxSodiumMg = Math.min(perMeal.maxSodiumMg, 500);
   else if (finalBP === "borderline") perMeal.maxSodiumMg = Math.min(perMeal.maxSodiumMg, 700);
 
-  // 맛 선호 (5단계→10단계 변환)
-  const rawTastes = (profileRaw.tastes as Record<string, number>) || { salty: 5, sweet: 5, spicy: 3, fatty: 5 };
-  const tastes = {
-    salty: rawTastes.salty <= 5 ? rawTastes.salty * 2 : rawTastes.salty,
-    sweet: rawTastes.sweet <= 5 ? rawTastes.sweet * 2 : rawTastes.sweet,
-    spicy: rawTastes.spicy,
-    fatty: rawTastes.fatty <= 5 ? rawTastes.fatty * 2 : rawTastes.fatty,
-  };
+  // 맛 선호 — 온보딩·마이페이지 슬라이더가 이미 1~10 이다 (전에는 5 이하를 두 배로 바꿔 기본값 5 가 10 이 됐다)
+  // 모르는 축은 0 (맛 비교에서 빠진다)
+  const t = cleanTastes(profileRaw.tastes);
+  const tastes = { salty: t.salty ?? 0, sweet: t.sweet ?? 0, spicy: t.spicy ?? 0, fatty: t.fatty ?? 0 };
 
   return {
     goals,
@@ -115,27 +112,27 @@ export function parseProfile(
 }
 
 /** 프로필 요약 라벨 생성 (사용자 화면용) */
-export function getProfileLabels(profile: UserProfile): { emoji: string; label: string; detail: string }[] {
-  const labels: { emoji: string; label: string; detail: string }[] = [];
+export function getProfileLabels(profile: UserProfile): { label: string; detail: string }[] {
+  const labels: { label: string; detail: string }[] = [];
 
   // 축1: 식단 목적
   if (profile.goals.includes("weight_loss") || profile.dietType === "diet")
-    labels.push({ emoji: "🥗", label: "다이어트", detail: `끼니당 ${profile.perMeal.caloriesMax}kcal 이하` });
+    labels.push({ label: "다이어트", detail: `끼니당 ${profile.perMeal.caloriesMax}kcal 이하` });
   else if (profile.goals.includes("muscle") || profile.dietType === "exercise")
-    labels.push({ emoji: "💪", label: "근력강화", detail: `단백질 ${profile.perMeal.minProteinG}g 이상 우선` });
+    labels.push({ label: "근력강화", detail: `단백질 ${profile.perMeal.minProteinG}g 이상 우선` });
   else if (profile.dietType === "pregnant")
-    labels.push({ emoji: "🤰", label: "임산부", detail: "엽산·철분 함유 제품 우선" });
+    labels.push({ label: "임산부", detail: "엽산·철분 함유 제품 우선" });
   else if (profile.dietType === "vegetarian")
-    labels.push({ emoji: "🌿", label: "채식", detail: "식물성 제품 우선" });
+    labels.push({ label: "채식", detail: "식물성 제품 우선" });
   else
-    labels.push({ emoji: "⚖️", label: "균형관리", detail: "영양 균형 중심" });
+    labels.push({ label: "균형관리", detail: "영양 균형 중심" });
 
   // 축2: 건강 관심사
-  const concernLabels: Record<string, { emoji: string; label: string }> = {
-    gut_health: { emoji: "🫧", label: "장건강" },
-    skin: { emoji: "✨", label: "피부케어" },
-    energy: { emoji: "⚡", label: "활력충전" },
-    weight: { emoji: "📉", label: "체중관리" },
+  const concernLabels: Record<string, { label: string }> = {
+    gut_health: { label: "장건강" },
+    skin: { label: "피부케어" },
+    energy: { label: "활력충전" },
+    weight: { label: "체중관리" },
   };
   for (const c of profile.concerns) {
     if (concernLabels[c]) labels.push({ ...concernLabels[c], detail: "" });
@@ -143,23 +140,23 @@ export function getProfileLabels(profile: UserProfile): { emoji: string; label: 
 
   // 축3: 건강 리스크
   if (profile.healthRisks.glucose === "warning")
-    labels.push({ emoji: "🩸", label: "혈당주의", detail: `당류 ${profile.perMeal.maxSugarG}g 이하 필터` });
+    labels.push({ label: "혈당주의", detail: `당류 ${profile.perMeal.maxSugarG}g 이하 필터` });
   else if (profile.healthRisks.glucose === "borderline")
-    labels.push({ emoji: "🩸", label: "혈당경계", detail: `당류 ${profile.perMeal.maxSugarG}g 이하 필터` });
+    labels.push({ label: "혈당경계", detail: `당류 ${profile.perMeal.maxSugarG}g 이하 필터` });
 
   if (profile.healthRisks.bloodPressure === "warning")
-    labels.push({ emoji: "❤️", label: "혈압주의", detail: `나트륨 ${profile.perMeal.maxSodiumMg}mg 이하 필터` });
+    labels.push({ label: "혈압주의", detail: `나트륨 ${profile.perMeal.maxSodiumMg}mg 이하 필터` });
   else if (profile.healthRisks.bloodPressure === "borderline")
-    labels.push({ emoji: "❤️", label: "혈압경계", detail: `나트륨 ${profile.perMeal.maxSodiumMg}mg 이하 필터` });
+    labels.push({ label: "혈압경계", detail: `나트륨 ${profile.perMeal.maxSodiumMg}mg 이하 필터` });
 
   if (profile.healthRisks.cholesterol !== "normal")
-    labels.push({ emoji: "🧪", label: "콜레스테롤관리", detail: "저지방 제품 우선" });
+    labels.push({ label: "콜레스테롤관리", detail: "저지방 제품 우선" });
 
   // 축4: BMI
   if (profile.body.bmiCategory === "obese")
-    labels.push({ emoji: "📊", label: `BMI ${profile.body.bmi}`, detail: "칼로리 15% 하향 조정" });
+    labels.push({ label: `BMI ${profile.body.bmi}`, detail: "칼로리 15% 하향 조정" });
   else if (profile.body.bmiCategory === "overweight")
-    labels.push({ emoji: "📊", label: `BMI ${profile.body.bmi}`, detail: "칼로리 10% 하향 조정" });
+    labels.push({ label: `BMI ${profile.body.bmi}`, detail: "칼로리 10% 하향 조정" });
 
   return labels;
 }

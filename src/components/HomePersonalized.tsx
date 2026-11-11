@@ -27,7 +27,7 @@ type QuickProduct = {
   is_exploration?: boolean;
   slot?: string;
   reason_detail: string | null;
-  reasons: string[];
+  match_reasons?: string[];
   product_prices: { platform: string; price: number; url: string; image_url: string | null }[];
 };
 

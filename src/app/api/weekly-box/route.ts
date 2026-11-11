@@ -391,7 +391,7 @@ export async function POST(request: NextRequest) {
         else if (tastes.salty <= 3 && sodium <= 400) score += 4;   // 저염 선호 = 건강 시너지
         if (tastes.sweet <= 3 && sugar <= 3) score += 2;
         else if (tastes.sweet >= 7 && sugar >= 8) score += 2;
-        if (tastes.spicy >= 7 && (p.spicy_score || 0) >= 6) score += 2;
+        if (tastes.spicy >= 7 && (p.spicy_score || 0) >= 3) score += 2; // spicy_score 는 0~5
         else if (tastes.spicy <= 3 && (p.spicy_score || 0) <= 2) score += 2;
       }
 
