@@ -3,6 +3,7 @@
  * score = healthBase × relevance × preference
  */
 
+import { defaultServingG } from "@/lib/serving";
 import type { UserProfile, ScoredProduct, HealthConcern } from "./types";
 import type { UserInteractions } from "./interactions";
 import type { ProductReviewStats } from "./reviews";
@@ -85,9 +86,7 @@ export function scoreProduct(
   // DB 값은 모두 nutrient_base_g(보통 100g) 기준
   // perMeal 비교 시 per-serving 값으로 변환
   const baseG = (p.nutrient_base_g as number) || 100;
-  // 1회 제공량에 포장 전체 무게(1kg·3kg…)가 들어간 제품이 많다 — 20~500g 밖이면 한 끼 300g·그 밖 100g 으로 본다
-  const rawServing = Number(p.serving_size_g) || 0;
-  const servingG = rawServing >= 20 && rawServing <= 500 ? rawServing : p.meal_role === "meal" ? 300 : 100;
+  const servingG = defaultServingG(p); // 포장 전체 무게가 들어간 1회 제공량은 걸러서 (lib/serving.ts)
   const servingRatio = baseG > 0 ? servingG / baseG : 1;
 
   // ─── 1. Health Base (0.4 ~ 1.0) ───

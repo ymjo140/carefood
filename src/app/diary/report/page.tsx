@@ -18,7 +18,7 @@ type NutrientGrade = {
   avg: number;
   target: number;
   ratio: number;
-  grade: "excellent" | "good" | "low" | "critical" | "over";
+  grade: "excellent" | "good" | "low" | "critical" | "over" | "high";
   emoji: string;
 };
 
@@ -34,6 +34,9 @@ type ReportData = {
   message?: string;
   period?: { start: string; end: string };
   daysWithData?: number;
+  countedDays?: number;
+  partial?: boolean;
+  unknownNutrients?: string[];
   totalEntries?: number;
   recordRate?: number;
   overallScore?: number;
@@ -54,6 +57,7 @@ const GRADE_TONE: Record<string, "positive" | "brand" | "caution" | "danger"> = 
   low: "caution",
   critical: "danger",
   over: "caution",
+  high: "danger",
 };
 
 const GRADE_LABELS: Record<string, string> = {
@@ -61,7 +65,8 @@ const GRADE_LABELS: Record<string, string> = {
   good: "양호",
   low: "부족",
   critical: "매우 부족",
-  over: "과다",
+  over: "많음",
+  high: "매우 많음",
 };
 
 const SLOT_LABELS: Record<string, string> = {
@@ -107,7 +112,7 @@ function ReportContent() {
     );
   }
 
-  const { overallScore = 0, comment, grades = [], dailyData = [], topFoods = [], mealSlotCounts = {}, gapNutrients = [], recommendations = [], groupBuys = [], period, daysWithData = 0, totalEntries = 0, recordRate = 0 } = report;
+  const { overallScore = 0, comment, grades = [], dailyData = [], topFoods = [], mealSlotCounts = {}, gapNutrients = [], recommendations = [], groupBuys = [], period, daysWithData = 0, countedDays = 0, partial = false, unknownNutrients = [], totalEntries = 0, recordRate = 0 } = report;
 
   // 점수 의미 (같은 의미는 같은 색)
   const scoreTone = overallScore >= 80 ? "positive" : overallScore >= 60 ? "brand" : overallScore >= 40 ? "caution" : "danger";
@@ -156,7 +161,10 @@ function ReportContent() {
 
       {/* ── 영양소별 성적표 ── */}
       <Card padding="none">
-        <div className="px-4 pt-4"><SectionHeader title="영양소별 달성률" /></div>
+        <div className="px-4 pt-4">
+          <SectionHeader title="영양소별 달성률"
+            description={partial ? "두 끼 이상 기록한 날이 없어 기록한 날 전부로 셌어요" : `아침·점심·저녁 중 두 끼 이상 기록한 ${countedDays}일 평균이에요`} />
+        </div>
         <div className="divide-y divide-line">
           {grades.map(g => (
             <div key={g.nutrient} className="px-4 py-3">
@@ -172,6 +180,11 @@ function ReportContent() {
             </div>
           ))}
         </div>
+        {unknownNutrients.length > 0 && (
+          <p className="px-4 pb-4 pt-2 text-caption text-ink-2">
+            {unknownNutrients.join("·")} 정보가 없는 기록이 많아 이번 주는 매기지 않았어요. 검색으로 기록하면 제품 정보가 채워져요
+          </p>
+        )}
       </Card>
 
       {/* ── 끼니별 기록률 · 자주 먹은 음식 ── */}

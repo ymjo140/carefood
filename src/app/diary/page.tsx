@@ -3,10 +3,11 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import Link from "next/link";
 import {
-  Badge, Button, Card, Chip, ConfirmSheet, IconLink, EmptyState, Field, Icon, IconButton, Input, Kcal, LinkButton, ListRow, MacroGrid, MealSlot, Page, PageHeader, PageLoading, SectionHeader, Spinner, Tabs, buttonClass, cn, useToast, SkeletonList, QuickRating, Notice, TextLink,
+  Badge, Button, Card, Chip, ChipRow, ConfirmSheet, IconLink, Sheet, EmptyState, Field, Icon, IconButton, Input, Kcal, LinkButton, ListRow, MacroGrid, MealSlot, Page, PageHeader, PageLoading, SectionHeader, Spinner, Tabs, buttonClass, cn, useToast, SkeletonList, QuickRating, Notice, TextLink,
 } from "@/components/ui";
 import { getClientActorId } from "@/lib/actor-client";
 import { addDays, kstHour, monthDay, todayKst, weekday } from "@/lib/day";
+import { defaultServingG } from "@/lib/serving";
 import { NextMeal, pickNextMeal, type NextCandidate } from "./NextMeal";
 import PushPrompt from "@/components/PushPrompt";
 
@@ -69,7 +70,12 @@ type SearchResult = {
   calories: number | null;
   protein_g: number | null;
   serving_size_g: number | null;
+  meal_role?: string | null;
+  nutrient_base_g?: number | null;
 };
+
+/** 영양 정보가 하나도 없는 제품(열량·단백질 모두 0·없음)은 기록 검색에서 뺀다 — 0kcal 로 기록된다 */
+const hasNutrition = (p: SearchResult) => (Number(p.calories) || 0) > 0 || (Number(p.protein_g) || 0) > 0;
 
 type CommonFood = {
   id: string;
@@ -140,10 +146,16 @@ function getMealAlert(entries: DiaryEntry[]): { nutrient: string; label: string;
 }
 
 /* ── 제품 리스트 (공통) ── */
-function ProductList({ items, onSelect }: { items: SearchResult[]; onSelect: (p: SearchResult) => void }) {
+function ProductList({ items, onSelect, multiplier = 1 }: { items: SearchResult[]; onSelect: (p: SearchResult) => void; multiplier?: number }) {
   return (
     <div className="flex flex-col max-h-60 overflow-y-auto -mx-3">
-      {items.map((p) => (
+      {items.map((p) => {
+        // 기록될 양 그대로 보여 준다 — 1회 제공량을 모르면(즐겨찾기·식단 리스트) 100g 당
+        const known = p.serving_size_g != null || p.meal_role != null;
+        const g = known ? defaultServingG(p) * multiplier : null;
+        const kcal = p.calories != null ? Math.round((Number(p.calories) * (g ?? 100)) / (Number(p.nutrient_base_g) || 100)) : null;
+        const pro = p.protein_g != null ? Math.round((Number(p.protein_g) * (g ?? 100)) / (Number(p.nutrient_base_g) || 100) * 10) / 10 : null;
+        return (
         <ListRow
           key={p.id}
           onClick={() => onSelect(p)}
@@ -151,13 +163,15 @@ function ProductList({ items, onSelect }: { items: SearchResult[]; onSelect: (p:
           meta={
             <span className="flex flex-wrap gap-x-2">
               {p.manufacturer && <span>{p.manufacturer}</span>}
-              {p.calories != null && <span><span className="num">{p.calories}</span>kcal</span>}
-              {p.protein_g != null && <span>단백질 <span className="num">{p.protein_g}</span>g</span>}
+              <span>{g != null ? <><span className="num">{Math.round(g)}</span>g</> : "100g당"}</span>
+              {kcal != null && <span><span className="num">{kcal}</span>kcal</span>}
+              {pro != null && <span>단백질 <span className="num">{pro}</span>g</span>}
             </span>
           }
           trailing={<span className="text-label font-bold text-brand-ink">추가</span>}
         />
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -235,7 +249,10 @@ export default function DiaryPage() {
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [commonFoods, setCommonFoods] = useState<CommonFood[]>([]);
   const [searching, setSearching] = useState(false);
-  const [manualForm, setManualForm] = useState({ food_name: "", calories: "", protein_g: "", serving_g: "" });
+  const [manualForm, setManualForm] = useState({ food_name: "", calories: "", protein_g: "", sodium_mg: "", serving_g: "" });
+  // 기록 고치기 — 끼니·양(배수·g)
+  const [editing, setEditing] = useState<{ id: string; name: string; meal: string; mult: number; grams: string } | null>(null);
+  const [editSaving, setEditSaving] = useState(false);
   const [servingMultiplier, setServingMultiplier] = useState<number>(1);
   const [recentMeals, setRecentMeals] = useState<RecentMeal[]>([]);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
@@ -420,7 +437,7 @@ export default function DiaryPage() {
       ]);
       const prodData = await prodRes.json();
       const foodData = await foodRes.json();
-      setSearchResults(prodData.products || []);
+      setSearchResults(((prodData.products || []) as SearchResult[]).filter(hasNutrition));
       setCommonFoods(foodData.foods || []);
     } catch {
       toast.show("검색하지 못했어요. 다시 시도해 주세요", { tone: "danger" });
@@ -433,7 +450,7 @@ export default function DiaryPage() {
     const res = await fetch("/api/diary", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ date, meal_type: meal, product_id: c.id, food_name: c.name, serving_g: c.serving_size_g || 100, serving_multiplier: 1 }),
+      body: JSON.stringify({ date, meal_type: meal, product_id: c.id, food_name: c.name, serving_multiplier: 1 }), // 양은 서버가 정한다 (lib/serving.ts)
     }).catch(() => null); // ds-allow: 네트워크 실패는 바로 아래 !res?.ok 에서 알림
     if (!res?.ok) { toast.show("기록하지 못했어요. 다시 시도해 주세요", { tone: "danger" }); return; }
     toast.show("식단에 기록했어요");
@@ -464,8 +481,7 @@ export default function DiaryPage() {
       body: JSON.stringify({
         date, meal_type: addingMeal,
         product_id: product.id, food_name: product.name,
-        serving_g: product.serving_size_g || 100,
-        serving_multiplier: servingMultiplier,
+        serving_multiplier: servingMultiplier, // 양(g)·영양값은 서버가 제품 값으로 계산한다
       }),
     }).catch(() => null); // ds-allow: 네트워크 실패는 바로 아래 !res?.ok 에서 알림
     if (!res?.ok) { toast.show("기록하지 못했어요. 다시 시도해 주세요", { tone: "danger" }); return; }
@@ -482,7 +498,7 @@ export default function DiaryPage() {
   // 일반 음식(외식)으로 기록 추가
   const addFromCommonFood = async (food: CommonFood) => {
     if (!addingMeal) return;
-    await fetch("/api/diary", {
+    const res = await fetch("/api/diary", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -497,7 +513,8 @@ export default function DiaryPage() {
         sodium_mg: food.sodium_mg,
         sugar_g: food.sugar_g,
       }),
-    });
+    }).catch(() => null); // ds-allow: 네트워크 실패는 바로 아래 !res?.ok 에서 알림
+    if (!res?.ok) { toast.show("기록하지 못했어요. 다시 시도해 주세요", { tone: "danger" }); return; }
     setAddingMeal(null);
     setSearchQuery("");
     setSearchResults([]);
@@ -511,7 +528,8 @@ export default function DiaryPage() {
   // 다시 먹기
   const addFromRecent = async (meal: RecentMeal) => {
     if (!addingMeal) return;
-    await fetch("/api/diary", {
+    // 최근 기록 값은 서버가 1인분 기준으로 준다 — 고른 배수는 서버가 한 번만 곱한다. 제품이면 지금 제품 값으로 다시 계산
+    const res = await fetch("/api/diary", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -527,7 +545,8 @@ export default function DiaryPage() {
         sodium_mg: meal.sodium_mg,
         sugar_g: meal.sugar_g,
       }),
-    });
+    }).catch(() => null); // ds-allow: 네트워크 실패는 바로 아래 !res?.ok 에서 알림
+    if (!res?.ok) { toast.show("기록하지 못했어요. 다시 시도해 주세요", { tone: "danger" }); return; }
     setAddingMeal(null);
     setServingMultiplier(1);
     toast.show("식단에 기록했어요");
@@ -537,7 +556,7 @@ export default function DiaryPage() {
 
   const addManual = async () => {
     if (!addingMeal || !manualForm.food_name) return;
-    await fetch("/api/diary", {
+    const res = await fetch("/api/diary", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -545,12 +564,14 @@ export default function DiaryPage() {
         food_name: manualForm.food_name,
         calories: manualForm.calories ? Number(manualForm.calories) : null,
         protein_g: manualForm.protein_g ? Number(manualForm.protein_g) : null,
+        sodium_mg: manualForm.sodium_mg ? Number(manualForm.sodium_mg) : null,
         serving_g: manualForm.serving_g ? Number(manualForm.serving_g) : null,
       }),
-    });
+    }).catch(() => null); // ds-allow: 네트워크 실패는 바로 아래 !res?.ok 에서 알림
+    if (!res?.ok) { toast.show("기록하지 못했어요. 다시 시도해 주세요", { tone: "danger" }); return; }
     setAddingMeal(null);
     setAddTab("search");
-    setManualForm({ food_name: "", calories: "", protein_g: "", serving_g: "" });
+    setManualForm({ food_name: "", calories: "", protein_g: "", sodium_mg: "", serving_g: "" });
     toast.show("식단에 기록했어요");
     fetchDiary();
     loadWeeklyTrend();
@@ -619,11 +640,33 @@ export default function DiaryPage() {
   };
 
   const deleteEntry = async (id: string) => {
-    await fetch(`/api/diary?id=${id}&user_id=${userId}`, { method: "DELETE" });
+    const res = await fetch(`/api/diary?id=${id}`, { method: "DELETE" }).catch(() => null); // ds-allow: 실패는 바로 아래에서 알림
     setDeleteConfirmId(null);
+    if (!res?.ok) { toast.show("삭제하지 못했어요. 다시 시도해 주세요", { tone: "danger" }); return; }
     toast.show("기록을 삭제했어요");
     fetchDiary();
     loadWeeklyTrend();
+  };
+
+  const saveEdit = async () => {
+    if (!editing) return;
+    const grams = editing.grams.trim() ? Number(editing.grams) : undefined;
+    if (grams !== undefined && !(grams >= 1 && grams <= 3000)) { toast.show("양은 1~3000g 사이로 적어 주세요", { tone: "danger" }); return; }
+    setEditSaving(true);
+    try {
+      const res = await fetch("/api/diary", {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: editing.id, meal_type: editing.meal, serving_multiplier: editing.mult, ...(grams !== undefined ? { serving_g: grams } : {}) }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error);
+      setEditing(null);
+      toast.show("기록을 고쳤어요");
+      fetchDiary();
+      loadWeeklyTrend();
+    } catch {
+      toast.show("기록을 고치지 못했어요. 다시 시도해 주세요", { tone: "danger" });
+    } finally { setEditSaving(false); }
   };
 
   /* ── 날짜 이동 ── */
@@ -732,7 +775,7 @@ export default function DiaryPage() {
             {searchResults.length > 0 && (
               <div>
                 {commonFoods.length > 0 && <GroupLabel>제품</GroupLabel>}
-                <ProductList items={searchResults} onSelect={addFromProduct} />
+                <ProductList items={searchResults} onSelect={addFromProduct} multiplier={servingMultiplier} />
               </div>
             )}
             {searchQuery && searchResults.length === 0 && commonFoods.length === 0 && !searching && (
@@ -742,13 +785,13 @@ export default function DiaryPage() {
         )}
 
         {addTab === "favorites" && (
-          favorites.length > 0 ? <ProductList items={favorites} onSelect={addFromProduct} /> : (
+          favorites.length > 0 ? <ProductList items={favorites} onSelect={addFromProduct} multiplier={servingMultiplier} /> : (
             <EmptyState title="즐겨찾기한 제품이 없어요" description="제품 상세에서 하트를 누르면 여기서 바로 기록할 수 있어요" className="py-6" />
           )
         )}
 
         {addTab === "weekly" && (
-          weeklyItems.length > 0 ? <ProductList items={weeklyItems} onSelect={addFromProduct} /> : (
+          weeklyItems.length > 0 ? <ProductList items={weeklyItems} onSelect={addFromProduct} multiplier={servingMultiplier} /> : (
             <EmptyState
               title="식단 리스트가 비어 있어요"
               className="py-6"
@@ -854,12 +897,15 @@ export default function DiaryPage() {
             <Field label="음식 이름">
               <Input value={manualForm.food_name} onChange={(e) => setManualForm({ ...manualForm, food_name: e.target.value })} placeholder="예: 김치볶음밥" autoFocus />
             </Field>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2">
               <Field label="칼로리">
                 <Input type="number" inputMode="numeric" value={manualForm.calories} onChange={(e) => setManualForm({ ...manualForm, calories: e.target.value })} placeholder="kcal" className="text-center" />
               </Field>
               <Field label="단백질">
                 <Input type="number" inputMode="decimal" value={manualForm.protein_g} onChange={(e) => setManualForm({ ...manualForm, protein_g: e.target.value })} placeholder="g" className="text-center" />
+              </Field>
+              <Field label="나트륨">
+                <Input type="number" inputMode="numeric" value={manualForm.sodium_mg} onChange={(e) => setManualForm({ ...manualForm, sodium_mg: e.target.value })} placeholder="mg" className="text-center" />
               </Field>
               <Field label="양">
                 <Input type="number" inputMode="numeric" value={manualForm.serving_g} onChange={(e) => setManualForm({ ...manualForm, serving_g: e.target.value })} placeholder="g" className="text-center" />
@@ -1025,6 +1071,8 @@ export default function DiaryPage() {
 
                             </div>
                             <span className="num text-label font-bold text-ink shrink-0">{e.calories || 0}</span>
+                            <IconButton icon="edit" label={`${e.food_name} 고치기`} size="sm"
+                              onClick={() => setEditing({ id: e.id, name: e.food_name, meal: e.meal_type, mult: Number(e.serving_multiplier) || 1, grams: e.serving_g != null ? String(e.serving_g) : "" })} />
                             <IconButton icon="trash" label={`${e.food_name} 삭제하기`} size="sm" onClick={() => setDeleteConfirmId(e.id)} />
                           </div>
                           {e.product_id && ratings[e.product_id] == null && (
@@ -1091,6 +1139,35 @@ export default function DiaryPage() {
         description={deleteTarget ? `${deleteTarget.food_name} 기록이 사라져요` : undefined}
         confirmLabel="삭제하기"
       />
+
+      <Sheet open={!!editing} onClose={() => setEditing(null)} title="기록 고치기" description={editing?.name}
+        footer={
+          <>
+            <Button variant="secondary" block onClick={() => setEditing(null)}>취소</Button>
+            <Button block loading={editSaving} onClick={saveEdit}>저장하기</Button>
+          </>
+        }>
+        {editing && (
+          <div className="flex flex-col gap-5">
+            <Field label="끼니">
+              <ChipRow>
+                {MEAL_TYPES.map((m) => <Chip key={m.key} size="sm" selected={editing.meal === m.key} onClick={() => setEditing({ ...editing, meal: m.key })}>{m.label}</Chip>)}
+              </ChipRow>
+            </Field>
+            <Field label="먹은 양">
+              <ChipRow>
+                {[0.5, 1, 1.5, 2].map((m) => (
+                  <Chip key={m} size="sm" selected={editing.mult === m} onClick={() => setEditing({ ...editing, mult: m })}><span className="num">{m}</span>인분</Chip>
+                ))}
+              </ChipRow>
+            </Field>
+            <Field label="1인분 무게 (g)" hint="포장에 적힌 무게와 다르면 먹은 만큼 적어 주세요. 영양값을 다시 계산해요">
+              <Input type="number" inputMode="numeric" name="serving_g" value={editing.grams} placeholder="g"
+                onChange={(e) => setEditing({ ...editing, grams: e.target.value })} />
+            </Field>
+          </div>
+        )}
+      </Sheet>
     </Page>
   );
 }
