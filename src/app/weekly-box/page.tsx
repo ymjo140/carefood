@@ -5,6 +5,7 @@ import Link from "next/link";
 import { perServing } from "@/lib/nutrition";
 import { defaultServingG, isBrothDish } from "@/lib/serving";
 import { unitPrice } from "@/lib/prices";
+import { sendImpressions } from "@/lib/impressions";
 import {
   Badge, BottomBar, Button, Card, CardActions, ConfirmSheet, EmptyState, Input, Kcal, LinkButton, ListRow,
   IconButton, MacroGrid, MacroInline, MealSlot, Page, PageLoading, Price, ProgressBar, SearchField, SectionHeader, Sheet, SkeletonList,
@@ -67,6 +68,13 @@ type SavedPlan = {
   /** 음식이 든 요일 — 하루 이하면 원하는 요일에 넣고, 여러 날이면 통째로 불러온다 */
   filled_days?: string[];
 };
+
+/** AI 가 채운 식단에 들어간 제품 — 노출 수로 센다 */
+function countFill(grid: GridData) {
+  const ids: string[] = [];
+  for (const day of Object.values(grid)) for (const cell of Object.values(day)) for (const f of cellFoods(cell)) if (f.product_id) ids.push(f.product_id);
+  sendImpressions("weekly_fill", ids);
+}
 
 const DAYS = [
   { key: "mon", label: "월" }, { key: "tue", label: "화" }, { key: "wed", label: "수" },
@@ -659,14 +667,14 @@ export default function WeeklyBoxPage() {
       try {
         const result = await fetchAndBuildGrid(who);
         if (!result) { toast.show("식단을 만들지 못했어요. 가족 프로필을 확인해 주세요", { tone: "danger" }); return; }
-        setGrid(result.grid); setPlanTitle(result.title); setPlanId(null);
+        setGrid(result.grid); setPlanTitle(result.title); setPlanId(null); countFill(result.grid);
         toast.show(`${who.nickname} 기준으로 7일을 채웠어요`);
       } catch { toast.show("식단을 만들지 못했어요. 다시 시도해 주세요", { tone: "danger" }); }
       finally { setGenerating(false); }
       return;
     }
     if (precomputed) {
-      setGrid(precomputed.grid); setPlanTitle(precomputed.title); setPlanId(null);
+      setGrid(precomputed.grid); setPlanTitle(precomputed.title); setPlanId(null); countFill(precomputed.grid);
       setPrecomputed(null); setPreloading(true);
       fetchAndBuildGrid().then(r => { if (r) setPrecomputed(r); setPreloading(false); }).catch(() => setPreloading(false));
       toast.show("AI 추천으로 7일을 채웠어요");
@@ -676,7 +684,7 @@ export default function WeeklyBoxPage() {
     try {
       const result = await fetchAndBuildGrid();
       if (!result) { toast.show("식단을 만들지 못했어요. 프로필을 확인해 주세요", { tone: "danger" }); return; }
-      setGrid(result.grid); setPlanTitle(result.title); setPlanId(null);
+      setGrid(result.grid); setPlanTitle(result.title); setPlanId(null); countFill(result.grid);
       toast.show("AI 추천으로 7일을 채웠어요");
     } catch { toast.show("식단을 만들지 못했어요. 다시 시도해 주세요", { tone: "danger" }); }
     finally { setGenerating(false); }

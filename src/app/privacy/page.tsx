@@ -38,39 +38,39 @@ export default function PrivacyPage() {
             </thead>
             <tbody>
               <tr className="border-b border-line">
-                <td className="py-2 pr-3">회원가입</td>
+                <td className="py-2 pr-3 whitespace-nowrap">회원가입</td>
                 <td className="py-2 pr-3">이메일, 비밀번호(암호화)</td>
-                <td className="py-2 pr-3">회원가입 시</td>
+                <td className="py-2 pr-3 whitespace-nowrap">회원가입 시</td>
               </tr>
               <tr className="border-b border-line">
-                <td className="py-2 pr-3">소셜 로그인</td>
+                <td className="py-2 pr-3 whitespace-nowrap">소셜 로그인</td>
                 <td className="py-2 pr-3">이메일, 프로필 이름</td>
-                <td className="py-2 pr-3">소셜 로그인 시</td>
+                <td className="py-2 pr-3 whitespace-nowrap">소셜 로그인 시</td>
               </tr>
               <tr className="border-b border-line">
-                <td className="py-2 pr-3">서비스 이용</td>
+                <td className="py-2 pr-3 whitespace-nowrap">서비스 이용</td>
                 <td className="py-2 pr-3">검색어, 필터 사용 내역, 찜 목록, 맛 평가, 식단 기록, 저장한 식단</td>
-                <td className="py-2 pr-3">서비스 이용 중</td>
+                <td className="py-2 pr-3 whitespace-nowrap">서비스 이용 중</td>
               </tr>
               <tr className="border-b border-line">
-                <td className="py-2 pr-3">기기 식별</td>
+                <td className="py-2 pr-3 whitespace-nowrap">기기 식별</td>
                 <td className="py-2 pr-3">무작위로 만든 기기 식별자(쿠키 cf_uid) — 이름·연락처와 연결하지 않음</td>
-                <td className="py-2 pr-3">첫 접속 시</td>
+                <td className="py-2 pr-3 whitespace-nowrap">첫 접속 시</td>
               </tr>
               <tr className="border-b border-line">
-                <td className="py-2 pr-3">이용 횟수 확인</td>
+                <td className="py-2 pr-3 whitespace-nowrap">이용 횟수 확인</td>
                 <td className="py-2 pr-3">접속 IP를 비밀값과 섞어 원래 값으로 되돌릴 수 없게 만든 값, 이용한 기능 종류와 시각 — 도배·자동 반복을 막는 데만 쓰고 2일 뒤 지웁니다</td>
                 <td className="py-2 pr-3">글쓰기·기록 등 이용 시</td>
               </tr>
               <tr className="border-b border-line">
-                <td className="py-2 pr-3">오류 기록</td>
+                <td className="py-2 pr-3 whitespace-nowrap">오류 기록</td>
                 <td className="py-2 pr-3">오류가 난 화면 주소, 오류 내용, 브라우저 종류 — 기기 식별자는 붙이지 않고 30일 뒤 지웁니다</td>
-                <td className="py-2 pr-3">오류가 났을 때</td>
+                <td className="py-2 pr-3 whitespace-nowrap">오류가 났을 때</td>
               </tr>
               <tr className="border-b border-line">
-                <td className="py-2 pr-3">구매 링크 이용</td>
+                <td className="py-2 pr-3 whitespace-nowrap">구매 링크 이용</td>
                 <td className="py-2 pr-3">누른 제품, 판매처, 누른 화면, 시각</td>
-                <td className="py-2 pr-3">판매처 링크를 누를 때</td>
+                <td className="py-2 pr-3 whitespace-nowrap">판매처 링크를 누를 때</td>
               </tr>
             </tbody>
           </table></div>

@@ -30,24 +30,26 @@ export async function buildReport(sb: Sb, items: ReportItem[], days: number) {
   if (ids.length === 0) return { days, products: [], totals: null, audience: null };
 
   type Ev = { product_id: string; user_id: string | null };
-  const [views, clicks, diary, favs, reviews, plans] = await Promise.all([
+  const [views, clicks, diary, favs, reviews, imps, plans] = await Promise.all([
     inChunks<Ev>(ids, (p) => sb.from("user_interactions").select("product_id, user_id").eq("action", "view").in("product_id", p).gte("created_at", since).limit(50000)),
     inChunks<Ev>(ids, (p) => sb.from("product_clicks").select("product_id, user_id").in("product_id", p).gte("created_at", since).limit(50000)),
     inChunks<Ev>(ids, (p) => sb.from("meal_diary").select("product_id, user_id").in("product_id", p).gte("date", sinceDay).limit(50000)),
     inChunks<Ev>(ids, (p) => sb.from("user_favorites").select("product_id, user_id").in("product_id", p).gte("created_at", since).limit(50000)),
     inChunks<{ product_id: string; rating: number | null }>(ids, (p) => sb.from("product_reviews").select("product_id, rating").in("product_id", p).limit(50000)),
+    inChunks<{ product_id: string; count: number }>(ids, (p) => sb.from("product_impressions").select("product_id, count").in("product_id", p).gte("day", sinceDay).limit(50000)),
     sb.from("saved_meal_plans").select("user_id, grid").eq("is_active", true).gte("updated_at", since).limit(2000),
   ]);
   if (plans.error) throw new Error(plans.error.message);
 
   const idSet = new Set(ids);
-  const blank = () => ({ views: 0, clicks: 0, diary: 0, favorites: 0, plans: 0, rating_sum: 0, rating_n: 0 });
+  const blank = () => ({ impressions: 0, views: 0, clicks: 0, diary: 0, favorites: 0, plans: 0, rating_sum: 0, rating_n: 0 });
   const by = new Map<string, ReturnType<typeof blank>>(ids.map((id) => [id, blank()]));
   const people = new Set<string>();
   const count = (rows: Ev[], key: "views" | "clicks" | "diary" | "favorites") => {
     for (const r of rows) { const b = by.get(r.product_id); if (b) { b[key]++; if (r.user_id) people.add(r.user_id); } }
   };
   count(views, "views"); count(clicks, "clicks"); count(diary, "diary"); count(favs, "favorites");
+  for (const r of imps) { const b = by.get(r.product_id); if (b) b.impressions += r.count; }
   for (const r of reviews) { const b = by.get(r.product_id); if (b && r.rating) { b.rating_sum += r.rating; b.rating_n++; } }
   for (const pl of (plans.data || []) as { user_id: string | null; grid: PlanGrid | null }[]) {
     for (const day of Object.values(pl.grid || {})) for (const cell of Object.values(day || {})) {
@@ -60,13 +62,13 @@ export async function buildReport(sb: Sb, items: ReportItem[], days: number) {
     const b = by.get(id)!;
     return {
       product_id: id, name: nameOf.get(id)?.name || "", sku: nameOf.get(id)?.sku || "",
-      views: b.views, clicks: b.clicks, diary: b.diary, favorites: b.favorites, plans: b.plans,
+      impressions: b.impressions, views: b.views, clicks: b.clicks, diary: b.diary, favorites: b.favorites, plans: b.plans,
       rating: b.rating_n ? Math.round((b.rating_sum / b.rating_n) * 10) / 10 : null, rating_n: b.rating_n,
     };
   }).sort((a, b) => (b.views + b.clicks * 3 + b.diary * 2) - (a.views + a.clicks * 3 + a.diary * 2)).slice(0, 100);
   const totals = products.reduce((t, p) => ({
-    views: t.views + p.views, clicks: t.clicks + p.clicks, diary: t.diary + p.diary, favorites: t.favorites + p.favorites, plans: t.plans + p.plans,
-  }), { views: 0, clicks: 0, diary: 0, favorites: 0, plans: 0 });
+    impressions: t.impressions + p.impressions, views: t.views + p.views, clicks: t.clicks + p.clicks, diary: t.diary + p.diary, favorites: t.favorites + p.favorites, plans: t.plans + p.plans,
+  }), { impressions: 0, views: 0, clicks: 0, diary: 0, favorites: 0, plans: 0 });
 
   // 본·누른·기록한 사람들의 목표 — 10명 이상일 때만, 칸도 10명 이상만
   let audience: { people: number; goals: { label: string; share: number }[]; hidden: number } | { people: null } = { people: null };

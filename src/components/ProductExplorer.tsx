@@ -1,5 +1,6 @@
 "use client";
 
+import { useImpressions } from "@/lib/impressions";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
 import type { ProductWithPrices, TasteLevel, DishCategory } from "@/types/database";
@@ -509,6 +510,7 @@ function ProductCard({ product, isFavorite, onToggleFavorite }: {
 export default function ProductExplorer({ variant = "page" }: { variant?: "page" | "home" }) {
   const { isFavorite, toggleFavorite } = useFavorites();
   const [kind, setKind] = useState<"meal_service" | null>(null);
+  const seen = useImpressions("product_list");
   const [error, setError] = useState(false);
   const [autoFocus, setAutoFocus] = useState(false);
   const [tastes, setTastes] = useState<TasteFilters>({ salty: 0, sweet: 0, spicy: 0, fatty: 0 });
@@ -754,9 +756,11 @@ export default function ProductExplorer({ variant = "page" }: { variant?: "page"
             <>
               <div className="flex flex-col gap-3">
                 {data.products.map(product => (
-                  <ProductCard key={product.id} product={product}
-                    isFavorite={isFavorite(product.id)}
-                    onToggleFavorite={toggleFavorite} />
+                  <div key={product.id} ref={seen(product.id)}>
+                    <ProductCard product={product}
+                      isFavorite={isFavorite(product.id)}
+                      onToggleFavorite={toggleFavorite} />
+                  </div>
                 ))}
               </div>
 

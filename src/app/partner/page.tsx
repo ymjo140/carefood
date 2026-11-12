@@ -11,6 +11,9 @@ import { Commission } from "./Commission";
 import { Feed } from "./Feed";
 import { Report } from "./Report";
 import { ApiKeys } from "./ApiKeys";
+import { Demand } from "./Demand";
+import { Orders } from "./Orders";
+import { ORDERING_ENABLED } from "@/lib/features";
 
 type Partner = { id: string; slug: string; name: string; kind: string; status: string };
 type Batch = {
@@ -36,7 +39,7 @@ function PartnerHome() {
   const [me, setMe] = useState<Load<Me>>({ status: "loading" });
   const [items, setItems] = useState<Load<Item[]>>({ status: "loading" });
   const [filter, setFilter] = useState<Filter>("all");
-  const [view, setView] = useState<"products" | "feed" | "api" | "report" | "commission">("products");
+  const [view, setView] = useState<"products" | "feed" | "api" | "report" | "demand" | "orders" | "commission">("products");
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [result, setResult] = useState<Batch | null>(null);
@@ -135,7 +138,13 @@ function PartnerHome() {
       </div>
 
       <Tabs value={view} onChange={setView} label="입점 업체 메뉴" className="mb-6"
-        items={[{ value: "products", label: "제품" }, { value: "feed", label: "피드" }, { value: "api", label: "API" }, { value: "report", label: "성과" }, { value: "commission", label: "수수료" }]} />
+        items={[
+          { value: "products", label: "제품" }, { value: "feed", label: "피드" }, { value: "api", label: "API" },
+          { value: "report", label: "성과" }, { value: "demand", label: "수요" },
+          // 앱 안 주문은 결제가 붙은 뒤에 연다 (lib/features.ts) — 그 전에는 탭을 두지 않는다
+          ...(ORDERING_ENABLED ? [{ value: "orders" as const, label: "주문" }] : []),
+          { value: "commission", label: "정산" },
+        ]} />
 
       {view === "products" && <>
       <SectionHeader title="제품 올리기" />
@@ -195,6 +204,8 @@ function PartnerHome() {
       {view === "feed" && <Feed qs={qs} onFetched={() => { loadMe(); loadItems(filter); }} />}
       {view === "api" && <ApiKeys qs={qs} />}
       {view === "report" && <Report qs={qs} />}
+      {view === "demand" && <Demand qs={qs} />}
+      {view === "orders" && <Orders qs={qs} />}
       {view === "commission" && <Commission qs={qs} />}
     </Page>
   );

@@ -19,6 +19,11 @@ type ReviewItem = {
   product_id: string | null; updated_at: string; partners: { slug: string; name: string; kind: string }; candidates: Candidate[];
 };
 type Load<T> = { status: "loading" | "error" | "done"; data: T; error?: string };
+type SettleMonth = {
+  month: string; clicks: number; orders: number; confirmed_amount: number; commission: number; order_sales: number; order_fee: number; open: boolean;
+  settlement: { commission: number; order_sales: number; order_fee: number; status: "closed" | "paid"; closed_at: string; paid_at: string | null } | null;
+};
+const won = (n: number) => `${n.toLocaleString("ko-KR")}원`;
 
 const KIND_LABEL: Record<string, string> = { meal_service: "식단 서비스", brand: "식품 브랜드", mall: "유통·몰" };
 const STATUS_LABEL: Record<Partner["status"], string> = { onboarding: "준비 중", active: "운영 중", paused: "멈춤" };
@@ -217,6 +222,7 @@ function PartnerRow({ p, onDone, onFail }: { p: Partner; onDone: (m: string) => 
   const [rate, setRate] = useState(p.commission_rate === null ? "" : String(p.commission_rate));
   const [days, setDays] = useState(String(p.attribution_days ?? 7));
   const [savingTerms, setSavingTerms] = useState(false);
+  const [settling, setSettling] = useState(false);
   const saveTerms = async (e: React.FormEvent) => {
     e.preventDefault();
     setSavingTerms(true);
@@ -249,6 +255,7 @@ function PartnerRow({ p, onDone, onFail }: { p: Partner; onDone: (m: string) => 
           <Select aria-label={`${p.name} 상태`} value={p.status} onChange={(e) => setStatus(e.target.value)} className="w-32">
             {Object.entries(STATUS_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </Select>
+          <Button size="sm" variant="ghost" onClick={() => setSettling(true)}>정산</Button>
           <LinkButton href={`/partner?as=${p.slug}`} size="sm" variant="ghost">업체 화면</LinkButton>
         </div>
       </div>
@@ -261,6 +268,67 @@ function PartnerRow({ p, onDone, onFail }: { p: Partner; onDone: (m: string) => 
         <Input type="email" aria-label="담당자 이메일" placeholder="담당자 이메일 (먼저 케어푸드에 가입)" value={email} onChange={(e) => setEmail(e.target.value)} className="flex-1 min-w-48" />
         <Button type="submit" size="sm" variant="secondary" loading={busy} disabled={!email.includes("@")}>담당자 연결하기</Button>
       </form>
+      <Sheet open={settling} onClose={() => setSettling(false)} title={`${p.name} 정산`} description="끝난 달을 마감하면 그때의 금액이 정산서로 남아요">
+        {settling && <Settlements partnerId={p.id} onFail={onFail} />}
+      </Sheet>
     </Card>
+  );
+}
+
+/* ── 정산: 달별 마감·입금 확인 ── */
+function Settlements({ partnerId, onFail }: { partnerId: string; onFail: (w: string, e: unknown) => void }) {
+  const toast = useToast();
+  const [state, setState] = useState<Load<SettleMonth[]>>({ status: "loading", data: [] });
+  const [busy, setBusy] = useState<string | null>(null);
+  const load = useCallback(async () => {
+    try { setState({ status: "done", data: (await api<{ months: SettleMonth[] }>(`/api/admin/partners/settlements?partner_id=${partnerId}`)).months }); }
+    catch (e) { setState({ status: "error", data: [], error: (e as Error).message }); }
+  }, [partnerId]);
+  useEffect(() => { load(); }, [load]); // eslint-disable-line react-hooks/set-state-in-effect -- 불러온 뒤에 상태를 바꾼다
+
+  const act = async (month: string, action: "close" | "paid") => {
+    setBusy(month);
+    try {
+      await api("/api/admin/partners/settlements", post({ partner_id: partnerId, month, action }));
+      toast.show(action === "close" ? `${month} 정산을 마감했어요` : `${month} 입금을 확인했어요`);
+      await load();
+    } catch (e) { onFail(action === "close" ? "마감" : "입금을 확인", e); } finally { setBusy(null); }
+  };
+
+  if (state.status === "loading") return <SkeletonList rows={3} thumb={false} />;
+  if (state.status === "error") {
+    return <EmptyState title="정산을 불러오지 못했어요" description={state.error}
+      action={<Button size="sm" variant="secondary" icon="refresh" onClick={() => { setState({ status: "loading", data: [] }); load(); }}>다시 불러오기</Button>} />;
+  }
+  if (state.data.length === 0) return <EmptyState title="아직 클릭이나 주문이 없어요" description="구매 링크가 눌리거나 주문이 들어오면 달별로 모여요" />;
+  return (
+    <ul className="divide-y divide-line">
+      {state.data.map((m) => {
+        const s = m.settlement;
+        const drift = s ? m.commission - s.commission : 0;
+        return (
+          <li key={m.month} className="py-3 flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-label text-ink">
+                <span className="num font-bold">{m.month}</span> · 수수료 <span className="num font-bold">{won(s ? s.commission : m.commission)}</span>
+                {(s ? s.order_sales : m.order_sales) > 0 && <> · 앱 주문 <span className="num">{won(s ? s.order_sales : m.order_sales)}</span> (수수료 <span className="num">{won(s ? s.order_fee : m.order_fee)}</span>)</>}
+              </p>
+              <p className="text-caption text-ink-2">
+                클릭 <span className="num">{m.clicks.toLocaleString("ko-KR")}</span> · 주문 <span className="num">{m.orders.toLocaleString("ko-KR")}</span> · 구매확정 <span className="num">{won(m.confirmed_amount)}</span>
+                {drift !== 0 && <> · 마감 뒤 <span className="num">{drift > 0 ? "+" : "−"}{won(Math.abs(drift))}</span></>}
+              </p>
+            </div>
+            {s?.status === "paid" ? <Badge tone="positive">정산 끝</Badge>
+              : m.open ? <span className="text-label text-ink-2">집계 중</span>
+              : s ? (
+                <div className="flex gap-2">
+                  <Button size="sm" variant="ghost" loading={busy === m.month} onClick={() => act(m.month, "close")}>다시 마감하기</Button>
+                  <Button size="sm" variant="secondary" disabled={busy === m.month} onClick={() => act(m.month, "paid")}>입금 확인하기</Button>
+                </div>
+              ) : <Button size="sm" variant="secondary" loading={busy === m.month} onClick={() => act(m.month, "close")}>마감하기</Button>}
+          </li>
+        );
+      })}
+    </ul>
   );
 }

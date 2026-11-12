@@ -1,255 +1,87 @@
 import { NextRequest, NextResponse } from "next/server";
-import { todayKst } from "@/lib/day";
 import { connection } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { getActorId, noActor } from "@/lib/actor-server";
 import { ORDERING_ENABLED } from "@/lib/features";
+import { isDay } from "@/lib/day";
+import { parseShipping, partnerOffersFor } from "@/lib/partner/orders";
 
 /**
- * POST /api/orders — 주간 식단 → 통합 주문 생성
+ * POST /api/orders — 식단 리스트 → 한 번에 주문
  *
- * 1. 주간 박스의 제품들을 서비스별로 분류
- * 2. orders + order_items 생성
- * 3. 서비스별 purchase_orders 생성/집계
+ * 주문할 수 있는 것은 입점 업체가 지금 팔고 있는 제품뿐이다 (lib/partner/orders.ts). 값은 그 업체의 판매가를 서버에서 다시 읽는다.
+ * 그 밖의 제품(시판·크롤링 가격)은 주문에 넣지 않고 건너뛴 수만 돌려준다 — 장보기 목록에서 몰마다 따로 산다.
+ * 받는 분 정보와 제3자 제공 동의 시각을 주문에 적고, 결제가 끝나면(paid_at) 업체 화면·API 에 보인다.
  *
  * GET /api/orders — 내 주문 내역
  *
  * 통합 주문은 사업자 등록·PG 연결 후 NEXT_PUBLIC_ORDERING_ENABLED=1 로 연다 (그 전엔 POST 403)
  */
-
-// 서비스 식별: product의 manufacturer/source로 판단
-const SERVICE_MAP: Record<string, string> = {
-  "현대그린푸드": "greating",
-  "그리팅": "greating",
-  "(주)그리팅": "greating",
-  "윤식단": "yundiet",
-  "(주)윤식단": "yundiet",
-  "풀무원": "designmeal",
-  "디자인밀": "designmeal",
-  "식스밀": "sixmeal",
-  "메이크샐러드": "makesalad",
-};
-
-function identifyService(manufacturer: string | null): string {
-  if (!manufacturer) return "market";
-  for (const [key, service] of Object.entries(SERVICE_MAP)) {
-    if (manufacturer.includes(key)) return service;
-  }
-  return "market"; // 시판 제품
-}
+const DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+const MEALS = ["breakfast", "lunch", "dinner", "snack"];
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export async function POST(request: NextRequest) {
   await connection();
   if (!ORDERING_ENABLED) return NextResponse.json({ error: "한 번에 주문하기는 준비 중이에요" }, { status: 403 });
+  const user_id = await getActorId();
+  if (!user_id) return noActor();
+  const body = await request.json().catch(() => null);
+  const items = (Array.isArray(body?.items) ? body.items.slice(0, 60) : []) as { product_id?: unknown; day_of_week?: unknown; meal_type?: unknown; quantity?: unknown }[];
+  if (items.length === 0) return NextResponse.json({ error: "주문할 식단이 없어요" }, { status: 400 });
+  const parsed = parseShipping(body?.shipping);
+  if ("error" in parsed) return NextResponse.json({ error: parsed.error }, { status: 400 });
+  if (body?.third_party_consent !== true) return NextResponse.json({ error: "배송을 위해 판매 업체에 받는 분 정보를 전달하는 데 동의해야 주문할 수 있어요" }, { status: 400 });
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sb = createServiceRoleClient() as any;
   try {
-    const body = await request.json();
-    const { items, address_id, delivery_week_start, delivery_preference } = body;
-    const user_id = await getActorId();
-    if (!user_id) return noActor();
+    const ids = [...new Set(items.map((it) => it.product_id).filter((x): x is string => typeof x === "string" && UUID.test(x)))];
+    const offers = await partnerOffersFor(sb, ids);
+    const { data: products, error: pErr } = await sb.from("products").select("id, name, calories, protein_g").in("id", [...offers.keys()]);
+    if (pErr) throw new Error(pErr.message);
+    const nameOf = new Map<string, { name: string; calories: number | null; protein_g: number | null }>((products || []).map((p: { id: string }) => [p.id, p]));
 
-    if (!items || !Array.isArray(items) || items.length === 0) {
-      return NextResponse.json({ error: "items[] 필수" }, { status: 400 });
-    }
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const sb = createServiceRoleClient() as any;
-
-    // ── 1. 제품 정보 조회 (가격 + 서비스 식별) ──
-    const productIds = items
-      .map((it: { product_id?: string }) => it.product_id)
-      .filter(Boolean);
-
-    let productMap: Record<string, { name: string; manufacturer: string | null; calories: number | null; protein_g: number | null }> = {};
-    if (productIds.length > 0) {
-      const { data: products } = await sb
-        .from("products")
-        .select("id, name, manufacturer, calories, protein_g")
-        .in("id", productIds.slice(0, 100));
-      for (const p of (products || [])) {
-        productMap[p.id] = p;
-      }
-    }
-
-    // 가격 조회
-    let priceMap: Record<string, number> = {};
-    if (productIds.length > 0) {
-      const { data: prices } = await sb
-        .from("product_prices")
-        .select("product_id, price")
-        .in("product_id", productIds.slice(0, 100))
-        .order("price", { ascending: true });
-      for (const pp of (prices || [])) {
-        if (!priceMap[pp.product_id]) priceMap[pp.product_id] = pp.price; // 최저가
-      }
-    }
-
-    // ── 2. 주문 아이템 정리 ──
-    type OrderItemRow = {
-      product_id: string | null;
-      day_of_week: string;
-      meal_type: string;
-      product_name: string;
-      service: string;
-      quantity: number;
-      unit_price: number;
-      calories: number | null;
-      protein_g: number | null;
-    };
-
-    const orderItems: OrderItemRow[] = items.map((it: {
-      product_id?: string;
-      product_name?: string;
-      day_of_week: string;
-      meal_type: string;
-      quantity?: number;
-    }) => {
-      const prod = it.product_id ? productMap[it.product_id] : null;
-      const service = prod ? identifyService(prod.manufacturer) : "market";
-      return {
-        product_id: it.product_id || null,
-        day_of_week: it.day_of_week,
-        meal_type: it.meal_type,
-        product_name: it.product_name || prod?.name || "직접 입력",
-        service,
-        quantity: it.quantity || 1,
-        unit_price: it.product_id ? (priceMap[it.product_id] || 0) : 0,
-        calories: prod?.calories || null,
-        protein_g: prod?.protein_g || null,
-      };
+    const rows = items.flatMap((it) => {
+      const offer = typeof it.product_id === "string" ? offers.get(it.product_id) : undefined;
+      if (!offer || !DAYS.includes(String(it.day_of_week)) || !MEALS.includes(String(it.meal_type))) return [];
+      const prod = nameOf.get(it.product_id as string);
+      return [{
+        product_id: it.product_id as string, day_of_week: String(it.day_of_week), meal_type: String(it.meal_type),
+        product_name: prod?.name || "제품", service: offer.slug, quantity: Math.min(Math.max(Math.floor(Number(it.quantity)) || 1, 1), 20),
+        unit_price: offer.price, calories: prod?.calories ?? null, protein_g: prod?.protein_g ?? null,
+        partner_id: offer.partner_id, partner_sku: offer.partner_sku,
+      }];
     });
+    if (rows.length === 0) return NextResponse.json({ error: "지금 한 번에 주문할 수 있는 제품이 없어요" }, { status: 400 });
+    const total = rows.reduce((s, r) => s + r.unit_price * r.quantity, 0);
 
-    const totalPrice = orderItems.reduce((s, it) => s + it.unit_price * it.quantity, 0);
+    const { data: order, error: oErr } = await sb.from("orders").insert({
+      user_id, status: "pending", total_items: rows.length, total_price: total, final_price: total,
+      delivery_week_start: isDay(body.delivery_week_start) ? body.delivery_week_start : null,
+      delivery_preference: { note: parsed.shipping.note }, weekly_box_snapshot: items,
+      shipping: parsed.shipping, third_party_consent_at: new Date().toISOString(),
+    }).select("id, status, total_items").single();
+    if (oErr) throw new Error(oErr.message);
 
-    // ── 3. 주문 생성 ──
-    const { data: order, error: orderError } = await sb
-      .from("orders")
-      .insert({
-        user_id,
-        address_id: address_id || null,
-        status: "pending",
-        total_items: orderItems.length,
-        total_price: totalPrice,
-        final_price: totalPrice, // 할인 없는 경우
-        delivery_week_start: delivery_week_start || null,
-        delivery_preference: delivery_preference || {},
-        weekly_box_snapshot: items,
-      })
-      .select()
-      .single();
-
-    if (orderError) return NextResponse.json({ error: orderError.message }, { status: 500 });
-
-    // ── 4. 주문 아이템 삽입 ──
-    const itemsToInsert = orderItems.map(it => ({
-      order_id: order.id,
-      ...it,
-    }));
-
-    await sb.from("order_items").insert(itemsToInsert);
-
-    // ── 5. 서비스별 발주 집계 ──
-    const serviceGroups: Record<string, OrderItemRow[]> = {};
-    for (const it of orderItems) {
-      if (it.service === "market") continue; // 시판은 발주 대상 아님
-      if (!serviceGroups[it.service]) serviceGroups[it.service] = [];
-      serviceGroups[it.service].push(it);
+    const { error: iErr } = await sb.from("order_items").insert(rows.map((r) => ({ order_id: order.id, ...r })));
+    if (iErr) {
+      // 상품 없는 주문이 남지 않게 지운다
+      const { error: undoErr } = await sb.from("orders").delete().eq("id", order.id);
+      if (undoErr) console.error("상품을 넣지 못한 주문을 지우지 못했어요:", order.id, undoErr.message);
+      throw new Error(iErr.message);
     }
-
-    const purchaseOrders: { service: string; items_count: number; amount: number }[] = [];
-
-    for (const [service, serviceItems] of Object.entries(serviceGroups)) {
-      // 기존 발주가 있으면 합치고, 없으면 새로 생성
-      const deliveryDate = delivery_week_start || todayKst();
-
-      const { data: existingPO } = await sb
-        .from("purchase_orders")
-        .select("id, total_items, total_users, total_amount, items")
-        .eq("service", service)
-        .eq("delivery_date", deliveryDate)
-        .eq("status", "pending")
-        .maybeSingle();
-
-      // 제품별 수량 집계
-      const productAgg: Record<string, { product_id: string; product_name: string; quantity: number; unit_price: number }> = {};
-      for (const it of serviceItems) {
-        const key = it.product_id || it.product_name;
-        if (!productAgg[key]) {
-          productAgg[key] = { product_id: it.product_id || "", product_name: it.product_name, quantity: 0, unit_price: it.unit_price };
-        }
-        productAgg[key].quantity += it.quantity;
-      }
-
-      const serviceAmount = serviceItems.reduce((s, it) => s + it.unit_price * it.quantity, 0);
-
-      if (existingPO) {
-        // 기존 발주에 합치기
-        const existingItems = (existingPO.items || []) as { product_id: string; product_name: string; quantity: number; unit_price: number }[];
-        for (const newItem of Object.values(productAgg)) {
-          const existing = existingItems.find(e => e.product_id === newItem.product_id && e.product_name === newItem.product_name);
-          if (existing) {
-            existing.quantity += newItem.quantity;
-          } else {
-            existingItems.push(newItem);
-          }
-        }
-
-        await sb.from("purchase_orders").update({
-          total_items: existingPO.total_items + serviceItems.length,
-          total_users: existingPO.total_users + 1,
-          total_amount: existingPO.total_amount + serviceAmount,
-          items: existingItems,
-          updated_at: new Date().toISOString(),
-        }).eq("id", existingPO.id);
-
-        // 발주-주문 연결
-        for (const it of serviceItems) {
-          await sb.from("purchase_order_items").insert({
-            purchase_order_id: existingPO.id,
-            order_id: order.id,
-            user_id,
-            address_id: address_id || null,
-          });
-        }
-      } else {
-        // 새 발주 생성
-        const { data: newPO } = await sb.from("purchase_orders").insert({
-          service,
-          delivery_date: deliveryDate,
-          total_items: serviceItems.length,
-          total_users: 1,
-          total_amount: serviceAmount,
-          items: Object.values(productAgg),
-        }).select().single();
-
-        if (newPO) {
-          await sb.from("purchase_order_items").insert({
-            purchase_order_id: newPO.id,
-            order_id: order.id,
-            user_id,
-            address_id: address_id || null,
-          });
-        }
-      }
-
-      purchaseOrders.push({ service, items_count: serviceItems.length, amount: serviceAmount });
-    }
-
     return NextResponse.json({
-      order: {
-        id: order.id,
-        status: order.status,
-        total_items: order.total_items,
-        total_price: totalPrice,
-      },
-      service_breakdown: purchaseOrders,
-      market_items: orderItems.filter(it => it.service === "market").length,
+      order: { id: order.id, status: order.status, total_items: order.total_items, total_price: total },
+      partner_items: rows.length, skipped: items.length - rows.length,
     });
   } catch (e) {
-    return NextResponse.json({ error: "주문 생성 실패" }, { status: 500 });
+    console.error("주문을 만들지 못했어요:", (e as Error).message);
+    return NextResponse.json({ error: "주문을 접수하지 못했어요. 다시 시도해 주세요" }, { status: 500 });
   }
 }
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   await connection();
   const userId = await getActorId();
   if (!userId) return noActor();
@@ -257,12 +89,13 @@ export async function GET(request: NextRequest) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sb = createServiceRoleClient() as any;
 
-  const { data: orders } = await sb
+  const { data: orders, error } = await sb
     .from("orders")
-    .select("id, status, total_items, total_price, final_price, delivery_week_start, created_at")
+    .select("id, status, total_items, total_price, final_price, delivery_week_start, created_at, order_items(product_name, quantity, service, fulfil_status, tracking_carrier, tracking_number, shipped_at, delivered_at)")
     .eq("user_id", userId)
     .order("created_at", { ascending: false })
     .limit(20);
+  if (error) return NextResponse.json({ error: "주문 내역을 불러오지 못했어요" }, { status: 500 });
 
   return NextResponse.json({ orders: orders || [] });
 }

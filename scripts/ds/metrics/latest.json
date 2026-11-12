@@ -1,6 +1,6 @@
 {
-  "measuredAt": "2026-11-11T03:07:14.200Z",
-  "files": 77,
+  "measuredAt": "2026-11-12T06:19:44.663Z",
+  "files": 91,
   "distinctColors": 2,
   "gradients": 1,
   "shadows": 1,
@@ -21,15 +21,15 @@
   "fontSizes": [
     [
       "ds:label",
-      175
+      223
     ],
     [
       "ds:caption",
-      163
+      209
     ],
     [
       "ds:body",
-      80
+      84
     ],
     [
       "ds:title",
@@ -43,7 +43,7 @@
   "radii": [
     [
       "md",
-      39
+      41
     ],
     [
       "full",
@@ -51,7 +51,7 @@
     ],
     [
       "lg",
-      17
+      18
     ],
     [
       "sm",
@@ -130,6 +130,13 @@
       }
     ],
     [
+      "src/app/admin/partners/page.tsx",
+      {
+        "colors": 0,
+        "inline": 0
+      }
+    ],
+    [
       "src/app/admin/reports/page.tsx",
       {
         "colors": 0,
@@ -151,14 +158,7 @@
       }
     ],
     [
-      "src/app/community/[id]/MealPlanActions.tsx",
-      {
-        "colors": 0,
-        "inline": 0
-      }
-    ],
-    [
-      "src/app/community/[id]/PostDetail.tsx",
+      "src/app/auth/forgot/page.tsx",
       {
         "colors": 0,
         "inline": 0

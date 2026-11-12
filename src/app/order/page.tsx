@@ -1,44 +1,23 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { addDays, todayKst, weekday } from "@/lib/day";
 import { ORDERING_ENABLED } from "@/lib/features";
 import { Button, Card, EmptyState, Field, Icon, Input, LinkButton, Page, PageHeader, PageLoading, Price, TextLink, useToast } from "@/components/ui";
-import { getClientActorId } from "@/lib/actor-client";
 
 /**
- * 주문 요약 페이지
+ * 주문 확인
  *
- * 주간 박스에서 "주문하기" 클릭 → 이 페이지로 이동
- * - 서비스별 주문 그룹핑
- * - 배송지 입력
- * - 요일별 배송 스케줄
- * - 총 비용 요약
+ * 식단 리스트에서 "주문하기" → 이 화면
+ * - 한 번에 주문할 수 있는 것은 입점 업체가 지금 팔고 있는 제품뿐이다. 판매 업체와 값은 서버에서 받아 온다 (/api/orders/quote)
+ * - 그 밖의 제품은 '따로 사야 하는 제품'으로 보여 주고 주문·금액에 넣지 않는다
+ * - 받는 분 정보 + 판매 업체에 전달 동의(필수)
  */
 
-type BoxItem = {
-  day: string;
-  slot: string;
-  product_id?: string;
-  product_name: string;
-  service?: string;
-  price?: number;
-  calories?: number;
-  protein_g?: number;
-};
-
-type ServiceGroup = {
-  service: string;
-  label: string;
-  items: BoxItem[];
-  total: number;
-  deliveryDays: string[];
-};
-
-const SERVICE_LABELS: Record<string, string> = {
-  greating: "그리팅", yundiet: "윤식단", designmeal: "디자인밀",
-  sixmeal: "식스밀", makesalad: "메이크샐러드", market: "시판 제품",
-};
+type BoxItem = { day: string; slot: string; product_id?: string; product_name: string };
+type Seller = { seller: string; slug: string; price: number };
+type Line = BoxItem & Seller;
+type Quote = { status: "loading" | "error" | "done"; groups: { slug: string; seller: string; lines: Line[]; total: number }[]; others: BoxItem[] };
 
 const DAY_LABELS: Record<string, string> = {
   mon: "월", tue: "화", wed: "수", thu: "목", fri: "금", sat: "토", sun: "일",
@@ -48,9 +27,12 @@ const SLOT_LABELS: Record<string, string> = {
   breakfast: "아침", lunch: "점심", dinner: "저녁", snack: "간식",
 };
 
-function getUserId(): string {
-  // 서버가 발급한 쿠키의 id — API 는 이 값을 받지 않고 쿠키로 직접 확인한다
-  return getClientActorId() || "";
+function readBox(): BoxItem[] {
+  try {
+    const raw = localStorage.getItem("carefood_order_items");
+    const list = raw ? JSON.parse(raw) : [];
+    return Array.isArray(list) ? list : [];
+  } catch { return []; } // ds-allow: 저장소를 못 읽으면 빈 주문으로 — 아래 빈 상태가 안내한다
 }
 
 export default function OrderPage() {
@@ -74,60 +56,51 @@ function OrderLocked() {
 
 function OrderFlow() {
   const toast = useToast();
-  const [items, setItems] = useState<BoxItem[]>([]);
-  const [groups, setGroups] = useState<ServiceGroup[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [items, setItems] = useState<BoxItem[] | null>(null);
+  const [quote, setQuote] = useState<Quote>({ status: "loading", groups: [], others: [] });
   const [ordering, setOrdering] = useState(false);
   const [orderResult, setOrderResult] = useState<{ id: string; total_price: number } | null>(null);
 
   // 배송지
   const [address, setAddress] = useState({ name: "", phone: "", addr1: "", addr2: "", note: "" });
+  // 배송을 위해 판매 업체에 받는 분 정보를 전달하는 데 동의 (필수)
+  const [consent, setConsent] = useState(false);
+  const canOrder = address.name.trim() !== "" && address.phone.replace(/[^\d]/g, "").length >= 9 && address.addr1.trim().length >= 5 && consent;
 
-  useEffect(() => {
-    // 주간 박스에서 전달된 데이터 로드
+  const loadQuote = useCallback(async (list: BoxItem[]) => {
     try {
-      const boxData = localStorage.getItem("carefood_order_items");
-      if (boxData) {
-        const parsed = JSON.parse(boxData) as BoxItem[];
-        setItems(parsed);
-
-        // 서비스별 그룹핑
-        const groupMap: Record<string, BoxItem[]> = {};
-        for (const it of parsed) {
-          const svc = it.service || "market";
-          if (!groupMap[svc]) groupMap[svc] = [];
-          groupMap[svc].push(it);
-        }
-
-        const grouped: ServiceGroup[] = Object.entries(groupMap).map(([service, serviceItems]) => ({
-          service,
-          label: SERVICE_LABELS[service] || service,
-          items: serviceItems,
-          total: serviceItems.reduce((s, it) => s + (it.price || 0), 0),
-          deliveryDays: [...new Set(serviceItems.map(it => it.day))],
-        }));
-
-        // 건강식단 서비스 먼저, 시판 마지막
-        grouped.sort((a, b) => {
-          if (a.service === "market") return 1;
-          if (b.service === "market") return -1;
-          return b.items.length - a.items.length;
-        });
-
-        setGroups(grouped);
+      const res = await fetch("/api/orders/quote", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ product_ids: list.map((it) => it.product_id).filter(Boolean) }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "");
+      const sellers = (data.sellers || {}) as Record<string, Seller>;
+      const by = new Map<string, Quote["groups"][number]>();
+      const others: BoxItem[] = [];
+      for (const it of list) {
+        const s = it.product_id ? sellers[it.product_id] : undefined;
+        if (!s) { others.push(it); continue; }
+        const g = by.get(s.slug) || by.set(s.slug, { slug: s.slug, seller: s.seller, lines: [], total: 0 }).get(s.slug)!;
+        g.lines.push({ ...it, ...s });
+        g.total += s.price;
       }
-    } catch { /* */ } // ds-allow: 로컬 주문 목록 읽기
-    setLoading(false);
+      setQuote({ status: "done", groups: [...by.values()].sort((a, b) => b.lines.length - a.lines.length), others });
+    } catch { setQuote({ status: "error", groups: [], others: [] }); }
   }, []);
 
-  const totalPrice = groups.reduce((s, g) => s + g.total, 0);
-  const totalItems = items.length;
+  useEffect(() => {
+    const list = readBox();
+    setItems(list); // eslint-disable-line react-hooks/set-state-in-effect -- 저장소는 화면이 뜬 뒤에만 읽을 수 있다
+    if (list.length > 0) loadQuote(list);
+  }, [loadQuote]);
+
+  const lines = quote.groups.flatMap((g) => g.lines);
+  const totalPrice = quote.groups.reduce((s, g) => s + g.total, 0);
 
   const handleOrder = async () => {
-    if (ordering || items.length === 0) return;
+    if (ordering || lines.length === 0 || !canOrder) return;
     setOrdering(true);
-
-    const userId = getUserId();
     const today = todayKst();
     const nextMonday = addDays(today, (8 - weekday(today)) % 7); // 오늘이 월요일이면 오늘
 
@@ -136,29 +109,24 @@ function OrderFlow() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          user_id: userId,
-          items: items.map(it => ({
-            product_id: it.product_id || null,
-            product_name: it.product_name,
-            day_of_week: it.day,
-            meal_type: it.slot,
-            quantity: 1,
-          })),
+          items: lines.map((it) => ({ product_id: it.product_id, day_of_week: it.day, meal_type: it.slot, quantity: 1 })),
           delivery_week_start: nextMonday,
-          delivery_preference: { note: address.note },
+          shipping: { name: address.name, phone: address.phone, address1: address.addr1, address2: address.addr2, note: address.note },
+          third_party_consent: consent,
         }),
       });
-      const data = await res.json();
-      if (!res.ok || !data.order) throw new Error(String(res.status));
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.order) throw new Error(data.error || "");
       setOrderResult(data.order);
-      localStorage.removeItem("carefood_order_items");
-    } catch {
-      toast.show("주문을 접수하지 못했어요. 다시 시도해 주세요", { tone: "danger" });
+      try { localStorage.removeItem("carefood_order_items"); } catch { /* */ } // ds-allow: 주문은 이미 접수됐다 — 담아 둔 목록만 못 지운 것
+    } catch (e) {
+      toast.show((e as Error).message || "주문을 접수하지 못했어요. 다시 시도해 주세요", { tone: "danger" });
     }
     finally { setOrdering(false); }
   };
 
-  if (loading) return <PageLoading />;
+  if (items === null || (items.length > 0 && quote.status === "loading" && !orderResult)) return <PageLoading />;
+
 
   // 주문 완료
   if (orderResult) {
@@ -170,7 +138,7 @@ function OrderFlow() {
           </span>
           <h1 className="text-title font-bold text-ink">주문을 접수했어요</h1>
           <p className="text-label text-ink-2">주문번호 <span className="num font-bold text-ink">{orderResult.id.slice(0, 8)}</span></p>
-          <p className="text-label text-ink-2 mb-4">서비스별 발주가 자동으로 처리돼요</p>
+          <p className="text-label text-ink-2 mb-4">판매 업체가 접수하면 배송을 준비해요</p>
           <div className="flex gap-2">
             <LinkButton href="/diary">식단 기록하기</LinkButton>
             <LinkButton href="/" variant="secondary">홈으로 가기</LinkButton>
@@ -193,6 +161,30 @@ function OrderFlow() {
       </Page>
     );
   }
+  if (quote.status === "error") {
+    return (
+      <Page width="narrow">
+        <EmptyState
+          className="mt-10"
+          title="주문할 수 있는 제품을 확인하지 못했어요"
+          description="잠시 뒤 다시 불러와 주세요"
+          action={<Button size="sm" variant="secondary" icon="refresh" onClick={() => { setQuote({ status: "loading", groups: [], others: [] }); loadQuote(items); }}>다시 불러오기</Button>}
+        />
+      </Page>
+    );
+  }
+  if (lines.length === 0) {
+    return (
+      <Page width="narrow">
+        <EmptyState
+          className="mt-10"
+          title="한 번에 주문할 수 있는 제품이 없어요"
+          description="담은 제품은 장보기 목록에서 몰마다 따로 살 수 있어요"
+          action={<LinkButton href="/weekly-box">식단 리스트로 가기</LinkButton>}
+        />
+      </Page>
+    );
+  }
 
   const ADDRESS_FIELDS: { key: keyof typeof address; label: string; placeholder: string }[] = [
     { key: "name", label: "받는 분", placeholder: "홍길동" },
@@ -207,36 +199,40 @@ function OrderFlow() {
       <TextLink href="/weekly-box" className="mb-3"><Icon name="chevron-left" size={16} /> 식단 리스트</TextLink>
       <PageHeader title="주문 확인" />
 
-      {/* ── 서비스별 주문 ── */}
+      {/* ── 판매 업체별 주문 ── */}
       <div className="flex flex-col gap-4 mb-6">
-        {groups.map(g => (
-          <Card key={g.service} padding="none" className="overflow-hidden">
+        {quote.groups.map((g) => (
+          <Card key={g.slug} padding="none" className="overflow-hidden">
             <div className="bg-sunken px-4 py-2.5 border-b border-line flex items-center justify-between gap-3">
-              <span className="text-label font-bold text-ink">{g.label}</span>
-              <span className="text-caption text-ink-2"><span className="num">{g.items.length}</span>끼 · {g.deliveryDays.map(d => DAY_LABELS[d]).join("/")}요일</span>
+              <span className="text-label font-bold text-ink">{g.seller}</span>
+              <span className="text-caption text-ink-2"><span className="num">{g.lines.length}</span>끼 · {[...new Set(g.lines.map((l) => l.day))].map((d) => DAY_LABELS[d]).join("/")}요일</span>
             </div>
             <div className="divide-y divide-line">
-              {g.items.map((it, i) => (
+              {g.lines.map((it, i) => (
                 <div key={i} className="px-4 py-2.5 flex items-center justify-between gap-3">
                   <div className="flex-1 min-w-0">
                     <p className="text-label text-ink truncate">{it.product_name}</p>
-                    <p className="text-caption text-ink-2">
-                      {DAY_LABELS[it.day]}요일 {SLOT_LABELS[it.slot]}
-                      {it.calories ? <> · <span className="num">{it.calories}</span>kcal</> : ""}
-                    </p>
+                    <p className="text-caption text-ink-2">{DAY_LABELS[it.day]}요일 {SLOT_LABELS[it.slot]}</p>
                   </div>
-                  {it.price ? <Price value={it.price} className="text-label shrink-0" /> : <span className="text-label text-ink-3 shrink-0">–</span>}
+                  <Price value={it.price} className="text-label shrink-0" />
                 </div>
               ))}
             </div>
-            {g.total > 0 && (
-              <div className="px-4 py-2.5 flex justify-between text-label border-t border-line">
-                <span className="text-ink-2">소계</span>
-                <Price value={g.total} />
-              </div>
-            )}
+            <div className="px-4 py-2.5 flex justify-between text-label border-t border-line">
+              <span className="text-ink-2">소계</span>
+              <Price value={g.total} />
+            </div>
           </Card>
         ))}
+        {quote.others.length > 0 && (
+          <div>
+            <h2 className="text-label font-bold text-ink mb-1">따로 사야 하는 제품 <span className="num font-regular text-ink-2">{quote.others.length}</span></h2>
+            <p className="text-caption text-ink-2 mb-2">이 주문에는 들어가지 않아요. 식단 리스트의 장보기 목록에서 몰마다 살 수 있어요</p>
+            <ul className="text-label text-ink-2 flex flex-col gap-1">
+              {quote.others.map((it, i) => <li key={i} className="truncate">{DAY_LABELS[it.day]}요일 {SLOT_LABELS[it.slot]} · {it.product_name}</li>)}
+            </ul>
+          </div>
+        )}
       </div>
 
       {/* ── 배송 정보 ── */}
@@ -250,31 +246,38 @@ function OrderFlow() {
             </Field>
           ))}
         </div>
+        <label className="flex items-start gap-2 mt-4 text-label text-ink">
+          <input type="checkbox" className="ds-check shrink-0 mt-0.5" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
+          <span>
+            배송을 위해 주문한 상품의 판매 업체에 받는 분·연락처·주소·배송 메모를 전달하는 데 동의해요 (필수)
+            <span className="block text-caption text-ink-2 mt-0.5">업체는 이 정보를 배송에만 쓰고, 배송이 끝나면 업체 화면에서 가려져요</span>
+          </span>
+        </label>
       </Card>
 
       {/* ── 결제 요약 ── */}
       <Card tone="sunken" className="mb-6">
         <div className="flex justify-between text-label mb-2">
-          <span className="text-ink-2">총 <span className="num">{totalItems}</span>끼</span>
+          <span className="text-ink-2">총 <span className="num">{lines.length}</span>끼</span>
           <Price value={totalPrice} className="font-medium" />
         </div>
         <div className="flex justify-between text-label mb-2">
           <span className="text-ink-2">배송비</span>
-          <span className="text-positive font-medium">무료</span>
+          <span className="text-ink-2">결제할 때 업체별로 더해요</span>
         </div>
         <div className="border-t border-line pt-2 flex justify-between items-baseline">
-          <span className="text-body font-bold text-ink">결제 금액</span>
+          <span className="text-body font-bold text-ink">상품 금액</span>
           <span className="num text-title font-bold text-ink highlight">{totalPrice.toLocaleString()}<span className="text-label font-medium text-ink-2 ml-0.5">원</span></span>
         </div>
       </Card>
 
       {/* ── 주문 버튼 ── */}
-      <Button block onClick={handleOrder} loading={ordering}>
+      <Button block onClick={handleOrder} loading={ordering} disabled={!canOrder}>
         {ordering ? "주문하는 중" : `${totalPrice.toLocaleString()}원 주문하기`}
       </Button>
 
       <p className="text-caption text-ink-2 text-center mt-3">
-        각 서비스별로 자동 발주돼요. 시판 제품은 따로 구매해야 해요.
+        {canOrder ? "주문은 판매 업체별로 전달돼요" : "받는 분·연락처·주소를 적고 동의하면 주문할 수 있어요"}
       </p>
     </Page>
   );

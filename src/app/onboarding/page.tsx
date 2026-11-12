@@ -865,7 +865,7 @@ function ResultPreview({ makeProfile }: { makeProfile: () => ReturnType<typeof b
       )}
       {status === "ready" && items.length > 0 && (
         <>
-          <ProductCards products={items} showMatch onOpen={keep} />
+          <ProductCards products={items} showMatch onOpen={keep} placement="onboarding_preview" />
           <p className="text-caption text-ink-2 mt-1">아래 버튼을 누르면 이런 제품으로 이번 주 끼니를 채워요</p>
         </>
       )}

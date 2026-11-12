@@ -3,10 +3,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { Button, Card, EmptyState, ProgressBar, SectionHeader, SkeletonList, Stat, Tabs, TextLink } from "@/components/ui";
 
-type Product = { product_id: string; name: string; sku: string; views: number; clicks: number; diary: number; favorites: number; plans: number; rating: number | null; rating_n: number };
+type Product = { product_id: string; name: string; sku: string; impressions: number; views: number; clicks: number; diary: number; favorites: number; plans: number; rating: number | null; rating_n: number };
 type Data = {
   days: number; products: Product[];
-  totals: { views: number; clicks: number; diary: number; favorites: number; plans: number } | null;
+  totals: { impressions: number; views: number; clicks: number; diary: number; favorites: number; plans: number } | null;
   audience: { people: number | null; goals?: { label: string; share: number }[]; hidden?: number } | null;
 };
 type Days = "7" | "28" | "90";
@@ -41,7 +41,8 @@ export function Report({ qs }: { qs: string }) {
           <EmptyState title="아직 반영된 제품이 없어요" description="제품이 반영되고 업체가 운영 중이 되면 여기 성과가 모여요" />
         ) : (
           <>
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              <Card><Stat label="노출" value={n(d.totals.impressions)} /></Card>
               <Card><Stat label="상세 조회" value={n(d.totals.views)} /></Card>
               <Card><Stat label="구매 링크 클릭" value={n(d.totals.clicks)} emphasis /></Card>
               <Card><Stat label="식단 기록" value={n(d.totals.diary)} /></Card>
@@ -49,8 +50,9 @@ export function Report({ qs }: { qs: string }) {
               <Card><Stat label="즐겨찾기" value={n(d.totals.favorites)} /></Card>
             </div>
             <p className="text-caption text-ink-2 mt-2">
+              노출 대비 조회 <span className="num">{d.totals.impressions > 0 ? Math.round((d.totals.views / d.totals.impressions) * 100) : 0}</span>% ·
               조회 대비 클릭 <span className="num">{d.totals.views > 0 ? Math.round((d.totals.clicks / d.totals.views) * 100) : 0}</span>% ·
-              목록·추천에 보인 횟수는 아직 세지 않아요
+              노출은 추천·목록·식단 채우기에 보인 횟수로, 11월 12일부터 세요
             </p>
 
             <h3 className="text-label font-bold text-ink mt-8 mb-2">제품별</h3>
@@ -59,6 +61,7 @@ export function Report({ qs }: { qs: string }) {
                 <thead>
                   <tr className="text-ink-2 border-b border-line">
                     <th className="text-left font-medium px-4 py-2.5">제품</th>
+                    <th className="text-right font-medium px-3 py-2.5 whitespace-nowrap">노출</th>
                     <th className="text-right font-medium px-3 py-2.5 whitespace-nowrap">조회</th>
                     <th className="text-right font-medium px-3 py-2.5 whitespace-nowrap">클릭</th>
                     <th className="text-right font-medium px-3 py-2.5 whitespace-nowrap">기록</th>
@@ -71,6 +74,7 @@ export function Report({ qs }: { qs: string }) {
                   {d.products.map((p) => (
                     <tr key={p.product_id}>
                       <td className="px-4 py-2.5 min-w-48"><TextLink href={`/products/${p.product_id}`}>{p.name}</TextLink></td>
+                      <td className="px-3 py-2.5 num text-right text-ink">{n(p.impressions)}</td>
                       <td className="px-3 py-2.5 num text-right text-ink">{n(p.views)}</td>
                       <td className="px-3 py-2.5 num text-right text-ink">{n(p.clicks)}</td>
                       <td className="px-3 py-2.5 num text-right text-ink">{n(p.diary)}</td>

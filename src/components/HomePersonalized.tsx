@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { PLATFORM_LABELS } from "@/lib/platforms";
 import Link from "next/link";
 import { Badge, Price, SectionHeader, TextLink } from "@/components/ui";
+import { useImpressions, type Placement } from "@/lib/impressions";
 
 const CONCERN_LABELS: Record<string, string> = {
   gut_health: "장건강",
@@ -126,7 +127,7 @@ export default function HomePersonalized({ cold = false }: { cold?: boolean }) {
       <section className="pt-8">
         <SectionHeader title="지금 살 수 있는 건강한 한 끼" />
         <p className="text-label text-ink-2 -mt-1 mb-3">건강 점수가 높은 한 끼·반찬이에요. 목표를 알려 주면 맞춰 골라요</p>
-        <ProductCards products={products} showMatch={false} />
+        <ProductCards products={products} showMatch={false} placement="home_cold" />
       </section>
     );
   }
@@ -170,7 +171,12 @@ export default function HomePersonalized({ cold = false }: { cold?: boolean }) {
 }
 
 /** 가로로 넘기는 제품 카드 — 홈 추천·첫 방문 추천·온보딩 결과가 같이 쓴다 */
-export function ProductCards({ products, showMatch, onOpen }: { products: QuickProduct[]; showMatch: boolean; onOpen?: () => void }) {
+export function ProductCards({ products, showMatch, onOpen, placement = "home_reco" }: {
+  products: QuickProduct[]; showMatch: boolean; onOpen?: () => void;
+  /** 노출 수를 셀 자리 이름 */
+  placement?: Placement;
+}) {
+  const seen = useImpressions(placement);
   return (
     <div className="flex gap-3 scroll-row -mx-4 px-4 pb-2">
     {products.map((p) => {
@@ -185,6 +191,7 @@ export function ProductCards({ products, showMatch, onOpen }: { products: QuickP
         <Link
           key={p.id}
           href={`/products/${p.id}`}
+          ref={seen(p.id)}
           onClick={onOpen}
           className="block w-44 shrink-0 rounded-lg border border-line bg-surface overflow-hidden transition-colors hover:border-line-strong"
         >

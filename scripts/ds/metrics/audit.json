@@ -1,18 +1,18 @@
 {
-  "auditedAt": "2026-11-07T03:57:38.597Z",
+  "auditedAt": "2026-11-12T06:26:09.528Z",
   "base": "http://localhost:3100",
-  "commit": "70c1cb44fe81ee93b5ea4f3ac6e1f53bfca4ac20",
+  "commit": "08496b44d294925deac9c55bb94b588f1bc03452",
   "ignored": null,
-  "pages": 25,
+  "pages": 39,
   "variants": [
     "데스크톱",
     "모바일",
     "모바일 다크"
   ],
-  "screenshots": 75,
-  "seconds": 165,
+  "screenshots": 117,
+  "seconds": 348,
   "totals": {
-    "error": 13,
+    "error": 33,
     "overflow": 0,
     "off-color": 0,
     "contrast": 0,
@@ -20,12 +20,12 @@
     "tiny-text": 0,
     "touch-target": 2
   },
-  "blocking": 13,
+  "blocking": 33,
   "byPage": [
     {
       "route": "/",
       "url": "/",
-      "issues": 0
+      "issues": 12
     },
     {
       "route": "/admin",
@@ -53,6 +53,26 @@
       "issues": 0
     },
     {
+      "route": "/admin/partners",
+      "url": "/admin/partners",
+      "issues": 0
+    },
+    {
+      "route": "/admin/reports",
+      "url": "/admin/reports",
+      "issues": 0
+    },
+    {
+      "route": "/auth/forgot",
+      "url": "/auth/forgot",
+      "issues": 0
+    },
+    {
+      "route": "/auth/reset",
+      "url": "/auth/reset",
+      "issues": 0
+    },
+    {
       "route": "/community",
       "url": "/community",
       "issues": 0
@@ -60,6 +80,16 @@
     {
       "route": "/community/[id]",
       "url": "/community/fc8c8e13-03c1-465f-a159-86fcf4749ce8",
+      "issues": 0
+    },
+    {
+      "route": "/community/challenges",
+      "url": "/community/challenges",
+      "issues": 0
+    },
+    {
+      "route": "/community/u/[id]",
+      "url": "/community/u/seed_user_2",
       "issues": 0
     },
     {
@@ -83,6 +113,11 @@
       "issues": 0
     },
     {
+      "route": "/group-buy",
+      "url": "/group-buy",
+      "issues": 0
+    },
+    {
       "route": "/health",
       "url": "/health",
       "issues": 0
@@ -98,8 +133,33 @@
       "issues": 0
     },
     {
+      "route": "/me",
+      "url": "/me",
+      "issues": 0
+    },
+    {
+      "route": "/me/blocked",
+      "url": "/me/blocked",
+      "issues": 0
+    },
+    {
+      "route": "/me/notifications",
+      "url": "/me/notifications",
+      "issues": 0
+    },
+    {
+      "route": "/me/profile",
+      "url": "/me/profile",
+      "issues": 0
+    },
+    {
       "route": "/meals",
       "url": "/meals",
+      "issues": 0
+    },
+    {
+      "route": "/notifications",
+      "url": "/notifications",
       "issues": 0
     },
     {
@@ -113,6 +173,16 @@
       "issues": 0
     },
     {
+      "route": "/partner",
+      "url": "/partner",
+      "issues": 0
+    },
+    {
+      "route": "/partner/docs",
+      "url": "/partner/docs",
+      "issues": 0
+    },
+    {
       "route": "/privacy",
       "url": "/privacy",
       "issues": 0
@@ -120,7 +190,7 @@
     {
       "route": "/products",
       "url": "/products",
-      "issues": 5
+      "issues": 11
     },
     {
       "route": "/products/[id]",
@@ -130,7 +200,7 @@
     {
       "route": "/recommend",
       "url": "/recommend",
-      "issues": 2
+      "issues": 10
     },
     {
       "route": "/terms",
@@ -145,7 +215,7 @@
     {
       "route": "/weekly-box",
       "url": "/weekly-box",
-      "issues": 6
+      "issues": 0
     }
   ]
 }

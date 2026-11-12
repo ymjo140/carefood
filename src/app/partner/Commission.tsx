@@ -3,14 +3,18 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button, Card, EmptyState, Notice, SectionHeader, SkeletonList, buttonClass, useToast } from "@/components/ui";
 
-type Month = { month: string; clicks: number; orders: number; confirmed: number; confirmed_amount: number; commission: number; canceled: number };
+type Settlement = { commission: number; order_sales: number; order_fee: number; status: "closed" | "paid"; closed_at: string; paid_at: string | null };
+type Month = {
+  month: string; clicks: number; orders: number; confirmed: number; confirmed_amount: number; commission: number; canceled: number;
+  order_sales: number; order_fee: number; open: boolean; settlement: Settlement | null;
+};
 type Data = { commission_rate: number | null; attribution_days: number; months: Month[] };
 type RowError = { row: number; sku?: string; message: string };
 type Result = { rows: number; saved: number; error: number; errors: RowError[] };
 
 const won = (n: number) => `${n.toLocaleString("ko-KR")}원`;
 
-/** 구매 수수료 — 달별 클릭·주문·수수료와 주문 내역 올리기 */
+/** 정산 — 달별 클릭·주문·수수료, 마감·입금 상태, 주문 내역 올리기 */
 export function Commission({ qs }: { qs: string }) {
   const toast = useToast();
   const [state, setState] = useState<{ status: "loading" | "error" | "done"; data?: Data; error?: string }>({ status: "loading" });
@@ -48,9 +52,10 @@ export function Commission({ qs }: { qs: string }) {
     } finally { setBusy(false); }
   };
 
+  const appOrders = !!state.data?.months.some((m) => m.order_sales > 0 || (m.settlement?.order_sales || 0) > 0);
   return (
     <section>
-      <SectionHeader title="구매 수수료"
+      <SectionHeader title="정산"
         action={<a href="/api/partner/template?kind=orders" className={buttonClass({ variant: "ghost", size: "sm" })}>주문 양식 내려받기</a>} />
       {state.status === "loading" ? <SkeletonList rows={2} thumb={false} />
         : state.status === "error" || !state.data ? (
@@ -62,7 +67,7 @@ export function Commission({ qs }: { qs: string }) {
               케어푸드 구매 링크에는 <span className="num">cf_click</span> 번호가 붙어요. 그 번호로 들어온 주문을 올리면
               클릭 뒤 <span className="num">{state.data.attribution_days}</span>일 안의 구매확정 금액에
               {state.data.commission_rate === null ? " 계약한 수수료율" : <> <span className="num">{state.data.commission_rate}</span>%</>}을 계산해요.
-              번호에는 고객을 알아볼 정보가 없어요.
+              번호에는 고객을 알아볼 정보가 없어요. 달이 끝나면 케어푸드가 그 달을 마감하고, 마감한 금액으로 정산해요.
             </p>
             {state.data.months.length === 0 ? (
               <EmptyState title="아직 클릭이나 주문이 없어요" description="제품이 앱에 보이고 구매 링크가 눌리면 여기 달별로 모여요" />
@@ -76,23 +81,42 @@ export function Commission({ qs }: { qs: string }) {
                       <th className="text-right font-medium px-3 py-2.5 whitespace-nowrap">주문</th>
                       <th className="text-right font-medium px-3 py-2.5 whitespace-nowrap">취소·반품</th>
                       <th className="text-right font-medium px-3 py-2.5 whitespace-nowrap">구매확정 금액</th>
-                      <th className="text-right font-medium px-4 py-2.5 whitespace-nowrap">수수료</th>
+                      <th className={`text-right font-medium py-2.5 whitespace-nowrap ${appOrders ? "px-3" : "px-4"}`}>수수료</th>
+                      {appOrders && <th className="text-right font-medium px-3 py-2.5 whitespace-nowrap">앱 주문 판매</th>}
+                      {appOrders && <th className="text-right font-medium px-4 py-2.5 whitespace-nowrap">앱 주문 수수료</th>}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-line">
-                    {state.data.months.map((m) => (
+                    {state.data.months.map((m) => {
+                      const s = m.settlement;
+                      const drift = s ? m.commission - s.commission : 0;
+                      return (
                       <tr key={m.month}>
-                        <td className="px-4 py-2.5 num text-ink whitespace-nowrap">{m.month}</td>
+                        <td className="px-4 py-2.5 whitespace-nowrap">
+                          <span className="num text-ink">{m.month}</span>
+                          <span className={`block text-caption ${s?.status === "paid" ? "text-positive" : "text-ink-2"}`}>
+                            {s?.status === "paid" ? "정산 끝" : s ? "마감" : m.open ? "집계 중" : "마감 전"}
+                          </span>
+                        </td>
                         <td className="px-3 py-2.5 num text-right text-ink">{m.clicks.toLocaleString("ko-KR")}</td>
                         <td className="px-3 py-2.5 num text-right text-ink">{m.orders.toLocaleString("ko-KR")}</td>
                         <td className="px-3 py-2.5 num text-right text-ink">{m.canceled.toLocaleString("ko-KR")}</td>
                         <td className="px-3 py-2.5 num text-right text-ink whitespace-nowrap">{won(m.confirmed_amount)}</td>
-                        <td className="px-4 py-2.5 num text-right font-bold text-ink whitespace-nowrap">{won(m.commission)}</td>
+                        <td className={`py-2.5 num text-right font-bold text-ink whitespace-nowrap ${appOrders ? "px-3" : "px-4"}`}>
+                          {won(s ? s.commission : m.commission)}
+                          {drift !== 0 && <span className="block text-caption font-regular text-ink-2">마감 뒤 {drift > 0 ? "+" : "−"}{won(Math.abs(drift))}</span>}
+                        </td>
+                        {appOrders && <td className="px-3 py-2.5 num text-right text-ink whitespace-nowrap">{won(s ? s.order_sales : m.order_sales)}</td>}
+                        {appOrders && <td className="px-4 py-2.5 num text-right text-ink whitespace-nowrap">{won(s ? s.order_fee : m.order_fee)}</td>}
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
               </Card>
+            )}
+            {state.data.months.some((m) => m.settlement && m.commission !== m.settlement.commission) && (
+              <p className="text-caption text-ink-2 mt-2">&lsquo;마감 뒤&rsquo;는 마감한 다음에 주문 상태가 바뀌어 달라진 금액이에요. 케어푸드가 확인해 다음 정산에 반영해요</p>
             )}
 
             <Card className="mt-3">

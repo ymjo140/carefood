@@ -1,5 +1,6 @@
 import { Card, Page, PageHeader, SectionHeader, TextLink } from "@/components/ui";
 import { FIELDS } from "@/lib/partner/schema";
+import { CARRIERS } from "@/lib/partner/orders";
 
 export const metadata = { title: "입점 업체 연동 문서" };
 
@@ -13,6 +14,8 @@ const ENDPOINTS: [string, string, string][] = [
   ["GET", "/products?status=rejected", "내 제품과 검수 상태, 반려 이유"],
   ["GET", "/batches/{batch_id}", "한 번 보낸 묶음의 처리 결과"],
   ["POST", "/conversions", "케어푸드 링크로 들어온 주문 (구매 수수료 정산)"],
+  ["GET", "/orders?status=new", "케어푸드 앱에서 들어온 주문 (앱 주문이 열린 뒤)"],
+  ["PATCH", "/orders/{order_id}", "주문 접수·발송(송장)·배송 완료·취소"],
 ];
 
 const RESULTS: [string, string][] = [
@@ -24,7 +27,8 @@ const RESULTS: [string, string][] = [
 const ERRORS: [string, string, string][] = [
   ["401", "unauthorized", "키가 없거나 폐기된 키"],
   ["403", "partner_paused", "업체 계정이 멈춤"],
-  ["404", "not_found", "없는 제품 코드·묶음"],
+  ["404", "not_found", "없는 제품 코드·묶음·주문"],
+  ["409", "conflict", "지금 상태에서는 할 수 없는 주문 처리 (예: 발송한 주문 취소)"],
   ["413", "too_large · too_many", "본문 2MB 초과, 개수 초과"],
   ["422", "invalid", "값이 양식에 맞지 않음 — errors 에 칸과 이유"],
   ["429", "rate_limited", "키 하나에 1분 120번 초과"],
@@ -75,6 +79,20 @@ const CONV_EXAMPLE = `curl -X POST "${BASE}/conversions" \\
   }] }'
 
 → 200  { "received": 1, "saved": 1, "rejected": 0, "errors": [] }`;
+
+const ORDER_EXAMPLE = `curl "${BASE}/orders?status=new" -H "Authorization: Bearer cf_live_…"
+
+→ 200  { "orders": [{
+    "order_id": "8a1f0c52-…", "ordered_at": "2026-11-12T05:30:00Z", "status": "new", "amount": 23600,
+    "lines": [{ "partner_sku": "GR-2611-014", "product_name": "저당 닭가슴살 도시락", "quantity": 2, "unit_price": 11800 }],
+    "shipping": { "name": "…", "phone": "…", "postal_code": "…", "address1": "…", "address2": "…", "note": "…" }
+  }] }
+
+curl -X PATCH "${BASE}/orders/8a1f0c52-…" \\
+  -H "Authorization: Bearer cf_live_…" -H "Content-Type: application/json" \\
+  -d '{ "status": "shipped", "carrier": "cj", "tracking_number": "123456789012" }'
+
+→ 200  { "order": { … "status": "shipped" }, "changed": true }`;
 
 const ERROR_EXAMPLE = `→ 422
 {
@@ -149,6 +167,18 @@ export default function PartnerDocsPage() {
       </p>
       <Code>{CONV_EXAMPLE}</Code>
       <p className="text-label text-ink-2 mt-2">status: ordered · confirmed · canceled · returned. 수수료는 confirmed 금액에만 계산해요. ordered_at 에 시간대가 없으면 한국 시간으로 읽어요.</p>
+
+      <SectionHeader title="앱 주문 받기" className="mt-10" description="케어푸드 앱 안 주문이 열린 뒤에 쓰여요. 그 전에는 빈 목록이 와요" />
+      <p className="text-label text-ink mb-2">
+        결제가 끝난 주문만 와요. 한 주문 안의 우리 업체 상품은 한 묶음으로 움직여요: new → accepted → shipped → delivered.
+        받는 분 정보(shipping)는 배송에만 쓰고, 배송이 끝나면 응답에서 빠져요.
+      </p>
+      <Code>{ORDER_EXAMPLE}</Code>
+      <p className="text-label text-ink-2 mt-2">
+        status: accepted · shipped(carrier 와 tracking_number 필요) · delivered · canceled(reason 필요, 발송 전까지만).
+        carrier: {Object.entries(CARRIERS).map(([k, v], i) => <span key={k}>{i > 0 && " · "}<span className="num">{k}</span> {v}</span>)}.
+        direct 는 송장 번호 없이 보낼 수 있어요. 같은 상태를 다시 보내면 changed 가 false 로 와요.
+      </p>
 
       <SectionHeader title="오류" className="mt-10" />
       <Code>{ERROR_EXAMPLE}</Code>

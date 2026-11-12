@@ -3,12 +3,13 @@ import { connection } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { getPartnerContext } from "@/lib/partner/auth";
 import { readWorkbook } from "@/lib/partner/excel";
-import { DEFAULT_ATTRIBUTION_DAYS, ingestConversions, monthlySummary } from "@/lib/partner/conversions";
+import { DEFAULT_ATTRIBUTION_DAYS, ingestConversions } from "@/lib/partner/conversions";
+import { settlementMonths } from "@/lib/partner/settlement";
 import { limitRequest } from "@/lib/rate-limit";
 
 export const maxDuration = 60;
 
-/** GET /api/partner/conversions[?as=slug] — 달별 클릭·주문·수수료 + 계약 조건 */
+/** GET /api/partner/conversions[?as=slug] — 달별 클릭·주문·수수료·정산 상태 + 계약 조건 */
 export async function GET(req: NextRequest) {
   await connection();
   const ctx = await getPartnerContext(req.nextUrl.searchParams.get("as"));
@@ -20,7 +21,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       commission_rate: pa.commission_rate === null ? null : Number(pa.commission_rate),
       attribution_days: pa.attribution_days ?? DEFAULT_ATTRIBUTION_DAYS,
-      months: await monthlySummary(sb, ctx.partner.id),
+      months: await settlementMonths(sb, ctx.partner.id),
     });
   } catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: 500 }); }
 }
