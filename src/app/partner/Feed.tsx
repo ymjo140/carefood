@@ -69,7 +69,7 @@ export function Feed({ qs, onFetched }: { qs: string; onFetched: () => void }) {
   const feed = state.feed;
   const s = feed?.last_summary;
   return (
-    <section className="mt-10">
+    <section>
       <SectionHeader title="상품 피드"
         action={<a href="/api/partner/template?kind=feed" className={buttonClass({ variant: "ghost", size: "sm" })}>예시 피드 내려받기</a>} />
       {state.status === "loading" ? <SkeletonList rows={2} thumb={false} />

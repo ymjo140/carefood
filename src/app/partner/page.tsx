@@ -9,6 +9,7 @@ import {
 import { REVIEW_LABELS } from "@/lib/partner/schema";
 import { Commission } from "./Commission";
 import { Feed } from "./Feed";
+import { Report } from "./Report";
 
 type Partner = { id: string; slug: string; name: string; kind: string; status: string };
 type Batch = {
@@ -34,6 +35,7 @@ function PartnerHome() {
   const [me, setMe] = useState<Load<Me>>({ status: "loading" });
   const [items, setItems] = useState<Load<Item[]>>({ status: "loading" });
   const [filter, setFilter] = useState<Filter>("all");
+  const [view, setView] = useState<"products" | "feed" | "report" | "commission">("products");
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [result, setResult] = useState<Batch | null>(null);
@@ -131,6 +133,10 @@ function PartnerHome() {
         <Card><Stat label="반려" value={(counts.rejected || 0).toLocaleString()} /></Card>
       </div>
 
+      <Tabs value={view} onChange={setView} label="입점 업체 메뉴" className="mb-6"
+        items={[{ value: "products", label: "제품" }, { value: "feed", label: "피드" }, { value: "report", label: "성과" }, { value: "commission", label: "수수료" }]} />
+
+      {view === "products" && <>
       <SectionHeader title="제품 올리기" />
       <Card className="mb-3">
         <p className="text-label text-ink-2">
@@ -150,7 +156,7 @@ function PartnerHome() {
       {last && <BatchResult batch={last} fresh={!!result} />}
 
       <SectionHeader title="제품" className="mt-8" />
-      <Tabs value={filter} onChange={(f) => { setFilter(f); setItems({ status: "loading" }); }} label="제품 상태" className="mb-3"
+      <Tabs variant="line" value={filter} onChange={(f) => { setFilter(f); setItems({ status: "loading" }); }} label="제품 상태" className="mb-3"
         items={[
           { value: "all", label: "전체" },
           { value: "pending", label: "검수 중", count: counts.pending || 0 },
@@ -183,8 +189,11 @@ function PartnerHome() {
           </Card>
         )}
 
-      <Feed qs={qs} onFetched={() => { loadMe(); loadItems(filter); }} />
-      <Commission qs={qs} />
+      </>}
+
+      {view === "feed" && <Feed qs={qs} onFetched={() => { loadMe(); loadItems(filter); }} />}
+      {view === "report" && <Report qs={qs} />}
+      {view === "commission" && <Commission qs={qs} />}
     </Page>
   );
 }

@@ -49,7 +49,7 @@ export function Commission({ qs }: { qs: string }) {
   };
 
   return (
-    <section className="mt-10">
+    <section>
       <SectionHeader title="구매 수수료"
         action={<a href="/api/partner/template?kind=orders" className={buttonClass({ variant: "ghost", size: "sm" })}>주문 양식 내려받기</a>} />
       {state.status === "loading" ? <SkeletonList rows={2} thumb={false} />
