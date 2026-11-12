@@ -54,6 +54,7 @@ export async function ingestRows(sb: Sb, partner: Partner, rows: { row: number; 
 
   const errors: RowError[] = [];
   let ok = 0, review = 0, unchanged = 0, failed = 0;
+  try {
 
   // 이미 받은 제품
   const skus = [...new Set(rows.map((r) => String(r.values.partner_sku ?? "").trim()).filter(Boolean))];
@@ -63,6 +64,14 @@ export async function ingestRows(sb: Sb, partner: Partner, rows: { row: number; 
       .eq("partner_id", partner.id).in("partner_sku", skus.slice(i, i + 200));
     if (error) throw new Error(error.message);
     for (const it of data || []) existing.set(it.partner_sku, it);
+  }
+
+  // 같은 바코드·품목보고번호가 이 업체의 다른 제품 코드에 있으면 검수로 (같은 제품을 두 번 올린 것일 수 있다)
+  const codeOwner = new Map<string, string>();
+  {
+    const { data, error } = await sb.from("partner_items").select("partner_sku, data->>barcode, data->>report_no").eq("partner_id", partner.id).limit(20000);
+    if (error) throw new Error(error.message);
+    for (const it of data || []) for (const c of [it.barcode, it.report_no]) if (c) codeOwner.set(c, it.partner_sku);
   }
 
   const seen = new Set<string>();
@@ -85,14 +94,16 @@ export async function ingestRows(sb: Sb, partner: Partner, rows: { row: number; 
     const reasons = [
       ...(!cur?.approved_data ? ["new"] : contentDiff.length ? ["content_changed"] : []),
       ...parsed.review.map((x) => x.code),
+      ...([item.barcode, item.report_no].some((c) => c && codeOwner.has(c) && codeOwner.get(c) !== sku) ? ["duplicate_code"] : []),
     ];
+    for (const c of [item.barcode, item.report_no]) if (c && !codeOwner.has(c)) codeOwner.set(c, sku);
     const now = new Date().toISOString();
     const warnings = parsed.warnings.map((w) => w.message);
     let itemId = cur?.id;
     if (reasons.length === 0 && cur) {
       // 가격·재고·링크·배송만 바뀜 → 바로
       const { error } = await sb.from("partner_items").update({
-        data: item, approved_data: item, status: "approved", review_reasons: [], warnings, reject_note: null, last_batch_id: batch.id, updated_at: now,
+        data: item, approved_data: item, status: item.status === "discontinued" ? "discontinued" : "approved", review_reasons: [], warnings, reject_note: null, last_batch_id: batch.id, updated_at: now,
       }).eq("id", cur.id);
       if (error) throw new Error(error.message);
       await applyOffers(sb, partner.id, cur.id, cur.product_id, item);
@@ -116,6 +127,12 @@ export async function ingestRows(sb: Sb, partner: Partner, rows: { row: number; 
     }
     const { error: vErr } = await sb.from("partner_item_versions").insert({ item_id: itemId, batch_id: batch.id, data: item, changed });
     if (vErr) console.error("변경 이력을 남기지 못했어요:", vErr.message);
+  }
+
+  } catch (e) {
+    // 중간에 멈추면 '처리 중'으로 남지 않게
+    await sb.from("ingest_batches").update({ ok_count: ok, review_count: review, error_count: failed, unchanged_count: unchanged, errors: errors.slice(0, 500), status: "failed" }).eq("id", batch.id);
+    throw e;
   }
 
   const { error: uErr } = await sb.from("ingest_batches").update({

@@ -10,6 +10,7 @@ import { ALLERGENS, CATEGORIES, REVIEW_LABELS, stable, type PartnerItem } from "
 
 type Partner = {
   id: string; slug: string; name: string; kind: string; status: "onboarding" | "active" | "paused"; contact_email: string | null;
+  commission_rate: number | null; attribution_days: number | null;
   members: { email: string; role: string }[]; counts: Record<string, number>;
 };
 type Candidate = { id: string; name: string; manufacturer: string | null; calories: number | null; serving_size_g: number | null; why: string };
@@ -213,6 +214,17 @@ function NewPartner({ onDone, onFail }: { onDone: (m: string) => void; onFail: (
 function PartnerRow({ p, onDone, onFail }: { p: Partner; onDone: (m: string) => void; onFail: (w: string, e: unknown) => void }) {
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
+  const [rate, setRate] = useState(p.commission_rate === null ? "" : String(p.commission_rate));
+  const [days, setDays] = useState(String(p.attribution_days ?? 7));
+  const [savingTerms, setSavingTerms] = useState(false);
+  const saveTerms = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingTerms(true);
+    try {
+      await api("/api/admin/partners", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: p.id, commission_rate: Number(rate), attribution_days: Number(days) }) });
+      onDone(`${p.name} 수수료 조건을 저장했어요`);
+    } catch (err) { onFail("수수료 조건을 저장", err); } finally { setSavingTerms(false); }
+  };
   const setStatus = async (status: string) => {
     try { await api("/api/admin/partners", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: p.id, status }) }); onDone(`${p.name}을(를) ${STATUS_LABEL[status as Partner["status"]]}(으)로 바꿨어요`); }
     catch (e) { onFail("상태를 바꾸", e); }
@@ -240,6 +252,11 @@ function PartnerRow({ p, onDone, onFail }: { p: Partner; onDone: (m: string) => 
           <LinkButton href={`/partner?as=${p.slug}`} size="sm" variant="ghost">업체 화면</LinkButton>
         </div>
       </div>
+      <form onSubmit={saveTerms} className="flex flex-wrap items-end gap-2 mt-3">
+        <Field label="구매 수수료율(%)" className="w-36"><Input inputMode="decimal" value={rate} onChange={(e) => setRate(e.target.value)} placeholder="계약 뒤" /></Field>
+        <Field label="인정 기간(일)" className="w-28"><Input inputMode="numeric" value={days} onChange={(e) => setDays(e.target.value)} /></Field>
+        <Button type="submit" size="sm" variant="secondary" loading={savingTerms} disabled={rate.trim() === "" || Number.isNaN(Number(rate))}>조건 저장하기</Button>
+      </form>
       <form onSubmit={addMember} className="flex flex-wrap gap-2 mt-3">
         <Input type="email" aria-label="담당자 이메일" placeholder="담당자 이메일 (먼저 케어푸드에 가입)" value={email} onChange={(e) => setEmail(e.target.value)} className="flex-1 min-w-48" />
         <Button type="submit" size="sm" variant="secondary" loading={busy} disabled={!email.includes("@")}>담당자 연결하기</Button>

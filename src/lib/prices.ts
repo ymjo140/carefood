@@ -14,6 +14,9 @@ export type PriceRow = {
   pack_count?: number | null;
   /** 묶음을 개수로 나눈 한 개 값 */
   unit_price?: number | null;
+  /** 입점 업체 가격이면 업체명, 수수료 링크 여부 */
+  seller_name?: string | null;
+  is_partner?: boolean | null;
 };
 
 /** 한 개(한 끼) 값 — 묶음이면 개수로 나눈 값 */

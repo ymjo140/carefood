@@ -464,7 +464,7 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
                   <Price value={bestPrice.price} className="text-title" />
                   {packLabel(bestPrice) && <p className="text-caption text-ink-2">{packLabel(bestPrice)}</p>}
                 </div>
-                <TrackableLink href={bestPrice.url} productId={product.id} platform={bestPrice.platform} placement="detail_best"
+                <TrackableLink href={bestPrice.url} productId={product.id} platform={bestPrice.platform} placement="detail_best" partner={!!bestPrice.is_partner}
                   className={buttonClass({ variant: "primary" })}>
                   {bestPrice.seller_name || PLATFORM_LABELS[bestPrice.platform] || bestPrice.platform}에서 사기
                   <Icon name="external" size={18} />
@@ -474,7 +474,7 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
             {sortedPrices.length > 1 && (
               <div className="flex flex-col p-1">
                 {sortedPrices.slice(1).map((pp) => (
-                  <TrackableLink key={pp.platform} href={pp.url} productId={product.id} platform={pp.platform} placement="detail_other"
+                  <TrackableLink key={pp.platform} href={pp.url} productId={product.id} platform={pp.platform} placement="detail_other" partner={!!pp.is_partner}
                     className="flex items-center gap-3 px-3 h-12 rounded-md hover:bg-sunken transition-colors">
                     <span className="flex-1 min-w-0 text-body text-ink">
                       {pp.seller_name || PLATFORM_LABELS[pp.platform] || pp.platform}

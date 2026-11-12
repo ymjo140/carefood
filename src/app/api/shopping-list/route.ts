@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
   const sb = createServiceRoleClient() as any;
   const [{ data: products, error }, { data: prices, error: prErr }] = await Promise.all([
     sb.from("products").select("id, name, manufacturer, image_url").in("id", ids),
-    sb.from("v_all_prices").select("product_id, platform, price, url, image_url, last_crawled_at, pack_count, unit_price").in("product_id", ids),
+    sb.from("v_all_prices").select("product_id, platform, price, url, image_url, last_crawled_at, pack_count, unit_price, seller_name, is_partner").in("product_id", ids),
   ]);
   if (error || prErr) return NextResponse.json({ error: (error || prErr).message }, { status: 500 });
 
@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
       name: p.name,
       manufacturer: p.manufacturer,
       image_url: p.image_url || list.find((x) => x.image_url)?.image_url || null,
-      prices: list.map(({ platform, price, url, last_crawled_at, pack_count }) => ({ platform, price, url, last_crawled_at, pack_count: pack_count ?? null })),
+      prices: list.map(({ platform, price, url, last_crawled_at, pack_count, seller_name, is_partner }) => ({ platform, price, url, last_crawled_at, pack_count: pack_count ?? null, seller_name: seller_name ?? null, is_partner: !!is_partner })),
     };
   });
   return NextResponse.json({ items });

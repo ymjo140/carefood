@@ -7,6 +7,7 @@ import {
   SkeletonList, Stat, Tabs, buttonClass, timeAgo, useToast,
 } from "@/components/ui";
 import { REVIEW_LABELS } from "@/lib/partner/schema";
+import { Commission } from "./Commission";
 
 type Partner = { id: string; slug: string; name: string; kind: string; status: string };
 type Batch = {
@@ -180,6 +181,8 @@ function PartnerHome() {
             ))}
           </Card>
         )}
+
+      <Commission qs={qs} />
     </Page>
   );
 }

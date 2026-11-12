@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
   const limited = await limitRequest(request, "track");
   if (limited) return limited;
   try {
-    const { product_id, platform, click_url, referrer_page, placement } = await request.json();
+    const { product_id, platform, click_url, referrer_page, placement, click_id } = await request.json();
     const user_id = await getActorId();
 
     if (!product_id || !platform) {
@@ -23,7 +23,15 @@ export async function POST(request: NextRequest) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const sb = createServiceRoleClient() as any;
 
+    // 입점 업체 링크의 클릭 번호 — 업체가 운영 중일 때만 남긴다 (정산 기준)
+    let partner: { click_id: string; partner_id: string } | null = null;
+    if (typeof click_id === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(click_id)) {
+      const { data: pa } = await sb.from("partners").select("id").eq("slug", String(platform)).eq("status", "active").maybeSingle();
+      if (pa) partner = { click_id, partner_id: pa.id };
+    }
+
     const row = {
+      ...(partner || {}),
       user_id: user_id || null,
       product_id,
       platform,

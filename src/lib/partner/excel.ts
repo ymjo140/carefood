@@ -79,13 +79,41 @@ export async function buildTemplate(): Promise<Buffer> {
 
 export type SheetRow = { row: number; values: Record<string, unknown> };
 
-/** 올린 엑셀에서 제품 줄을 읽는다 — 2행의 필드 키로 칸을 찾는다 */
-export async function readWorkbook(buf: ArrayBuffer): Promise<{ rows: SheetRow[]; unknownKeys: string[] }> {
+/** 주문(구매 수수료 정산) 양식의 칸 */
+export const ORDER_FIELDS = [
+  { key: "click_id", label: "클릭 번호 *", help: "구매 링크에 붙어 온 cf_click 값", example: "3f2a9c1e-5b7d-4e8a-9c21-7d4e5f6a8b90" },
+  { key: "order_no", label: "주문 번호 *", help: "업체 안에서 겹치지 않는 번호. 같은 번호를 다시 올리면 상태·금액이 고쳐져요", example: "ORD-20261112-0001" },
+  { key: "amount", label: "결제 금액(원) *", help: "배송비를 뺀 상품 금액", example: "23600" },
+  { key: "status", label: "상태 *", help: "ordered(주문) · confirmed(구매확정) · canceled(취소) · returned(반품)", example: "confirmed" },
+  { key: "ordered_at", label: "주문 시각 *", help: "2026-11-12 또는 2026-11-12 14:30", example: "2026-11-12 14:30" },
+] as const;
+const ORDER_SHEET = "주문";
+
+export async function buildOrdersTemplate(): Promise<Buffer> {
+  const wb = new ExcelJS.Workbook();
+  wb.creator = "케어푸드";
+  const ws = wb.addWorksheet(ORDER_SHEET, { views: [{ state: "frozen", ySplit: 2 }] });
+  ws.addRow(ORDER_FIELDS.map((f) => f.label)).font = { bold: true };
+  ws.addRow(ORDER_FIELDS.map((f) => f.key)).font = { color: { argb: "FF8A8A8A" }, size: 9 };
+  ws.columns = [{ width: 40 }, { width: 24 }, { width: 16 }, { width: 14 }, { width: 20 }];
+  const guide = wb.addWorksheet("안내");
+  guide.addRow(["케어푸드 주문 내역 양식"]).font = { bold: true, size: 14 };
+  guide.addRow(["케어푸드 링크로 들어온 주문(주소에 cf_click 이 붙은 방문의 주문)을 '주문' 시트 3행부터 한 줄에 하나씩 적어요. 2행은 지우지 마세요."]);
+  guide.addRow(["수수료는 구매확정(confirmed) 금액에만 계산해요. 취소·반품은 같은 주문 번호로 상태만 바꿔 다시 올려 주세요."]);
+  guide.addRow([]);
+  guide.addRow(["칸", "필드 키", "설명", "예"]).font = { bold: true };
+  for (const f of ORDER_FIELDS) guide.addRow([f.label, f.key, f.help, f.example]);
+  guide.columns = [{ width: 20 }, { width: 14 }, { width: 70 }, { width: 40 }];
+  return Buffer.from(await wb.xlsx.writeBuffer());
+}
+
+/** 올린 엑셀에서 줄을 읽는다 — 2행의 필드 키로 칸을 찾는다. kind: 제품(기본) 또는 주문 */
+export async function readWorkbook(buf: ArrayBuffer, kind: "products" | "orders" = "products"): Promise<{ rows: SheetRow[]; unknownKeys: string[] }> {
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.load(buf);
-  const ws = wb.getWorksheet(SHEET) || wb.worksheets[0];
+  const ws = wb.getWorksheet(kind === "orders" ? ORDER_SHEET : SHEET) || wb.worksheets[0];
   if (!ws) throw new Error("시트를 찾지 못했어요");
-  const known = new Set(FIELDS.map((f) => f.key));
+  const known = new Set<string>(kind === "orders" ? ORDER_FIELDS.map((f) => f.key) : FIELDS.map((f) => f.key));
   const keys: (string | null)[] = [];
   const unknownKeys: string[] = [];
   ws.getRow(2).eachCell({ includeEmpty: true }, (cell, col) => {

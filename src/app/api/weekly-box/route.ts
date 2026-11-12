@@ -256,10 +256,17 @@ export async function POST(request: NextRequest) {
         .eq("is_available", true)
         .in("dish_type", ["meal", "salad"]);
 
-      if (healthMeals && healthMeals.length > 0) {
+      // 입점해 운영 중인 업체는 업체가 보낸 제품(products)을 쓴다 — 크롤링한 같은 메뉴가 겹치지 않게 뺀다
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: live } = await (supabase as any).from("partners").select("slug").eq("status", "active");
+      const liveSlugs = new Set((live || []).map((x: { slug: string }) => x.slug));
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const crawled = (healthMeals || []).filter((h: any) => !liveSlugs.has(h.source));
+
+      if (crawled.length > 0) {
         // health_meal_products → mealProducts 형태로 변환
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const converted = healthMeals.map((h: any) => ({
+        const converted = crawled.map((h: any) => ({
           id: h.id,
           name: h.name,
           manufacturer: h.source,

@@ -6,7 +6,7 @@ import TrackableLink from "@/components/TrackableLink";
 import { AFFILIATE_PLATFORMS, COUPANG_DISCLOSURE, platformLabel } from "@/lib/platforms";
 import { checkedLabel } from "@/lib/prices";
 
-type ShopPrice = { platform: string; price: number; url: string; last_crawled_at: string | null; pack_count?: number | null };
+type ShopPrice = { platform: string; price: number; url: string; last_crawled_at: string | null; pack_count?: number | null; seller_name?: string | null; is_partner?: boolean };
 type ShopItem = { product_id: string; name: string; manufacturer: string | null; image_url: string | null; prices: ShopPrice[] };
 type Load = { status: "loading" | "error" | "done"; items: ShopItem[]; error?: string };
 
@@ -44,6 +44,8 @@ export function ShoppingList({ open, onClose, counts }: { open: boolean; onClose
   const ordered = [...groups.entries()].sort((a, b) => b[1].length - a[1].length);
   const allPrices = priced.flatMap((it) => it.prices.slice(0, 1));
   const hasAffiliate = priced.some((it) => AFFILIATE_PLATFORMS.has(it.prices[0].platform));
+  const hasPartner = priced.some((it) => it.prices[0].is_partner);
+  const sellerOf = (platform: string, items: ShopItem[]) => items[0]?.prices[0].seller_name || platformLabel(platform);
 
   return (
     <Sheet open={open} onClose={onClose} size="lg" title="장보기 목록"
@@ -65,9 +67,9 @@ export function ShoppingList({ open, onClose, counts }: { open: boolean; onClose
       {load.status === "done" && priced.length > 0 && (
         <div className="flex flex-col gap-6">
           {ordered.map(([platform, items]) => (
-            <section key={platform} aria-label={`${platformLabel(platform)}에서 살 제품`}>
+            <section key={platform} aria-label={`${sellerOf(platform, items)}에서 살 제품`}>
               <div className="flex items-baseline justify-between gap-3 mb-2">
-                <h3 className="text-body font-bold text-ink">{platformLabel(platform)} <span className="num text-ink-2 font-medium">{items.length}</span><span className="text-ink-2 font-medium">개</span></h3>
+                <h3 className="text-body font-bold text-ink">{sellerOf(platform, items)} <span className="num text-ink-2 font-medium">{items.length}</span><span className="text-ink-2 font-medium">개</span></h3>
                 <Price value={items.reduce((s, it) => s + it.prices[0].price, 0)} className="text-label" />
               </div>
               <ul className="flex flex-col divide-y divide-line border-y border-line">
@@ -82,7 +84,7 @@ export function ShoppingList({ open, onClose, counts }: { open: boolean; onClose
                         {it.prices.length > 1 && <> · {platformLabel(it.prices[1].platform)} <span className="num">{it.prices[1].price.toLocaleString()}</span>원</>}
                       </p>
                     </div>
-                    <TrackableLink href={it.prices[0].url} productId={it.product_id} platform={platform} placement="shopping_list"
+                    <TrackableLink href={it.prices[0].url} productId={it.product_id} platform={platform} placement="shopping_list" partner={!!it.prices[0].is_partner}
                       className="press shrink-0 inline-flex items-center gap-1 h-11 px-3 rounded-md border border-line text-label font-medium text-ink hover:bg-sunken transition-colors">
                       <Price value={it.prices[0].price} className="text-label" />
                       <Icon name="external" size={16} className="text-ink-3" />
@@ -107,6 +109,7 @@ export function ShoppingList({ open, onClose, counts }: { open: boolean; onClose
           <div className="flex flex-col gap-1 text-caption text-ink-2">
             {checkedLabel(allPrices) && <p>{checkedLabel(allPrices)} · 몰에서 바뀌었을 수 있어요</p>}
             {hasAffiliate && <p>{COUPANG_DISCLOSURE}</p>}
+            {hasPartner && <p>입점 업체 링크로 구매하면 케어푸드가 판매 수수료를 받을 수 있어요</p>}
           </div>
         </div>
       )}

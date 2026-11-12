@@ -44,7 +44,7 @@ const ALLERGEN_WORDS: Record<AllergenCode, RegExp> = {
   buckwheat: /메밀/,
   peanut: /땅콩/,
   soybean: /대두|콩|두부|간장|된장|두유|레시틴/,
-  wheat: /밀가루|소맥|밀(?!리)|글루텐|빵가루/,
+  wheat: /밀가루|소맥|밀(?!리|크)|글루텐|빵가루/,
   mackerel: /고등어/,
   crab: /게살|꽃게|대게|홍게|(?<![가-힣])게(?![가-힣])/,
   shrimp: /새우/,
