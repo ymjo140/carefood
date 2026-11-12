@@ -440,21 +440,24 @@ export async function POST(request: NextRequest) {
       const batch = allCandidateIds.slice(i, i + 50);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data } = await (supabase as any).from("v_all_prices")
-        .select("product_id, platform, price, url, image_url").in("product_id", batch).gt("price", 0);
+        .select("product_id, platform, price, url, image_url, pack_count, unit_price").in("product_id", batch).gt("price", 0);
       if (data) for (const p of data) {
         if (!priceMap[p.product_id]) priceMap[p.product_id] = [];
         priceMap[p.product_id].push(p);
       }
     }
     // 가격 붙이기
+    const byUnit = (a: { price: number; unit_price?: number | null }, b: { price: number; unit_price?: number | null }) =>
+      (a.unit_price || a.price) - (b.unit_price || b.price);
     for (const p of scored) {
       if (p._is_health_meal) {
         // 건강식단 서비스 제품은 이미 가격이 있음
         p.bestPrice = p._health_price || 10000;
         p.prices = [];
       } else {
-        const prices = (priceMap[p.id] || []).sort((a: { price: number }, b: { price: number }) => a.price - b.price);
-        p.bestPrice = prices[0]?.price || 99999;
+        // 한 끼 값은 묶음을 개수로 나눈 값(unit_price) — "200g x 24개 41,540원"을 한 끼 값으로 쓰지 않게
+        const prices = (priceMap[p.id] || []).sort(byUnit);
+        p.bestPrice = prices[0]?.unit_price || prices[0]?.price || 99999;
         p.prices = prices;
       }
     }
@@ -464,8 +467,8 @@ export async function POST(request: NextRequest) {
     }
     for (const key of Object.keys(poolByType) as MealType[]) poolByType[key].sort((a, b) => b.score - a.score);
     const scoredSupplements = supplementProducts.map((p: { id: string }) => {
-      const prices = (priceMap[p.id] || []).sort((a: { price: number }, b: { price: number }) => a.price - b.price);
-      return { ...p, bestPrice: prices[0]?.price || 99999, prices, score: 50 + Math.floor(Math.random() * 10) };
+      const prices = (priceMap[p.id] || []).sort(byUnit);
+      return { ...p, bestPrice: prices[0]?.unit_price || prices[0]?.price || 99999, prices, score: 50 + Math.floor(Math.random() * 10) };
     });
 
     // ── 5. 영양사 방식 7일 식단 구성 ──

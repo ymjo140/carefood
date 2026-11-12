@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
 
   const [{ data: products, error: pErr }, { data: prices }] = await Promise.all([
     sb.from("products").select("id, name, manufacturer, calories, protein_g, carbs_g, fat_g, sodium_mg, image_url, serving_size_g, nutrient_base_g").in("id", ids),
-    sb.from("v_all_prices").select("product_id, platform, price, url, image_url").in("product_id", ids),
+    sb.from("v_all_prices").select("product_id, platform, price, url, image_url, pack_count, unit_price").in("product_id", ids),
   ]);
   if (pErr) return NextResponse.json({ error: pErr.message }, { status: 500 });
 

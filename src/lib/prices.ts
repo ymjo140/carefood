@@ -10,7 +10,23 @@ export type PriceRow = {
   url: string;
   image_url?: string | null;
   last_crawled_at?: string | null;
+  /** 판매처 상품명에서 읽은 묶음 개수 — 못 읽으면 null(낱개로 본다). v_all_prices (20261112_price_pack_count) */
+  pack_count?: number | null;
+  /** 묶음을 개수로 나눈 한 개 값 */
+  unit_price?: number | null;
 };
+
+/** 한 개(한 끼) 값 — 묶음이면 개수로 나눈 값 */
+export function unitPrice(r: Pick<PriceRow, "price" | "unit_price">): number {
+  return r.unit_price || r.price;
+}
+
+/** "12개 묶음 · 개당 2,858원" — 낱개면 null */
+export function packLabel(r: Pick<PriceRow, "price" | "pack_count" | "unit_price">): string | null {
+  const n = Number(r.pack_count) || 1;
+  if (n <= 1) return null;
+  return `${n}개 묶음 · 개당 ${unitPrice(r).toLocaleString("ko-KR")}원`;
+}
 
 export const PRICE_HIDE_DAYS = 60;
 

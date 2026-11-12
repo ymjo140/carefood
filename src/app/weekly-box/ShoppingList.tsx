@@ -6,7 +6,7 @@ import TrackableLink from "@/components/TrackableLink";
 import { AFFILIATE_PLATFORMS, COUPANG_DISCLOSURE, platformLabel } from "@/lib/platforms";
 import { checkedLabel } from "@/lib/prices";
 
-type ShopPrice = { platform: string; price: number; url: string; last_crawled_at: string | null };
+type ShopPrice = { platform: string; price: number; url: string; last_crawled_at: string | null; pack_count?: number | null };
 type ShopItem = { product_id: string; name: string; manufacturer: string | null; image_url: string | null; prices: ShopPrice[] };
 type Load = { status: "loading" | "error" | "done"; items: ShopItem[]; error?: string };
 
@@ -77,6 +77,7 @@ export function ShoppingList({ open, onClose, counts }: { open: boolean; onClose
                     <div className="flex-1 min-w-0">
                       <a href={`/products/${it.product_id}`} className="block text-label font-medium text-ink line-clamp-1 hover:underline">{it.name}</a>
                       <p className="text-caption text-ink-2">
+                        {(it.prices[0].pack_count || 1) > 1 && <><span className="num">{it.prices[0].pack_count}</span>개 묶음 · </>}
                         식단에 <span className="num">{counts[it.product_id] || 1}</span>번
                         {it.prices.length > 1 && <> · {platformLabel(it.prices[1].platform)} <span className="num">{it.prices[1].price.toLocaleString()}</span>원</>}
                       </p>

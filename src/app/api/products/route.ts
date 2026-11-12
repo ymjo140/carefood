@@ -31,6 +31,8 @@ type MallPrice = {
   price: number;
   url: string;
   image_url: string | null;
+  pack_count?: number | null;
+  unit_price?: number | null;
 };
 
 const PURPOSE_TAG_MAP: Record<string, string[]> = {
@@ -211,7 +213,7 @@ async function attachPricesAndFilter(supabase: any, products: any[], params: Ret
   for (let i = 0; i < productIds.length; i += 150) {
     let priceQuery = supabase
       .from("v_all_prices" as "product_prices")
-      .select("product_id, platform, price, url, image_url")
+      .select("product_id, platform, price, url, image_url, pack_count, unit_price")
       .in("product_id", productIds.slice(i, i + 150));
     if (source && source !== "all") priceQuery = priceQuery.eq("platform", source);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -226,6 +228,7 @@ async function attachPricesAndFilter(supabase: any, products: any[], params: Ret
       if (!priceMap[p.product_id]) priceMap[p.product_id] = [];
       priceMap[p.product_id].push({
         platform: p.platform, price: p.price, url: p.url, image_url: p.image_url,
+        pack_count: p.pack_count ?? null, unit_price: p.unit_price ?? null,
       });
     }
   }

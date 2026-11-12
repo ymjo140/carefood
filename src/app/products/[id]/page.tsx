@@ -10,7 +10,7 @@ import ProductViewTracker from "@/components/ProductViewTracker";
 import ProductReviews from "@/components/ProductReviews";
 import FavoriteButton from "@/components/FavoriteButton";
 import TrackableLink from "@/components/TrackableLink";
-import { checkedLabel, usablePrices } from "@/lib/prices";
+import { checkedLabel, packLabel, usablePrices } from "@/lib/prices";
 import AllergenWarning from "@/components/AllergenWarning";
 import {
   Page, SectionHeader, Card, Badge, Icon, MacroStat, Stat, EmptyState, Estimate, Notice, Thumb, Price,
@@ -67,6 +67,8 @@ type PriceInfo = {
   url: string;
   image_url: string | null;
   last_crawled_at: string | null;
+  pack_count?: number | null;
+  unit_price?: number | null;
 };
 
 
@@ -144,7 +146,7 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
   // 가격 데이터
   const { data: prices } = await supabase
     .from("v_all_prices" as any)
-    .select("platform, price, url, image_url, last_crawled_at")
+    .select("platform, price, url, image_url, last_crawled_at, pack_count, unit_price")
     .eq("product_id", productId) as { data: PriceInfo[] | null };
 
   // 0원·오래된 가격 빼고, 몰마다 가장 싼 것 하나, 싼 순 (src/lib/prices.ts)
@@ -451,6 +453,7 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
                 <div className="flex flex-col gap-1">
                   <Badge tone="brand" className="self-start">최저가</Badge>
                   <Price value={bestPrice.price} className="text-title" />
+                  {packLabel(bestPrice) && <p className="text-caption text-ink-2">{packLabel(bestPrice)}</p>}
                 </div>
                 <TrackableLink href={bestPrice.url} productId={product.id} platform={bestPrice.platform} placement="detail_best"
                   className={buttonClass({ variant: "primary" })}>
@@ -464,7 +467,10 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
                 {sortedPrices.slice(1).map((pp) => (
                   <TrackableLink key={pp.platform} href={pp.url} productId={product.id} platform={pp.platform} placement="detail_other"
                     className="flex items-center gap-3 px-3 h-12 rounded-md hover:bg-sunken transition-colors">
-                    <span className="flex-1 text-body text-ink">{PLATFORM_LABELS[pp.platform] || pp.platform}</span>
+                    <span className="flex-1 min-w-0 text-body text-ink">
+                      {PLATFORM_LABELS[pp.platform] || pp.platform}
+                      {packLabel(pp) && <span className="block text-caption text-ink-2">{packLabel(pp)}</span>}
+                    </span>
                     <Price value={pp.price} className="text-label" />
                     <Icon name="external" size={16} className="text-ink-3" />
                   </TrackableLink>

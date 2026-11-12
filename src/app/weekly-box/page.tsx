@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef, type ReactNode } from "react"
 import Link from "next/link";
 import { perServing } from "@/lib/nutrition";
 import { defaultServingG, isBrothDish } from "@/lib/serving";
+import { unitPrice } from "@/lib/prices";
 import {
   Badge, BottomBar, Button, Card, CardActions, ConfirmSheet, EmptyState, Input, Kcal, LinkButton, ListRow,
   IconButton, MacroGrid, MacroInline, MealSlot, Page, PageLoading, Price, ProgressBar, SearchField, SectionHeader, Sheet, SkeletonList,
@@ -24,7 +25,11 @@ type CellData = {
   carbs_g?: number;
   fat_g?: number;
   sodium_mg?: number;
+  /** 한 끼 값 — 묶음이면 개수로 나눈 값 */
   price?: number;
+  /** 묶음일 때 판매 가격과 개수 ("12개 34,300원") */
+  pack_price?: number;
+  pack_count?: number;
   platform?: string;
   url?: string;
   type?: "product" | "eating_out";
@@ -34,6 +39,12 @@ type CellData = {
 
 type GridData = Record<string, Record<string, CellData>>;
 type Food = Omit<NonNullable<CellData>, "_foods">;
+
+/** 묶음 가격이면 판매 가격·개수 */
+function packOf(p: { price?: number; pack_count?: number | null } | undefined): { pack_price?: number; pack_count?: number } {
+  const n = Number(p?.pack_count) || 1;
+  return n > 1 && p?.price ? { pack_price: p.price, pack_count: n } : {};
+}
 
 /** 한 칸에 든 음식 — 여럿이면 _foods, 하나면 칸 자체 */
 function cellFoods(c: CellData): Food[] {
@@ -52,6 +63,7 @@ function cellOf(foods: Food[]): CellData {
   const first = foods[0];
   return {
     product_id: first.product_id, name: first.name, platform: first.platform, url: first.url,
+    pack_price: first.pack_price, pack_count: first.pack_count,
     type: first.type === "eating_out" ? "eating_out" : "product",
     calories: sum("calories"), protein_g: sum("protein_g"), carbs_g: sum("carbs_g"), fat_g: sum("fat_g"),
     sodium_mg: sum("sodium_mg"), price: sum("price"),
@@ -145,19 +157,28 @@ function ProductRow({ p: raw, onSelect }: { p: any; onSelect: (cell: CellData) =
   // DB 영양값은 100g 기준 → 식단 칸에는 제품 상세와 같은 1회 제공량 기준으로 넣는다
   const p = perServing(raw);
   const prices = p.product_prices?.filter((pp: { price: number }) => pp.price > 0) || [];
-  const best = prices[0];
+  // 한 끼 값이 가장 싼 곳 — 묶음은 개수로 나눠 견준다 ("200g x 24개 41,540원" → 1,731원)
+  const best = prices.reduce((a: { price: number; unit_price?: number | null } | undefined, b: { price: number; unit_price?: number | null }) =>
+    !a || unitPrice(b) < unitPrice(a) ? b : a, undefined);
+  const pack = Number(best?.pack_count) > 1 ? Number(best.pack_count) : undefined;
   const servingG = defaultServingG(p); // 포장 무게는 걸러서 (lib/serving.ts) — perServing 과 같은 양
   return (
     <ListRow
       onClick={() => onSelect({
         product_id: p.id, name: p.name, calories: Math.round(p.calories || 0), protein_g: p.protein_g,
         carbs_g: p.carbs_g ?? undefined, fat_g: p.fat_g ?? undefined, sodium_mg: p.sodium_mg ?? undefined,
-        price: best?.price, platform: best?.platform, url: best?.url, type: "product",
+        price: best ? unitPrice(best) : undefined, pack_price: pack ? best.price : undefined, pack_count: pack,
+        platform: best?.platform, url: best?.url, type: "product",
       })}
       leading={<Thumb src={best?.image_url || p.image_url} size={44} />}
       title={p.name}
       meta={<>{servingG > 0 && <>1회 <span className="num">{Math.round(servingG)}</span>g · </>}<Kcal value={Math.round(p.calories || 0)} className="text-caption" /> · 단백질 <span className="num">{Math.round(p.protein_g || 0)}</span>g</>}
-      trailing={best ? <Price value={best.price} className="text-label" /> : undefined}
+      trailing={best ? (
+        <span className="flex flex-col items-end">
+          <Price value={unitPrice(best)} className="text-label" />
+          {pack && <span className="text-caption text-ink-2"><span className="num">{pack}</span>개 묶음 개당</span>}
+        </span>
+      ) : undefined}
     />
   );
 }
@@ -230,7 +251,7 @@ function ProductSearchSheet({ open, onSelect, onClose, onEatingOut, title = "음
       setFavorites({ status: "done", data: (data.favorites || []).map((f: any) => ({
         id: f.product_id, name: f.name, calories: f.calories, protein_g: f.protein_g, carbs_g: f.carbs_g, fat_g: f.fat_g,
         sodium_mg: f.sodium_mg, serving_size_g: f.serving_size_g, nutrient_base_g: f.nutrient_base_g,
-        product_prices: f.best_price ? [{ price: f.best_price, platform: "", url: "", image_url: f.image_url }] : [],
+        product_prices: f.best_price ? [{ price: f.best_price, pack_count: f.best_pack_count, unit_price: f.best_unit_price, platform: "", url: "", image_url: f.image_url }] : [],
       })) });
     } catch { setFavorites({ status: "error", data: [] }); }
   }, []);
@@ -622,7 +643,8 @@ export default function WeeklyBoxPage() {
         const slot = m.slot_type || "lunch";
         newGrid[dayKey][slot] = {
           product_id: m.product_id, name: m.name, calories: m.calories != null ? Math.round(m.calories) : undefined, // 영양 정보가 없는 식단 서비스 제품은 비워 둔다
-          protein_g: m.protein_g, carbs_g: m.carbs_g, fat_g: m.fat_g, sodium_mg: m.sodium_mg, price: m.best_price,
+          protein_g: m.protein_g, carbs_g: m.carbs_g, fat_g: m.fat_g, sodium_mg: m.sodium_mg, price: m.best_price, // 묶음이면 개당 (api/weekly-box)
+          ...packOf(m.prices?.[0]),
           platform: m.health_source || m.prices?.[0]?.platform, url: m.prices?.[0]?.url, type: "product",
         };
       }
@@ -632,6 +654,7 @@ export default function WeeklyBoxPage() {
         newGrid[dayKey].supplement = {
           product_id: s.product_id, name: s.name, calories: s.calories != null ? Math.round(s.calories) : undefined,
           protein_g: s.protein_g, carbs_g: s.carbs_g, fat_g: s.fat_g, sodium_mg: s.sodium_mg, price: s.best_price,
+          ...packOf(s.prices?.[0]),
           platform: s.prices?.[0]?.platform, url: s.prices?.[0]?.url, type: "product",
         };
       }
@@ -989,6 +1012,9 @@ export default function WeeklyBoxPage() {
                     <div className="flex flex-wrap items-center gap-2 mt-1">
                       {cell?.platform && SERVICE_NAMES[cell.platform] && <Badge tone="brand">{SERVICE_NAMES[cell.platform]}</Badge>}
                       {cell?.price ? <Price value={cell.price} className="text-caption" /> : null}
+                      {all.length === 1 && cell?.pack_count && cell.pack_price ? (
+                        <span className="text-caption text-ink-2"><span className="num">{cell.pack_count}</span>개 묶음 <span className="num">{cell.pack_price.toLocaleString("ko-KR")}</span>원 중 1개</span>
+                      ) : null}
                     </div>
                     <MacroInline className="mt-1.5" values={{ protein: cell?.protein_g, carbs: cell?.carbs_g, fat: cell?.fat_g, sodium: cell?.sodium_mg }} />
                     {broth && <p className="text-caption text-ink-2 mt-1">밥은 들어 있지 않아요. 드신다면 밥을 더해야 열량이 맞아요</p>}
@@ -1172,7 +1198,7 @@ export default function WeeklyBoxPage() {
         <BottomBar>
           <div className="flex-1 min-w-0">
             <div className="text-caption text-ink-2">
-              <span className="num">{stats.products}</span>끼 · <span className="num">{stats.serviceMix.filter(s => s.isHealth).length}</span>개 서비스
+              <span className="num">{stats.products}</span>끼 · 묶음은 개당 값으로
             </div>
             <Price value={stats.totalPrice} className="text-body" />
           </div>

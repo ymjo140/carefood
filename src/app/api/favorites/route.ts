@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
   // 가격 정보 로드
   const { data: prices } = await sb
     .from("v_all_prices")
-    .select("product_id, platform, price, url, image_url")
+    .select("product_id, platform, price, url, image_url, pack_count, unit_price")
     .in("product_id", productIds)
     .gt("price", 0);
 
@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
   if (prices) {
     for (const p of prices) {
       if (!priceMap[p.product_id]) priceMap[p.product_id] = [];
-      priceMap[p.product_id].push({ platform: p.platform, price: p.price, url: p.url, image_url: p.image_url });
+      priceMap[p.product_id].push({ platform: p.platform, price: p.price, url: p.url, image_url: p.image_url, pack_count: p.pack_count ?? null, unit_price: p.unit_price ?? null });
     }
   }
 
@@ -77,6 +77,8 @@ export async function GET(request: NextRequest) {
       functional_tags: product?.functional_tags || [],
       dish_category: product?.dish_category,
       best_price: pp[0]?.price || null,
+      best_pack_count: pp[0]?.pack_count ?? null,
+      best_unit_price: pp[0]?.unit_price ?? null,
       image_url: pp.find((p: { image_url: string | null }) => p.image_url)?.image_url || null,
       prices: pp.slice(0, 3),
     };
