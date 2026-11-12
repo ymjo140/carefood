@@ -231,3 +231,31 @@ export async function syncPartnerProducts(sb: Sb, partnerId: string) {
     if (uErr) throw new Error(uErr.message);
   }
 }
+
+/**
+ * 피드는 '지금 파는 것 전부'다 — 지난번 피드에 있었는데 이번에 없는 제품은 판매 종료로 내린다.
+ * 엑셀·API 로 올린 제품은 건드리지 않는다. 피드가 깨져 통째로 비는 일을 막으려고,
+ * 팔던 제품이 10개 이상인데 절반 넘게 사라지면 내리지 않고 건수만 알린다(skipped).
+ */
+export async function retireMissing(sb: Sb, partner: Partner, present: Set<string>): Promise<{ retired: number; skipped: number }> {
+  const { data, error } = await sb.from("partner_items")
+    .select("id, partner_sku, product_id, data, approved_data, status, ingest_batches(channel)")
+    .eq("partner_id", partner.id).in("status", ["approved", "pending"]).limit(20000);
+  if (error) throw new Error(error.message);
+  type Row = { id: string; partner_sku: string; product_id: string | null; data: PartnerItem; approved_data: PartnerItem | null; status: string; ingest_batches: { channel: string } | null };
+  const fromFeed = ((data || []) as Row[]).filter((it) => it.ingest_batches?.channel === "feed");
+  const missing = fromFeed.filter((it) => !present.has(it.partner_sku));
+  if (missing.length === 0) return { retired: 0, skipped: 0 };
+  if (fromFeed.length >= 10 && missing.length > fromFeed.length / 2) return { retired: 0, skipped: missing.length };
+  const now = new Date().toISOString();
+  for (const it of missing) {
+    // 상태를 값에도 적어 둔다 — 다음 피드에 다시 나오면 '바뀐 것'으로 읽혀 되살아난다
+    const gone = { ...(it.approved_data || it.data), status: "discontinued" as const };
+    const { error: uErr } = await sb.from("partner_items").update({
+      status: "discontinued", data: gone, approved_data: it.approved_data ? gone : null, review_reasons: [], updated_at: now,
+    }).eq("id", it.id);
+    if (uErr) throw new Error(uErr.message);
+    if (it.approved_data) await applyOffers(sb, partner.id, it.id, it.product_id, gone);
+  }
+  return { retired: missing.length, skipped: 0 };
+}

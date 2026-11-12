@@ -8,6 +8,7 @@ import {
 } from "@/components/ui";
 import { REVIEW_LABELS } from "@/lib/partner/schema";
 import { Commission } from "./Commission";
+import { Feed } from "./Feed";
 
 type Partner = { id: string; slug: string; name: string; kind: string; status: string };
 type Batch = {
@@ -182,6 +183,7 @@ function PartnerHome() {
           </Card>
         )}
 
+      <Feed qs={qs} onFetched={() => { loadMe(); loadItems(filter); }} />
       <Commission qs={qs} />
     </Page>
   );
