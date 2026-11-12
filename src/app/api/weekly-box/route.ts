@@ -228,9 +228,9 @@ export async function POST(request: NextRequest) {
     let mealProducts: any[] = [];
     {
       let query = supabase.from("products")
-        .select("id, name, manufacturer, calories, protein_g, carbs_g, fat_g, sugar_g, sodium_mg, fiber_g, functional_tags, dish_category, health_score, serving_size_g, nutrient_base_g")
+        .select("id, name, manufacturer, calories, protein_g, carbs_g, fat_g, sugar_g, sodium_mg, fiber_g, functional_tags, dish_category, health_score, serving_size_g, nutrient_base_g, meal_role")
         .eq("is_active", true).eq("category_large", "상용제품")
-        .eq("is_purchasable", true).eq("is_meal", true);
+        .eq("is_purchasable", true).eq("meal_role", "meal"); // 끼니 역할(scripts/meal_role.py) — 예전 is_meal 은 사탕·냉동 과일까지 한 끼로 잡았다
 
       // 관심사 기반 영양 제외 필터 적용
       if (nutritionExclusions.sodium_max) query = query.lte("sodium_mg", nutritionExclusions.sodium_max);
@@ -261,15 +261,16 @@ export async function POST(request: NextRequest) {
           id: h.id,
           name: h.name,
           manufacturer: h.source,
-          calories: h.calories || 400, // 영양 정보 없으면 기본값 (건강도시락 평균)
-          protein_g: h.protein_g || 25,
+          // 영양 정보가 없으면 비워 둔다 — 전에는 400kcal·단백질 25g·나트륨 500mg 을 지어 넣어 사실처럼 보였다
+          calories: h.calories ?? null,
+          protein_g: h.protein_g ?? null,
           fat_g: h.fat_g,
-          sugar_g: h.sugar_g || 3,
-          sodium_mg: h.sodium_mg || 500,
+          sugar_g: h.sugar_g ?? null,
+          sodium_mg: h.sodium_mg ?? null,
           fiber_g: h.fiber_g,
           functional_tags: h.health_tags || [],
           dish_category: "meal",
-          health_score: h.health_score || 80, // DB 값 우선, 없으면 기본 80점
+          health_score: h.health_score ?? 60, // 점수가 없으면 보통(60)으로만 — 순위용, 화면에는 보이지 않는다
           _is_health_meal: true, // 마킹
           _health_price: h.price,
           _health_url: h.product_url,
@@ -285,8 +286,9 @@ export async function POST(request: NextRequest) {
     let supplementProducts: any[] = [];
     {
       const { data } = await supabase.from("products")
-        .select("id, name, manufacturer, calories, protein_g, carbs_g, fat_g, sugar_g, sodium_mg, fiber_g, functional_tags, dish_category, serving_size_g, nutrient_base_g")
+        .select("id, name, manufacturer, calories, protein_g, carbs_g, fat_g, sugar_g, sodium_mg, fiber_g, functional_tags, dish_category, serving_size_g, nutrient_base_g, meal_role")
         .eq("is_active", true).eq("category_large", "상용제품").eq("is_purchasable", true)
+        .in("meal_role", ["snack", "drink", "side"]) // 간식 칸 — 재료·소스·영양제는 빼고
         .gt("calories", 0)
         .or("name.ilike.%유산균%,name.ilike.%프로바이오%,name.ilike.%요거트%,name.ilike.%요구르트%,name.ilike.%비타민%,name.ilike.%프로틴%,name.ilike.%단백질바%,name.ilike.%에너지바%,name.ilike.%그래놀라%,name.ilike.%오트밀%,name.ilike.%시리얼%,name.ilike.%두유%,name.ilike.%스무디%")
         .limit(200);

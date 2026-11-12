@@ -17,7 +17,7 @@ import {
  * 저장하면 추천(이 기기·서버 프로필)과 식단 기록의 하루 목표가 같이 바뀐다.
  */
 const DEFAULTS: ProfileInput = {
-  goals: [], gender: "other", birthYear: 1995, heightCm: 170, weightKg: 65, mealsPerDay: 3, eatingOutFreq: "1_2",
+  goals: [], gender: "other", birthYear: 0, heightCm: 0, weightKg: 0, mealsPerDay: 3, eatingOutFreq: "1_2",
   dietType: "normal", allergies: [], sensitivity: { digestive: 2, additive: 2 }, tastes: { salty: 5, sweet: 5, spicy: 5, fatty: 5 },
 };
 
@@ -58,7 +58,7 @@ export function ProfileEditor() {
     /* eslint-enable react-hooks/set-state-in-effect */
   }, []);
 
-  const bodyOk = !!s && s.gender !== "other" && s.birthYear > 1920 && s.birthYear <= THIS_YEAR - 10
+  const bodyOk = !!s && s.birthYear > 1920 && s.birthYear <= THIS_YEAR - 10
     && s.heightCm >= 100 && s.heightCm <= 250 && s.weightKg >= 20 && s.weightKg <= 300;
   const goals = useMemo(() => (s && bodyOk
     ? calculateNutritionGoals({ gender: s.gender as Gender, birthYear: s.birthYear, heightCm: s.heightCm, weightKg: s.weightKg }, s.goals.length ? s.goals : ["balanced"], s.dietType)
@@ -119,9 +119,9 @@ export function ProfileEditor() {
           ))}
         </div>
         <div className="grid grid-cols-3 gap-3">
-          <Field label="출생 연도"><Input type="number" inputMode="numeric" name="birthYear" className="num" value={s.birthYear || ""} onChange={(e) => set("birthYear", Number(e.target.value) || 0)} /></Field>
-          <Field label="키 (cm)"><Input type="number" inputMode="decimal" name="heightCm" className="num" value={s.heightCm || ""} onChange={(e) => set("heightCm", Number(e.target.value) || 0)} /></Field>
-          <Field label="몸무게 (kg)"><Input type="number" inputMode="decimal" name="weightKg" className="num" value={s.weightKg || ""} onChange={(e) => set("weightKg", Number(e.target.value) || 0)} /></Field>
+          <Field label="출생 연도"><Input type="number" inputMode="numeric" name="birthYear" placeholder="예: 1995" className="num" value={s.birthYear || ""} onChange={(e) => set("birthYear", Number(e.target.value) || 0)} /></Field>
+          <Field label="키 (cm)"><Input type="number" inputMode="decimal" name="heightCm" placeholder="예: 170" className="num" value={s.heightCm || ""} onChange={(e) => set("heightCm", Number(e.target.value) || 0)} /></Field>
+          <Field label="몸무게 (kg)"><Input type="number" inputMode="decimal" name="weightKg" placeholder="예: 65" className="num" value={s.weightKg || ""} onChange={(e) => set("weightKg", Number(e.target.value) || 0)} /></Field>
         </div>
         {goals ? (
           <div className="flex flex-wrap gap-x-8 gap-y-3 mt-4 rounded-md bg-sunken px-4 py-3">

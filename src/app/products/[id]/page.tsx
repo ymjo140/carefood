@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { defaultServingG } from "@/lib/serving";
 import { PLATFORM_LABELS, AFFILIATE_PLATFORMS, COUPANG_DISCLOSURE } from "@/lib/platforms";
 import type { Metadata } from "next";
 import { cache } from "react";
@@ -12,7 +13,7 @@ import TrackableLink from "@/components/TrackableLink";
 import { checkedLabel, usablePrices } from "@/lib/prices";
 import AllergenWarning from "@/components/AllergenWarning";
 import {
-  Page, SectionHeader, Card, Badge, Icon, MacroStat, Stat, EmptyState, Notice, Thumb, Price,
+  Page, SectionHeader, Card, Badge, Icon, MacroStat, Stat, EmptyState, Estimate, Notice, Thumb, Price,
   TextLink, buttonClass, cn,
 } from "@/components/ui";
 
@@ -215,9 +216,10 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
 
   // ── 영양성분 기준 보정 ──
   // DB 값 = nutrient_base_g(보통 100g) 기준
-  // 표시 = serving_size_g(1회 섭취참고량) 기준
-  const baseG = product.nutrient_base_g || product.serving_size_g || 100;
-  const servingG = product.serving_size_g || baseG;
+  // 표시 = 1회 먹는 양 기준 — 1회 제공량에 포장 전체 무게(1kg 등)가 들어간 제품은 한 끼 300g·그 밖 100g 으로 (lib/serving.ts)
+  const baseG = product.nutrient_base_g || 100;
+  const servingG = defaultServingG(product);
+  const servingGuessed = Number(product.serving_size_g) > 0 && Number(product.serving_size_g) !== servingG;
   const ratio = (baseG > 0 && servingG !== baseG) ? servingG / baseG : 1;
 
   // 보정된 영양값 (1회 섭취 기준)
@@ -233,9 +235,7 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
   const displayCholesterol = adj(product.cholesterol_mg);
 
   // 표시 기준 라벨
-  const servingLabel = ratio === 1
-    ? (baseG === 100 ? "100g 당" : `1회 제공량 ${servingG}g`)
-    : `1회 제공량 ${servingG}g`;
+  const servingLabel = ratio === 1 ? `${baseG}g 당` : servingGuessed ? `1회 ${servingG}g 기준` : `1회 제공량 ${servingG}g`;
 
   // 매크로 경고 판단 (보정값 기준)
   const sodiumHigh = displaySodium != null && displaySodium > 1000;
@@ -315,6 +315,11 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
             <Stat size="lg" emphasis label="칼로리" value={displayCal != null ? Math.round(displayCal).toLocaleString("ko-KR") : "–"} unit="kcal" />
             {s && <span className="text-caption text-ink-2">{servingLabel}</span>}
           </div>
+          {servingGuessed && (
+            <Estimate className="mb-3">
+              표시된 1회 제공량({Math.round(Number(product.serving_size_g)).toLocaleString("ko-KR")}g)이 포장 전체 무게로 보여, {servingG}g을 한 번 먹는 양으로 계산했어요
+            </Estimate>
+          )}
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {macroRows.map((m) => (

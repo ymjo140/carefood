@@ -1,3 +1,4 @@
+import { defaultServingG } from "@/lib/serving";
 /**
  * 영양 계산 유틸리티
  * BMI, 기초대사량, 일일 영양 목표 계산
@@ -80,11 +81,11 @@ export const BMI_LABELS: Record<NutritionGoals["bmiCategory"], string> = {
 
 export function calculateBMR(body: BodyInfo): number {
   const age = new Date().getFullYear() - body.birthYear;
-  if (body.gender === "male") {
-    return Math.round(66.47 + (13.75 * body.weightKg) + (5.003 * body.heightCm) - (6.755 * age));
-  }
-  // female 및 other는 여성 공식 사용 (보수적)
-  return Math.round(655.1 + (9.563 * body.weightKg) + (1.85 * body.heightCm) - (4.676 * age));
+  const male = 66.47 + (13.75 * body.weightKg) + (5.003 * body.heightCm) - (6.755 * age);
+  const female = 655.1 + (9.563 * body.weightKg) + (1.85 * body.heightCm) - (4.676 * age);
+  if (body.gender === "male") return Math.round(male);
+  if (body.gender === "female") return Math.round(female);
+  return Math.round((male + female) / 2); // 선택 안 함 — 두 공식의 평균
 }
 
 // ── 활동계수 ──
@@ -308,16 +309,17 @@ export const HEALTH_GOAL_LABELS: Record<HealthGoal, { label: string; desc: strin
 
 // ── 제품 영양 기준 환산 ──
 // DB 의 제품 영양값은 nutrient_base_g(보통 100g) 기준이다. 식단 칸·추천처럼 "한 번 먹는 양"이 필요한 곳은
-// 제품 상세와 같은 기준(serving_size_g = 1회 제공량)으로 바꿔 쓴다.
+// 제품 상세와 같은 기준(1회 먹는 양)으로 바꿔 쓴다. 1회 제공량이 포장 전체 무게면 걸러서 (lib/serving.ts)
 type ServingBasis = {
   serving_size_g?: number | string | null;
   nutrient_base_g?: number | string | null;
+  meal_role?: string | null;
 };
 const NUTRIENT_KEYS = ["calories", "protein_g", "carbs_g", "fat_g", "sodium_mg", "sugar_g", "fiber_g", "saturated_fat_g", "cholesterol_mg"] as const;
 
 export function servingRatio(p: ServingBasis): number {
   const base = Number(p.nutrient_base_g) || 100;
-  const serving = Number(p.serving_size_g) || base;
+  const serving = defaultServingG(p); // 전에는 serving_size_g 그대로 — 1kg 포장이면 열량이 10배로 (식단 리스트 간식 21,000kcal)
   return base > 0 && serving > 0 ? serving / base : 1;
 }
 

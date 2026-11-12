@@ -96,9 +96,10 @@ function OnboardingContent() {
     goals: [],
     showDiseaseGoals: false,
     gender: "other",
-    birthYear: 1995,
-    heightCm: 170,
-    weightKg: 65,
+    // 비워서 시작한다 — 전에는 1995·170·65 가 들어 있어 입력한 것처럼 보였는데, 성별을 안 고르면 분석이 비어 나왔다
+    birthYear: 0,
+    heightCm: 0,
+    weightKg: 0,
     mealsPerDay: 3,
     eatingOutFreq: "1_2",
     dietType: "normal",
@@ -127,8 +128,8 @@ function OnboardingContent() {
   const totalSteps = STEPS.length;
   const currentStepKey: StepKey = STEPS[step] || "goals";
 
+  // 성별은 '선택 안 함'이어도 된다 (기초대사량은 남녀 공식의 평균 — lib/nutrition.ts)
   const hasBodyInfo =
-    state.gender !== "other" &&
     state.birthYear > 1920 &&
     state.heightCm >= 100 &&
     state.heightCm <= 250 &&
@@ -477,7 +478,6 @@ function StepBody({
   const age = currentYear - birthYear;
 
   const hasFull =
-    gender !== "other" &&
     birthYear > 1920 &&
     heightCm >= 100 && heightCm <= 250 &&
     weightKg >= 20 && weightKg <= 300;
@@ -493,7 +493,7 @@ function StepBody({
 
   return (
     <div>
-      <StepTitle title="신체 정보를 알려주세요" description="맞춤 영양 분석에 활용해요" />
+      <StepTitle title="신체 정보를 알려주세요" description="출생연도·키·몸무게를 넣으면 하루 열량과 단백질 목표를 계산해요" />
 
       <div className="flex flex-col gap-5">
         <div>
@@ -524,10 +524,10 @@ function StepBody({
             inputMode="numeric"
             min={1920}
             max={currentYear - 10}
-            value={birthYear}
-            onChange={(e) => onChange("birthYear", parseInt(e.target.value) || 1995)}
+            value={birthYear || ""}
+            onChange={(e) => onChange("birthYear", parseInt(e.target.value) || 0)}
             className="num font-bold text-center"
-            placeholder="1995"
+            placeholder="예: 1995"
           />
         </Field>
 
@@ -538,10 +538,10 @@ function StepBody({
               inputMode="numeric"
               min={100}
               max={250}
-              value={heightCm}
-              onChange={(e) => onChange("heightCm", parseInt(e.target.value) || 170)}
+              value={heightCm || ""}
+              onChange={(e) => onChange("heightCm", parseInt(e.target.value) || 0)}
               className="num font-bold text-center"
-              placeholder="170"
+              placeholder="예: 170"
             />
           </Field>
           <Field label="체중 (kg)">
@@ -550,10 +550,10 @@ function StepBody({
               inputMode="numeric"
               min={20}
               max={300}
-              value={weightKg}
-              onChange={(e) => onChange("weightKg", parseInt(e.target.value) || 65)}
+              value={weightKg || ""}
+              onChange={(e) => onChange("weightKg", parseInt(e.target.value) || 0)}
               className="num font-bold text-center"
-              placeholder="65"
+              placeholder="예: 65"
             />
           </Field>
         </div>
@@ -831,7 +831,7 @@ function StepResult({
         <h1 className="text-title font-bold text-ink">나의 영양 분석 결과</h1>
         {hasBodyInfo && (
           <p className="text-label text-ink-2 mt-1">
-            {genderLabel} · 만 {age}세 · {bodyInfo.heightCm}cm · {bodyInfo.weightKg}kg 기준
+            {[genderLabel, `만 ${age}세`, `${bodyInfo.heightCm}cm`, `${bodyInfo.weightKg}kg`].filter(Boolean).join(" · ")} 기준
           </p>
         )}
       </div>
@@ -936,7 +936,7 @@ function StepResult({
               ))}
             </div>
             <p className="text-label text-ink-2">
-              신체 정보를 입력하면 더 정확한 영양 분석을 받을 수 있어요
+              출생연도·키·몸무게를 넣으면 하루 열량과 단백질 목표를 계산해요. 마이페이지에서 언제든 넣을 수 있어요
             </p>
           </Card>
 

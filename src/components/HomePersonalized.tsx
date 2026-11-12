@@ -133,8 +133,11 @@ export default function HomePersonalized({ cold = false }: { cold?: boolean }) {
 
   if (loading || !profile) return null;
 
-  // 섹션 헤더 라벨: v2 concerns 우선, v1 persona 폴백
+  // 섹션 헤더 라벨: 고른 목표 → v2 concerns → v1 persona
+  //   (concerns 는 목표 일부만 옮겨 담아 '근력 강화'를 골라도 기본값 '활력충전'으로 보였다)
   const sectionLabel = (() => {
+    const goalLabels = ((profile.goals || []) as string[]).map((g) => CONCERN_LABELS[g]).filter(Boolean);
+    if (goalLabels.length > 0) return [...new Set(goalLabels)].join(" · ");
     if (profile.concerns && profile.concerns.length > 0) {
       return profile.concerns.map((c: string) => CONCERN_LABELS[c] || c).join(" · ");
     }
@@ -186,8 +189,9 @@ function ProductCards({ products, showMatch }: { products: QuickProduct[]; showM
         >
           <div className="h-28 bg-sunken relative">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            {imageUrl && <img src={imageUrl} alt="" className="w-full h-full object-cover" loading="lazy" />}
-            {showMatch && <Badge tone="brand" className="absolute top-2 left-2">적합도 <span className="num">{p.match_score}</span></Badge>}
+            {imageUrl && <img src={imageUrl} alt="" className="w-full h-full object-cover" loading="lazy"
+              onError={(e) => { e.currentTarget.style.visibility = "hidden"; }} /> /* 판매처 이미지가 안 열리면 깨진 그림 대신 빈 칸 */}
+            {showMatch && <Badge tone="brand" className="absolute top-2 left-2 bg-surface">적합도 <span className="num">{p.match_score}</span></Badge>}
           </div>
           <div className="p-3">
             {p.slot && <p className="text-caption font-medium text-brand-ink mb-0.5">{p.slot}</p>}

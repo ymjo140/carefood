@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef, type ReactNode } from "react";
 import Link from "next/link";
 import { perServing } from "@/lib/nutrition";
+import { defaultServingG } from "@/lib/serving";
 import {
   Badge, BottomBar, Button, Card, CardActions, ConfirmSheet, EmptyState, Input, Kcal, LinkButton, ListRow,
   MacroGrid, MacroInline, MealSlot, Page, PageLoading, Price, ProgressBar, SearchField, SectionHeader, Sheet, SkeletonList,
@@ -120,7 +121,7 @@ function ProductRow({ p: raw, onSelect }: { p: any; onSelect: (cell: CellData) =
   const p = perServing(raw);
   const prices = p.product_prices?.filter((pp: { price: number }) => pp.price > 0) || [];
   const best = prices[0];
-  const servingG = Number(p.serving_size_g) || 0;
+  const servingG = defaultServingG(p); // 포장 무게는 걸러서 (lib/serving.ts) — perServing 과 같은 양
   return (
     <ListRow
       onClick={() => onSelect({
@@ -584,7 +585,7 @@ export default function WeeklyBoxPage() {
       for (const m of (dayData.meals || [])) {
         const slot = m.slot_type || "lunch";
         newGrid[dayKey][slot] = {
-          product_id: m.product_id, name: m.name, calories: Math.round(m.calories || 0),
+          product_id: m.product_id, name: m.name, calories: m.calories != null ? Math.round(m.calories) : undefined, // 영양 정보가 없는 식단 서비스 제품은 비워 둔다
           protein_g: m.protein_g, carbs_g: m.carbs_g, fat_g: m.fat_g, sodium_mg: m.sodium_mg, price: m.best_price,
           platform: m.health_source || m.prices?.[0]?.platform, url: m.prices?.[0]?.url, type: "product",
         };
@@ -593,7 +594,7 @@ export default function WeeklyBoxPage() {
       if (supplements.length > 0) {
         const s = supplements[0];
         newGrid[dayKey].supplement = {
-          product_id: s.product_id, name: s.name, calories: Math.round(s.calories || 0),
+          product_id: s.product_id, name: s.name, calories: s.calories != null ? Math.round(s.calories) : undefined,
           protein_g: s.protein_g, carbs_g: s.carbs_g, fat_g: s.fat_g, sodium_mg: s.sodium_mg, price: s.best_price,
           platform: s.prices?.[0]?.platform, url: s.prices?.[0]?.url, type: "product",
         };
@@ -913,7 +914,8 @@ export default function WeeklyBoxPage() {
                     </div>
                   </MealSlot>
                 ) : (
-                  <MealSlot meal={meal.key} dropping={dropping} handle={handle} right={<Kcal value={cell?.calories || 0} className="text-label" />}>
+                  <MealSlot meal={meal.key} dropping={dropping} handle={handle}
+                    right={cell?.calories != null ? <Kcal value={cell.calories} className="text-label" /> : <span className="text-caption text-ink-2">열량 정보 없음</span>}>
                     {foods && foods.length > 1 ? (
                       <ul className="flex flex-col gap-0.5">
                         {foods.map((f, i) => (

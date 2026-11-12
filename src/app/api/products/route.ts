@@ -231,9 +231,10 @@ async function attachPricesAndFilter(supabase: any, products: any[], params: Ret
   }
 
   // 가격 + 100g당 환산
-  let result = products.map((product: { id: string; serving_size_g?: number; sugar_g?: number; sodium_mg?: number; protein_g?: number; calories?: number }) => {
-    const s = product.serving_size_g;
-    const per100 = (v: number | undefined | null) => (v != null && s && s > 0) ? Math.round((v / s) * 100 * 10) / 10 : null;
+  // DB 영양값은 이미 nutrient_base_g(보통 100g) 기준 — 전에는 1회 제공량으로 한 번 더 나눠 '100g당' 필터가 틀렸다
+  let result = products.map((product: { id: string; nutrient_base_g?: number; sugar_g?: number; sodium_mg?: number; protein_g?: number; calories?: number }) => {
+    const base = Number(product.nutrient_base_g) || 100;
+    const per100 = (v: number | undefined | null) => (v != null ? Math.round((Number(v) * 100 / base) * 10) / 10 : null);
     return {
       ...product,
       per100g_sugar: per100(product.sugar_g),
