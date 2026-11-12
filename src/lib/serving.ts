@@ -14,6 +14,13 @@ const WHOLE_CHICKEN = /삼계탕|백숙|반계탕/;
 const SOUP_BOWL = /갈비탕|곰탕|설렁탕|우족탕|도가니탕|육개장|해장국|국밥|추어탕|감자탕|탕(?=[\s\d(]|$)|국(?=[\s\d(]|$)/;
 const STEW = /찌개|전골|죽(?=[\s\d(]|$)/;
 
+/** 밥 없이 파는 국물 요리인지 — 식단 리스트에서 "밥 더하기"를 권할 때. 국밥·죽처럼 밥이 든 것은 아니다 */
+export function isBrothDish(name: unknown): boolean {
+  const n = String(name || "");
+  if (/국밥|죽(?=[\s\d(]|$)|라면|면(?=[\s\d(]|$)|우동|국수|수제비/.test(n)) return false;
+  return WHOLE_CHICKEN.test(n) || SOUP_BOWL.test(n) || /찌개|전골/.test(n);
+}
+
 export function defaultServingG(p: { serving_size_g?: unknown; meal_role?: unknown; name?: unknown }): number {
   const raw = Number(p.serving_size_g) || 0;
   if (raw >= 20 && raw <= 500) return raw;

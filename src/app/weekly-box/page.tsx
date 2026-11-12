@@ -3,10 +3,10 @@
 import { useState, useEffect, useCallback, useRef, type ReactNode } from "react";
 import Link from "next/link";
 import { perServing } from "@/lib/nutrition";
-import { defaultServingG } from "@/lib/serving";
+import { defaultServingG, isBrothDish } from "@/lib/serving";
 import {
   Badge, BottomBar, Button, Card, CardActions, ConfirmSheet, EmptyState, Input, Kcal, LinkButton, ListRow,
-  MacroGrid, MacroInline, MealSlot, Page, PageLoading, Price, ProgressBar, SearchField, SectionHeader, Sheet, SkeletonList,
+  IconButton, MacroGrid, MacroInline, MealSlot, Page, PageLoading, Price, ProgressBar, SearchField, SectionHeader, Sheet, SkeletonList,
   Stat, Tabs, TextLink, Thumb, cn, useToast,
   DragArea, DragGhost, DragHandle, useDragItem, useDropTarget, type DragData,
   Chip, ChipRow, FoodEntryForm, type FoodBase, type FoodEntry, Field, Select,
@@ -33,6 +33,31 @@ type CellData = {
 } | null;
 
 type GridData = Record<string, Record<string, CellData>>;
+type Food = Omit<NonNullable<CellData>, "_foods">;
+
+/** 한 칸에 든 음식 — 여럿이면 _foods, 하나면 칸 자체 */
+function cellFoods(c: CellData): Food[] {
+  if (!c) return [];
+  if (Array.isArray(c._foods) && c._foods.length > 0) return c._foods as Food[];
+  const { _foods: _, ...one } = c; // eslint-disable-line @typescript-eslint/no-unused-vars
+  return one.product_id || one.name ? [one] : [];
+}
+
+/** 음식 목록 → 한 칸 (첫 음식이 대표, 영양·가격은 합) */
+function cellOf(foods: Food[]): CellData {
+  if (foods.length === 0) return null;
+  if (foods.length === 1) return { ...foods[0] };
+  const sum = (k: "calories" | "protein_g" | "carbs_g" | "fat_g" | "sodium_mg" | "price") =>
+    foods.some((f) => f[k] != null) ? foods.reduce((a, f) => a + (Number(f[k]) || 0), 0) : undefined;
+  const first = foods[0];
+  return {
+    product_id: first.product_id, name: first.name, platform: first.platform, url: first.url,
+    type: first.type === "eating_out" ? "eating_out" : "product",
+    calories: sum("calories"), protein_g: sum("protein_g"), carbs_g: sum("carbs_g"), fat_g: sum("fat_g"),
+    sodium_mg: sum("sodium_mg"), price: sum("price"),
+    _foods: foods,
+  };
+}
 
 /** 가족 프로필 (/api/family) — AI 채우기 기준으로 고를 수 있다 */
 type FamilyMember = {
@@ -158,11 +183,15 @@ function PlanMealRow({ day, meal, cell, multiDay, onSelect }: {
   );
 }
 
-function ProductSearchSheet({ open, onSelect, onClose, onEatingOut }: {
+function ProductSearchSheet({ open, onSelect, onClose, onEatingOut, title = "음식 고르기", quickQueries }: {
   open: boolean;
   onSelect: (product: CellData) => void;
   onClose: () => void;
-  onEatingOut: () => void;
+  /** 없으면 "외식으로만 표시"를 숨긴다 (음식을 더할 때) */
+  onEatingOut?: () => void;
+  title?: string;
+  /** 검색어를 누르기만 해도 찾게 — 국물 요리에 밥을 더할 때 "쌀밥" 등 */
+  quickQueries?: string[];
 }) {
   const toast = useToast();
   const [tab, setTab] = useState<PickTab>("favorites");
@@ -236,9 +265,10 @@ function ProductSearchSheet({ open, onSelect, onClose, onEatingOut }: {
     if (tabKey === "plans") { setPlans({ status: "loading", data: [] }); loadPlans(); }
   };
 
-  const search = async () => {
-    const q = query.trim();
+  const search = async (qArg?: string) => {
+    const q = (qArg ?? query).trim();
     if (!q) return;
+    if (qArg) setQuery(qArg);
     setSearching(true); setSearched(q);
     setEntry(null); setEatOut(false);
     try {
@@ -375,11 +405,11 @@ function ProductSearchSheet({ open, onSelect, onClose, onEatingOut }: {
     <Sheet
       open={open}
       onClose={onClose}
-      title={entry ? "메뉴 넣기" : eatOut ? "외식 메뉴" : "음식 고르기"}
+      title={entry ? "메뉴 넣기" : eatOut ? "외식 메뉴" : title}
       footer={entry || eatOut ? undefined : (
         <div className="flex gap-2">
           <Button variant="secondary" block onClick={openEatOut}>외식 메뉴 고르기</Button>
-          <Button variant="ghost" onClick={onEatingOut}>외식으로만 표시</Button>
+          {onEatingOut && <Button variant="ghost" onClick={onEatingOut}>외식으로만 표시</Button>}
         </div>
       )}
     >
@@ -390,7 +420,12 @@ function ProductSearchSheet({ open, onSelect, onClose, onEatingOut }: {
           </Button>
         </div>
       ) : null}
-      {!entry && <SearchField value={query} onChange={setQuery} onSubmit={search} placeholder="메뉴·제품 검색 (예: 핫도그)" />}
+      {!entry && <SearchField value={query} onChange={setQuery} onSubmit={() => search()} placeholder="메뉴·제품 검색 (예: 핫도그)" />}
+      {!entry && !eatOut && !inSearch && quickQueries && quickQueries.length > 0 && (
+        <ChipRow className="mt-2">
+          {quickQueries.map((q) => <Chip key={q} size="sm" onClick={() => search(q)}>{q}</Chip>)}
+        </ChipRow>
+      )}
       {entry || eatOut ? null : inSearch ? (
         <div className="flex items-center justify-between mt-4 mb-1">
           <p className="text-label font-bold text-ink">검색 결과 {!searching && <span className="num text-ink-2">{results.length}</span>}</p>
@@ -487,7 +522,8 @@ export default function WeeklyBoxPage() {
   const [savedPlans, setSavedPlans] = useState<SavedPlan[]>([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
-  const [searchModal, setSearchModal] = useState<{ day: string; meal: string } | null>(null);
+  // add: 이미 든 음식 옆에 더한다 (국물 요리에 밥 등) — 밥은 사용자가 고른다, 자동으로 넣지 않는다
+  const [searchModal, setSearchModal] = useState<{ day: string; meal: string; mode?: "add"; broth?: boolean } | null>(null);
   const [shopOpen, setShopOpen] = useState(false);
   // 누구 기준으로 AI 가 채울지 — 로그인하고 가족을 등록한 경우만 고를 수 있다
   const [familyList, setFamilyList] = useState<FamilyMember[]>([]);
@@ -696,6 +732,13 @@ export default function WeeklyBoxPage() {
   const updateCell = (day: string, meal: string, cell: CellData) => {
     setGrid(prev => ({ ...prev, [day]: { ...prev[day], [meal]: cell } }));
   };
+  const addFood = (day: string, meal: string, food: CellData) => {
+    if (!food) return;
+    setGrid(prev => ({ ...prev, [day]: { ...prev[day], [meal]: cellOf([...cellFoods(prev[day]?.[meal]), ...cellFoods(food)]) } }));
+  };
+  const removeFood = (day: string, meal: string, index: number) => {
+    setGrid(prev => ({ ...prev, [day]: { ...prev[day], [meal]: cellOf(cellFoods(prev[day]?.[meal]).filter((_, i) => i !== index)) } }));
+  };
 
   const showDay = (day: string) => {
     setActiveDay(day);
@@ -795,7 +838,10 @@ export default function WeeklyBoxPage() {
   // 장보기 목록: 제품 → 이번 주에 들어간 횟수 (외식 제외)
   const shopCounts: Record<string, number> = {};
   for (const slots of Object.values(grid)) for (const cell of Object.values(slots)) {
-    if (cell?.product_id && cell.type !== "eating_out") shopCounts[cell.product_id] = (shopCounts[cell.product_id] || 0) + 1;
+    if (!cell || cell.type === "eating_out") continue;
+    for (const f of cellFoods(cell)) {
+      if (f.product_id && f.type !== "eating_out") shopCounts[f.product_id] = (shopCounts[f.product_id] || 0) + 1;
+    }
   }
 
   const stats = (() => {
@@ -826,10 +872,14 @@ export default function WeeklyBoxPage() {
           totalFat += cell.fat_g || 0;
           totalSodium += cell.sodium_mg || 0;
           dayCal += cell.calories || 0;
-          const svc = cell.platform || "기타";
-          if (!serviceMap[svc]) serviceMap[svc] = { count: 0, cost: 0 };
-          serviceMap[svc].count++;
-          serviceMap[svc].cost += cell.price || 0;
+          // 판매처별 — 한 칸에 여럿이면 음식마다 (더한 밥이 대표 음식의 판매처로 잡히지 않게)
+          for (const f of cellFoods(cell)) {
+            if (f.type === "eating_out") continue;
+            const svc = f.platform || "기타";
+            if (!serviceMap[svc]) serviceMap[svc] = { count: 0, cost: 0 };
+            serviceMap[svc].count++;
+            serviceMap[svc].cost += f.price || 0;
+          }
         }
       }
       perDay[d.key] = dayCal;
@@ -889,7 +939,10 @@ export default function WeeklyBoxPage() {
             const cell = activeDayMeals[meal.key];
             const isEatingOut = cell?.type === "eating_out";
             const isEmpty = !isEatingOut && (!cell || (!cell.product_id && !cell.name));
-            const foods = cell?._foods as { name: string; calories?: number; product_id?: string }[] | undefined;
+            const foods = cell?._foods as Food[] | undefined;
+            const all = cellFoods(cell);
+            // 국물 요리만 있고 밥이 없으면 — 열량에 밥이 빠졌다고 알리고 "밥 더하기"로 (자동으로 넣지 않는다)
+            const broth = !isEatingOut && all.some(f => isBrothDish(f.name)) && !all.some(f => /밥|햇반/.test(f.name || "") && !isBrothDish(f.name));
             const name = isEatingOut ? (cell?.name || "외식") : foods && foods.length > 1 ? `${foods[0].name} 외 ${foods.length - 1}개` : cell?.name || "";
 
             return (
@@ -917,10 +970,14 @@ export default function WeeklyBoxPage() {
                   <MealSlot meal={meal.key} dropping={dropping} handle={handle}
                     right={cell?.calories != null ? <Kcal value={cell.calories} className="text-label" /> : <span className="text-caption text-ink-2">열량 정보 없음</span>}>
                     {foods && foods.length > 1 ? (
-                      <ul className="flex flex-col gap-0.5">
+                      <ul className="flex flex-col">
                         {foods.map((f, i) => (
-                          <li key={i} className="text-body text-ink">
-                            {f.product_id ? <FoodLink id={f.product_id}>{f.name}</FoodLink> : f.name}
+                          <li key={i} className="flex items-center justify-between gap-2 text-body text-ink">
+                            <span className="min-w-0">
+                              {f.product_id ? <FoodLink id={f.product_id}>{f.name}</FoodLink> : f.name}
+                              {f.calories != null && <span className="text-caption text-ink-2"> · <Kcal value={Math.round(f.calories)} className="text-caption" /></span>}
+                            </span>
+                            <IconButton icon="close" size="sm" label={`${f.name} 빼기`} onClick={() => removeFood(activeDay, meal.key, i)} />
                           </li>
                         ))}
                       </ul>
@@ -934,9 +991,13 @@ export default function WeeklyBoxPage() {
                       {cell?.price ? <Price value={cell.price} className="text-caption" /> : null}
                     </div>
                     <MacroInline className="mt-1.5" values={{ protein: cell?.protein_g, carbs: cell?.carbs_g, fat: cell?.fat_g, sodium: cell?.sodium_mg }} />
-                    <div className="flex gap-1 mt-2 -ml-3">
+                    {broth && <p className="text-caption text-ink-2 mt-1">밥은 들어 있지 않아요. 드신다면 밥을 더해야 열량이 맞아요</p>}
+                    <div className="flex flex-wrap gap-1 mt-2 -ml-3">
                       <Button size="sm" variant="ghost" icon="refresh" onClick={() => setSearchModal({ day: activeDay, meal: meal.key })}>바꾸기</Button>
-                      <Button size="sm" variant="ghost" icon="trash" onClick={() => updateCell(activeDay, meal.key, null)}>빼기</Button>
+                      <Button size="sm" variant="ghost" icon="plus" onClick={() => setSearchModal({ day: activeDay, meal: meal.key, mode: "add", broth })}>
+                        {broth ? "밥 더하기" : "더하기"}
+                      </Button>
+                      <Button size="sm" variant="ghost" icon="trash" onClick={() => updateCell(activeDay, meal.key, null)}>{all.length > 1 ? "모두 빼기" : "빼기"}</Button>
                     </div>
                   </MealSlot>
                 )}
@@ -1136,9 +1197,19 @@ export default function WeeklyBoxPage() {
       {/* ── 음식 고르기 ── */}
       <ProductSearchSheet
         open={!!searchModal}
-        onSelect={(product) => { if (searchModal) updateCell(searchModal.day, searchModal.meal, product); setSearchModal(null); }}
+        onSelect={(product) => {
+          if (searchModal) {
+            if (searchModal.mode === "add") {
+              addFood(searchModal.day, searchModal.meal, product);
+              toast.show(`${product?.name || "음식"}, ${MEALS.find(m => m.key === searchModal.meal)?.label}에 더했어요`);
+            } else updateCell(searchModal.day, searchModal.meal, product);
+          }
+          setSearchModal(null);
+        }}
         onClose={() => setSearchModal(null)}
-        onEatingOut={() => { if (searchModal) updateCell(searchModal.day, searchModal.meal, { type: "eating_out" }); setSearchModal(null); }}
+        onEatingOut={searchModal?.mode === "add" ? undefined : () => { if (searchModal) updateCell(searchModal.day, searchModal.meal, { type: "eating_out" }); setSearchModal(null); }}
+        title={searchModal?.mode === "add" ? (searchModal.broth ? "밥 더하기" : "함께 먹을 음식 더하기") : undefined}
+        quickQueries={searchModal?.broth ? ["쌀밥", "잡곡밥", "곤약밥"] : undefined}
       />
 
       {/* ── 요일에 넣기 ── */}
