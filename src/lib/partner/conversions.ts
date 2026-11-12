@@ -15,7 +15,13 @@ export const DEFAULT_ATTRIBUTION_DAYS = 7;
 
 /** "2026-11-12" · "2026-11-12 14:30" (한국 시간) → ISO */
 function parseKst(v: unknown): string | null {
-  const s = String(v ?? "").trim().replace("T", " ");
+  const raw = String(v ?? "").trim();
+  // API 는 시간대가 붙은 ISO 시각도 보낸다 (2026-11-12T14:30:00+09:00 · …Z)
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})$/.test(raw)) {
+    const t = Date.parse(raw);
+    return Number.isFinite(t) ? new Date(t).toISOString() : null;
+  }
+  const s = raw.replace("T", " ");
   const m = s.match(/^(\d{4}-\d{2}-\d{2})(?: (\d{2}):(\d{2})(?::(\d{2}))?)?/);
   if (!m) return null;
   const t = Date.parse(`${m[1]}T${m[2] || "00"}:${m[3] || "00"}:${m[4] || "00"}+09:00`);

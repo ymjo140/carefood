@@ -259,3 +259,29 @@ export async function retireMissing(sb: Sb, partner: Partner, present: Set<strin
   }
   return { retired: missing.length, skipped: 0 };
 }
+
+/**
+ * 가격·재고·판매 상태만 고치기 (API PATCH …/offer, DELETE) — 검수 없이 바로.
+ * 내용(영양·원재료)은 건드리지 않는다. 검수 중인 변경이 있어도 반영된 값과 대기 중인 값 양쪽에 같이 적는다.
+ */
+export async function patchOffer(sb: Sb, partner: Partner, sku: string,
+  patch: { price?: number; list_price?: number; status?: PartnerItem["status"]; url?: string }): Promise<"applied" | "unchanged" | "not_found"> {
+  const { data: it, error } = await sb.from("partner_items").select("id, product_id, data, approved_data, status").eq("partner_id", partner.id).eq("partner_sku", sku).maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!it) return "not_found";
+  const apply = (d: PartnerItem): PartnerItem => ({
+    ...d,
+    ...(patch.status ? { status: patch.status } : {}),
+    ...(patch.list_price !== undefined ? { list_price: patch.list_price } : {}),
+    offers: d.offers.map((o, i) => (i === 0 ? { ...o, ...(patch.price !== undefined ? { price: patch.price } : {}), ...(patch.url ? { url: patch.url } : {}) } : o)),
+  });
+  const data = apply(it.data);
+  const approved = it.approved_data ? apply(it.approved_data) : null;
+  if (anyChanged(it.data, data).length === 0) return "unchanged";
+  const status = it.status === "pending" || it.status === "rejected" ? it.status
+    : data.status === "discontinued" ? "discontinued" : approved ? "approved" : it.status;
+  const { error: uErr } = await sb.from("partner_items").update({ data, approved_data: approved, status, updated_at: new Date().toISOString() }).eq("id", it.id);
+  if (uErr) throw new Error(uErr.message);
+  if (approved) await applyOffers(sb, partner.id, it.id, it.product_id, approved);
+  return "applied";
+}

@@ -10,6 +10,7 @@ import { REVIEW_LABELS } from "@/lib/partner/schema";
 import { Commission } from "./Commission";
 import { Feed } from "./Feed";
 import { Report } from "./Report";
+import { ApiKeys } from "./ApiKeys";
 
 type Partner = { id: string; slug: string; name: string; kind: string; status: string };
 type Batch = {
@@ -35,7 +36,7 @@ function PartnerHome() {
   const [me, setMe] = useState<Load<Me>>({ status: "loading" });
   const [items, setItems] = useState<Load<Item[]>>({ status: "loading" });
   const [filter, setFilter] = useState<Filter>("all");
-  const [view, setView] = useState<"products" | "feed" | "report" | "commission">("products");
+  const [view, setView] = useState<"products" | "feed" | "api" | "report" | "commission">("products");
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [result, setResult] = useState<Batch | null>(null);
@@ -134,7 +135,7 @@ function PartnerHome() {
       </div>
 
       <Tabs value={view} onChange={setView} label="입점 업체 메뉴" className="mb-6"
-        items={[{ value: "products", label: "제품" }, { value: "feed", label: "피드" }, { value: "report", label: "성과" }, { value: "commission", label: "수수료" }]} />
+        items={[{ value: "products", label: "제품" }, { value: "feed", label: "피드" }, { value: "api", label: "API" }, { value: "report", label: "성과" }, { value: "commission", label: "수수료" }]} />
 
       {view === "products" && <>
       <SectionHeader title="제품 올리기" />
@@ -192,6 +193,7 @@ function PartnerHome() {
       </>}
 
       {view === "feed" && <Feed qs={qs} onFetched={() => { loadMe(); loadItems(filter); }} />}
+      {view === "api" && <ApiKeys qs={qs} />}
       {view === "report" && <Report qs={qs} />}
       {view === "commission" && <Commission qs={qs} />}
     </Page>

@@ -13,7 +13,8 @@ export async function GET(req: NextRequest) {
   const [items, batches] = await Promise.all([
     sb.from("partner_items").select("status").eq("partner_id", ctx.partner.id).limit(20000),
     sb.from("ingest_batches").select("id, channel, file_name, row_count, ok_count, review_count, error_count, unchanged_count, errors, created_at")
-      .eq("partner_id", ctx.partner.id).order("created_at", { ascending: false }).limit(5),
+      .eq("partner_id", ctx.partner.id).neq("channel", "api") // API 로 보낸 것은 응답으로 결과를 받는다 — 화면에는 엑셀·피드만
+      .order("created_at", { ascending: false }).limit(5),
   ]);
   if (items.error || batches.error) return NextResponse.json({ error: (items.error || batches.error).message }, { status: 500 });
   const counts: Record<string, number> = { pending: 0, approved: 0, rejected: 0, discontinued: 0 };
