@@ -18,7 +18,7 @@ const CONCERN_LABELS: Record<string, string> = {
   kidney: "신장 관심",
 };
 
-type QuickProduct = {
+export type QuickProduct = {
   id: string;
   name: string;
   match_score: number;
@@ -39,7 +39,7 @@ type QuickProduct = {
  * 1. 내 프로필에 가장 잘 맞는 것  2. 건강식단 서비스 중 가장 잘 맞는 것  3. 평소 안 보던 종류 (필터 버블 방지)
  * 해당하는 게 없으면 다음 순위로 채운다.
  */
-function pickSlots(list: QuickProduct[]): QuickProduct[] {
+export function pickSlots(list: QuickProduct[]): QuickProduct[] {
   const out: QuickProduct[] = [];
   const used = new Set<string>();
   const take = (p: QuickProduct | undefined, slot: string) => { if (p && !used.has(p.id)) { used.add(p.id); out.push({ ...p, slot }); } };
@@ -169,8 +169,8 @@ export default function HomePersonalized({ cold = false }: { cold?: boolean }) {
   );
 }
 
-/** 가로로 넘기는 제품 카드 — 홈 추천·첫 방문 추천이 같이 쓴다 */
-function ProductCards({ products, showMatch }: { products: QuickProduct[]; showMatch: boolean }) {
+/** 가로로 넘기는 제품 카드 — 홈 추천·첫 방문 추천·온보딩 결과가 같이 쓴다 */
+export function ProductCards({ products, showMatch, onOpen }: { products: QuickProduct[]; showMatch: boolean; onOpen?: () => void }) {
   return (
     <div className="flex gap-3 scroll-row -mx-4 px-4 pb-2">
     {products.map((p) => {
@@ -185,6 +185,7 @@ function ProductCards({ products, showMatch }: { products: QuickProduct[]; showM
         <Link
           key={p.id}
           href={`/products/${p.id}`}
+          onClick={onOpen}
           className="block w-44 shrink-0 rounded-lg border border-line bg-surface overflow-hidden transition-colors hover:border-line-strong"
         >
           <div className="h-28 bg-sunken relative">

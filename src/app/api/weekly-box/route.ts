@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { getActorId, noActor } from "@/lib/actor-server";
 import { perServing } from "@/lib/nutrition";
+import { foodType } from "@/lib/recommend/diversity";
 
 /**
  * 주간 식단 추천 API v3 — 영양사 방식
@@ -88,14 +89,15 @@ const MEAL_TYPE_SLOTS: Record<MealType, ("breakfast" | "lunch" | "dinner")[]> = 
 
 // ── 끼니별 카테고리 우선순위 (MEAL_TYPE_SLOTS 기반 + 끼니 특성 반영) ──
 const SLOT_PREFERENCES: Record<string, MealType[]> = {
-  breakfast: ["health_meal", "light", "rice", "soup"],                          // 아침: 가벼운 것 우선
-  lunch:     ["health_meal", "rice", "main", "stew", "noodle", "street", "soup", "light", "other_meal"],  // 점심: 다양하게
-  dinner:    ["health_meal", "soup", "stew", "main", "rice", "noodle", "street", "other_meal"],            // 저녁: 든든하게
+  // 식단 서비스 제품(health_meal)은 맨 뒤 — 주간 최소(2회)는 1차에서 채우고, 나머지는 바로 살 수 있는 제품을 먼저 고른다
+  breakfast: ["light", "rice", "soup", "health_meal"],                          // 아침: 가벼운 것 우선
+  lunch:     ["rice", "main", "stew", "noodle", "street", "soup", "light", "other_meal", "health_meal"],  // 점심: 다양하게
+  dinner:    ["soup", "stew", "main", "rice", "noodle", "street", "other_meal", "health_meal"],            // 저녁: 든든하게
 };
 
 // 주간 카테고리 제한 (7일 전체)
 const WEEKLY_CATEGORY_LIMITS: Partial<Record<MealType, { min: number; max: number }>> = {
-  health_meal: { min: 3, max: 14 }, // 건강식단: 최소 3회 (있으면 우선 배치)
+  health_meal: { min: 2, max: 7 }, // 식단 서비스 제품: 하루 한 끼 정도까지 — 나머지는 쿠팡 등에서 살 수 있는 제품으로 섞는다
   noodle: { min: 0, max: 4 },
   rice:   { min: 2, max: 8 },
   soup:   { min: 2, max: 7 },
@@ -162,7 +164,7 @@ export async function POST(request: NextRequest) {
     const supabase = createServiceRoleClient();
 
     // ── 1. 행동 이력 로드 ──
-    let userPrefs = { category_counts: {} as Record<string, number>, tag_counts: {} as Record<string, number>, clicked_ids: new Set<string>() };
+    const userPrefs = { category_counts: {} as Record<string, number>, tag_counts: {} as Record<string, number>, clicked_ids: new Set<string>() };
     if (user_id) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: interactions } = await supabase
@@ -245,7 +247,7 @@ export async function POST(request: NextRequest) {
       if (data) mealProducts = data.map(perServing);
     }
 
-    // 건강 식단 서비스 제품 (식스밀, 그리팅 등) — 높은 우선순위로 추가
+    // 건강 식단 서비스 제품 (식스밀, 그리팅 등) — 다른 후보와 같은 점수로 겨루고, 주간 2~7회만 들어간다
     {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: healthMeals } = await (supabase as any)
@@ -277,7 +279,7 @@ export async function POST(request: NextRequest) {
           _health_image: h.image_url,
           _health_source: h.source,
         }));
-        mealProducts = [...converted, ...mealProducts]; // 건강식단 우선
+        mealProducts = [...mealProducts, ...converted];
         console.log("[weekly-box] 건강식단 제품 추가:", converted.length, "개");
       }
     }
@@ -423,8 +425,13 @@ export async function POST(request: NextRequest) {
     }
 
     // ── 4. 가격 조회 (상위 후보) ──
+    // 식단 서비스 제품은 가격을 이미 들고 있다 — 가격을 물어야 하는 건 일반 제품. 종류마다 점수 상위 60개씩
+    //   (전에는 scored 앞 150개를 물었는데, 앞쪽이 모두 식단 서비스 제품이라 일반 제품은 가격이 없어(99999) 한 끼도 못 들어왔다)
+    const priceTargets = (Object.keys(poolByType) as MealType[])
+      .filter((t) => t !== "health_meal")
+      .flatMap((t) => poolByType[t].filter((p) => !p._is_health_meal).slice(0, 60));
     const allCandidateIds = [...new Set([
-      ...scored.slice(0, 150).map(p => p.id),
+      ...priceTargets.map(p => p.id),
       ...supplementProducts.slice(0, 50).map((p: { id: string }) => p.id),
     ])];
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -451,6 +458,11 @@ export async function POST(request: NextRequest) {
         p.prices = prices;
       }
     }
+    // 쿠팡에서 바로 살 수 있으면 조금 앞으로 — 같은 종류 안에서 비슷한 점수면 앞서는 정도(+8). 보여 주는 가격은 그대로 가장 싼 곳
+    for (const p of scored) {
+      if (!p._is_health_meal && p.prices.some((x: { platform: string }) => x.platform === "coupang")) p.score += 8;
+    }
+    for (const key of Object.keys(poolByType) as MealType[]) poolByType[key].sort((a, b) => b.score - a.score);
     const scoredSupplements = supplementProducts.map((p: { id: string }) => {
       const prices = (priceMap[p.id] || []).sort((a: { price: number }, b: { price: number }) => a.price - b.price);
       return { ...p, bestPrice: prices[0]?.price || 99999, prices, score: 50 + Math.floor(Math.random() * 10) };
@@ -495,7 +507,10 @@ export async function POST(request: NextRequest) {
       }
 
       const pool = poolByType[type];
+      // 조건을 통과한 앞쪽 후보 몇 개 중에서 점수와 끼니 열량 목표를 함께 본다 (전에는 점수 1등만 — 200kcal 대 국이 줄줄이 들어왔다)
+      const fits: ScoredProduct[] = [];
       for (const p of pool) {
+        if (fits.length >= 8) break;
         if (usedProductIds.has(p.id)) continue;
         if (p.bestPrice > maxPrice) continue;
         // 칼로리 적합성: 최소 150kcal, 최대 개인 상한의 1.3배
@@ -508,15 +523,23 @@ export async function POST(request: NextRequest) {
         // 같은 이름 반복 방지
         const base = getBaseName(p.name);
         if (usedBaseNames.has(base)) continue;
-        return p;
+        // 같은 음식 종류(삼계탕·곰탕은 국·탕, 닭가슴살 등)는 하루 한 번, 한 주 네 번까지
+        const ft = foodType(p);
+        if (ft && (dayFoodTypes.has(ft) || (weekFoodTypes[ft] || 0) >= 4)) continue;
+        fits.push(p);
       }
-      return null;
+      if (fits.length === 0) return null;
+      const fit = (p: ScoredProduct) => p.score - Math.abs((p.calories || 0) - targetCal) / 20;
+      return fits.reduce((best, p) => (fit(p) > fit(best) ? p : best));
     };
+    const dayFoodTypes = new Set<string>();
+    const weekFoodTypes: Record<string, number> = {};
 
     // 끼니 배정 — 요일 × 끼니 순회
     const perMealBudget = (budget * 0.75) / (7 * mealSlots.length);
 
     for (let d = 0; d < 7; d++) {
+      dayFoodTypes.clear();
       for (const slot of mealSlots) {
         const targetCal = slotTargetCal(slot);
         const prefs = SLOT_PREFERENCES[slot] || ["noodle", "rice", "soup", "main", "street"];
@@ -555,6 +578,8 @@ export async function POST(request: NextRequest) {
         if (picked) {
           usedProductIds.add(picked.id);
           usedBaseNames.add(getBaseName(picked.name));
+          const ft = foodType(picked);
+          if (ft) { dayFoodTypes.add(ft); weekFoodTypes[ft] = (weekFoodTypes[ft] || 0) + 1; }
           weekCategoryCounts[picked.mealType as MealType]++;
           weekPlan[d].meals.push(picked);
           weekPlan[d].slots.push(slot);

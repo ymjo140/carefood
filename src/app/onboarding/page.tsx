@@ -16,10 +16,11 @@ import {
   type NutritionGoals,
 } from "@/lib/nutrition";
 import {
-  Badge, BottomBar, Button, Card, Chip, Field, Icon, Input, MacroGrid, Notice, Page, PageLoading, Stat, Steps, TextLink, cn,
+  Badge, BottomBar, Button, Card, Chip, EmptyState, Field, Icon, Input, MacroGrid, Notice, Page, PageLoading, SectionHeader, Skeleton, Stat, Steps, TextLink, cn,
   type BadgeTone,
 } from "@/components/ui";
 import { ChoiceCard } from "@/components/ui/ChoiceCard";
+import { ProductCards, pickSlots, type QuickProduct } from "@/components/HomePersonalized";
 import { getClientActorId } from "@/lib/actor-client";
 import { ALLERGIES, DIET_OPTIONS, DISEASE_GOALS, EATING_OUT_OPTIONS, MAIN_GOALS, TASTE_CONFIG, buildProfile, persistProfile, readLocalProfile } from "@/lib/profile-options";
 
@@ -280,6 +281,8 @@ function OnboardingContent() {
           goals={state.goals}
           nutritionGoals={nutritionGoals}
           hasBodyInfo={hasBodyInfo}
+          makeProfile={() => buildProfile(state, nutritionGoals, readLocalProfile() || {})}
+          onEditBody={() => setStep(STEPS.indexOf("body"))}
           bodyInfo={{
             gender: state.gender,
             birthYear: state.birthYear,
@@ -804,6 +807,73 @@ function StepTastes({
 }
 
 /* ════════════════════════════════════════════
+   결과 화면의 제품 미리보기 — 방금 고른 목표·입맛으로 추천 API 를 불러 세 개만
+   ════════════════════════════════════════════ */
+
+function ResultPreview({ makeProfile }: { makeProfile: () => ReturnType<typeof buildProfile> }) {
+  // 결과 화면에 들어온 순간의 답으로 한 번만 만든다 (렌더마다 만들면 요청이 되풀이된다)
+  const [profile] = useState(makeProfile);
+  const [status, setStatus] = useState<"loading" | "error" | "ready">("loading");
+  const [items, setItems] = useState<QuickProduct[]>([]);
+  const [reload, setReload] = useState(0);
+
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/recommend", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ profile }),
+    })
+      .then((r) => {
+        if (!r.ok) throw new Error(String(r.status));
+        return r.json();
+      })
+      .then((data) => {
+        if (!alive) return;
+        setItems(pickSlots(data.recommendations || []));
+        setStatus("ready");
+      })
+      .catch(() => { if (alive) setStatus("error"); });
+    return () => { alive = false; };
+  }, [profile, reload]);
+
+  // 제품을 눌러 나가도 답이 남게 — 휴대폰 저장은 바로, 서버 저장은 이어서 (식단 채우기를 누르면 한 번 더 저장한다)
+  const keep = () => {
+    persistProfile(profile).catch(() => {}); // ds-allow: 휴대폰에는 이미 저장됐다
+  };
+
+  return (
+    <section className="mt-8">
+      <SectionHeader title="이 기준으로 고른 제품" />
+      {status === "loading" && (
+        <div className="flex gap-3 overflow-hidden -mx-4 px-4 pb-2" aria-label="추천 제품을 불러오는 중">
+          {[0, 1, 2].map((i) => <Skeleton key={i} className="w-44 h-60 shrink-0 rounded-lg" />)}
+        </div>
+      )}
+      {status === "error" && (
+        <EmptyState
+          title="추천 제품을 불러오지 못했어요"
+          description="연결이 잠깐 끊겼을 수 있어요. 식단 채우기는 그대로 할 수 있어요"
+          action={<Button size="sm" variant="secondary" icon="refresh" onClick={() => { setStatus("loading"); setReload((k) => k + 1); }}>다시 불러오기</Button>}
+        />
+      )}
+      {status === "ready" && items.length === 0 && (
+        <EmptyState
+          title="조건에 맞는 제품이 아직 없어요"
+          description="알레르기·식단 조건이 겹치면 고를 제품이 적어요. 식단 리스트에서 직접 찾아 담을 수 있어요"
+        />
+      )}
+      {status === "ready" && items.length > 0 && (
+        <>
+          <ProductCards products={items} showMatch onOpen={keep} />
+          <p className="text-caption text-ink-2 mt-1">아래 버튼을 누르면 이런 제품으로 이번 주 끼니를 채워요</p>
+        </>
+      )}
+    </section>
+  );
+}
+
+/* ════════════════════════════════════════════
    Step 6: 영양 분석 결과
    ════════════════════════════════════════════ */
 
@@ -811,11 +881,15 @@ function StepResult({
   goals,
   nutritionGoals,
   hasBodyInfo,
+  makeProfile,
+  onEditBody,
   bodyInfo,
 }: {
   goals: HealthGoal[];
   nutritionGoals: NutritionGoals | null;
   hasBodyInfo: boolean;
+  makeProfile: () => ReturnType<typeof buildProfile>;
+  onEditBody: () => void;
   bodyInfo: BodyInfo;
 }) {
   const currentYear = new Date().getFullYear();
@@ -926,32 +1000,24 @@ function StepResult({
           </Card>
         </div>
       ) : (
-        /* 신체 정보 없을 때 간소화 버전 */
-        <div className="flex flex-col gap-3">
-          <Card className="text-center py-6">
-            <h3 className="text-body font-bold text-ink mb-3">선택한 건강 목표</h3>
-            <div className="flex flex-wrap gap-2 justify-center mb-4">
-              {effectiveGoals.map((g) => (
-                <Badge key={g} tone="brand">{HEALTH_GOAL_LABELS[g].label}</Badge>
-              ))}
-            </div>
-            <p className="text-label text-ink-2">
-              출생연도·키·몸무게를 넣으면 하루 열량과 단백질 목표를 계산해요. 마이페이지에서 언제든 넣을 수 있어요
-            </p>
-          </Card>
-
-          <Card>
-            <p className="text-label font-bold text-ink">맞춤 케어 전략</p>
-            <div className="flex flex-wrap gap-1.5 mt-3">
-              {effectiveGoals
-                .flatMap((g) => [HEALTH_GOAL_LABELS[g].label])
-                .map((tag) => (
-                  <Badge key={tag} tone="brand">#{tag}</Badge>
-                ))}
-            </div>
-          </Card>
-        </div>
+        /* 신체 정보 없을 때 — 고른 목표 + 신체 정보를 넣으러 가는 길 (전에는 같은 목표 배지를 두 카드에 되풀이했다) */
+        <Card>
+          <p className="text-label font-bold text-ink">고른 목표</p>
+          <div className="flex flex-wrap gap-1.5 mt-3">
+            {effectiveGoals.map((g) => (
+              <Badge key={g} tone="brand">{HEALTH_GOAL_LABELS[g].label}</Badge>
+            ))}
+          </div>
+          <p className="text-label text-ink-2 mt-4">
+            출생연도·키·몸무게를 넣으면 하루 열량과 단백질 목표를 계산하고, 그 기준으로 끼니 양을 맞춰요
+          </p>
+          <Button variant="secondary" size="sm" icon="chevron-left" className="mt-3" onClick={onEditBody}>
+            신체 정보 넣기
+          </Button>
+        </Card>
       )}
+
+      <ResultPreview makeProfile={makeProfile} />
 
       {/* 면책 */}
       <Notice className="mt-6 text-center">
