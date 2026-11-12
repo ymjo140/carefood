@@ -54,3 +54,19 @@ export function readDraftGrid(): PlanGrid | null {
     return g && typeof g === "object" ? (g as PlanGrid) : null;
   } catch { return null; } // ds-allow: 저장 공간을 못 쓰는 브라우저 — 식단 리스트가 없는 것으로 본다
 }
+
+/** 그 날짜(요일)·끼니에 짜 둔 음식 — 이름 요약과 열량 합 (알림 문구용) */
+export function plannedMeal(grid: PlanGrid | null | undefined, date: string, meal: string): { label: string; kcal: number; count: number } | null {
+  if (!grid) return null;
+  const foods = cellFoods(grid[weekdayKey(date)]?.[planMealKey(meal)]);
+  if (foods.length === 0) return null;
+  const first = (foods[0].name || "음식").slice(0, 24);
+  const kcal = Math.round(foods.reduce((a, f) => a + (Number(f.calories) || 0), 0));
+  return { label: foods.length > 1 ? `${first} 외 ${foods.length - 1}개` : first, kcal, count: foods.length };
+}
+
+/** 사흘 이상 채운 식단인지 — '한 주 식단'으로 볼 기준 (식단 기록·알림이 같이 쓴다) */
+export function isWeekPlan(grid: PlanGrid | null | undefined): boolean {
+  if (!grid) return false;
+  return PLAN_DAYS.filter((d) => Object.values(grid[d] || {}).some((c) => cellFoods(c).length > 0)).length >= 3;
+}

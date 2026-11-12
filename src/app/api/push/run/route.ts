@@ -5,6 +5,7 @@ import { getAdminUser } from "@/lib/actor-server";
 import { pushReady, sendToUser, type PushPayload, type PushSub } from "@/lib/push";
 import { addDays, daysBetween, kstHour, mondayOf, todayKst, weekday } from "@/lib/day";
 import { buildNotifications } from "@/lib/notifications";
+import { isWeekPlan, plannedMeal, type PlanGrid } from "@/lib/weekly-plan";
 
 /**
  * POST /api/push/run — 보낼 때가 된 알림을 보낸다. Supabase 예약 작업(pg_cron + pg_net, 30분마다)이 부른다.
@@ -15,6 +16,8 @@ import { buildNotifications } from "@/lib/notifications";
  *
  * 언제 무엇을 (한국 시간, 밤 10시~아침 8시는 보내지 않음 · 같은 알림은 push_log 로 한 번만)
  *   - 점심 13~15시: 오늘 점심 기록이 없으면 · 저녁 20~22시: 오늘 저녁 기록이 없으면
+ *     저장한 한 주 식단(최근 28일 안에 저장, 사흘 이상 채움)에 오늘 그 끼니가 있으면 그 이름으로 — 식단 기록에서 '계획대로 기록하기' 한 번
+ *     (최근 14일 기록이 없으면 7일 안에 저장한 식단일 때만)
  *     최근 14일 기록이 없는 사람은 저녁 알림만, 일주일에 한 번
  *   - 챌린지 20~22시: 하고 있는 챌린지가 있는데 오늘 기록이 하나도 없으면 (그날 저녁 알림 대신)
  *   - 주간 요약 월요일 9~12시: 지난주(월~일)에 하루라도 기록했으면 기록한 날 수 · 하루 평균
@@ -44,6 +47,11 @@ async function authorized(req: NextRequest): Promise<boolean> {
 type Prefs = { user_id: string; meals: boolean; weekly: boolean; community: boolean; challenge: boolean; community_pushed_at: string | null };
 type Diary = { user_id: string; date: string; meal_type: string | null; calories: number | null; protein_g: number | null; sodium_mg: number | null };
 
+/** 끼니 알림 시간대 (한국 시간) */
+function slotOf(hour: number): "lunch" | "dinner" | null {
+  return hour >= 13 && hour < 15 ? "lunch" : hour >= 20 && hour < 22 ? "dinner" : null;
+}
+
 export async function POST(req: NextRequest) {
   if (!(await authorized(req))) return NextResponse.json({ error: "권한이 없어요" }, { status: 403 });
   if (!pushReady()) return NextResponse.json({ sent: 0, skipped: "VAPID 키가 아직 없어요" });
@@ -63,13 +71,23 @@ export async function POST(req: NextRequest) {
   if (!users.length) return NextResponse.json({ sent: 0, users: 0 });
 
   const lastMonday = addDays(mondayOf(today), -7);
-  const [pRes, dRes, lRes, mRes] = await Promise.all([
+  const [pRes, dRes, lRes, mRes, planRes] = await Promise.all([
     sb.from("notification_prefs").select("user_id, meals, weekly, community, challenge, community_pushed_at").in("user_id", users),
     sb.from("meal_diary").select("user_id, date, meal_type, calories, protein_g, sodium_mg").in("user_id", users).gte("date", addDays(today, -14)).lte("date", today).limit(20000),
     sb.from("push_log").select("user_id, kind, key").in("user_id", users).gte("sent_at", new Date(Date.now() - 8 * 86400e3).toISOString()).limit(20000),
     sb.from("community_challenge_members").select("user_id, started_on, community_challenges(title, days, is_active)").in("user_id", users),
+    // 저장한 식단 (끼니 알림에 계획 이름을 넣으려고) — 사람마다 가장 최근의 한 주
+    slotOf(hour) ? sb.from("saved_meal_plans").select("user_id, grid, updated_at").in("user_id", users).eq("is_active", true)
+      .gte("updated_at", new Date(Date.now() - 28 * 86400e3).toISOString()).order("updated_at", { ascending: false }).limit(Math.min(5000, users.length * 5))
+      : Promise.resolve({ data: [], error: null }),
   ]);
-  for (const r of [pRes, dRes, lRes, mRes]) if (r.error) return NextResponse.json({ error: r.error.message }, { status: 500 });
+  for (const r of [pRes, dRes, lRes, mRes, planRes]) if (r.error) return NextResponse.json({ error: r.error.message }, { status: 500 });
+  const planBy = new Map<string, { grid: PlanGrid; fresh: boolean }>();
+  for (const p of (planRes.data || []) as { user_id: string; grid: PlanGrid; updated_at: string }[]) {
+    if (!planBy.has(p.user_id) && isWeekPlan(p.grid)) {
+      planBy.set(p.user_id, { grid: p.grid, fresh: Date.parse(p.updated_at) > Date.now() - 7 * 86400e3 });
+    }
+  }
   const prefsBy = new Map<string, Prefs>(((pRes.data || []) as Prefs[]).map((p) => [p.user_id, p]));
   const diaryBy = new Map<string, Diary[]>();
   for (const d of (dRes.data || []) as Diary[]) diaryBy.set(d.user_id, [...(diaryBy.get(d.user_id) || []), d]);
@@ -99,7 +117,7 @@ export async function POST(req: NextRequest) {
     return ok;
   };
 
-  const slot = hour >= 13 && hour < 15 ? "lunch" : hour >= 20 && hour < 22 ? "dinner" : null;
+  const slot = slotOf(hour);
   const isWeekly = weekday(today) === 1 && hour >= 9 && hour < 12;
 
   for (const user of users) {
@@ -116,7 +134,18 @@ export async function POST(req: NextRequest) {
     }
     if (slot && prefs.meals && !todayRows.some((r) => r.meal_type === slot)) {
       const recent = rows.length > 0;
-      if (recent) {
+      // 기록이 끊긴 사람에게는 이번 주에 새로 저장한 식단일 때만 (오래된 식단으로 매일 두 번 보내지 않게)
+      const saved = planBy.get(user);
+      const plan = saved && (recent || saved.fresh) ? plannedMeal(saved.grid, today, slot) : null;
+      if (plan) {
+        // 짜 둔 끼니가 있으면 그 이름으로 — 식단 기록 빈 칸에 '계획대로 기록하기'가 있다
+        const label = slot === "lunch" ? "점심" : "저녁";
+        await send(user, "meal", `${today}:${slot}`, {
+          title: `${label} 계획: ${plan.label}`,
+          body: `${plan.kcal > 0 ? `${plan.kcal.toLocaleString("ko-KR")}kcal · ` : ""}계획대로 먹었으면 식단 기록에서 한 번에 기록할 수 있어요`,
+          url: "/diary", tag: "meal",
+        });
+      } else if (recent) {
         await send(user, "meal", `${today}:${slot}`, slot === "lunch"
           ? { title: "점심 기록", body: "점심 아직 안 적었어요. 먹은 것 하나만 남겨 볼까요?", url: "/diary", tag: "meal" }
           : { title: "저녁 기록", body: "오늘 저녁은 뭐 먹었어요? 적으면 오늘 합계를 바로 볼 수 있어요", url: "/diary", tag: "meal" });
