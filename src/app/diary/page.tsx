@@ -303,6 +303,8 @@ export default function DiaryPage() {
   // 식단 리스트 화면에서 짜 둔 한 주 (이 기기) — 요일·끼니가 맞으면 '계획대로 기록하기'
   const [planGrid, setPlanGrid] = useState<PlanGrid | null>(null);
   const [recordingPlan, setRecordingPlan] = useState<string | null>(null);
+  /** 이 기기에 짜 둔 게 없어 서버에 저장한 식단을 쓸 때 그 이름 */
+  const [planTitle, setPlanTitle] = useState<string | null>(null);
   const [weeklyTrend, setWeeklyTrend] = useState<{
     days: { date: string; label: string; dayOfWeek: string; calories: number; protein_g: number; count: number }[];
     weeklyAvg: { calories: number; protein_g: number; sodium_mg: number; goalAchievement: number } | null;
@@ -400,6 +402,12 @@ export default function DiaryPage() {
   useEffect(() => {
     const draft = readDraftGrid();
     if (draft) { setPlanGrid(draft); return; } // eslint-disable-line react-hooks/set-state-in-effect -- 이 기기 저장소는 화면을 그린 뒤에 읽는다
+    // 이 기기에 없으면 — 다른 기기에서 짜서 저장한 가장 최근 한 주
+    let alive = true;
+    fetch("/api/meal-plans?latest=week")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (alive && d?.plan?.grid) { setPlanGrid(d.plan.grid); setPlanTitle(d.plan.title || "저장한 식단"); } })
+      .catch(() => {}); // ds-allow: 보조 — 못 불러오면 예전 목록(아래)이나 빈 탭
     try {
       // 예전 방식: 커뮤니티 '따라하기'가 남긴 목록
       const saved = localStorage.getItem("carefood_weekly_box");
@@ -424,6 +432,7 @@ export default function DiaryPage() {
         setWeeklyItems(items);
       }
     } catch { /* */ } // ds-allow: 보조 패널(식단 리스트) 불러오기
+    return () => { alive = false; };
   }, []);
 
   // 최근 기록 로드 (다시 먹기)
@@ -874,9 +883,10 @@ export default function DiaryPage() {
         )}
 
         {addTab === "weekly" && (
-          planGrid && plannedRows.length > 0 ? (
+          planGrid && plannedRows.length > 0 ? (<>
+            {planTitle && <p className="text-caption text-ink-2 mb-1">저장한 식단 &lsquo;{planTitle}&rsquo;에서 불러왔어요</p>}
             <PlannedList rows={plannedRows} onSelect={(f) => addingMeal && recordPlanned(addingMeal, [f], MEAL_TYPES.find((m) => m.key === addingMeal)?.label || "끼니", servingMultiplier)} />
-          ) : !planGrid && weeklyItems.length > 0 ? <ProductList items={weeklyItems} onSelect={addFromProduct} multiplier={servingMultiplier} /> : (
+          </>) : !planGrid && weeklyItems.length > 0 ? <ProductList items={weeklyItems} onSelect={addFromProduct} multiplier={servingMultiplier} /> : (
             <EmptyState
               title="식단 리스트가 비어 있어요"
               className="py-6"
@@ -1116,7 +1126,7 @@ export default function DiaryPage() {
                   const foods = plannedFor(meal.key);
                   const kcal = foods.reduce((a, f) => a + (Number(f.calories) || 0), 0);
                   return (
-                    <MealSlot meal={meal.key} right={<span className="text-caption text-ink-2">식단 리스트</span>}>
+                    <MealSlot meal={meal.key} right={<span className="text-caption text-ink-2 line-clamp-1 max-w-48">{planTitle || "식단 리스트"}</span>}>
                       <p className="text-body text-ink">{foods.map((f) => f.name).join(" · ")}</p>
                       {kcal > 0 && <p className="text-caption text-ink-2 mt-0.5">계획 <Kcal value={Math.round(kcal)} className="text-caption" /></p>}
                       <div className="flex flex-wrap gap-1 mt-2 -ml-1">

@@ -20,13 +20,15 @@ export async function GET(request: NextRequest) {
   const sb = createServiceRoleClient() as any;
 
   const withGrid = request.nextUrl.searchParams.get("include") === "grid";
+  // ?latest=week — 가장 최근에 저장한 '한 주' 식단 하나 (사흘 이상 채운 것). 식단 기록이 다른 기기에서 짠 식단을 이어 볼 때
+  const latestWeek = request.nextUrl.searchParams.get("latest") === "week";
   const { data: plans, error } = await sb
     .from("saved_meal_plans")
     .select("id, title, tags, total_price, avg_daily_calories, avg_daily_protein, product_count, eating_out_count, source, updated_at, created_at, grid")
     .eq("user_id", userId)
     .eq("is_active", true)
     .order("updated_at", { ascending: false })
-    .limit(50);
+    .limit(latestWeek ? 10 : 50);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
@@ -35,8 +37,12 @@ export async function GET(request: NextRequest) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const out = (plans || []).map(({ grid, ...p }: { grid: Record<string, Record<string, any>> | null } & Record<string, unknown>) => {
     const filled_days = DAY_KEYS.filter(d => Object.values(grid?.[d] || {}).some(c => c && (c.product_id || c.name || c.type === "eating_out")));
-    return withGrid ? { ...p, filled_days, grid } : { ...p, filled_days };
+    return withGrid || latestWeek ? { ...p, filled_days, grid } : { ...p, filled_days };
   });
+  if (latestWeek) {
+    const plan = out.find((p: { filled_days: string[] }) => p.filled_days.length >= 3) || null;
+    return NextResponse.json({ plan: plan && { id: plan.id, title: plan.title, updated_at: plan.updated_at, grid: plan.grid } });
+  }
   return NextResponse.json({ plans: out });
 }
 
