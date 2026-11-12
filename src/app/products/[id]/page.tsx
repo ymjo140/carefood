@@ -69,6 +69,9 @@ type PriceInfo = {
   last_crawled_at: string | null;
   pack_count?: number | null;
   unit_price?: number | null;
+  /** 입점 업체 가격이면 업체명 (v_all_prices) */
+  seller_name?: string | null;
+  is_partner?: boolean | null;
 };
 
 
@@ -117,6 +120,7 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
   type ProductRow = {
     id: string; name: string; manufacturer: string | null;
     food_code: string | null; food_type: string | null;
+    data_source?: string | null; nutrition_source?: string | null;
     category_large: string | null; meal_type: string | null;
     serving_size_g: number | null; calories: number | null;
     nutrient_base_g: number | null; total_weight_g: number | null;
@@ -146,7 +150,7 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
   // 가격 데이터
   const { data: prices } = await supabase
     .from("v_all_prices" as any)
-    .select("platform, price, url, image_url, last_crawled_at, pack_count, unit_price")
+    .select("platform, price, url, image_url, last_crawled_at, pack_count, unit_price, seller_name, is_partner")
     .eq("product_id", productId) as { data: PriceInfo[] | null };
 
   // 0원·오래된 가격 빼고, 몰마다 가장 싼 것 하나, 싼 순 (src/lib/prices.ts)
@@ -338,6 +342,11 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
           )}
 
           <p className="text-caption text-ink-3 mt-3">막대는 1일 기준치 대비 (2,000kcal 성인 기준)</p>
+          {product.data_source === "partner" && (
+            <p className="text-caption text-ink-3 mt-1">
+              영양 정보: 판매 업체 제공({product.nutrition_source === "lab" ? "시험성적서" : product.nutrition_source === "calculated" ? "배합비로 계산한 값" : "포장 표시사항"})
+            </p>
+          )}
           {product.health_score != null && (
             <p className="text-caption text-ink-3 mt-1">건강 점수는 100g 당 열량·당류·포화지방·나트륨이 적을수록, 단백질·식이섬유가 많을수록 높아요</p>
           )}
@@ -457,7 +466,7 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
                 </div>
                 <TrackableLink href={bestPrice.url} productId={product.id} platform={bestPrice.platform} placement="detail_best"
                   className={buttonClass({ variant: "primary" })}>
-                  {PLATFORM_LABELS[bestPrice.platform] || bestPrice.platform}에서 사기
+                  {bestPrice.seller_name || PLATFORM_LABELS[bestPrice.platform] || bestPrice.platform}에서 사기
                   <Icon name="external" size={18} />
                 </TrackableLink>
               </div>
@@ -468,7 +477,7 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
                   <TrackableLink key={pp.platform} href={pp.url} productId={product.id} platform={pp.platform} placement="detail_other"
                     className="flex items-center gap-3 px-3 h-12 rounded-md hover:bg-sunken transition-colors">
                     <span className="flex-1 min-w-0 text-body text-ink">
-                      {PLATFORM_LABELS[pp.platform] || pp.platform}
+                      {pp.seller_name || PLATFORM_LABELS[pp.platform] || pp.platform}
                       {packLabel(pp) && <span className="block text-caption text-ink-2">{packLabel(pp)}</span>}
                     </span>
                     <Price value={pp.price} className="text-label" />
@@ -481,6 +490,7 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
           <div className="flex flex-col gap-1 mt-2 text-caption text-ink-2">
             {priceChecked && <p>{priceChecked} · 판매처에서 바뀌었을 수 있어요</p>}
             {sortedPrices.some((pp) => AFFILIATE_PLATFORMS.has(pp.platform)) && <p>{COUPANG_DISCLOSURE}</p>}
+            {sortedPrices.some((pp) => pp.is_partner) && <p>입점 업체 링크로 구매하면 케어푸드가 판매 수수료를 받을 수 있어요</p>}
           </div>
         </section>
       )}

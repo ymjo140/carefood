@@ -40,4 +40,5 @@ export const ADMIN_TABS = [
   { href: "/admin/odm", label: "ODM 수요 분석" },
   { href: "/admin/orders", label: "발주 관리" },
   { href: "/admin/reports", label: "신고" },
+  { href: "/admin/partners", label: "입점" },
 ];
