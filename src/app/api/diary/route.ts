@@ -140,7 +140,7 @@ const gramsOf = (v: unknown) => { const g = Number(v); return Number.isFinite(g)
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function productNutrients(sb: any, productId: string, wantG: number | null, mult: number): Promise<{ n: Nutrients; grams: number } | null> {
   const { data: p, error } = await sb.from("products")
-    .select("calories, protein_g, fat_g, carbs_g, sugar_g, sodium_mg, fiber_g, serving_size_g, nutrient_base_g, meal_role")
+    .select("name, calories, protein_g, fat_g, carbs_g, sugar_g, sodium_mg, fiber_g, serving_size_g, nutrient_base_g, meal_role")
     .eq("id", productId).maybeSingle();
   if (error) throw new Error(error.message);
   if (!p) return null;

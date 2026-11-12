@@ -313,6 +313,7 @@ export const HEALTH_GOAL_LABELS: Record<HealthGoal, { label: string; desc: strin
 type ServingBasis = {
   serving_size_g?: number | string | null;
   nutrient_base_g?: number | string | null;
+  name?: string | null;
   meal_role?: string | null;
 };
 const NUTRIENT_KEYS = ["calories", "protein_g", "carbs_g", "fat_g", "sodium_mg", "sugar_g", "fiber_g", "saturated_fat_g", "cholesterol_mg"] as const;
