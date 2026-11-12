@@ -8,6 +8,7 @@ import {
 import { getClientActorId } from "@/lib/actor-client";
 import { addDays, kstHour, monthDay, todayKst, weekday } from "@/lib/day";
 import { defaultServingG } from "@/lib/serving";
+import { PLAN_DAYS, cellFoods, planMealKey, readDraftGrid, weekdayKey, type PlanFood, type PlanGrid } from "@/lib/weekly-plan";
 import { NextMeal, pickNextMeal, type NextCandidate } from "./NextMeal";
 import PushPrompt from "@/components/PushPrompt";
 
@@ -176,6 +177,32 @@ function ProductList({ items, onSelect, multiplier = 1 }: { items: SearchResult[
   );
 }
 
+/* ── 식단 리스트에 담아 둔 음식 — 담아 둔 값(1회 기준)을 그대로 보여 준다 ── */
+const PLAN_DAY_LABEL: Record<string, string> = { mon: "월", tue: "화", wed: "수", thu: "목", fri: "금", sat: "토", sun: "일" };
+const PLAN_MEAL_LABEL: Record<string, string> = { breakfast: "아침", lunch: "점심", dinner: "저녁", supplement: "간식" };
+type PlannedRow = { key: string; day: string; meal: string; food: PlanFood };
+
+function PlannedList({ rows, onSelect }: { rows: PlannedRow[]; onSelect: (f: PlanFood) => void }) {
+  return (
+    <div className="flex flex-col max-h-60 overflow-y-auto -mx-3">
+      {rows.map((r) => (
+        <ListRow
+          key={r.key}
+          onClick={() => onSelect(r.food)}
+          title={r.food.name || "음식"}
+          meta={
+            <span className="flex flex-wrap gap-x-2">
+              <span>{PLAN_DAY_LABEL[r.day]}요일 {PLAN_MEAL_LABEL[r.meal]}</span>
+              {r.food.calories != null && <span><span className="num">{Math.round(r.food.calories)}</span>kcal</span>}
+            </span>
+          }
+          trailing={<span className="text-label font-bold text-brand-ink">추가</span>}
+        />
+      ))}
+    </div>
+  );
+}
+
 /* ── 일반 음식 리스트 ── */
 function CommonFoodList({ items, onSelect }: { items: CommonFood[]; onSelect: (f: CommonFood) => void }) {
   return (
@@ -273,6 +300,9 @@ export default function DiaryPage() {
   const showToast = toast.show; // 안정된 함수 — effect 의존성에 toast 객체를 넣지 않는다
   const [favorites, setFavorites] = useState<SearchResult[]>([]);
   const [weeklyItems, setWeeklyItems] = useState<SearchResult[]>([]);
+  // 식단 리스트 화면에서 짜 둔 한 주 (이 기기) — 요일·끼니가 맞으면 '계획대로 기록하기'
+  const [planGrid, setPlanGrid] = useState<PlanGrid | null>(null);
+  const [recordingPlan, setRecordingPlan] = useState<string | null>(null);
   const [weeklyTrend, setWeeklyTrend] = useState<{
     days: { date: string; label: string; dayOfWeek: string; calories: number; protein_g: number; count: number }[];
     weeklyAvg: { calories: number; protein_g: number; sodium_mg: number; goalAchievement: number } | null;
@@ -368,7 +398,10 @@ export default function DiaryPage() {
   }, [userId]);
 
   useEffect(() => {
+    const draft = readDraftGrid();
+    if (draft) { setPlanGrid(draft); return; } // eslint-disable-line react-hooks/set-state-in-effect -- 이 기기 저장소는 화면을 그린 뒤에 읽는다
     try {
+      // 예전 방식: 커뮤니티 '따라하기'가 남긴 목록
       const saved = localStorage.getItem("carefood_weekly_box");
       if (saved) {
         const box = JSON.parse(saved);
@@ -577,6 +610,34 @@ export default function DiaryPage() {
     loadWeeklyTrend();
   };
 
+  /** 식단 리스트 음식을 기록 — 제품이면 서버가 제품 값으로, 식단 서비스 메뉴·외식은 담아 둔 값으로 */
+  const postPlanned = async (meal: string, f: PlanFood, mult: number): Promise<boolean> => {
+    const base = { date, meal_type: meal, food_name: (f.name || "음식").slice(0, 80), serving_multiplier: mult };
+    const given = { ...base, calories: f.calories ?? null, protein_g: f.protein_g ?? null, carbs_g: f.carbs_g ?? null, fat_g: f.fat_g ?? null, sodium_mg: f.sodium_mg ?? null };
+    const post = (body: object) => fetch("/api/diary", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
+      .catch(() => null); // ds-allow: 네트워크 실패는 부르는 쪽에서 알림
+    if (f.product_id && f.type !== "eating_out") {
+      const res = await post({ ...base, product_id: f.product_id });
+      if (res?.status !== 404) return !!res?.ok;
+      // 식단 서비스 메뉴는 제품 DB 에 없다 — 식단 리스트에 담긴 값으로
+    }
+    return !!(await post(given))?.ok;
+  };
+  const recordPlanned = async (meal: string, foods: PlanFood[], label: string, mult = 1) => {
+    if (foods.length === 0) return;
+    setRecordingPlan(meal);
+    const results = await Promise.all(foods.map((f) => postPlanned(meal, f, mult)));
+    setRecordingPlan(null);
+    const ok = results.filter(Boolean).length;
+    if (ok === 0) { toast.show("기록하지 못했어요. 다시 시도해 주세요", { tone: "danger" }); return; }
+    if (ok < foods.length) toast.show(`${foods.length}개 중 ${ok}개만 기록했어요. 빠진 음식은 다시 추가해 주세요`, { tone: "danger" });
+    else toast.show(`${label}을 식단 리스트대로 기록했어요`);
+    setAddingMeal(null);
+    setServingMultiplier(1);
+    fetchDiary();
+    loadWeeklyTrend();
+  };
+
   // 사진 촬영/업로드 핸들러
   const handlePhotoCapture = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -675,6 +736,28 @@ export default function DiaryPage() {
   const todayStr = typeof window !== "undefined" ? todayKst() : "";
   const isToday = date === todayStr;
 
+  /* ── 식단 리스트 → 기록 ── 요일로만 짜는 식단이라 이번 주(오늘부터 6일 전까지)에만 맞춰 보인다 */
+  const planOk = !!planGrid && !!date && !!todayStr && date <= todayStr && date >= addDays(todayStr, -6);
+  const plannedFor = (meal: string) => (planOk && planGrid ? cellFoods(planGrid[weekdayKey(date)]?.[planMealKey(meal)]) : []);
+  const plannedRows = useMemo<PlannedRow[]>(() => {
+    if (!planGrid || !date) return [];
+    const today = weekdayKey(date);
+    const days = [today, ...PLAN_DAYS.filter((d) => d !== today)];
+    const first = addingMeal ? planMealKey(addingMeal) : "";
+    const meals = [first, "breakfast", "lunch", "dinner", "supplement"].filter((m, i, a) => m && a.indexOf(m) === i);
+    const out: PlannedRow[] = [];
+    const seen = new Set<string>();
+    for (const d of days) for (const m of meals) {
+      for (const f of cellFoods(planGrid[d]?.[m])) {
+        const k = f.product_id || f.name || "";
+        if (!k || seen.has(k)) continue;
+        seen.add(k);
+        out.push({ key: `${d}-${m}-${k}`, day: d, meal: m, food: f });
+      }
+    }
+    return out;
+  }, [planGrid, date, addingMeal]);
+
   /* ── 주간 스트립 데이터 ── */
   const weekDays = useMemo(() => {
     if (!date) return [];
@@ -720,7 +803,7 @@ export default function DiaryPage() {
           { value: "search", label: "검색" },
           { value: "photo", label: "사진" },
           { value: "favorites", label: "즐겨찾기", count: favorites.length },
-          { value: "weekly", label: "식단 리스트", count: weeklyItems.length },
+          { value: "weekly", label: "식단 리스트", count: planGrid ? plannedRows.length : weeklyItems.length },
           { value: "manual", label: "직접 입력" },
         ]}
         className="scroll-row"
@@ -791,7 +874,9 @@ export default function DiaryPage() {
         )}
 
         {addTab === "weekly" && (
-          weeklyItems.length > 0 ? <ProductList items={weeklyItems} onSelect={addFromProduct} multiplier={servingMultiplier} /> : (
+          planGrid && plannedRows.length > 0 ? (
+            <PlannedList rows={plannedRows} onSelect={(f) => addingMeal && recordPlanned(addingMeal, [f], MEAL_TYPES.find((m) => m.key === addingMeal)?.label || "끼니", servingMultiplier)} />
+          ) : !planGrid && weeklyItems.length > 0 ? <ProductList items={weeklyItems} onSelect={addFromProduct} multiplier={servingMultiplier} /> : (
             <EmptyState
               title="식단 리스트가 비어 있어요"
               className="py-6"
@@ -1026,7 +1111,22 @@ export default function DiaryPage() {
 
             return (
               <div key={meal.key} className="flex flex-col gap-2">
-                {isEmpty && !isAdding ? (
+                {isEmpty && !isAdding && plannedFor(meal.key).length > 0 ? (() => {
+                  // 식단 리스트에 이 요일·끼니가 있으면 — 계획대로 한 번에, 아니면 다른 음식
+                  const foods = plannedFor(meal.key);
+                  const kcal = foods.reduce((a, f) => a + (Number(f.calories) || 0), 0);
+                  return (
+                    <MealSlot meal={meal.key} right={<span className="text-caption text-ink-2">식단 리스트</span>}>
+                      <p className="text-body text-ink">{foods.map((f) => f.name).join(" · ")}</p>
+                      {kcal > 0 && <p className="text-caption text-ink-2 mt-0.5">계획 <Kcal value={Math.round(kcal)} className="text-caption" /></p>}
+                      <div className="flex flex-wrap gap-1 mt-2 -ml-1">
+                        <Button size="sm" variant="secondary" icon="check" loading={recordingPlan === meal.key}
+                          onClick={() => recordPlanned(meal.key, foods, meal.label)}>계획대로 기록하기</Button>
+                        <Button size="sm" variant="ghost" onClick={toggleAdd}>다른 음식 기록하기</Button>
+                      </div>
+                    </MealSlot>
+                  );
+                })() : isEmpty && !isAdding ? (
                   <MealSlot meal={meal.key} empty onAdd={toggleAdd} addLabel={`${meal.label} 기록하기`} />
                 ) : (
                   <MealSlot

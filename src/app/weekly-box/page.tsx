@@ -15,43 +15,17 @@ import {
 import { ORDERING_ENABLED } from "@/lib/features";
 import { ShoppingList } from "./ShoppingList";
 import { getClientActorId } from "@/lib/actor-client";
+import { DRAFT_KEY, cellFoods, type PlanCell, type PlanFood, type PlanGrid } from "@/lib/weekly-plan";
 
 /* ───── 타입 ───── */
-type CellData = {
-  product_id?: string;
-  name?: string;
-  calories?: number;
-  protein_g?: number;
-  carbs_g?: number;
-  fat_g?: number;
-  sodium_mg?: number;
-  /** 한 끼 값 — 묶음이면 개수로 나눈 값 */
-  price?: number;
-  /** 묶음일 때 판매 가격과 개수 ("12개 34,300원") */
-  pack_price?: number;
-  pack_count?: number;
-  platform?: string;
-  url?: string;
-  type?: "product" | "eating_out";
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  _foods?: any[];
-} | null;
-
-type GridData = Record<string, Record<string, CellData>>;
-type Food = Omit<NonNullable<CellData>, "_foods">;
+type CellData = PlanCell;
+type GridData = PlanGrid;
+type Food = PlanFood;
 
 /** 묶음 가격이면 판매 가격·개수 */
 function packOf(p: { price?: number; pack_count?: number | null } | undefined): { pack_price?: number; pack_count?: number } {
   const n = Number(p?.pack_count) || 1;
   return n > 1 && p?.price ? { pack_price: p.price, pack_count: n } : {};
-}
-
-/** 한 칸에 든 음식 — 여럿이면 _foods, 하나면 칸 자체 */
-function cellFoods(c: CellData): Food[] {
-  if (!c) return [];
-  if (Array.isArray(c._foods) && c._foods.length > 0) return c._foods as Food[];
-  const { _foods: _, ...one } = c; // eslint-disable-line @typescript-eslint/no-unused-vars
-  return one.product_id || one.name ? [one] : [];
 }
 
 /** 음식 목록 → 한 칸 (첫 음식이 대표, 영양·가격은 합) */
@@ -470,7 +444,6 @@ function FoodLink({ id, children }: { id: string; children: ReactNode }) {
   );
 }
 
-const DRAFT_KEY = "carefood_weekly_draft";
 
 /* ───── 끌어서 놓기 조각 ───── */
 const dayLabel = (k: string) => DAYS.find(d => d.key === k)?.label || "";
