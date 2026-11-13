@@ -41,7 +41,12 @@ function key() {
  */
 function prevKeys() {
   const derived = process.env.SUPABASE_SERVICE_ROLE_KEY ? `carefood-actor-v1:${process.env.SUPABASE_SERVICE_ROLE_KEY}` : "";
-  const list = [...new Set([process.env.SESSION_SECRET_PREVIOUS?.trim() || "", derived])].filter((s) => s && s !== secret());
+  const previous = process.env.SESSION_SECRET_PREVIOUS?.trim() || "";
+  const list = [...new Set([previous, derived])].filter((s) => s && s !== secret());
+  if (!prevKeysPromise && process.env.SESSION_SECRET) {
+    // 키를 옮기기 전에 확인할 수 있게 — 값은 남기지 않고 맞는지만 (서버 로그)
+    console.info(`[actor] SESSION_SECRET_PREVIOUS: ${!previous ? "없음" : previous === derived ? "지금 service_role 키와 맞음" : "지금 service_role 키와 다름"}`);
+  }
   prevKeysPromise ||= Promise.all(list.map(hmacKey));
   return prevKeysPromise;
 }
