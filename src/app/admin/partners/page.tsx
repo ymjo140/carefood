@@ -202,7 +202,8 @@ function NewPartner({ onDone, onFail }: { onDone: (m: string) => void; onFail: (
     <Card tone="sunken">
       <form onSubmit={submit} className="grid grid-cols-1 sm:grid-cols-5 gap-3 items-end">
         <Field label="업체 이름"><Input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} placeholder="그리팅" required /></Field>
-        <Field label="영문 이름" hint="가격 출처 이름"><Input value={f.slug} onChange={(e) => setF({ ...f, slug: e.target.value })} placeholder="greating" required /></Field>
+        {/* 도움말을 칸 아래에 두면 이 칸만 높아져 줄이 어긋난다 — 라벨에 함께 */}
+        <Field label="영문 이름 · 가격 출처"><Input value={f.slug} onChange={(e) => setF({ ...f, slug: e.target.value })} placeholder="greating" required /></Field>
         <Field label="유형">
           <Select value={f.kind} onChange={(e) => setF({ ...f, kind: e.target.value })}>
             {Object.entries(KIND_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
