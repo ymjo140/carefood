@@ -8,7 +8,7 @@ import { unitPrice } from "@/lib/prices";
 import { sendImpressions } from "@/lib/impressions";
 import {
   Badge, BottomBar, Button, Card, CardActions, ConfirmSheet, EmptyState, Input, Kcal, LinkButton, ListRow,
-  IconButton, MacroGrid, MacroInline, MealSlot, Page, PageLoading, Price, ProgressBar, SearchField, SectionHeader, Sheet, SkeletonList,
+  IconButton, MacroGrid, MacroInline, MealSlot, Page, PageHeader, PageLoading, Price, ProgressBar, SearchField, SectionHeader, Sheet, SkeletonList,
   Stat, Tabs, TextLink, Thumb, cn, useToast,
   DragArea, DragGhost, DragHandle, useDragItem, useDropTarget, type DragData,
   Chip, ChipRow, FoodEntryForm, type FoodBase, type FoodEntry, Field, Select,
@@ -660,6 +660,8 @@ export default function WeeklyBoxPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // 이미 짠 식단이 있으면 덮어쓰기 전에 묻는다 — 전에는 누르자마자 손으로 짠 7일이 사라졌다
+  const [confirmFill, setConfirmFill] = useState(false);
   const generatePlan = async () => {
     const who = familyList.find((f) => f.id === forWhom);
     if (who) {
@@ -677,7 +679,7 @@ export default function WeeklyBoxPage() {
       setGrid(precomputed.grid); setPlanTitle(precomputed.title); setPlanId(null); countFill(precomputed.grid);
       setPrecomputed(null); setPreloading(true);
       fetchAndBuildGrid().then(r => { if (r) setPrecomputed(r); setPreloading(false); }).catch(() => setPreloading(false));
-      toast.show("AI 추천으로 7일을 채웠어요");
+      toast.show("추천 식단으로 7일을 채웠어요");
       return;
     }
     setGenerating(true);
@@ -685,7 +687,7 @@ export default function WeeklyBoxPage() {
       const result = await fetchAndBuildGrid();
       if (!result) { toast.show("식단을 만들지 못했어요. 프로필을 확인해 주세요", { tone: "danger" }); return; }
       setGrid(result.grid); setPlanTitle(result.title); setPlanId(null); countFill(result.grid);
-      toast.show("AI 추천으로 7일을 채웠어요");
+      toast.show("추천 식단으로 7일을 채웠어요");
     } catch { toast.show("식단을 만들지 못했어요. 다시 시도해 주세요", { tone: "danger" }); }
     finally { setGenerating(false); }
   };
@@ -913,6 +915,7 @@ export default function WeeklyBoxPage() {
 
   return (
     <Page width="narrow">
+    <PageHeader title="식단 리스트" description="일주일 식단을 짜 두면 식단 기록에서 계획대로 한 번에 기록할 수 있어요" />
     <DragArea
       onDrop={onDrop}
       describe={(d) => String(d?.label || "항목")}
@@ -1014,16 +1017,14 @@ export default function WeeklyBoxPage() {
         </div>
 
         <div className="flex flex-col gap-3 mt-6">
-          <div>
+          <Field label="식단 이름">
             <Input
               value={planTitle}
               onChange={e => setPlanTitle(e.target.value)}
-              placeholder="식단 이름"
-              aria-label="식단 이름"
-              className="font-bold"
+              placeholder="예: 체중관리 첫 주"
+              name="plan_title"
             />
-            <p className="text-caption text-ink-2 mt-1.5">영양 밸런스를 맞춰 7일을 구성해요</p>
-          </div>
+          </Field>
           {familyList.length > 0 && (
             <Field label="누구 기준으로 채울까요">
               <Select value={forWhom} onChange={(e) => setForWhom(e.target.value)}>
@@ -1033,8 +1034,8 @@ export default function WeeklyBoxPage() {
             </Field>
           )}
           <div className="flex gap-2">
-            <Button variant="secondary" block onClick={generatePlan} loading={generating || (!precomputed && preloading)}>
-              {generating ? "만드는 중" : !precomputed && preloading ? "준비 중" : "AI 추천으로 채우기"}
+            <Button variant="secondary" block onClick={() => (stats.products > 0 ? setConfirmFill(true) : generatePlan())} loading={generating || (!precomputed && preloading)}>
+              {generating ? "만드는 중" : !precomputed && preloading ? "준비 중" : "추천으로 채우기"}
             </Button>
             <Button block onClick={savePlan} disabled={stats.products === 0} loading={saving}>
               {saving ? "저장 중" : "저장하기"}
@@ -1166,7 +1167,7 @@ export default function WeeklyBoxPage() {
         ) : (
           <EmptyState
             title="아직 저장한 식단이 없어요"
-            description="위에서 AI 추천으로 채우거나, 커뮤니티에서 따라하기 해 보세요"
+            description="위에서 추천으로 채우거나, 커뮤니티에서 따라하기 해 보세요"
             action={<LinkButton href="/community" size="sm" variant="secondary">커뮤니티 보기</LinkButton>}
           />
         )}
@@ -1242,6 +1243,15 @@ export default function WeeklyBoxPage() {
         <p className="text-caption text-ink-2 mt-3">카드의 손잡이를 위쪽 요일로 끌어 놓아도 돼요</p>
       </Sheet>
 
+      <ConfirmSheet
+        open={confirmFill}
+        onClose={() => setConfirmFill(false)}
+        onConfirm={() => { setConfirmFill(false); generatePlan(); }}
+        title="지금 식단을 추천 식단으로 바꿀까요?"
+        description="저장하지 않은 지금 7일 식단은 사라져요"
+        confirmLabel="바꾸기"
+        tone="primary"
+      />
       <ConfirmSheet
         open={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}
