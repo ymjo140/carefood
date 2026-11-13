@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { cn } from "./cn";
 import { Icon, type IconName } from "./Icon";
+import { ProductImage } from "./ProductImage";
 
 /** 프로필 동그라미 — 이름 첫 글자 */
 export function Avatar({ name, size = "md", className }: { name?: string | null; size?: "xs" | "sm" | "md" | "lg"; className?: string }) {
@@ -51,9 +52,8 @@ export function Estimate({ children, className }: { children: ReactNode; classNa
 /** 썸네일 자리 — 이미지 없을 때 */
 export function Thumb({ src, alt = "", size = 48, className }: { src?: string | null; alt?: string; size?: number; className?: string }) {
   return (
-    <span className={cn("block rounded-md bg-sunken overflow-hidden shrink-0", className)} style={{ width: size, height: size }}>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      {src ? <img src={src} alt={alt} className="w-full h-full object-cover" loading="lazy" /> : null}
+    <span className={cn("block rounded-md overflow-hidden shrink-0", className)} style={{ width: size, height: size }}>
+      <ProductImage src={src} alt={alt} iconSize={Math.round(size * 0.45)} />
     </span>
   );
 }

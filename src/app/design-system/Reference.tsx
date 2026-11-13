@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Badge, Button, Card, CardActions, Chip, ChipRow, ConfirmSheet, EmptyState, Field, Icon, ICON_NAMES, IconButton, IconLink,
   Input, Kcal, LinkButton, ListRow, MacroGrid, MacroInline, MealSlot, MealTag, Notice, Estimate, Page, PageHeader, Price,
-  ProgressBar, SearchField, SectionHeader, Select, Sheet, Spinner, Stat, Steps, Tabs, Textarea, TextLink, Thumb,
+  ProgressBar, SearchField, SectionHeader, Select, Sheet, Spinner, Stat, Steps, Tabs, Textarea, TextLink, Thumb, ProductImage,
   Avatar, useToast, cn, type BadgeTone,
   BottomNavItems, SkeletonList, FoodEntryForm, DragArea, DragGhost, DragHandle, useDragItem, useDropTarget, type DragData, ChoiceCard, ChoiceList, LinkTabs, RatingStars, RatingInput, ScaleInput, QuickRating, PostAuthor, PostAction, PostActions, PostTags, ThreadItem, MealAttach, PlanAttach, ProductTagLinks, PhotoGrid, PollAttach, DayDots, Switch,
 } from "@/components/ui";
@@ -716,6 +716,11 @@ export default function Reference({ status }: { status: DsStatus }) {
           <Demo label="목록 한 줄" code="<ListRow leading title meta trailing />" className="p-2">
             <ListRow onClick={() => toast.show("고른 제품을 담았어요")} leading={<Thumb size={44} />} title="닭가슴살 스테이크 오리지널" meta={<><Kcal value={128} className="text-caption" /> · 단백질 <span className="num">23</span>g</>} trailing={<Price value={2900} className="text-label" />} />
             <ListRow onClick={() => toast.show("고른 제품을 담았어요")} leading={<Thumb size={44} />} title="그릭요거트 플레인 무가당" meta={<><Kcal value={95} className="text-caption" /> · 단백질 <span className="num">9</span>g</>} trailing={<Price value={3500} className="text-label" />} />
+          </Demo>
+          <Demo label="제품 사진 — 사진이 없거나 안 열리면 그릇 아이콘" code='<ProductImage src={url} />  · <Thumb size={44} />'>
+            <div className="flex gap-3">
+              <span className="block size-28 rounded-md overflow-hidden"><ProductImage src={null} /></span>
+            </div>
           </Demo>
           <Demo label="아바타 · 작성자 줄">
             <div className="flex items-center gap-3">

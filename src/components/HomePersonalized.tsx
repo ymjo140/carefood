@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { PLATFORM_LABELS } from "@/lib/platforms";
 import Link from "next/link";
-import { Badge, Price, SectionHeader, TextLink } from "@/components/ui";
+import { Badge, Button, EmptyState, Price, ProductImage, SectionHeader, Skeleton, TextLink } from "@/components/ui";
 import { useImpressions, type Placement } from "@/lib/impressions";
 
 const CONCERN_LABELS: Record<string, string> = {
@@ -65,6 +65,8 @@ export default function HomePersonalized({ cold = false }: { cold?: boolean }) {
   const [profile, setProfile] = useState<any>(null);
   const [products, setProducts] = useState<QuickProduct[]>([]);
   const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const [hasHealthData, setHasHealthData] = useState(false);
   const [learned, setLearned] = useState(0);
 
@@ -109,20 +111,23 @@ export default function HomePersonalized({ cold = false }: { cold?: boolean }) {
           health: healthData,
         }),
       })
-        .then((r) => r.json())
-        .then((data) => {
+        .then(async (r) => {
+          const data = await r.json();
+          if (!r.ok) throw new Error(data.error || String(r.status));
           setProducts(pickSlots(data.recommendations || []));
           setLearned(data.learned?.samples || 0);
+          setFailed(false);
         })
-        .catch(console.error)
+        .catch(() => setFailed(true)) // 실패 상태로 보여 주고 다시 불러오기를 준다
         .finally(() => setLoading(false));
     } catch {
-      setLoading(false);
+      setLoading(false); // ds-allow: 저장된 프로필을 못 읽으면 처음 온 사람처럼 아무것도 그리지 않는다
     }
-  }, [cold]);
+  }, [cold, attempt]);
 
   if (cold) {
-    if (loading || products.length === 0) return null;
+    if (loading) return <CardsSkeleton title />;
+    if (products.length === 0) return null; // 첫 방문 추천은 보조 — 못 불러오면 칸을 숨기고 아래 전체 제품이 받는다
     return (
       <section className="pt-8">
         <SectionHeader title="지금 살 수 있는 건강한 한 끼" />
@@ -132,7 +137,8 @@ export default function HomePersonalized({ cold = false }: { cold?: boolean }) {
     );
   }
 
-  if (loading || !profile) return null;
+  if (loading) return <CardsSkeleton title />;
+  if (!profile) return null;
 
   // 섹션 헤더 라벨: 고른 목표 → v2 concerns → v1 persona
   //   (concerns 는 목표 일부만 옮겨 담아 '근력 강화'를 골라도 기본값 '활력충전'으로 보였다)
@@ -157,13 +163,22 @@ export default function HomePersonalized({ cold = false }: { cold?: boolean }) {
       {/* 전체 목록은 바로 아래 '전체 제품'이 맡는다 */}
       <SectionHeader title={`${sectionLabel} 추천`} />
 
-      {products.length > 0 && <ProductCards products={products} showMatch />}
+      {failed ? (
+        <EmptyState title="추천을 불러오지 못했어요" description="잠시 뒤 다시 불러와 주세요"
+          action={<Button variant="secondary" size="sm" icon="refresh" onClick={() => { setLoading(true); setAttempt((n) => n + 1); }}>다시 불러오기</Button>} />
+      ) : products.length > 0 ? (
+        <ProductCards products={products} showMatch />
+      ) : (
+        <EmptyState title="조건에 맞는 제품을 아직 못 찾았어요" description="목표나 알레르기 조건을 바꾸면 더 찾을 수 있어요"
+          action={<TextLink href="/me/profile">내 조건 바꾸기</TextLink>} />
+      )}
       {learned > 0 && <p className="text-caption text-ink-2 mt-1">맛 평가 <span className="num">{learned}</span>개로 입맛을 맞춰 골랐어요</p>}
 
-      {/* 건강검진 입력 유도 — 추천을 가리지 않게 한 줄로 */}
+      {/* 건강검진 입력 유도 — 추천을 가리지 않게 한 줄로 (좁은 화면에서 '·' 만 남지 않게 문장과 링크를 나눈다) */}
       {!hasHealthData && (
-        <p className="text-label text-ink-2 mt-2">
-          혈당·혈압을 입력하면 더 정확하게 골라요 · <TextLink href="/health">건강검진 정보 입력하기</TextLink>
+        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-label text-ink-2 mt-2">
+          <span>혈당·혈압을 입력하면 더 정확하게 골라요</span>
+          <TextLink href="/health">건강검진 정보 입력하기</TextLink>
         </p>
       )}
     </section>
@@ -195,10 +210,8 @@ export function ProductCards({ products, showMatch, onOpen, placement = "home_re
           onClick={onOpen}
           className="block w-44 shrink-0 rounded-lg border border-line bg-surface overflow-hidden transition-colors hover:border-line-strong"
         >
-          <div className="h-28 bg-sunken relative">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            {imageUrl && <img src={imageUrl} alt="" className="w-full h-full object-cover" loading="lazy"
-              onError={(e) => { e.currentTarget.style.visibility = "hidden"; }} /> /* 판매처 이미지가 안 열리면 깨진 그림 대신 빈 칸 */}
+          <div className="h-28 relative">
+            <ProductImage src={imageUrl} />
             {showMatch && <Badge tone="brand" className="absolute top-2 left-2 bg-surface">적합도 <span className="num">{p.match_score}</span></Badge>}
           </div>
           <div className="p-3">
@@ -213,5 +226,26 @@ export function ProductCards({ products, showMatch, onOpen, placement = "home_re
       );
     })}
   </div>
+  );
+}
+
+/** 추천 칸 자리 — 카드 모양 그대로 */
+function CardsSkeleton({ title = false }: { title?: boolean }) {
+  return (
+    <section className="pt-8" role="status" aria-label="추천을 불러오는 중">
+      {title && <Skeleton className="h-6 w-40 mb-3" />}
+      <div className="flex gap-3 overflow-hidden">
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="w-44 shrink-0 rounded-lg border border-line bg-surface overflow-hidden">
+            <Skeleton className="h-28" />
+            <div className="p-3 flex flex-col gap-2">
+              <Skeleton className="h-3 w-16" />
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-20" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }

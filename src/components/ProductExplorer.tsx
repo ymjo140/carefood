@@ -6,7 +6,7 @@ import Link from "next/link";
 import type { ProductWithPrices, TasteLevel, DishCategory } from "@/types/database";
 import { DISH_CATEGORY_LABELS } from "@/types/database";
 import { useFavorites } from "@/hooks/useFavorites";
-import { Badge, Button, Card, Chip, cn, EmptyState, Icon, IconButton, Input, Kcal, MACRO_META, Notice, Price, ProgressBar, SearchField, SectionHeader, Sheet, SkeletonList, Tabs, TextLink, type BadgeTone, type Macro } from "@/components/ui";
+import { Badge, Button, Card, Chip, cn, EmptyState, Icon, IconButton, Input, Kcal, MACRO_META, Notice, Price, ProductImage, ProgressBar, SearchField, SectionHeader, Sheet, SkeletonList, Tabs, TextLink, type BadgeTone, type Macro } from "@/components/ui";
 
 /* ───── 타입 ───── */
 type TasteFilters = {
@@ -436,17 +436,15 @@ function ProductCard({ product, isFavorite, onToggleFavorite }: {
   const bestPrice = prices.length > 0 ? Math.min(...prices.map(p => p.price!)) : null;
   const imageUrl = (product as ProductWithPrices & { image_url?: string }).image_url || prices.find(p => p.image_url)?.image_url;
   const matchScore = (product as ProductWithPrices & { match_score?: number }).match_score;
-  const tasteScore = (product as ProductWithPrices & { taste_score?: number }).taste_score;
-  const nutritionScore = (product as ProductWithPrices & { nutrition_score?: number }).nutrition_score;
   const matchReasons = (product as ProductWithPrices & { match_reasons?: string[] }).match_reasons;
+  const reasons = matchReasons?.length ? matchReasons.slice(0, 3) : (product.functional_tags || []).slice(0, 2).map((t: string) => ALL_TAG_LABELS[t] || t);
   const href = `/products/${product.id}`;
 
   return (
     <Card className="flex gap-4 relative">
       {/* 이미지 */}
-      <Link href={href} tabIndex={-1} aria-hidden="true" className="size-22 sm:size-28 rounded-md overflow-hidden shrink-0 bg-sunken">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        {imageUrl ? <img src={imageUrl} alt="" className="w-full h-full object-cover" loading="lazy" /> : null}
+      <Link href={href} tabIndex={-1} aria-hidden="true" className="size-22 sm:size-28 rounded-md overflow-hidden shrink-0">
+        <ProductImage src={imageUrl} />
       </Link>
 
       {/* 즐겨찾기 */}
@@ -471,16 +469,13 @@ function ProductCard({ product, isFavorite, onToggleFavorite }: {
           {matchScore == null && <HealthBadge score={product.health_score} />}
         </div>
 
-        {/* 점수 + 태그 */}
-        <div className="flex flex-wrap items-center gap-1.5 mb-2">
-          {matchScore != null && <Badge tone={scoreTone(matchScore)} className="font-bold">매칭 <span className="num">{matchScore}</span>점</Badge>}
-          {tasteScore != null && <Badge>맛 <span className="num">{tasteScore}</span></Badge>}
-          {nutritionScore != null && <Badge>영양 <span className="num">{nutritionScore}</span></Badge>}
-          {matchReasons?.slice(0, 3).map((r: string) => <Badge key={r} tone="brand">{r}</Badge>)}
-          {!matchReasons?.length && product.functional_tags?.slice(0, 2).map((t: string) => (
-            <Badge key={t} tone="brand">{ALL_TAG_LABELS[t] || t}</Badge>
-          ))}
-        </div>
+        {/* 적합도 하나 + 이유는 글자 한 줄 (배지를 줄줄이 늘어놓지 않는다 — 맛·영양 점수는 상세에서) */}
+        {(matchScore != null || reasons.length > 0) && (
+          <div className="flex items-center gap-2 mb-2 min-w-0">
+            {matchScore != null && <Badge tone={scoreTone(matchScore)} className="font-bold shrink-0">적합도 <span className="num">{matchScore}</span></Badge>}
+            {reasons.length > 0 && <p className="text-caption text-ink-2 truncate">{reasons.join(" · ")}</p>}
+          </div>
+        )}
 
         {/* 칼로리 + 가격 */}
         <div className="flex items-baseline justify-between gap-3 mt-auto">

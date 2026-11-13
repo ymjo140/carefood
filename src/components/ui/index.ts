@@ -19,6 +19,7 @@ export { Page, PageHeader, SectionHeader, EmptyState, Spinner, PageLoading, Bott
 export { MACRO_META, ProgressBar, MacroStat, MacroGrid, MacroInline, Stat, Kcal, Price, type Macro } from "./Nutrition";
 export { MEAL_META, mealMeta, MealTag, MealSlot, type MealKey } from "./Meal";
 export { Avatar, ListRow, Thumb, Notice, Steps, Estimate } from "./Misc";
+export { ProductImage } from "./ProductImage";
 export { ChoiceCard } from "./ChoiceCard";
 export { ChoiceList, type ChoiceTone } from "./ChoiceList";
 export { LinkTabs, ADMIN_TABS } from "./LinkTabs";
