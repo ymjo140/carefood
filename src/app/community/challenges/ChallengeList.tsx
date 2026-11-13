@@ -81,10 +81,14 @@ export function ChallengeList() {
                 <div className="flex flex-col gap-0.5">
                   <h2 className="text-body font-bold text-ink">{c.title}</h2>
                   <p className="text-label text-ink-2">{c.rule}을 <span className="num">{c.days}</span>일 동안 채워요</p>
-                  <p className="text-caption text-ink-2">
-                    지금 <span className="num">{c.active_count}</span>명이 하고 있어요
-                    {c.finished_count > 0 && <> · <span className="num">{c.finished_count}</span>명이 마쳤어요</>}
-                  </p>
+                  {/* 0명이면 '지금 0명이 하고 있어요' 대신 아무것도 적지 않는다 — 참여 수는 사람이 있을 때만 */}
+                  {(c.active_count > 0 || c.finished_count > 0) && (
+                    <p className="text-caption text-ink-2">
+                      {c.active_count > 0 && <>지금 <span className="num">{c.active_count}</span>명이 하고 있어요</>}
+                      {c.active_count > 0 && c.finished_count > 0 && " · "}
+                      {c.finished_count > 0 && <><span className="num">{c.finished_count}</span>명이 마쳤어요</>}
+                    </p>
+                  )}
                 </div>
 
                 {run ? (
