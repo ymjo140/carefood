@@ -151,7 +151,7 @@ export function MeView() {
           <Row icon="edit" title="관심사·목표·신체 정보" meta={local ? [goalText, targetText].filter(Boolean).join(" · ") : undefined} href="/me/profile" />
           <Row icon="alert" title="알레르기·맛 선호" meta={local ? `알레르기 ${allergyText}` : undefined} href="/me/profile#allergies" />
           <Row icon="info" title="건강검진 정보" meta={local ? (local.hasHealth ? "입력했어요" : "혈당·혈압을 넣으면 더 정확하게 골라요") : undefined} href="/health" />
-          <Row icon="list" title="영양 리포트" href="/health/report" />
+          <Row icon="list" title="건강검진 영양 리포트" meta="입력한 혈당·혈압 수치로 정리" href="/health/report" />
         </ul>
         <p className="flex items-center gap-1.5 text-caption text-ink-2 mt-2">
           <Icon name="lock" size={14} className="shrink-0" />건강 정보는 나만 봐요. 커뮤니티 글에는 나오지 않아요
@@ -168,7 +168,7 @@ export function MeView() {
           <Row icon="bell" title="알림 설정" meta="끼니 기록·주간 요약·커뮤니티 소식" href="/me/notifications" />
           <Row icon="user" title="차단한 사람" meta="차단을 풀 수 있어요" href="/me/blocked" />
           <Row icon="users" title="관심 표시한 공구" href="/group-buy?view=mine" />
-          <Row icon="notebook" title="주간 식단 리포트" href="/diary/report" />
+          <Row icon="notebook" title="주간 식단 리포트" meta="지난 7일 식단 기록으로 정리" href="/diary/report" />
           <Row icon="users" title="가족 건강 관리" meta="로그인하면 가족 프로필을 함께 관리해요" href="/family" />
         </ul>
       </section>
