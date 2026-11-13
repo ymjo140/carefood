@@ -35,17 +35,39 @@ function key() {
   return keyPromise;
 }
 
+const PREFIX = "carefood-actor-v1:";
+/** 손으로 넣은 옛 키 값 다듬기 — 따옴표·띄어쓰기를 걷고, 앞말이 빠졌으면 붙인다 */
+function normalizePrevious(v: string | undefined) {
+  let s = (v || "").trim().replace(/^["']|["']$/g, "").trim();
+  if (!s) return "";
+  if (s.startsWith(PREFIX)) s = PREFIX + s.slice(PREFIX.length).trim();
+  else if (/^(eyJ|sb_secret_)/.test(s)) s = PREFIX + s;
+  return s;
+}
+/** JWT 의 role 만 (서명은 보지 않는다 — 진단용) */
+function jwtRole(t: string) {
+  try { return JSON.parse(atob(t.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))).role || "?"; } catch { return "?"; } // ds-allow: 진단 문구용
+}
+
 /**
  * 바꾸기 전 서명 키들 (옮겨 가는 동안만) — SESSION_SECRET_PREVIOUS, 그리고 SESSION_SECRET 이 없던 때처럼
  * service_role 키에서 파생한 값. (service_role 키를 새 secret 키로 바꾸면 뒤엣것은 저절로 달라지므로 앞엣것이 있어야 한다)
  */
 function prevKeys() {
-  const derived = process.env.SUPABASE_SERVICE_ROLE_KEY ? `carefood-actor-v1:${process.env.SUPABASE_SERVICE_ROLE_KEY}` : "";
-  const previous = process.env.SESSION_SECRET_PREVIOUS?.trim() || "";
+  const derived = process.env.SUPABASE_SERVICE_ROLE_KEY ? `${PREFIX}${process.env.SUPABASE_SERVICE_ROLE_KEY}` : "";
+  const previous = normalizePrevious(process.env.SESSION_SECRET_PREVIOUS);
   const list = [...new Set([previous, derived])].filter((s) => s && s !== secret());
   if (!prevKeysPromise && process.env.SESSION_SECRET) {
     // 키를 옮기기 전에 확인할 수 있게 — 값은 남기지 않고 맞는지만 (서버 로그)
-    console.info(`[actor] SESSION_SECRET_PREVIOUS: ${!previous ? "없음" : previous === derived ? "지금 service_role 키와 맞음" : "지금 service_role 키와 다름"}`);
+    const raw = process.env.SESSION_SECRET_PREVIOUS || "";
+    const keyPart = previous.replace(PREFIX, "");
+    const hint = [
+      `앞말 ${raw.trim().startsWith(PREFIX) ? "있음" : "없음"}`,
+      `키 모양 ${keyPart.startsWith("eyJ") ? "legacy(JWT)" : keyPart.startsWith("sb_secret_") ? "새 secret" : keyPart.startsWith("sb_publishable_") ? "publishable" : "알 수 없음"}`,
+      `키 역할 ${/^eyJ/.test(keyPart) ? jwtRole(keyPart) : "-"}`,
+      `길이 ${keyPart.length === (process.env.SUPABASE_SERVICE_ROLE_KEY || "").length ? "같음" : "다름"}`,
+    ].join(" · ");
+    console.info(`[actor] SESSION_SECRET_PREVIOUS: ${!previous ? "없음" : previous === derived ? "지금 service_role 키와 맞음" : `지금 service_role 키와 다름 (${hint})`}`);
   }
   prevKeysPromise ||= Promise.all(list.map(hmacKey));
   return prevKeysPromise;
