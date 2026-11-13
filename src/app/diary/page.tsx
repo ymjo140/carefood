@@ -169,7 +169,7 @@ function ProductList({ items, onSelect, multiplier = 1 }: { items: SearchResult[
               {pro != null && <span>단백질 <span className="num">{pro}</span>g</span>}
             </span>
           }
-          trailing={<span className="text-label font-bold text-brand-ink">추가</span>}
+          trailing={<span className="text-label font-bold text-brand-ink">기록</span>}
         />
         );
       })}
@@ -196,7 +196,7 @@ function PlannedList({ rows, onSelect }: { rows: PlannedRow[]; onSelect: (f: Pla
               {r.food.calories != null && <span><span className="num">{Math.round(r.food.calories)}</span>kcal</span>}
             </span>
           }
-          trailing={<span className="text-label font-bold text-brand-ink">추가</span>}
+          trailing={<span className="text-label font-bold text-brand-ink">기록</span>}
         />
       ))}
     </div>
@@ -254,7 +254,7 @@ function CalorieRing({ consumed, goal }: { consumed: number; goal: number }) {
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         <span className="num text-display font-bold text-ink leading-none">
-          <span className="highlight">{isOver ? `+${consumed - goal}` : remaining}</span>
+          <span className="highlight">{isOver ? `+${(consumed - goal).toLocaleString("ko-KR")}` : remaining.toLocaleString("ko-KR")}</span>
         </span>
         <span className="text-label text-ink-2 mt-1">
           {isOver ? "kcal 초과" : "kcal 남음"}
@@ -271,6 +271,10 @@ export default function DiaryPage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [addingMeal, setAddingMeal] = useState<string | null>(null);
+  // 끼니 칸을 열면 그 칸을 화면 위로 — 아래쪽 끼니를 열면 검색 결과가 화면 밖에 나와 보이지 않았다
+  useEffect(() => {
+    if (addingMeal) document.getElementById(`meal-${addingMeal}`)?.scrollIntoView({ block: "start" });
+  }, [addingMeal]);
   const [addTab, setAddTab] = useState<"search" | "favorites" | "weekly" | "manual" | "photo">("search");
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
@@ -899,7 +903,7 @@ export default function DiaryPage() {
           <div>
             {!photoPreview ? (
               <div className="flex flex-col items-center text-center py-4">
-                <span className="size-16 rounded-full bg-brand-soft text-brand-ink flex items-center justify-center mb-3">
+                <span className="size-16 rounded-full bg-sunken text-ink-2 flex items-center justify-center mb-3">
                   <Icon name="camera" size={28} />
                 </span>
                 <p className="text-body font-bold text-ink">음식 사진으로 기록하기</p>
@@ -1120,7 +1124,7 @@ export default function DiaryPage() {
             };
 
             return (
-              <div key={meal.key} className="flex flex-col gap-2">
+              <div key={meal.key} id={`meal-${meal.key}`} className="flex flex-col gap-2 scroll-mt-20">
                 {isEmpty && !isAdding && plannedFor(meal.key).length > 0 ? (() => {
                   // 식단 리스트에 이 요일·끼니가 있으면 — 계획대로 한 번에, 아니면 다른 음식
                   const foods = plannedFor(meal.key);
@@ -1216,7 +1220,7 @@ export default function DiaryPage() {
       )}
 
       {/* ━━ 주간 리포트 ━━ */}
-      <Link href="/diary/report" className="flex items-center justify-between gap-3 rounded-lg bg-brand-soft px-4 py-3.5 mt-3 hover:bg-brand-soft/70 transition-colors">
+      <Link href="/diary/report" className="flex items-center justify-between gap-3 rounded-lg border border-line bg-surface px-4 py-3.5 mt-3 hover:border-line-strong transition-colors">
         <div className="min-w-0">
           <p className="text-label font-bold text-ink">주간 영양 리포트</p>
           <p className="text-caption text-ink-2">이번 주 영양 밸런스를 확인하세요</p>

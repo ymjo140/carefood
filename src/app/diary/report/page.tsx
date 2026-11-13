@@ -5,10 +5,9 @@ import { weekday } from "@/lib/day";
 import Link from "next/link";
 import ShareButton from "@/components/ShareButton";
 import {
-  Badge, Card, EmptyState, Icon, LinkButton, Notice, Page, PageHeader, ProgressBar, SectionHeader,
-  Spinner, TextLink, buttonClass, cn,
+  Badge, Button, Card, EmptyState, Icon, LinkButton, Notice, Page, PageHeader, ProgressBar, SectionHeader,
+  Skeleton, TextLink, buttonClass, cn,
 } from "@/components/ui";
-import { getClientActorId } from "@/lib/actor-client";
 
 /* ───── 타입 ───── */
 type NutrientGrade = {
@@ -75,38 +74,50 @@ const SLOT_LABELS: Record<string, string> = {
 
 const DAY_NAMES = ["일", "월", "화", "수", "목", "금", "토"];
 
-function getUserId(): string {
-  // 서버가 발급한 쿠키의 id — API 는 이 값을 받지 않고 쿠키로 직접 확인한다
-  return getClientActorId() || "";
-}
 
 function ReportContent() {
   const [report, setReport] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
-    const userId = getUserId();
-    fetch(`/api/diary/report?user_id=${userId}`)
-      .then(r => r.json())
-      .then(setReport)
-      .catch(() => setReport({ hasData: false, message: "리포트를 불러오지 못했어요." }))
+    // 누구의 기록인지는 서버가 쿠키로 확인한다 (주소에 id 를 싣지 않는다)
+    fetch("/api/diary/report")
+      .then(async (r) => {
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || String(r.status));
+        setReport(d); setFailed(false);
+      })
+      .catch(() => setFailed(true))
       .finally(() => setLoading(false));
-  }, []);
+  }, [attempt]);
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center gap-3 py-16">
-        <Spinner size={32} />
-        <p className="text-label text-ink-2">주간 리포트를 분석하고 있어요</p>
+      <div role="status" aria-label="주간 리포트를 불러오는 중" className="flex flex-col gap-4">
+        <Skeleton className="h-36 rounded-lg" />
+        <Skeleton className="h-48 rounded-lg" />
+        <Skeleton className="h-32 rounded-lg" />
       </div>
+    );
+  }
+
+  if (failed) {
+    return (
+      <EmptyState
+        title="리포트를 불러오지 못했어요"
+        description="잠시 뒤 다시 불러와 주세요"
+        action={<Button variant="secondary" icon="refresh" onClick={() => { setLoading(true); setAttempt((n) => n + 1); }}>다시 불러오기</Button>}
+      />
     );
   }
 
   if (!report?.hasData) {
     return (
       <EmptyState
-        title="아직 데이터가 없어요"
-        description={report?.message || "식단을 기록하면 주간 리포트를 받을 수 있어요"}
+        title="아직 기록이 없어요"
+        description={report?.message || "식단을 기록하면 이번 주 영양 리포트를 볼 수 있어요"}
         action={<LinkButton href="/diary">식단 기록하기</LinkButton>}
       />
     );
@@ -287,7 +298,7 @@ export default function WeeklyReportPage() {
         <Icon name="chevron-left" size={16} /> 식단 기록
       </TextLink>
       <PageHeader title="주간 영양 리포트" description="지난 7일 기록으로 영양 밸런스를 살펴봐요" />
-      <Suspense fallback={<div className="flex justify-center py-16"><Spinner size={32} /></div>}>
+      <Suspense fallback={<Skeleton className="h-36 rounded-lg" />}>
         <ReportContent />
       </Suspense>
     </Page>
