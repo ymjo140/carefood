@@ -1,9 +1,9 @@
 name: 11번가 크롤러 (공식 OpenAPI)
 
 on:
-  schedule:
-    # 매일 KST 03:30 (UTC 18:30) — 오아시스 크롤링 30분 후
-    - cron: "30 18 * * *"
+  # 매일 실행은 멈춰 둠 — 11번가 OpenAPI 키(ST11_API_KEY)를 받으면 다시 켠다 (KST 03:30 = UTC 18:30)
+  # schedule:
+  #   - cron: "30 18 * * *"
   workflow_dispatch:
     inputs:
       test:
