@@ -1,5 +1,6 @@
 # 판매처 상품 ↔ 식약처 제품 연결 검증 — 상품정보 이미지 OCR(컬리) + 쿠팡 파트너스 키 확인
-# 실행: scripts/verify/input/RUN 파일을 바꿔 푸시 (첫 낱말: test | full | coupang) 또는 Actions 화면에서 수동 실행
+# 실행: scripts/verify/input/RUN 파일을 바꿔 푸시 (첫 낱말: test | full | coupang | score) 또는 Actions 화면에서 수동 실행
+#   score: 판매처 4곳의 연결을 브랜드·제조사·이름·중량으로 다시 채점 (DB 는 읽기만) → 아티팩트 match-score
 #   coupang: scripts/verify/input/coupang_targets.json 의 제품을 쿠팡에서 천천히 검색 → 아티팩트 coupang-prices
 # 결과: 아티팩트 label-ocr-kurly-<n> (JSONL), coupang-check (JSON) — 판정·DB 반영은 사람이 확인한 뒤 따로
 name: mall-verify
@@ -7,7 +8,7 @@ name: mall-verify
 on:
   workflow_dispatch:
     inputs:
-      mode: { description: "test(20개) | full", default: "test" }
+      mode: { description: "test(20개) | full | coupang | score", default: "test" }
   push:
     branches: [main]
     paths: ["scripts/verify/input/RUN"]
@@ -60,9 +61,28 @@ jobs:
         if: always()
         with: { name: coupang-prices, path: coupang-prices.jsonl, retention-days: 14 }
 
+  match-score:
+    needs: plan
+    if: needs.plan.outputs.mode == 'score'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: 연결 내려받기 (읽기만) + 다시 채점
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          mkdir -p out
+          python3 scripts/verify/fetch_matches.py out --catalog
+          python3 scripts/verify/score_matches.py out
+          rm out/matches.json   # 원본은 크다 — 채점 결과만 올린다
+      - uses: actions/upload-artifact@v4
+        with: { name: match-score, path: out, retention-days: 14 }
+
   kurly-ocr:
     needs: plan
-    if: needs.plan.outputs.mode != 'coupang'
+    if: needs.plan.outputs.mode != 'coupang' && needs.plan.outputs.mode != 'score'
     runs-on: ubuntu-latest
     timeout-minutes: 300
     strategy:

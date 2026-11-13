@@ -10,9 +10,14 @@
   name   식약처 제품명이 판매처 이름에 들어 있는가 / 글자 2개씩 겹침
   generic 식약처 제품명이 너무 흔한가 (열무김치·베이글처럼 짧고 브랜드 없음)
 
+  relink 판매처 브랜드가 제조사인 다른 식약처 제품이 이름이 더 잘 맞는가 (matches.json 에 catalog 가 있을 때)
+  11번가는 상품 데이터의 brand 칸을 브랜드 후보 맨 앞에 둔다 (이름에 브랜드가 없는 상품이 많다)
+
 판정
   confirmed  브랜드·제조사가 맞고 이름도 맞음
+  relink     지금 연결은 브랜드가 안 맞고, 브랜드 회사의 제품 중 이름이 맞는 것이 따로 있음 → 그 제품으로 바꿀 후보
   mismatch   브랜드 충돌, 또는 브랜드가 안 맞는데 이름이 흔하거나 중량이 다름
+  risky      브랜드를 모르는데 이름이 흔함
   suspect    그 밖 (브랜드를 확인할 수 없음) → 판매처 상세의 품목보고번호로 확인할 대상
 """
 import csv, json, os, re, sys
@@ -21,6 +26,7 @@ from collections import Counter, defaultdict
 D = sys.argv[1]
 data = json.load(open(os.path.join(D, "matches.json")))
 PRODS = data["products"]
+CATALOG = data.get("catalog") or []
 
 # 브랜드 → 제조사 이름에 들어가는 낱말 (OEM 이 흔한 곳은 비워 두고 '확인 불가'로)
 BRANDS = {
@@ -57,9 +63,10 @@ def clean_mall(name):
 
 SELLER_TAGS = re.compile(r"셀러허브|홈쇼핑|하프클럽|오티마트|코스트코|트레이더스|이마트|쿠팡|당일|무료배송|특가|정품|공식|^[A-Z0-9]{6,}$|국내산|냉동|냉장|haccp|인증|名品|명품", re.I)
 
-def mall_brands(mall, name):
-    """판매처 이름에서 브랜드 후보들 — [대괄호], 알려진 브랜드 낱말, (11번가·홈플러스·오아시스는) 첫 낱말"""
+def mall_brands(mall, name, brand_col=None):
+    """판매처 이름에서 브랜드 후보들 — (11번가) brand 칸, [대괄호], 알려진 브랜드 낱말, (11번가·홈플러스·오아시스는) 첫 낱말"""
     out = []
+    if brand_col and brand_col.strip() and not SELLER_TAGS.search(brand_col): out.append(brand_col.strip())
     for b in re.findall(r"\[([^\]]+)\]", name):
         b = b.strip()
         if b and not SELLER_TAGS.search(b): out.append(b)
@@ -67,7 +74,8 @@ def mall_brands(mall, name):
     nplain = norm(plain)
     for k in BRANDS:
         if len(norm(k)) >= 2 and norm(k) in nplain: out.append(k)
-    if mall in ("homeplus", "11st", "oasis"):
+    # 첫 낱말은 브랜드 칸이 없을 때만 — '자이언트 부대찌개' 의 '자이언트' 처럼 제품명 낱말을 브랜드로 잘못 읽는다
+    if mall in ("homeplus", "11st", "oasis") and not (brand_col and brand_col.strip()):
         first = plain.strip().split(" ")[0] if plain.strip() else ""
         if first and not SELLER_TAGS.search(first): out.append(first)
     seen, res = set(), []
@@ -90,7 +98,7 @@ def score(mall, row):
     mname = row["name"] or ""
     pname = p.get("name") or ""
     maker = p.get("manufacturer") or ""
-    brands = mall_brands(mall, mname)
+    brands = mall_brands(mall, mname, row.get("brand"))
     brand = brands[0] if brands else ""
     nmaker, npname = norm(maker), norm(pname)
     nmall = norm(clean_mall(mname))
@@ -129,11 +137,18 @@ def score(mall, row):
             return r <= 120 and abs(r - round(r)) <= 0.06 * r
         weight = any(near(mg, c) for c in cands)
 
+    # 다시 이을 후보 — 지금 연결이 브랜드로 확인되지 않을 때, 브랜드 회사 제품 중 이름이 가장 잘 맞는 것
+    relink = None
+    if not maker_ok and CATALOG:
+        relink = find_relink(brands, nmall, mg, row["matched_product_id"])
+
     # mismatch   = 틀렸을 가능성이 높음 (브랜드 충돌, 또는 브랜드 모름 + 중량 다름)
     # risky      = 확인 필요·위험 (브랜드 모름 + 흔한 이름 → 같은 이름의 다른 회사 제품일 수 있음)
     # suspect    = 확인 필요 (브랜드를 확인할 수 없음)
     # confirmed  = 브랜드·제조사·이름 일치
-    if clash: status = "mismatch"; reasons.append(f"브랜드 '{clash_with[0]}' 인데 제조사 '{maker}'")
+    if relink:
+        status = "relink"; reasons.append(f"브랜드 '{relink['brand']}' 인데 제조사 '{maker}' → '{relink['name']}' ({relink['manufacturer']}) 가 이름이 더 맞음 ({relink['jac']:.2f})")
+    elif clash: status = "mismatch"; reasons.append(f"브랜드 '{clash_with[0]}' 인데 제조사 '{maker}'")
     elif maker_ok and (contain or jac >= 0.5): status = "confirmed"; reasons.append("브랜드·제조사·이름 일치")
     elif not maker_ok and weight is False: status = "mismatch"; reasons.append(f"중량 다름 ({mg:g}g ↔ {', '.join(f'{c:g}' for c in cands)}g) + 브랜드 확인 안 됨")
     elif not maker_ok and generic: status = "risky"; reasons.append(f"흔한 이름 '{pname}' + 브랜드 확인 안 됨")
@@ -146,7 +161,45 @@ def score(mall, row):
         "product_id": row["matched_product_id"], "product_name": pname, "manufacturer": maker,
         "old_score": row.get("match_score"), "status": status, "score": round(sc, 3), "reason": "; ".join(reasons),
         "url": row.get("url") or row.get("product_url") or "",
+        "brand": brand,
+        "new_product_id": relink["id"] if relink else "", "new_name": relink["name"] if relink else "",
+        "new_manufacturer": relink["manufacturer"] if relink else "", "new_jac": round(relink["jac"], 3) if relink else "",
     }
+
+# ── 다시 이을 후보 찾기: 제조사 이름(정규화)에 브랜드가 들어 있는 상용제품 ──
+BY_MAKER = defaultdict(list)
+for p in CATALOG:
+    BY_MAKER[norm(p.get("manufacturer"))].append(p)
+_maker_cache = {}
+
+def makers_for(brand):
+    """브랜드 → 그 회사 제품들 (브랜드 낱말이 제조사 이름에 들어 있거나, 사전의 회사 낱말이 들어 있는 곳)"""
+    nb = norm(brand)
+    if len(nb) < 2 or nb in _maker_cache: return _maker_cache.get(nb, [])
+    key = next((k for k in BRANDS if norm(k) == nb), None)
+    words = [norm(c) for c in BRANDS[key]] if key is not None and BRANDS[key] else [nb]
+    out = []
+    for m, ps in BY_MAKER.items():
+        if any(w and w in m for w in words): out.extend(ps)
+    _maker_cache[nb] = out if len(out) <= 3000 else []   # 너무 흔한 낱말(예: '식품')은 쓰지 않는다
+    return _maker_cache[nb]
+
+def find_relink(brands, nmall, mall_g, current_id):
+    best = None
+    for b in brands[:3]:
+        for p in makers_for(b):
+            if p["id"] == current_id: continue
+            npn = norm(p.get("name"))
+            if len(npn) < 2: continue
+            contain = npn in nmall
+            jac = len(bigrams(npn) & bigrams(nmall)) / max(1, len(bigrams(npn)))
+            if not (contain or jac >= 0.6): continue
+            sc = jac + (0.2 if contain else 0)
+            cands = [float(x) for x in (p.get("serving_size_g"), p.get("total_weight_g")) if x]
+            if mall_g and cands and any(abs(mall_g - c) / max(mall_g, c) <= 0.12 for c in cands): sc += 0.1
+            if not best or sc > best["sc"]:
+                best = {"id": p["id"], "name": p.get("name"), "manufacturer": p.get("manufacturer"), "jac": jac, "sc": sc, "brand": b}
+    return best
 
 results = [score(m, r) for m, rows in data["malls"].items() for r in rows]
 with open(os.path.join(D, "scored.csv"), "w", newline="", encoding="utf-8-sig") as f:
