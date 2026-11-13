@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Button, Card, EmptyState, Notice, SectionHeader, SkeletonList, buttonClass, useToast } from "@/components/ui";
+import { Button, Card, EmptyState, Field, Input, Notice, SectionHeader, SkeletonList, buttonClass, useToast } from "@/components/ui";
 
 type Settlement = { commission: number; order_sales: number; order_shipping: number; order_fee: number; status: "closed" | "paid"; closed_at: string; paid_at: string | null };
 type Month = {
@@ -152,6 +152,104 @@ export function Commission({ qs }: { qs: string }) {
                   </ul>
                 )}
               </Notice>
+            )}
+          </>
+        )}
+      <Credits qs={qs} />
+    </section>
+  );
+}
+
+type Ledger = { id: string; kind: "topup" | "hold" | "release" | "charge" | "adjust"; amount: number; status: "requested" | "confirmed" | "canceled"; note: string | null; created_at: string; partner_campaigns: { title: string } | null };
+type CreditData = { ready: boolean; unit_price: number | null; balance: number; pending: number; ledger: Ledger[]; read_only: boolean };
+const KIND: Record<Ledger["kind"], string> = { topup: "충전", hold: "발송비 잡아 둠", release: "돌려받음", charge: "발송비", adjust: "조정" };
+
+/**
+ * 고객층 충전금 — 발송비는 보낼 때 충전금에서 낸다 (11/13 결정). 결제(PG) 전에는 계좌이체로 충전하고,
+ * 케어푸드가 입금을 확인하면 반영·세금계산서를 발행한다.
+ */
+export function Credits({ qs }: { qs: string }) {
+  const toast = useToast();
+  const [state, setState] = useState<{ status: "loading" | "error" | "done"; data?: CreditData; error?: string }>({ status: "loading" });
+  const [amount, setAmount] = useState("");
+  const [busy, setBusy] = useState(false);
+  const load = useCallback(async () => {
+    try {
+      const r = await fetch(`/api/partner/crm?view=credits&${qs}`);
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error);
+      setState({ status: "done", data: d });
+    } catch (e) { setState({ status: "error", error: (e as Error).message || "불러오지 못했어요" }); }
+  }, [qs]);
+  useEffect(() => { load(); }, [load]); // eslint-disable-line react-hooks/set-state-in-effect -- 불러온 뒤에 상태를 바꾼다
+
+  const request = async () => {
+    const v = Number(amount.replace(/,/g, ""));
+    setBusy(true);
+    try {
+      const r = await fetch(`/api/partner/crm?${qs}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "topup", amount: v }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error);
+      toast.show(`${won(v)} 충전을 신청했어요. 입금 계좌는 담당자 메일로 보내 드려요`);
+      setAmount("");
+      load();
+    } catch (e) { toast.show(`신청하지 못했어요. ${(e as Error).message || "다시 시도해 주세요"}`, { tone: "danger" }); }
+    finally { setBusy(false); }
+  };
+
+  if (state.status === "done" && !state.data?.ready) return null;
+  return (
+    <section className="mt-10">
+      <SectionHeader title="고객층 충전금" />
+      {state.status === "loading" ? <SkeletonList rows={2} thumb={false} />
+        : state.status === "error" || !state.data ? (
+          <EmptyState title="충전금을 불러오지 못했어요" description={state.error}
+            action={<Button size="sm" variant="secondary" icon="refresh" onClick={() => { setState({ status: "loading" }); load(); }}>다시 불러오기</Button>} />
+        ) : (
+          <>
+            <Card>
+              <p className="text-caption text-ink-2">잔액</p>
+              <p className="num text-title font-bold text-ink">{won(state.data.balance)}</p>
+              <p className="text-label text-ink-2 mt-1">
+                {state.data.pending > 0 && <>입금 확인 중 <span className="num">{won(state.data.pending)}</span> · </>}
+                건당 발송비 {state.data.unit_price === null ? "정해지지 않았어요" : <span className="num">{won(state.data.unit_price)}</span>}
+              </p>
+              {!state.data.read_only && (
+                <div className="flex flex-wrap items-end gap-2 mt-4">
+                  <Field label="충전할 금액 (원)" className="flex-1 min-w-40">
+                    <Input inputMode="numeric" value={amount} placeholder="100,000" className="num" onChange={(e) => setAmount(e.target.value.replace(/[^\d,]/g, ""))} />
+                  </Field>
+                  <Button variant="secondary" loading={busy} disabled={!amount} onClick={request}>충전 신청하기</Button>
+                </div>
+              )}
+              <p className="text-caption text-ink-2 mt-3">1만~1,000만 원. 계좌이체로 입금하면 케어푸드가 확인한 뒤 잔액에 넣고 세금계산서를 보내 드려요</p>
+            </Card>
+            {state.data.ledger.length > 0 && (
+              <Card padding="none" className="overflow-x-auto mt-3">
+                <table className="w-full text-label">
+                  <thead>
+                    <tr className="text-ink-2 border-b border-line">
+                      <th className="text-left font-medium px-4 py-2.5 whitespace-nowrap">날짜</th>
+                      <th className="text-left font-medium px-3 py-2.5">내용</th>
+                      <th className="text-right font-medium px-4 py-2.5 whitespace-nowrap">금액</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-line">
+                    {state.data.ledger.map((l) => (
+                      <tr key={l.id}>
+                        <td className="px-4 py-2.5 num text-ink-2 whitespace-nowrap">{l.created_at.slice(0, 10)}</td>
+                        <td className="px-3 py-2.5 text-ink">
+                          {KIND[l.kind]}{l.partner_campaigns?.title ? ` · ${l.partner_campaigns.title}` : ""}
+                          {l.status !== "confirmed" && <span className="text-ink-2"> · {l.status === "requested" ? "입금 확인 중" : "취소"}</span>}
+                        </td>
+                        <td className={`px-4 py-2.5 num text-right whitespace-nowrap ${l.status === "confirmed" ? "text-ink" : "text-ink-3"}`}>
+                          {l.amount > 0 ? "+" : "−"}{won(Math.abs(l.amount))}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </Card>
             )}
           </>
         )}

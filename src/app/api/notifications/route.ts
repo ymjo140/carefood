@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { connection } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { getActorId, noActor } from "@/lib/actor-server";
-import { buildNotifications } from "@/lib/notifications";
+import { adNotifications, buildNotifications } from "@/lib/notifications";
 
 /**
  * GET /api/notifications — 내 소식 (lib/notifications 가 커뮤니티 기록에서 만든다)
@@ -23,7 +23,11 @@ export async function GET(request: NextRequest) {
   const seen_at: string | null = read?.seen_at ?? null;
 
   let items;
-  try { items = await buildNotifications(sb, actor); } catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: 500 }); }
+  try {
+    // 업체 광고(고객층 발송)는 알림함에만 — 커뮤니티 웹 푸시와 섞지 않는다
+    const [community, ads] = await Promise.all([buildNotifications(sb, actor), adNotifications(sb, actor)]);
+    items = [...community, ...ads].sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+  } catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: 500 }); }
   if (latestOnly) return NextResponse.json({ latest_at: items[0]?.at ?? null, seen_at });
   return NextResponse.json({ items: items.slice(0, 40), seen_at });
 }
