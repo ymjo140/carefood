@@ -14,7 +14,7 @@ import { checkedLabel, packLabel, usablePrices } from "@/lib/prices";
 import AllergenWarning from "@/components/AllergenWarning";
 import {
   Page, SectionHeader, Card, Badge, Icon, MacroStat, Stat, EmptyState, Estimate, Notice, Thumb, Price,
-  TextLink, buttonClass, cn,
+  TextLink, buttonClass, cn, BottomBar,
 } from "@/components/ui";
 
 // 동적 라우트 — DB 조회 필요
@@ -211,17 +211,15 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
   // 안전 정보 — 영양값을 믿기 어려운 제품은 "저나트륨" 같은 좋은 쪽 표시를 하지 않는다
   const safetyNotes: { type: "good" | "warn"; text: string }[] = [];
   if (product.sodium_mg !== null && product.sodium_mg < 400)
-    safetyNotes.push({ type: "good", text: "저나트륨 (400mg 미만)" });
+    safetyNotes.push({ type: "good", text: "나트륨 적음 (100g당 400mg 미만)" });
   if (product.sodium_mg !== null && product.sodium_mg > 1000)
-    safetyNotes.push({ type: "warn", text: "고나트륨 — 나트륨 섭취에 주의가 필요한 분 참고" });
+    safetyNotes.push({ type: "warn", text: "나트륨 많음 (100g당 1,000mg 넘음) — 나트륨 섭취에 주의가 필요한 분 참고" });
   if (product.sugar_g !== null && product.sugar_g < 5)
-    safetyNotes.push({ type: "good", text: "저당 (5g 미만)" });
+    safetyNotes.push({ type: "good", text: "당류 적음 (100g당 5g 미만)" });
   if (product.sugar_g !== null && product.sugar_g > 15)
-    safetyNotes.push({ type: "warn", text: "높은 당류 — 당류 섭취에 주의가 필요한 분 참고" });
+    safetyNotes.push({ type: "warn", text: "당류 많음 (100g당 15g 넘음) — 당류 섭취에 주의가 필요한 분 참고" });
   if (product.protein_g !== null && product.protein_g >= 15)
-    safetyNotes.push({ type: "good", text: "고단백 (15g 이상)" });
-  if (product.fiber_g !== null && product.fiber_g < 3)
-    safetyNotes.push({ type: "good", text: "소화 부담 적음 (저섬유)" });
+    safetyNotes.push({ type: "good", text: "단백질 많음 (100g당 15g 이상)" });
   if (product.spicy_score >= 3)
     safetyNotes.push({ type: "warn", text: `매운맛 ${product.spicy_score}단계 — 자극에 민감한 분 참고` });
   const shownSafetyNotes = nutritionFlagged ? safetyNotes.filter((n) => n.type === "warn") : safetyNotes;
@@ -270,10 +268,10 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
   ];
 
   const detailRows = [
-    { label: "칼로리", val: product.calories, unit: "kcal" },
+    { label: "칼로리", val: displayCal, unit: "kcal" },
     { label: "탄수화물", val: displayCarbs, unit: "g" },
     { label: "당류", val: displaySugar, unit: "g" },
-    { label: "단백질", val: product.protein_g, unit: "g" },
+    { label: "단백질", val: displayProtein, unit: "g" },
     { label: "지방", val: displayFat, unit: "g" },
     { label: "포화지방", val: displaySatFat, unit: "g" },
     { label: "트랜스지방", val: adj(product.trans_fat_g), unit: "g" },
@@ -424,11 +422,7 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
         <section className="mb-6">
           <SectionHeader title="원재료" description="출처: 식품안전나라 품목제조보고" />
           <Card>
-            <div className="flex flex-wrap gap-1.5">
-              {ingredients.map((ing: string) => (
-                <Badge key={ing}>{ing}</Badge>
-              ))}
-            </div>
+            <p className="text-label text-ink">{ingredients.join(", ")}</p>
           </Card>
         </section>
       )}
@@ -470,18 +464,18 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
           <SectionHeader title="구매처 비교" />
           <Card padding="none" className="overflow-hidden">
             {bestPrice && (
-              <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-4 border-b border-line">
-                <div className="flex flex-col gap-1">
-                  <Badge tone="brand" className="self-start">최저가</Badge>
-                  <Price value={bestPrice.price} className="text-title" />
-                  {packLabel(bestPrice) && <p className="text-caption text-ink-2">{packLabel(bestPrice)}</p>}
-                </div>
-                <TrackableLink href={bestPrice.url} productId={product.id} platform={bestPrice.platform} placement="detail_best" partner={!!bestPrice.is_partner}
-                  className={buttonClass({ variant: "primary" })}>
-                  {bestPrice.seller_name || PLATFORM_LABELS[bestPrice.platform] || bestPrice.platform}에서 사기
-                  <Icon name="external" size={18} />
-                </TrackableLink>
-              </div>
+              <TrackableLink href={bestPrice.url} productId={product.id} platform={bestPrice.platform} placement="detail_best_row" partner={!!bestPrice.is_partner}
+                className="flex items-center gap-3 px-4 py-3 border-b border-line hover:bg-sunken transition-colors">
+                <span className="flex-1 min-w-0 flex flex-col gap-0.5">
+                  <span className="flex items-center gap-2 text-body text-ink">
+                    {bestPrice.seller_name || PLATFORM_LABELS[bestPrice.platform] || bestPrice.platform}
+                    <Badge tone="brand">최저가</Badge>
+                  </span>
+                  {packLabel(bestPrice) && <span className="text-caption text-ink-2">{packLabel(bestPrice)}</span>}
+                </span>
+                <Price value={bestPrice.price} className="text-title" />
+                <Icon name="external" size={16} className="text-ink-3" />
+              </TrackableLink>
             )}
             {sortedPrices.length > 1 && (
               <div className="flex flex-col p-1">
@@ -507,26 +501,29 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
         </section>
       )}
 
-      {/* ── 원재료 (원본 텍스트) ── */}
-      {product.ingredients_raw && (
-        <section className="mb-6">
-          <SectionHeader title="원재료 (전문)" />
-          <Card>
-            <p className="text-label text-ink-2">{product.ingredients_raw}</p>
-          </Card>
-        </section>
+      {/* ── 출처 ── (ingredients_raw 칸에는 원재료가 아니라 자료를 낸 기관 이름이 들어 있다 — 예: 식품의약품안전처)
+          의료 면책 문구는 모든 화면 아래(푸터)에 있다 */}
+      <p className="text-caption text-ink-2 mb-6">
+        영양 정보 출처: {product.data_source === "partner" ? "판매 업체 제공"
+          : product.category_large === "건강식단서비스" ? `${mfrLabel || "식단 서비스"} 제공`
+          : product.ingredients_raw || "식품의약품안전처"}
+        {product.food_code && <> · 식품코드 <span className="num">{product.food_code}</span></>}
+      </p>
+
+      {/* 주 행동 하나 — 구매처 비교가 화면 맨 아래라 사려는 사람이 끝까지 내려가야 했다 */}
+      {bestPrice && (
+        <BottomBar>
+          <div className="flex-1 min-w-0">
+            <p className="text-caption text-ink-2 truncate">최저가 · {bestPrice.seller_name || PLATFORM_LABELS[bestPrice.platform] || bestPrice.platform}</p>
+            <Price value={bestPrice.price} className="text-title" />
+          </div>
+          <TrackableLink href={bestPrice.url} productId={product.id} platform={bestPrice.platform} placement="detail_best" partner={!!bestPrice.is_partner}
+            className={buttonClass({ variant: "primary" })}>
+            사러 가기
+            <Icon name="external" size={18} />
+          </TrackableLink>
+        </BottomBar>
       )}
-
-      {/* ── 출처 ── */}
-      <div className="flex gap-2 flex-wrap mb-6">
-        <Badge>식약처 MFDS 데이터</Badge>
-        {product.food_code && <Badge>식품코드 {product.food_code}</Badge>}
-      </div>
-
-      {/* ── 면책 ── */}
-      <Notice>
-        본 정보는 식약처 영양성분 데이터베이스를 기반으로 하며, 의학적 진단·치료·처방을 대체하지 않습니다. 질환이 있는 경우 반드시 의사와 상담하세요.
-      </Notice>
     </Page>
   );
 }

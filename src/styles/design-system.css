@@ -251,6 +251,8 @@
 @utility above-nav {
   bottom: calc(var(--ds-nav-h, 0px) + max(1.5rem, env(safe-area-inset-bottom)));
 }
+/* 주 행동 줄(BottomBar)이 있으면 맨 아래 내용(푸터)이 줄에 가리지 않게 */
+html[data-bottom-bar] body { padding-bottom: calc(5.5rem + env(safe-area-inset-bottom)); }
 
 /* ── 5. 기본 요소 ── */
 @layer base {

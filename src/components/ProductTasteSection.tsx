@@ -170,7 +170,7 @@ export default function ProductTasteSection({ nutrition, reviewTaste, scoreRow, 
       {/* ── 3가지 점수 ── */}
       {(tasteScore != null || nutritionScore > 0) && (
         <div className="grid grid-cols-3 gap-2 mb-3">
-          {matchScore != null && <ScoreTile label="매칭" score={matchScore} />}
+          {matchScore != null && <ScoreTile label="적합도" score={matchScore} />}
           {tasteScore != null && <ScoreTile label="맛" score={tasteScore} />}
           {!nutritionUnreliable && <ScoreTile label="영양" score={nutritionScore} />}
         </div>

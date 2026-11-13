@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Badge, Button, Card, Chip, EmptyState, Field, SectionHeader, Spinner, Textarea, useToast } from "@/components/ui";
+import { Button, Card, Chip, EmptyState, Field, SectionHeader, Spinner, Textarea, useToast } from "@/components/ui";
 import { RatingInput, RatingStars, ScaleInput } from "@/components/ui/Rating";
 import { getClientActorId } from "@/lib/actor-client";
 
@@ -216,7 +216,7 @@ export default function ProductReviews({ productId }: { productId: string }) {
                 <div className="flex items-center gap-2">
                   <RatingStars value={r.rating} size={14} />
                   {r.would_rebuy !== null && (
-                    <Badge tone={r.would_rebuy ? "positive" : "neutral"}>{r.would_rebuy ? "재구매 의향" : "재구매 안 함"}</Badge>
+                    <span className={r.would_rebuy ? "text-caption font-medium text-positive" : "text-caption text-ink-2"}>{r.would_rebuy ? "재구매 의향" : "재구매 안 함"}</span>
                   )}
                 </div>
                 <span className="text-caption text-ink-3 num">
@@ -225,13 +225,14 @@ export default function ProductReviews({ productId }: { productId: string }) {
               </div>
 
               {(r.reviewer_age_group || (r.reviewer_gender && r.reviewer_gender !== "other") || r.reviewer_concerns?.length > 0) && (
-                <div className="flex gap-1 flex-wrap mb-1.5">
-                  {r.reviewer_age_group && <Badge>{AGE_LABELS[r.reviewer_age_group] || r.reviewer_age_group}</Badge>}
-                  {r.reviewer_gender && r.reviewer_gender !== "other" && <Badge>{GENDER_LABELS[r.reviewer_gender] || r.reviewer_gender}</Badge>}
-                  {r.reviewer_concerns?.slice(0, 2).map(c => (
-                    <Badge key={c} tone="brand">{CONCERN_LABELS[c] || c}</Badge>
-                  ))}
-                </div>
+                <p className="text-caption text-ink-2 mb-1.5">
+                  {/* 작성자 정보는 글자 한 줄 — 칸마다 배지를 달면 리뷰 본문보다 눈에 띈다 */}
+                  {[
+                    r.reviewer_age_group && (AGE_LABELS[r.reviewer_age_group] || r.reviewer_age_group),
+                    r.reviewer_gender && r.reviewer_gender !== "other" && (GENDER_LABELS[r.reviewer_gender] || r.reviewer_gender),
+                    ...(r.reviewer_concerns || []).slice(0, 2).map((c: string) => CONCERN_LABELS[c] || c),
+                  ].filter(Boolean).join(" · ")}
+                </p>
               )}
 
               {r.comment && <p className="text-body text-ink">{r.comment}</p>}
