@@ -578,29 +578,41 @@ function BmiCard({ bmi, category, title }: { bmi: number; category: NutritionGoa
           <Badge tone={BMI_TONE[category]}>{BMI_LABELS[category]}</Badge>
         </div>
       </div>
-      <BMIBar bmi={bmi} />
-      <div className="flex justify-between text-caption text-ink-2 mt-1.5">
-        <span>저체중</span>
-        <span>정상</span>
-        <span>과체중</span>
-        <span>비만</span>
-      </div>
+      <BMIBar bmi={bmi} category={category} />
     </Card>
   );
 }
 
-function BMIBar({ bmi }: { bmi: number }) {
-  const pct = Math.max(0, Math.min(100, ((bmi - 15) / 25) * 100));
+/**
+ * BMI 막대 — 상태마다 색을 칠하지 않는다(파랑·초록·빨강). 지금 구간만 앰버, 나머지는 회색.
+ * 아래에는 구간 이름 대신 경계 숫자(대한비만학회 기준 18.5 · 23 · 25) — 이름은 좁은 구간(23~25)에 들어가지 않아 엇갈려 보였다.
+ */
+const BMI_MIN = 15, BMI_MAX = 35;
+const BMI_BANDS: { key: NutritionGoals["bmiCategory"]; from: number; to: number }[] = [
+  { key: "underweight", from: BMI_MIN, to: 18.5 },
+  { key: "normal", from: 18.5, to: 23 },
+  { key: "overweight", from: 23, to: 25 },
+  { key: "obese", from: 25, to: BMI_MAX },
+];
+const bmiPct = (v: number) => Math.max(0, Math.min(100, ((v - BMI_MIN) / (BMI_MAX - BMI_MIN)) * 100));
+
+function BMIBar({ bmi, category }: { bmi: number; category: NutritionGoals["bmiCategory"] }) {
   return (
-    <div className="relative h-3">
-      <div className="absolute inset-0 rounded-full overflow-hidden flex">
-        <div className="flex-1 bg-protein" />
-        <div className="flex-[1.8] bg-positive" />
-        <div className="flex-[0.8] bg-brand" />
-        <div className="flex-[6] bg-danger" />
+    <div>
+      <div className="relative h-3">
+        <div className="absolute inset-0 rounded-full overflow-hidden flex gap-0.5">
+          {BMI_BANDS.map((b) => (
+            <div key={b.key} className={b.key === category ? "bg-brand" : "bg-line-strong"} style={{ width: `${bmiPct(b.to) - bmiPct(b.from)}%` }} />
+          ))}
+        </div>
+        <div className="absolute top-0 h-full w-0.5 bg-ink" style={{ left: `${bmiPct(bmi)}%` }}>
+          <div className="absolute -top-1 left-1/2 -translate-x-1/2 size-3 rounded-full bg-ink border-2 border-surface" />
+        </div>
       </div>
-      <div className="absolute top-0 h-full w-0.5 bg-ink" style={{ left: `${pct}%` }}>
-        <div className="absolute -top-1 left-1/2 -translate-x-1/2 size-3 rounded-full bg-ink border-2 border-surface" />
+      <div className="relative h-4 mt-1.5 text-caption text-ink-2">
+        {[18.5, 23, 25].map((v) => (
+          <span key={v} className="num absolute -translate-x-1/2" style={{ left: `${bmiPct(v)}%` }}>{v}</span>
+        ))}
       </div>
     </div>
   );

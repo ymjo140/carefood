@@ -218,24 +218,24 @@ function getStrategySummary(goals: HealthGoal[], bmiCat: NutritionGoals["bmiCate
   const parts: string[] = [];
 
   if (goals.includes("weight_loss") && (bmiCat === "overweight" || bmiCat === "obese")) {
-    parts.push("칼로리를 조절하면서 단백질을 충분히 섭취하는 저칼로리·고단백 식품 위주로 매칭합니다");
+    parts.push("칼로리를 조절하면서 단백질을 충분히 섭취하는 저칼로리·고단백 식품 위주로 매칭해요");
   } else if (goals.includes("weight_loss")) {
-    parts.push("균형 잡힌 영양 비율의 식품을 매칭합니다");
+    parts.push("균형 잡힌 영양 비율의 식품을 매칭해요");
   }
   if (goals.includes("muscle")) {
-    parts.push("고단백 식품 위주로 매칭합니다");
+    parts.push("고단백 식품 위주로 매칭해요");
   }
   if (goals.includes("gut_health")) {
-    parts.push("저나트륨·저당·고식이섬유 식품 위주로 매칭합니다");
+    parts.push("저나트륨·저당·고식이섬유 식품 위주로 매칭해요");
   }
   if (goals.includes("diabetes")) {
-    parts.push("저당 식품 위주로 매칭합니다");
+    parts.push("저당 식품 위주로 매칭해요");
   }
   if (goals.includes("blood_pressure")) {
-    parts.push("저나트륨 식품 위주로 매칭합니다");
+    parts.push("저나트륨 식품 위주로 매칭해요");
   }
   if (parts.length === 0) {
-    parts.push("탄수화물, 단백질, 지방의 균형과 충분한 식이섬유를 챙깁니다");
+    parts.push("탄수화물, 단백질, 지방의 균형과 충분한 식이섬유를 챙겨요");
   }
 
   return parts.join(". ") + ".";
