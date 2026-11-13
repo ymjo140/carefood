@@ -164,8 +164,11 @@ export async function requestPasswordReset(
 ): Promise<{ error: string | null; sent?: boolean }> {
   const email = String(formData.get("email") || "").trim();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { error: "이메일을 확인해 주세요" };
+  // 메일 링크는 늘 운영 주소로 — Vercel 의 다른 주소(…-projects.vercel.app)에서 요청하면 그 주소가 Supabase 허용 목록에 없어
+  // Supabase 가 기본 주소(홈)로 보내 재설정 화면이 열리지 않았다
   const h = await headers();
-  const origin = `${h.get("x-forwarded-proto") || "https"}://${h.get("x-forwarded-host") || h.get("host")}`;
+  const host = h.get("x-forwarded-host") || h.get("host") || "";
+  const origin = /localhost|127\.0\.0\.1/.test(host) ? `http://${host}` : (process.env.NEXT_PUBLIC_SITE_URL || "https://carefood-iota.vercel.app");
   // 메일 링크를 다른 기기(휴대폰 메일 앱 등)에서 열어도 되게 implicit 흐름 — PKCE 는 요청한 브라우저의 쿠키가 있어야
   // 코드를 바꿀 수 있어서, PC 에서 요청하고 휴대폰에서 누르면 '재설정 창이 안 열림'이 됐다.
   // 토큰은 주소의 # 뒤로 오고(서버로 가지 않음) /auth/reset 화면이 받아 세션으로 바꾼다.
