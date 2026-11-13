@@ -241,6 +241,7 @@ export default function HealthReportPage() {
   if (!report) {
     return (
       <Page width="narrow">
+        <PageHeader title="나의 영양 리포트" />
         <EmptyState
           title="건강검진 데이터가 없어요"
           description="검진 수치를 넣으면 성분 기준에 맞춘 리포트를 만들어 드려요"

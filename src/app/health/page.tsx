@@ -82,10 +82,23 @@ export default function HealthPage() {
 
   // 기존 데이터 로드
   useEffect(() => {
+    // 키·몸무게는 온보딩에서 이미 받았다 — 비어 있으면 그 값으로 채워 두 번 묻지 않는다
+    const fromOnboarding = () => {
+      try {
+        const p = JSON.parse(localStorage.getItem("carefood_profile") || "null");
+        if (!p) return;
+        setData((prev) => ({
+          ...prev,
+          height_cm: prev.height_cm || (p.heightCm ? String(p.heightCm) : ""),
+          weight_kg: prev.weight_kg || (p.weightKg ? String(p.weightKg) : ""),
+        }));
+      } catch { /* 저장소를 못 읽으면 빈 칸 그대로 */ } // ds-allow: 보조 채움
+    };
     (async () => {
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
+        fromOnboarding();
         setLoaded(true);
         return;
       }
@@ -109,6 +122,7 @@ export default function HealthPage() {
           triglycerides: profile.triglycerides?.toString() || "",
         });
       }
+      fromOnboarding();
       setLoaded(true);
     })();
   }, []);
@@ -203,7 +217,7 @@ export default function HealthPage() {
                       inputMode="decimal"
                       value={data[field.key]}
                       onChange={(e) => handleChange(field.key, e.target.value)}
-                      placeholder={field.placeholder}
+                      placeholder={`예: ${field.placeholder}`}
                     />
                     <span className="text-label text-ink-2 w-14 text-right shrink-0">{field.unit}</span>
                   </div>

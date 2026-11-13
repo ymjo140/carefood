@@ -147,6 +147,7 @@ export default function FamilyPage() {
   if (!userId) {
     return (
       <Page width="narrow">
+        <PageHeader title="가족 건강 관리" />
         <EmptyState
           title="가족 관리는 로그인이 필요해요"
           description="로그인하면 가족 건강 정보를 등록하고 맞춤 추천을 대신 받아볼 수 있어요"
