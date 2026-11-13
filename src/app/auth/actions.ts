@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createClient as createPlainClient } from "@supabase/supabase-js";
 import { linkActorToAccount, resetActor } from "@/lib/actor-server";
 
 /** 로그인 뒤 돌아갈 곳 — 이 사이트 안의 경로만 */
@@ -165,7 +166,12 @@ export async function requestPasswordReset(
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { error: "이메일을 확인해 주세요" };
   const h = await headers();
   const origin = `${h.get("x-forwarded-proto") || "https"}://${h.get("x-forwarded-host") || h.get("host")}`;
-  const supabase = await createServerSupabaseClient();
+  // 메일 링크를 다른 기기(휴대폰 메일 앱 등)에서 열어도 되게 implicit 흐름 — PKCE 는 요청한 브라우저의 쿠키가 있어야
+  // 코드를 바꿀 수 있어서, PC 에서 요청하고 휴대폰에서 누르면 '재설정 창이 안 열림'이 됐다.
+  // 토큰은 주소의 # 뒤로 오고(서버로 가지 않음) /auth/reset 화면이 받아 세션으로 바꾼다.
+  const supabase = createPlainClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
+    auth: { flowType: "implicit", persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+  });
   const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: `${origin}/auth/callback?next=/auth/reset` });
   if (error && /rate|limit|seconds/i.test(error.message)) return { error: "메일을 너무 자주 보냈어요. 잠시 뒤 다시 시도해 주세요" };
   if (error) console.error("비밀번호 재설정 메일:", error.message);

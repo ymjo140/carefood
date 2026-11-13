@@ -23,6 +23,9 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  // 비밀번호 재설정은 코드 없이 # 뒤에 토큰을 싣고 온다(implicit) — 브라우저는 # 를 다음 주소로 넘겨 주므로 재설정 화면으로 보낸다
+  if (!code && next === "/auth/reset") return NextResponse.redirect(`${origin}/auth/reset`);
+
   // 에러 시 로그인 페이지로
   return NextResponse.redirect(`${origin}/login?error=auth`);
 }
