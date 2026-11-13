@@ -39,8 +39,10 @@ def action(r):
 
 MARK = {"confirmed": "score_confirmed", "suspect": "score_unsure", "risky": "score_unsure"}
 if a.mark:
-    marks = [{"mall": r["mall"], "id": r["id"], "old": r["product_id"], "status": MARK[r["status"]]}
-             for r in csv.DictReader(open(a.csv, encoding="utf-8-sig")) if r["status"] in MARK]
+    # 쿠팡은 연결을 바꾸지 않으므로 confirmed 가 아니면 모두 '확인 안 됨'
+    marks = [{"mall": r["mall"], "id": r["id"], "old": r["product_id"],
+              "status": ("score_confirmed" if r["status"] == "confirmed" else "score_unsure") if r["mall"] == "coupang" else MARK[r["status"]]}
+             for r in csv.DictReader(open(a.csv, encoding="utf-8-sig")) if r["status"] in MARK or r["mall"] == "coupang"]
     print("미리보기" if not a.apply else "반영", "판정 남기기", dict(Counter((x["mall"], x["status"]) for x in marks)))
 
 rows = []
