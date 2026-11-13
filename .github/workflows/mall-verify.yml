@@ -1,5 +1,6 @@
 # 판매처 상품 ↔ 식약처 제품 연결 검증 — 상품정보 이미지 OCR(컬리) + 쿠팡 파트너스 키 확인
 # 실행: scripts/verify/input/RUN 파일을 바꿔 푸시 (첫 낱말: test | full | coupang | score) 또는 Actions 화면에서 수동 실행
+#   st11label: 11번가 확인 못 한 연결(suspect·risky)을 공식 OpenAPI 이미지 + OCR 로 판정 (DB 는 읽기만) → 아티팩트 st11-label
 #   apply: score 실행 번호(score_run)의 판정 파일을 DB 에 반영 (사람이 본 뒤에만)
 #   score: 판매처 4곳의 연결을 브랜드·제조사·이름·중량으로 다시 채점 (DB 는 읽기만) → 아티팩트 match-score
 #   coupang: scripts/verify/input/coupang_targets.json 의 제품을 쿠팡에서 천천히 검색 → 아티팩트 coupang-prices
@@ -9,7 +10,8 @@ name: mall-verify
 on:
   workflow_dispatch:
     inputs:
-      mode: { description: "test(20개) | full | coupang | score | apply", default: "test" }
+      mode: { description: "test(20개) | full | coupang | score | apply | st11label", default: "test" }
+      limit: { description: "st11label 일 때 볼 상품 수", default: "200" }
       score_run: { description: "apply 일 때: 판정을 본 score 실행 번호", default: "" }
   push:
     branches: [main]
@@ -83,6 +85,52 @@ jobs:
         with: { name: match-score, path: out, retention-days: 14 }
 
   # 사람이 본 score 실행의 판정 파일 그대로 반영 — 다시 채점하지 않는다 (그사이 바뀐 연결은 DB 함수가 건너뜀)
+  st11-label:
+    needs: plan
+    if: needs.plan.outputs.mode == 'st11label'
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+      - name: OCR 도구
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq tesseract-ocr && pip install -q pillow
+          mkdir -p "$HOME/tessdata"
+          for l in kor eng osd; do curl -sSL -o "$HOME/tessdata/$l.traineddata" "https://raw.githubusercontent.com/tesseract-ocr/tessdata_best/main/$l.traineddata"; done
+          echo "TESSDATA_PREFIX=$HOME/tessdata" >> "$GITHUB_ENV"
+          echo "OMP_THREAD_LIMIT=1" >> "$GITHUB_ENV"
+      - name: 연결 내려받기 + 채점 → 확인 못 한 11번가 상품 고르기
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          mkdir -p out
+          python3 scripts/verify/fetch_matches.py out --catalog
+          python3 scripts/verify/score_matches.py out
+          python3 - <<'PY'
+          import csv, re, random
+          rows = [r for r in csv.DictReader(open("out/scored.csv", encoding="utf-8-sig")) if r["mall"] == "11st" and r["status"] in ("suspect", "risky")]
+          codes = sorted({m.group(1) for r in rows for m in [re.search(r"products/(\d+)", r["url"])] if m})
+          random.Random(1).shuffle(codes)
+          open("out/codes.txt", "w").write("\n".join(codes[: int("${{ github.event.inputs.limit }}" or 200)]))
+          print("대상", len(codes), "· 이번에", min(len(codes), int("${{ github.event.inputs.limit }}" or 200)))
+          PY
+      - name: 공식 OpenAPI 상품이미지 → OCR
+        env:
+          ST11_API_KEY: ${{ secrets.ST11_API_KEY }}
+        run: python3 scripts/verify/label_ocr.py out/codes.txt out/st11_ocr.jsonl --mall 11st --workers 2
+      - name: 판정 (읽기만)
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          MFDS_API_KEY: ${{ secrets.MFDS_API_KEY }}
+        run: |
+          python3 scripts/verify/label_judge.py out out/st11_ocr.jsonl --mall 11st --out st11_judged.csv
+          rm out/matches.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: st11-label, path: out, retention-days: 14 }
+
   match-apply:
     needs: plan
     if: needs.plan.outputs.mode == 'apply'
@@ -101,7 +149,7 @@ jobs:
 
   kurly-ocr:
     needs: plan
-    if: needs.plan.outputs.mode != 'coupang' && needs.plan.outputs.mode != 'score' && needs.plan.outputs.mode != 'apply'
+    if: needs.plan.outputs.mode != 'coupang' && needs.plan.outputs.mode != 'score' && needs.plan.outputs.mode != 'apply' && needs.plan.outputs.mode != 'st11label'
     runs-on: ubuntu-latest
     timeout-minutes: 300
     strategy:

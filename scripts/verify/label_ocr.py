@@ -1,9 +1,10 @@
 """
 판매처 상품정보 표시 이미지 OCR (GitHub Actions 에서 나눠 돌림 — 비밀값 필요 없음)
 
-  python3 scripts/verify/label_ocr.py <상품번호 목록.txt> <출력.jsonl> [--shard i/n] [--workers 4]
+  python3 scripts/verify/label_ocr.py <상품번호 목록.txt> <출력.jsonl> [--shard i/n] [--workers 4] [--mall kurly|11st]
 
 컬리 상품 페이지 → noticeImages / legacyPiImages → tesseract(kor+eng) → 글자 그대로 저장.
+11번가: 공식 OpenAPI 상품이미지(ProductImage) → 추가 이미지 1~3·기본 이미지 (판매자가 올린 뒷면 표시 사진이 있으면 읽힌다). 환경변수 ST11_API_KEY
 번호·제조원·kcal 뽑기는 판정 단계(label_judge.py)에서 한다 (규칙을 고쳐도 OCR 를 다시 안 돌리게).
 """
 import argparse, io, json, os, re, subprocess, sys, tempfile, time, urllib.request
@@ -12,6 +13,7 @@ from concurrent.futures import ThreadPoolExecutor
 ap = argparse.ArgumentParser()
 ap.add_argument("ids"); ap.add_argument("out")
 ap.add_argument("--shard", default="0/1"); ap.add_argument("--workers", type=int, default=4)
+ap.add_argument("--mall", default="kurly", choices=["kurly", "11st"])
 a = ap.parse_args()
 si, sn = map(int, a.shard.split("/"))
 ids = [l.strip() for l in open(a.ids) if l.strip()]
@@ -53,6 +55,19 @@ def label_images(goods_no):
     walk(json.loads(m.group(1)))
     return urls
 
+ST11_API = "http://openapi.11st.co.kr/openapi/OpenApiService.tmall"
+
+def st11_images(code):
+    """11번가 공식 OpenAPI ProductImage — 추가 이미지 먼저(뒷면 표시 사진이 주로 여기), 기본 이미지는 마지막"""
+    raw = get(f"{ST11_API}?key={os.environ['ST11_API_KEY']}&apiCode=ProductImage&productCode={code}")
+    t = raw.decode("cp949", "ignore")
+    err = re.search(r"<ErrorCode>\s*(\d+)", t)
+    if err:
+        if err.group(1) == "004": raise SystemExit("11번가 OpenAPI 하루 호출 한도를 넘었어요")
+        raise RuntimeError("OpenAPI 오류 " + err.group(1))
+    urls = [re.search(f"<{tag}>\\s*([^<\\s]+)", t) for tag in ("AddImage1", "AddImage2", "AddImage3", "BasicImage")]
+    return [m.group(1) for m in urls if m]
+
 def ocr(url):
     from PIL import Image
     im = Image.open(io.BytesIO(get(url))).convert("L")
@@ -73,10 +88,13 @@ def ocr(url):
     return "\n".join(texts)
 
 def one(g):
-    rec = {"mall": "kurly", "goods_no": g, "images": [], "text": "", "error": ""}
+    rec = {"mall": a.mall, "goods_no": g, "images": [], "text": "", "error": ""}
     try:
-        imgs = label_images(g); rec["images"] = imgs[:3]
-        rec["text"] = "\n".join(ocr(u) for u in imgs[:3])
+        imgs = (st11_images(g) if a.mall == "11st" else label_images(g))[:4 if a.mall == "11st" else 3]
+        rec["images"] = imgs
+        rec["text"] = "\n".join(ocr(u) for u in imgs)
+    except SystemExit:
+        raise
     except Exception as e:
         rec["error"] = str(e)[:200]
     return rec

@@ -17,10 +17,11 @@ from concurrent.futures import ThreadPoolExecutor
 ap = argparse.ArgumentParser()
 ap.add_argument("dir"); ap.add_argument("ocr", nargs="+"); ap.add_argument("--out", default="judged.csv")
 ap.add_argument("--workers", type=int, default=6)
+ap.add_argument("--mall", default="kurly", choices=["kurly", "11st"])
 a = ap.parse_args()
 
 MFDS = "https://apis.data.go.kr/1471000/FoodNtrCpntDbInfo03/getFoodNtrCpntDbInq03"
-MKEY = urllib.parse.quote(os.environ["MFDS_API_KEY"], safe="")
+MKEY = urllib.parse.quote(os.environ.get("MFDS_API_KEY", ""), safe="")  # 없으면 번호 조회 없이 제조원·kcal 로만 판정
 SB = os.environ["NEXT_PUBLIC_SUPABASE_URL"].rstrip("/") + "/rest/v1/"
 SKEY = os.environ["SUPABASE_SERVICE_ROLE_KEY"]; SH = {"apikey": SKEY, **({"Authorization": f"Bearer {SKEY}"} if SKEY.startswith("eyJ") else {})}
 
@@ -51,6 +52,7 @@ def maker_sim(a_, b_):
 
 _cache, _lock = {}, threading.Lock()
 def mfds(no):
+    if not MKEY: return None
     with _lock:
         if no in _cache: return _cache[no]
     try:
@@ -68,8 +70,8 @@ def our_product(code):
 data = json.load(open(os.path.join(a.dir, "matches.json")))
 PRODS = data["products"]
 by_goods = {}
-for r in data["malls"]["kurly"]:
-    m = re.search(r"goods/(\d+)", r.get("url") or "")
+for r in data["malls"][a.mall]:
+    m = re.search(r"goods/(\d+)" if a.mall == "kurly" else r"products/(\d+)", (r.get("url") or r.get("product_url") or ""))
     if m: by_goods.setdefault(m.group(1), []).append(r)
 ocr = {}
 for path in a.ocr:
