@@ -11,12 +11,16 @@ score_matches.py 의 판정(scored.csv)을 운영 DB 에 반영한다 — 사람
   unlink : 판정이 mismatch, 또는 위 조건을 못 넘은 relink.
   나머지(confirmed·risky·suspect)는 그대로. 라벨로 확인한 연결은 DB 함수가 건너뛴다.
 되돌리기: select public.undo_link_rescore('<이름>');
+
+--mark: 연결은 바꾸지 않고 판정만 남긴다 (confirmed → score_confirmed, suspect·risky → score_unsure)
+        → mark_link_check(rows), 끝에 refresh_rec_hold() 로 확인 안 된 연결만 있는 제품을 추천에서 뺀다.
 """
 import argparse, csv, json, os, re, urllib.request
 from collections import Counter
 
 ap = argparse.ArgumentParser()
-ap.add_argument("csv"); ap.add_argument("--batch", required=True); ap.add_argument("--apply", action="store_true")
+ap.add_argument("csv"); ap.add_argument("--batch", default=""); ap.add_argument("--apply", action="store_true")
+ap.add_argument("--mark", action="store_true")
 a = ap.parse_args()
 
 norm = lambda s: re.sub(r"[^0-9a-z가-힣]", "", (s or "").lower())
@@ -33,8 +37,14 @@ def action(r):
     return None
 
 
+MARK = {"confirmed": "score_confirmed", "suspect": "score_unsure", "risky": "score_unsure"}
+if a.mark:
+    marks = [{"mall": r["mall"], "id": r["id"], "old": r["product_id"], "status": MARK[r["status"]]}
+             for r in csv.DictReader(open(a.csv, encoding="utf-8-sig")) if r["status"] in MARK]
+    print("미리보기" if not a.apply else "반영", "판정 남기기", dict(Counter((x["mall"], x["status"]) for x in marks)))
+
 rows = []
-for r in csv.DictReader(open(a.csv, encoding="utf-8-sig")):
+for r in ([] if a.mark else csv.DictReader(open(a.csv, encoding="utf-8-sig"))):
     act = action(r)
     if not act:
         continue
@@ -44,7 +54,8 @@ for r in csv.DictReader(open(a.csv, encoding="utf-8-sig")):
     rows.append({"mall": r["mall"], "id": r["id"], "old": r["product_id"], "new": r.get("new_product_id") if act == "relink" else None,
                  "action": act, "reason": ("다시 판정: " + note)[:300]})
 
-print("미리보기" if not a.apply else "반영", a.batch, dict(Counter((x["mall"], x["action"]) for x in rows)))
+if not a.mark:
+    print("미리보기" if not a.apply else "반영", a.batch, dict(Counter((x["mall"], x["action"]) for x in rows)))
 if not a.apply:
     raise SystemExit(0)
 
@@ -59,6 +70,19 @@ def rpc(fn, body):
         return json.loads(res.read() or "null")
 
 
+if a.mark:
+    done = 0
+    for i in range(0, len(marks), 2000):
+        done += rpc("mark_link_check", {"p_rows": marks[i:i + 2000]})
+        print(f"  {min(i + 2000, len(marks))}/{len(marks)} 보냄 · 남긴 행 {done}", flush=True)
+    try:
+        print("추천 보류 다시 계산", rpc("refresh_rec_hold", {}))
+    except Exception as e:
+        print("API 시간 제한 — SQL 편집기에서: set statement_timeout = '10min'; select public.refresh_rec_hold();", e)
+    raise SystemExit(0)
+
+if not a.batch:
+    raise SystemExit("--batch 이름이 필요해요")
 done = 0
 for i in range(0, len(rows), 1000):
     done += rpc("apply_link_rescore", {"p_batch": a.batch, "p_rows": rows[i:i + 1000]})

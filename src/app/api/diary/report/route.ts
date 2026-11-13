@@ -212,7 +212,7 @@ export async function GET(request: NextRequest) {
         .from("products")
         .select("id, name, health_score")
         .eq("is_purchasable", true)
-        .is("nutrition_flag", null)
+        .is("nutrition_flag", null).is("rec_hold", null)
         .not("health_score", "is", null)
         .order("health_score", { ascending: false })
         .limit(2);

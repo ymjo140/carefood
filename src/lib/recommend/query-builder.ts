@@ -57,6 +57,7 @@ export async function fetchColdPool(supabase: SupabaseClient, limit = 300): Prom
     .in("meal_role", ["meal", "side"])
     .not("health_score", "is", null)
     .is("nutrition_flag", null) // 영양값이 음식에 비해 말이 안 되게 낮은 제품 (flag_implausible_nutrition)
+    .is("rec_hold", null) // 확인된 판매처 연결이 없는 제품 (refresh_rec_hold) — 가격은 보이지만 추천하지 않는다
     .order("health_score", { ascending: false })
     .limit(limit) as unknown as Promise<{ data: Record<string, unknown>[] | null; error: { message: string } | null }>);
   if (error) throw new Error(error.message);
@@ -78,7 +79,7 @@ async function executeQuery(
     .select("*")
     .eq("is_active", true)
     .not("health_score", "is", null)
-    .is("nutrition_flag", null) // 영양값 이상 — 추천에서 뺀다
+    .is("nutrition_flag", null).is("rec_hold", null) // 영양값 이상 — 추천에서 뺀다
     .neq("dish_category", "sauce")
     .neq("dish_category", "ingredient")
     .neq("dish_category", "supplement") // 건강기능식품은 끼니 추천에서 뺀다

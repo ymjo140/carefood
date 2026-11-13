@@ -232,7 +232,7 @@ export async function POST(request: NextRequest) {
       let query = supabase.from("products")
         .select("id, name, manufacturer, calories, protein_g, carbs_g, fat_g, sugar_g, sodium_mg, fiber_g, functional_tags, dish_category, health_score, serving_size_g, nutrient_base_g, meal_role")
         .eq("is_active", true).eq("category_large", "상용제품")
-        .eq("is_purchasable", true).eq("meal_role", "meal").is("nutrition_flag", null); // 끼니 역할(scripts/meal_role.py) — 예전 is_meal 은 사탕·냉동 과일까지 한 끼로 잡았다
+        .eq("is_purchasable", true).eq("meal_role", "meal").is("nutrition_flag", null).is("rec_hold", null); // 끼니 역할(scripts/meal_role.py) — 예전 is_meal 은 사탕·냉동 과일까지 한 끼로 잡았다
 
       // 관심사 기반 영양 제외 필터 적용
       if (nutritionExclusions.sodium_max) query = query.lte("sodium_mg", nutritionExclusions.sodium_max);
@@ -296,7 +296,7 @@ export async function POST(request: NextRequest) {
     {
       const { data } = await supabase.from("products")
         .select("id, name, manufacturer, calories, protein_g, carbs_g, fat_g, sugar_g, sodium_mg, fiber_g, functional_tags, dish_category, serving_size_g, nutrient_base_g, meal_role")
-        .eq("is_active", true).eq("category_large", "상용제품").eq("is_purchasable", true).is("nutrition_flag", null)
+        .eq("is_active", true).eq("category_large", "상용제품").eq("is_purchasable", true).is("nutrition_flag", null).is("rec_hold", null)
         .in("meal_role", ["snack", "drink", "side"]) // 간식 칸 — 재료·소스·영양제는 빼고
         .gt("calories", 0)
         .or("name.ilike.%유산균%,name.ilike.%프로바이오%,name.ilike.%요거트%,name.ilike.%요구르트%,name.ilike.%비타민%,name.ilike.%프로틴%,name.ilike.%단백질바%,name.ilike.%에너지바%,name.ilike.%그래놀라%,name.ilike.%오트밀%,name.ilike.%시리얼%,name.ilike.%두유%,name.ilike.%스무디%")

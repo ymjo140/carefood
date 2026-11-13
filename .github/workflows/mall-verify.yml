@@ -1,6 +1,7 @@
 # 판매처 상품 ↔ 식약처 제품 연결 검증 — 상품정보 이미지 OCR(컬리) + 쿠팡 파트너스 키 확인
 # 실행: scripts/verify/input/RUN 파일을 바꿔 푸시 (첫 낱말: test | full | coupang | score) 또는 Actions 화면에서 수동 실행
 #   st11label: 11번가 확인 못 한 연결(suspect·risky)을 공식 OpenAPI 이미지 + OCR 로 판정 (DB 는 읽기만) → 아티팩트 st11-label
+#   mark: score 실행 번호(score_run)의 판정을 남기기만 (연결은 그대로) + 확인 안 된 연결만 있는 제품 추천 보류
 #   apply: score 실행 번호(score_run)의 판정 파일을 DB 에 반영 (사람이 본 뒤에만)
 #   score: 판매처 4곳의 연결을 브랜드·제조사·이름·중량으로 다시 채점 (DB 는 읽기만) → 아티팩트 match-score
 #   coupang: scripts/verify/input/coupang_targets.json 의 제품을 쿠팡에서 천천히 검색 → 아티팩트 coupang-prices
@@ -10,7 +11,7 @@ name: mall-verify
 on:
   workflow_dispatch:
     inputs:
-      mode: { description: "test(20개) | full | coupang | score | apply | st11label", default: "test" }
+      mode: { description: "test(20개) | full | coupang | score | apply | mark | st11label", default: "test" }
       limit: { description: "st11label 일 때 볼 상품 수", default: "200" }
       score_run: { description: "apply 일 때: 판정을 본 score 실행 번호", default: "" }
   push:
@@ -133,7 +134,7 @@ jobs:
 
   match-apply:
     needs: plan
-    if: needs.plan.outputs.mode == 'apply'
+    if: needs.plan.outputs.mode == 'apply' || needs.plan.outputs.mode == 'mark'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions: { contents: read, actions: read }
@@ -145,11 +146,16 @@ jobs:
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        run: python3 scripts/verify/apply_score.py out/scored.csv --batch "score-${{ github.event.inputs.score_run }}" --apply
+        run: |
+          if [ "${{ needs.plan.outputs.mode }}" = "mark" ]; then
+            python3 scripts/verify/apply_score.py out/scored.csv --mark --apply
+          else
+            python3 scripts/verify/apply_score.py out/scored.csv --batch "score-${{ github.event.inputs.score_run }}" --apply
+          fi
 
   kurly-ocr:
     needs: plan
-    if: needs.plan.outputs.mode != 'coupang' && needs.plan.outputs.mode != 'score' && needs.plan.outputs.mode != 'apply' && needs.plan.outputs.mode != 'st11label'
+    if: needs.plan.outputs.mode != 'coupang' && needs.plan.outputs.mode != 'score' && needs.plan.outputs.mode != 'apply' && needs.plan.outputs.mode != 'st11label' && needs.plan.outputs.mode != 'mark'
     runs-on: ubuntu-latest
     timeout-minutes: 300
     strategy:
