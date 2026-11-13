@@ -10,7 +10,7 @@ export default function PrivacyPage() {
   return (
     <Page width="default">
       <h1 className="text-title font-bold text-ink mb-1">개인정보처리방침</h1>
-      <p className="text-label text-ink-2 mb-8">시행일: 2026년 11월 11일</p>
+      <p className="text-label text-ink-2 mb-8">시행일: 2026년 11월 21일</p>
 
       <div className="flex flex-col gap-8 text-label text-ink-2">
         {/* 1조 */}
@@ -145,6 +145,16 @@ export default function PrivacyPage() {
                 <td className="py-2 pr-3">투표 결과(비율·참여자 수)와 챌린지 진행 계산. 누가 무엇을 골랐는지, 챌린지 달성 기록은 다른 이용자에게 보이지 않습니다</td>
                 <td className="py-2 pr-3 whitespace-nowrap">선택</td>
               </tr>
+              <tr className="border-b border-line">
+                <td className="py-2 pr-3">광고성 정보 수신 동의(업체 소식 받기·밤 9시~아침 8시에도 받기·맞춤 광고 대상 고르기)와 동의·철회 일시, 받은 업체 소식과 열어 본 기록</td>
+                <td className="py-2 pr-3">동의한 이용자에게 입점 업체의 신제품·할인·공동구매 소식을 알림함과 기기 알림으로 보내고, 동의 여부를 확인하며, 업체별 발송 결과(인원·클릭·구매 합계)를 집계합니다</td>
+                <td className="py-2 pr-3 whitespace-nowrap">선택</td>
+              </tr>
+              <tr className="border-b border-line">
+                <td className="py-2 pr-3">건강 목표·맛 선호도 (맞춤 광고 대상 고르기에 동의한 경우)</td>
+                <td className="py-2 pr-3">입점 업체 소식을 받을 사람을 고를 때 업체가 정한 조건과 대조합니다. 업체에는 조건에 맞는 인원 수(10명 미만은 가림)와 합계만 알리고, 누가 받았는지는 제공하지 않습니다. 질환 관심은 쓰지 않습니다</td>
+                <td className="py-2 pr-3 whitespace-nowrap">선택</td>
+              </tr>
             </tbody>
           </table></div>
         </section>
@@ -157,6 +167,7 @@ export default function PrivacyPage() {
             <li>주간 식단 구성 및 건강식단 서비스 비교</li>
             <li>서비스 이용 통계 분석 및 품질 개선</li>
             <li>이용자 문의 대응</li>
+            <li>이용자가 동의한 경우 입점 업체의 광고성 정보(신제품·할인·공동구매 소식) 발송과 발송 결과 집계</li>
             {ORDERING_ENABLED && <li>주문한 상품의 배송, 주문 취소·환불 처리, 판매 업체와의 정산</li>}
           </ul>
           <p className="mt-2">

@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { getActorId, noActor } from "@/lib/actor-server";
 
+// 질환 관심 — lib/profile-options.ts 의 DISEASE_GOALS 와 같다 (그 파일은 브라우저 전용이라 여기서 불러오지 않는다)
+const DISEASE_GOALS = ["diabetes", "blood_pressure", "kidney"];
+
 /**
  * POST /api/profile — 사용자 프로필 저장 (upsert)
  */
@@ -21,6 +24,8 @@ export async function POST(request: NextRequest) {
       .upsert({
         user_id,
         concerns: concerns || [],
+        // 고른 목표 그대로 (질환 관심은 conditions 에만) — 업체 고객층의 목표 조건이 이 값을 본다
+        ...(Array.isArray(body.goals) ? { goals: body.goals.filter((g: unknown): g is string => typeof g === "string" && !DISEASE_GOALS.includes(g)).slice(0, 10) } : {}),
         conditions: body.conditions || [],
         allergies: allergies || [],
         sensitivity_digestive: sensitivity?.digestive || 2,

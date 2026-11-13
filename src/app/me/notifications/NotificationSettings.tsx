@@ -152,6 +152,7 @@ function AdConsent() {
   const toast = useToast();
   const [state, setState] = useState<{ status: "loading" | "error" | "done" | "not_ready"; value?: Consent }>({ status: "loading" });
   const [attempt, setAttempt] = useState(0);
+  const [busy, setBusy] = useState(false); // 바꾸는 중에는 다른 칸을 잠근다 (요청이 엇갈려 끈 동의가 되살아나지 않게)
 
   useEffect(() => {
     let alive = true;
@@ -162,8 +163,9 @@ function AdConsent() {
   }, [attempt]);
 
   const set = async (key: keyof Consent, next: boolean) => {
-    if (!state.value) return;
+    if (!state.value || busy) return;
     const before = state.value;
+    setBusy(true);
     setState({ status: "done", value: { ...before, [key]: next, ...(key === "ads" && !next ? { night: false, targeting: false } : {}) } });
     try {
       const r = await fetch("/api/marketing-consent", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ [key]: next }) });
@@ -176,6 +178,8 @@ function AdConsent() {
     } catch {
       setState({ status: "done", value: before });
       toast.show("설정을 바꾸지 못했어요. 다시 시도해 주세요", { tone: "danger" });
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -190,11 +194,11 @@ function AdConsent() {
         ) : (
           <>
             <div className="flex flex-col divide-y divide-line">
-              <Switch label="업체 소식·할인 받기" checked={state.value.ads} onChange={(v) => set("ads", v)}
+              <Switch label="업체 소식·할인 받기" checked={state.value.ads} disabled={busy} onChange={(v) => set("ads", v)}
                 description="입점 업체의 신제품·할인·공구 소식을 알림함과 이 기기 알림으로 보내요. 업체에는 내 정보를 주지 않아요" />
-              <Switch label="밤 9시~아침 8시에도 받기" checked={state.value.night} disabled={!state.value.ads} onChange={(v) => set("night", v)}
+              <Switch label="밤 9시~아침 8시에도 받기" checked={state.value.night} disabled={busy || !state.value.ads} onChange={(v) => set("night", v)}
                 description="끄면 그 시간에는 업체 소식을 보내지 않아요" />
-              <Switch label="고른 목표에 맞는 소식만 받기" checked={state.value.targeting} disabled={!state.value.ads} onChange={(v) => set("targeting", v)}
+              <Switch label="고른 목표에 맞는 소식만 받기" checked={state.value.targeting} disabled={busy || !state.value.ads} onChange={(v) => set("targeting", v)}
                 description="가입할 때 고른 목표·입맛을 맞춤 광고 대상을 고르는 데 써요. 질환 관심은 쓰지 않아요" />
             </div>
             <p className="text-caption text-ink-2 mt-2">업체 소식은 한 주에 2번까지만 보내요. 받은 소식 끝에도 끄는 방법이 적혀 있어요</p>

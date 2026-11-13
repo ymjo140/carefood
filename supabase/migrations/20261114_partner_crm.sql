@@ -30,9 +30,16 @@ create table if not exists public.marketing_consent_log (
 );
 create index if not exists marketing_consent_log_user_idx on public.marketing_consent_log (user_id, at desc);
 
--- 2) 업체별 건당 발송비(원). 비어 있으면 그 업체는 아직 고객층 발송을 예약할 수 없다
+-- 2) 업체별 건당 발송비(원). 비어 있으면 그 업체는 고객층 발송을 예약할 수 없다 (관리자가 비워서 닫는다)
+--    결정(11/13): 처음에는 모든 업체 건당 100원
 alter table public.partners add column if not exists crm_unit_price integer
   check (crm_unit_price is null or crm_unit_price between 0 and 10000);
+alter table public.partners alter column crm_unit_price set default 100;
+update public.partners set crm_unit_price = 100 where crm_unit_price is null;
+
+-- 2-1) 온보딩에서 고른 목표를 그대로 저장한다 (concerns 는 추천용으로 접힌 값이라 muscle·balanced 가 없다)
+--      질환 관심(diabetes·blood_pressure·kidney)은 conditions 에만 두고 여기에는 넣지 않는다
+alter table public.user_profiles add column if not exists goals text[];
 
 -- 3) 저장한 고객층 (조건 묶음만 — 사람은 저장하지 않는다)
 create table if not exists public.partner_segments (
@@ -129,6 +136,65 @@ begin
 end $$;
 revoke all on function public.partner_credit_hold(uuid, uuid, integer) from public, anon, authenticated;
 grant execute on function public.partner_credit_hold(uuid, uuid, integer) to service_role;
+
+-- 7-1) 발송비 정산 — 잡아 둔 금액을 돌려놓고 실제 발송분을 차감하는 일을 업체 줄을 잠근 채 한 번에 한다.
+--      (돌려놓은 뒤 차감 전에 다른 요청이 그 돈을 다시 잡아 잔액이 음수가 되지 않게)
+--      한 발송은 한 번만 정산한다. 차감은 잡아 둔 금액을 넘지 않는다.
+create or replace function public.partner_credit_settle(p_partner uuid, p_campaign uuid, p_release integer, p_charge integer, p_release_note text, p_charge_note text)
+returns boolean
+language plpgsql security definer set search_path = ''
+as $$
+begin
+  if p_release < 0 or p_charge < 0 then raise exception 'amount must be >= 0'; end if;
+  if p_charge > p_release then raise exception 'charge exceeds hold'; end if;
+  perform 1 from public.partners where id = p_partner for update;
+  if exists (select 1 from public.partner_credit_ledger where campaign_id = p_campaign and kind in ('release', 'charge')) then
+    return false; -- 이미 정산함
+  end if;
+  if p_release > 0 then
+    insert into public.partner_credit_ledger (partner_id, kind, amount, campaign_id, note)
+    values (p_partner, 'release', p_release, p_campaign, p_release_note);
+  end if;
+  if p_charge > 0 then
+    insert into public.partner_credit_ledger (partner_id, kind, amount, campaign_id, note)
+    values (p_partner, 'charge', -p_charge, p_campaign, p_charge_note);
+  end if;
+  return true;
+end $$;
+revoke all on function public.partner_credit_settle(uuid, uuid, integer, integer, text, text) from public, anon, authenticated;
+grant execute on function public.partner_credit_settle(uuid, uuid, integer, integer, text, text) to service_role;
+
+-- 7-2) 광고 동의 하나 바꾸기 — 사람 줄을 잠그고 지금 값 위에서 바꾼다 (먼저 읽은 값으로 덮어써 끈 동의가 되살아나지 않게)
+--      ads 를 끄면 night·targeting 도 끈다. 바뀐 칸만 시각을 적고 기록을 남긴다.
+create or replace function public.marketing_consent_set(p_user text, p_key text, p_value boolean)
+returns jsonb
+language plpgsql security definer set search_path = ''
+as $$
+declare
+  cur public.marketing_consents%rowtype;
+  a boolean; n boolean; g boolean; t timestamptz := now();
+begin
+  if p_key not in ('ads', 'night', 'targeting') then raise exception 'unknown consent key %', p_key; end if;
+  insert into public.marketing_consents (user_id) values (p_user) on conflict (user_id) do nothing;
+  select * into cur from public.marketing_consents where user_id = p_user for update;
+  a := case when p_key = 'ads' then p_value else cur.ads end;
+  n := case when p_key = 'night' then p_value else cur.night end;
+  g := case when p_key = 'targeting' then p_value else cur.targeting end;
+  if not a then n := false; g := false; end if;
+  update public.marketing_consents set
+    ads = a, ads_at = case when a is distinct from cur.ads then t else cur.ads_at end,
+    night = n, night_at = case when n is distinct from cur.night then t else cur.night_at end,
+    targeting = g, targeting_at = case when g is distinct from cur.targeting then t else cur.targeting_at end,
+    updated_at = t
+  where user_id = p_user;
+  insert into public.marketing_consent_log (user_id, field, value, at)
+  select p_user, f, v, t from (values ('ads', a, cur.ads), ('night', n, cur.night), ('targeting', g, cur.targeting)) x(f, v, prev)
+  where v is distinct from prev;
+  return jsonb_build_object('ads', a, 'night', n, 'targeting', g,
+    'ads_at', case when a is distinct from cur.ads then t else cur.ads_at end);
+end $$;
+revoke all on function public.marketing_consent_set(text, text, boolean) from public, anon, authenticated;
+grant execute on function public.marketing_consent_set(text, text, boolean) to service_role;
 
 -- 8) 로그인하면 이 기기 기록을 계정으로 옮기는 함수에 동의·받은 기록을 넣는다
 create or replace function public.merge_actor(from_id text, to_id text)

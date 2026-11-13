@@ -5,8 +5,9 @@ import { getPartnerContext } from "@/lib/partner/auth";
 import {
   BEHAVIORS, BEHAVIOR_DAYS, CRM_GOALS, MIN_PEOPLE, PER_PARTNER_WEEK, SEGMENTS, TEMPLATES,
   adText, buildAudience, campaignResult, checkMessage, cleanConditions, creditBalance, describeConditions, isNight, notReady,
-  previewOf, releaseHold, sendableOf, weeklyUsed, type Template,
+  previewOf, releaseHold, sendableOf, bookedTimes, type Template,
 } from "@/lib/partner/crm";
+import { WEEK_MS, fitsWeekly } from "@/lib/partner/quota";
 
 /**
  * 고객층(CRM) — 업체 화면 API. 업체는 조건·인원·합계만 받는다 (lib/partner/crm.ts).
@@ -53,7 +54,7 @@ export async function GET(req: NextRequest) {
   for (const r of [pa, seg, camp]) if (r.error) return notReady(r.error) ? notReadyRes() : bad(r.error.message, 500);
   if (items.error) return bad(items.error.message, 500);
   try {
-    const [credit, used] = await Promise.all([creditBalance(sb, pid), weeklyUsed(sb, pid)]);
+    const [credit, booked] = await Promise.all([creditBalance(sb, pid), bookedTimes(sb, pid, Date.now() - WEEK_MS)]);
     type C = { id: string; status: string; sent_at: string | null; conditions: unknown; [k: string]: unknown };
     const campaigns = await Promise.all(((camp.data || []) as C[]).map(async (c) => ({
       ...c,
@@ -64,7 +65,7 @@ export async function GET(req: NextRequest) {
       ready: true,
       unit_price: pa.data?.crm_unit_price ?? null,
       balance: credit.balance, pending_topup: credit.pending,
-      weekly_used: used, weekly_limit: PER_PARTNER_WEEK,
+      booked: booked.map((t) => new Date(t).toISOString()), weekly_limit: PER_PARTNER_WEEK,
       segments: ((seg.data || []) as { id: string; name: string; conditions: unknown; updated_at: string }[])
         .map((s) => ({ ...s, conditions: cleanConditions(s.conditions), summary: describeConditions(cleanConditions(s.conditions)) })),
       campaigns,
@@ -151,7 +152,7 @@ export async function POST(req: NextRequest) {
       const { data: own, error: oErr } = await sb.from("partner_items").select("id").eq("partner_id", pid).eq("product_id", productId).eq("status", "approved").limit(1);
       if (oErr) return bad(oErr.message, 500);
       if (!own?.length) return bad("반영된 내 제품만 고를 수 있어요");
-      if ((await weeklyUsed(sb, pid)) >= PER_PARTNER_WEEK) return bad(`발송은 7일에 ${PER_PARTNER_WEEK}번까지 할 수 있어요`, 409);
+      if (!fitsWeekly(await bookedTimes(sb, pid, sendAt - WEEK_MS, sendAt + WEEK_MS), sendAt, PER_PARTNER_WEEK)) return bad(`고른 날 앞뒤 7일 안에 이미 ${PER_PARTNER_WEEK}번 보내요. 발송은 7일에 ${PER_PARTNER_WEEK}번까지라 다른 날을 골라 주세요`, 409);
 
       const c = cleanConditions(b.conditions);
       const a = await buildAudience(sb, pid, c, sendAt);

@@ -6,6 +6,7 @@ import {
   cn, timeAgo, useToast, type BadgeTone,
 } from "@/components/ui";
 import { checkClaims } from "@/lib/partner/claims";
+import { fitsWeekly } from "@/lib/partner/quota";
 import type { Tab } from "@/lib/partner/tabs";
 
 type Behavior = "viewed" | "saved" | "clicked" | "never_seen";
@@ -22,7 +23,7 @@ type Campaign = {
 };
 type Segment = { id: string; name: string; conditions: Conditions; summary: string };
 type Data = {
-  ready: boolean; unit_price: number | null; balance: number; pending_topup: number; weekly_used: number; weekly_limit: number;
+  ready: boolean; unit_price: number | null; balance: number; pending_topup: number; booked: string[]; weekly_limit: number;
   segments: Segment[]; campaigns: Campaign[]; products: { id: string; name: string }[]; partner_name: string; read_only: boolean;
   options: { goals: Option[]; needs: Option[]; behaviors: Option[]; days: number[]; templates: Record<string, { label: string; title: string; body: string }> };
 };
@@ -53,6 +54,7 @@ const fmtWhen = (iso: string) => new Date(iso).toLocaleString("ko-KR", { month: 
  */
 export function Segments({ qs, go, prefill }: { qs: string; go: (tab: Tab) => void; prefill?: { need?: string; goal?: string } | null }) {
   const toast = useToast();
+  const [now] = useState(() => Date.now());
   const [state, setState] = useState<{ status: "loading" | "error" | "done"; data?: Data; error?: string }>({ status: "loading" });
   const [compose, setCompose] = useState<{ conditions: Conditions; segmentId: string | null } | null>(null);
   const [cancel, setCancel] = useState<Campaign | null>(null);
@@ -98,6 +100,7 @@ export function Segments({ qs, go, prefill }: { qs: string; go: (tab: Tab) => vo
   }
 
   const ro = d.read_only;
+  const upcoming = d.booked.filter((t) => Date.parse(t) > now).length;
   return (
     <section className="flex flex-col gap-8">
       <div>
@@ -110,7 +113,7 @@ export function Segments({ qs, go, prefill }: { qs: string; go: (tab: Tab) => vo
           <span className="text-label text-ink-2">충전금 <span className="num font-bold text-ink">{won(d.balance)}</span>
             {d.pending_topup > 0 && <> · 확인 중 <span className="num">{won(d.pending_topup)}</span></>}</span>
           <span className="text-label text-ink-2">건당 발송비 {d.unit_price === null ? <span className="text-ink">정해지지 않았어요</span> : <span className="num font-bold text-ink">{won(d.unit_price)}</span>}</span>
-          <span className="text-label text-ink-2">이번 7일 발송 <span className="num text-ink">{d.weekly_used}/{d.weekly_limit}</span></span>
+          <span className="text-label text-ink-2">발송 7일에 {d.weekly_limit}번까지 · 예약 <span className="num text-ink">{upcoming}</span>건</span>
           <Button size="sm" variant="ghost" className="ml-auto" onClick={() => go("commission")}>충전하기</Button>
         </Card>
       </div>
@@ -275,6 +278,7 @@ function Composer({ qs, data, initial, segmentId, post, onClose, onDone }: {
   const hits = checkClaims(title, body);
   const cost = p?.cost ?? null;
   const lacking = cost !== null && cost > data.balance;
+  const full = !fitsWeekly(data.booked.map((t) => Date.parse(t)), Date.parse(sendIso), data.weekly_limit);
 
   const saveSegment = async () => {
     if (!saveName.trim()) { toast.show("고객층 이름을 적어 주세요", { tone: "danger" }); return; }
@@ -434,10 +438,10 @@ function Composer({ qs, data, initial, segmentId, post, onClose, onDone }: {
               <span className="num">{won(short ?? (cost! - data.balance))}</span> 더 있어야 해요. 정산 탭에서 충전을 신청하면 입금을 확인한 뒤 반영해요
             </Notice>
           )}
-          {data.weekly_used >= data.weekly_limit && <Notice tone="caution">발송은 7일에 {data.weekly_limit}번까지예요. 지난 발송이 7일을 넘기면 다시 보낼 수 있어요</Notice>}
+          {full && <Notice tone="caution">고른 날 앞뒤 7일 안에 이미 {data.weekly_limit}번 보내요. 발송은 7일에 {data.weekly_limit}번까지라 다른 날을 골라 주세요</Notice>}
           <div className="flex justify-between">
             <Button variant="secondary" onClick={() => setStep(1)}>이전</Button>
-            <Button loading={busy === "send"} disabled={!p?.enough || data.unit_price === null || lacking || data.weekly_used >= data.weekly_limit}
+            <Button loading={busy === "send"} disabled={!p?.enough || data.unit_price === null || lacking || full}
               onClick={request}>검수 요청하기</Button>
           </div>
         </div>

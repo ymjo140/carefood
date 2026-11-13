@@ -13,6 +13,7 @@
 import { kstHour } from "@/lib/day";
 import { checkClaims, type ClaimHit } from "./claims";
 import { wants, SEGMENTS, type SegmentKey } from "./demand";
+import { WEEK_MS } from "./quota";
 
 type Sb = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
@@ -22,7 +23,6 @@ export const PER_USER_WEEK = 2;
 export const PER_PARTNER_USER_WEEK = 1;
 export const PER_PARTNER_WEEK = 2;
 export const RESULT_DAYS = 7;
-const WEEK_MS = 7 * 86400e3;
 
 /** 조건에 쓰는 목표 — 질환 관심(diabetes·blood_pressure·kidney)은 넣지 않는다 */
 export const CRM_GOALS = [
@@ -141,6 +141,17 @@ async function behaviorSet(sb: Sb, partnerId: string, b: NonNullable<Conditions[
   return out;
 }
 
+/**
+ * 고객층 목표 조건에 쓰는 그 사람의 목표.
+ * goals(고른 목표 그대로)가 있으면 그것만. 2026-11-14 전에 저장된 프로필은 goals 가 없어 concerns 에서 되짚는데,
+ * concerns 의 energy 는 근육·균형만 고른 사람에게도 채워 넣은 값이라 빼고, 근육·균형은 되짚을 수 없어 맞추지 않는다
+ * (프로필을 다시 저장하면 goals 가 생긴다).
+ */
+function goalsOf(p: { goals: string[] | null; concerns: string[] | null }): string[] {
+  if (Array.isArray(p.goals)) return p.goals;
+  return (p.concerns || []).filter((g) => g !== "energy").map((g) => (g === "weight" ? "weight_loss" : g));
+}
+
 export type Audience = {
   /** 동의한 사람 중 조건에 맞는 사람 (상한·야간 거르기 전) */
   matched: number;
@@ -165,12 +176,11 @@ export async function buildAudience(sb: Sb, partnerId: string, c: Conditions, se
     .filter((r) => !needsTargeting || r.targeting);
 
   if (needsTargeting && people.length) {
-    type P = { user_id: string; concerns: string[] | null; diet_type: string | null; taste_salty: number | null; taste_sweet: number | null };
-    const profs = await chunked<P>(people.map((p) => p.user_id), (part) => sb.from("user_profiles").select("user_id, concerns, diet_type, taste_salty, taste_sweet").in("user_id", part));
+    type P = { user_id: string; goals: string[] | null; concerns: string[] | null; diet_type: string | null; taste_salty: number | null; taste_sweet: number | null };
+    const profs = await chunked<P>(people.map((p) => p.user_id), (part) => sb.from("user_profiles").select("user_id, goals, concerns, diet_type, taste_salty, taste_sweet").in("user_id", part));
     const ok = new Set<string>();
     for (const p of profs) {
-      const concerns = (p.concerns || []).map((g) => (g === "weight" ? "weight_loss" : g));
-      if (c.goals?.length && !c.goals.some((g) => concerns.includes(g))) continue;
+      if (c.goals?.length && !c.goals.some((g) => goalsOf(p).includes(g))) continue;
       if (c.needs?.length) {
         const w = wants({ concerns: p.concerns, diet_type: p.diet_type, taste_salty: p.taste_salty, taste_sweet: p.taste_sweet });
         if (!c.needs.some((k) => w.includes(k))) continue;
@@ -257,12 +267,17 @@ export async function creditBalance(sb: Sb, partnerId: string) {
   return { balance, pending };
 }
 
-/** 이번 7일에 이 업체가 쓴 발송 횟수 (검수 중·예약·보냄) */
-export async function weeklyUsed(sb: Sb, partnerId: string): Promise<number> {
-  const { count, error } = await sb.from("partner_campaigns").select("id", { count: "exact", head: true })
-    .eq("partner_id", partnerId).in("status", ["review", "scheduled", "sending", "sent"]).gte("send_at", new Date(Date.now() - WEEK_MS).toISOString());
+/**
+ * 이 업체의 살아 있는 발송(검수 중·예약·보내는 중·보냄) 중 보낼 시각이 from 이후인 것들의 시각(ms).
+ * 한도는 fitsWeekly(booked, 보낼 시각, PER_PARTNER_WEEK) 로 보낼 시각 기준으로 센다
+ */
+export async function bookedTimes(sb: Sb, partnerId: string, from: number, until?: number): Promise<number[]> {
+  let q = sb.from("partner_campaigns").select("send_at")
+    .eq("partner_id", partnerId).in("status", ["review", "scheduled", "sending", "sent"]).gt("send_at", new Date(from).toISOString());
+  if (until !== undefined) q = q.lt("send_at", new Date(until).toISOString());
+  const { data, error } = await q.limit(500);
   if (error) throw error;
-  return count || 0;
+  return ((data || []) as { send_at: string }[]).map((r) => Date.parse(r.send_at));
 }
 
 export type CampaignResult = {
@@ -305,15 +320,21 @@ export async function campaignResult(sb: Sb, partnerId: string, c: { id: string;
   };
 }
 
-/** 원장에 적는다 — 실패하면 throw */
-async function ledger(sb: Sb, row: Record<string, unknown>) {
-  const { error } = await sb.from("partner_credit_ledger").insert(row);
+/**
+ * 발송비 정산 — 잡아 둔 금액을 돌려놓고 실제 발송분을 차감한다. 업체 줄을 잠근 채 DB 함수 하나로 한다
+ * (따로 적으면 그 사이에 다른 요청이 돌려놓은 돈을 다시 잡아 잔액이 음수가 될 수 있다). 한 발송은 한 번만 정산된다.
+ */
+async function settle(sb: Sb, c: { id: string; partner_id: string; held_amount: number }, charge: number, releaseNote: string, chargeNote: string | null) {
+  const { error } = await sb.rpc("partner_credit_settle", {
+    p_partner: c.partner_id, p_campaign: c.id, p_release: Math.max(0, c.held_amount), p_charge: charge,
+    p_release_note: releaseNote, p_charge_note: chargeNote,
+  });
   if (error) throw new Error(error.message);
 }
 
-/** 잡아 둔 발송비를 돌려준다 (반려·취소·못 보냄) */
+/** 잡아 둔 발송비를 모두 돌려준다 (반려·취소·못 보냄) */
 export async function releaseHold(sb: Sb, c: { id: string; partner_id: string; held_amount: number }, note: string) {
-  if (c.held_amount > 0) await ledger(sb, { partner_id: c.partner_id, kind: "release", amount: c.held_amount, campaign_id: c.id, note });
+  if (c.held_amount > 0) await settle(sb, c, 0, note, null);
 }
 
 function shuffle<T>(a: T[]): T[] {
@@ -365,8 +386,7 @@ export async function runDueCampaigns(sb: Sb, push?: (userId: string, payload: {
         if (iErr) throw new Error(iErr.message);
       }
       const charged = send.length * c.unit_price;
-      await releaseHold(sb, c, "발송비 확정 전 돌려놓음");
-      if (charged > 0) await ledger(sb, { partner_id: c.partner_id, kind: "charge", amount: -charged, campaign_id: c.id, note: `발송 ${send.length}명 × ${c.unit_price}원` });
+      await settle(sb, c, charged, "발송비 확정 전 돌려놓음", `발송 ${send.length}명 × ${c.unit_price}원`);
       await sb.from("partner_campaigns").update({ status: "sent", sent_at: sentAt, sent_count: send.length, holdout_count: hold.size, charged_amount: charged }).eq("id", c.id);
       total += send.length; n++;
 
