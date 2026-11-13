@@ -38,7 +38,7 @@ RATE_LIMIT_DELAY = 1.5  # 시간당 100회 제한 → 안전하게 1.5초
 
 SUPABASE_HEADERS = {
     "apikey": SUPABASE_KEY,
-    "Authorization": f"Bearer {SUPABASE_KEY}",
+    **({"Authorization": f"Bearer {SUPABASE_KEY}"} if SUPABASE_KEY.startswith("eyJ") else {}),
     "Content-Type": "application/json",
     "Prefer": "return=minimal",
 }

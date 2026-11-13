@@ -29,7 +29,7 @@ a = ap.parse_args()
 SB = (os.environ.get("SUPABASE_URL") or os.environ.get("NEXT_PUBLIC_SUPABASE_URL") or "").rstrip("/") + "/rest/v1/"
 KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or os.environ.get("SUPABASE_KEY") or ""
 if not KEY or SB == "/rest/v1/": raise SystemExit("SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY 비밀값이 없어요")
-H = {"apikey": KEY, "Authorization": f"Bearer {KEY}", "Content-Type": "application/json"}
+H = {"apikey": KEY, **({"Authorization": f"Bearer {KEY}"} if KEY.startswith("eyJ") else {}), "Content-Type": "application/json"}
 
 def rest(method, path, body=None, prefer=None):
     h = dict(H)

@@ -25,7 +25,7 @@ MFDS = "https://apis.data.go.kr/1471000/FoodNtrCpntDbInfo03/getFoodNtrCpntDbInq0
 MKEY = urllib.parse.quote(os.environ["MFDS_API_KEY"], safe="")
 SB = os.environ["NEXT_PUBLIC_SUPABASE_URL"].rstrip("/") + "/rest/v1/"
 SKEY = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
-SH = {"apikey": SKEY, "Authorization": f"Bearer {SKEY}"}
+SH = {"apikey": SKEY, **({"Authorization": f"Bearer {SKEY}"} if SKEY.startswith("eyJ") else {})}
 
 def get(url, headers=UA, timeout=30, tries=3):
     for i in range(tries):

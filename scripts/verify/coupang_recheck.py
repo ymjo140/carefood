@@ -11,7 +11,7 @@ SERVICE_BRANDS = {"sixmeal": "식스밀", "greating": "그리팅", "yundiet": "�
 
 ap = argparse.ArgumentParser(); ap.add_argument("--apply", action="store_true"); a = ap.parse_args()
 SB = (os.environ.get("SUPABASE_URL") or os.environ["NEXT_PUBLIC_SUPABASE_URL"]).rstrip("/") + "/rest/v1/"
-K = os.environ["SUPABASE_SERVICE_ROLE_KEY"]; H = {"apikey": K, "Authorization": f"Bearer {K}", "Content-Type": "application/json"}
+K = os.environ["SUPABASE_SERVICE_ROLE_KEY"]; H = {"apikey": K, **({"Authorization": f"Bearer {K}"} if K.startswith("eyJ") else {}), "Content-Type": "application/json"}
 
 def rest(method, path, body=None, rng=None):
     h = dict(H)

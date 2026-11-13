@@ -19,7 +19,7 @@ ap.add_argument("--out", default="namematch.csv"); ap.add_argument("--sample", t
 a = ap.parse_args()
 
 SB = os.environ["NEXT_PUBLIC_SUPABASE_URL"].rstrip("/") + "/rest/v1/"
-K = os.environ["SUPABASE_SERVICE_ROLE_KEY"]; H = {"apikey": K, "Authorization": f"Bearer {K}"}
+K = os.environ["SUPABASE_SERVICE_ROLE_KEY"]; H = {"apikey": K, **({"Authorization": f"Bearer {K}"} if K.startswith("eyJ") else {})}
 
 def get(q):
     for i in range(3):

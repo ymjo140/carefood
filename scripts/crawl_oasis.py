@@ -238,7 +238,7 @@ def upsert_to_supabase(products: list, supabase_url: str, supabase_key: str):
     session = requests.Session()
     headers = {
         "apikey": supabase_key,
-        "Authorization": f"Bearer {supabase_key}",
+        **({"Authorization": f"Bearer {supabase_key}"} if supabase_key.startswith("eyJ") else {}),
         "Content-Type": "application/json",
         "Prefer": "resolution=merge-duplicates,return=minimal",
     }

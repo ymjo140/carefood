@@ -7,7 +7,7 @@ import json, os, sys, urllib.parse, urllib.request
 URL = os.environ["NEXT_PUBLIC_SUPABASE_URL"].rstrip("/") + "/rest/v1/"
 KEY = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
 OUT = sys.argv[1]
-H = {"apikey": KEY, "Authorization": f"Bearer {KEY}"}
+H = {"apikey": KEY, **({"Authorization": f"Bearer {KEY}"} if KEY.startswith("eyJ") else {})}
 
 def get_all(table, select, filt, page=1000):
     rows, start = [], 0

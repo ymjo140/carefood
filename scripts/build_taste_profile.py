@@ -54,7 +54,7 @@ def rest(method, path, body=None):
     url = os.environ["NEXT_PUBLIC_SUPABASE_URL"].rstrip("/") + "/rest/v1/" + path
     key = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
     req = urllib.request.Request(url, method=method, data=json.dumps(body).encode() if body is not None else None,
-                                 headers={"apikey": key, "Authorization": f"Bearer {key}", "Content-Type": "application/json", "Prefer": "return=minimal,resolution=merge-duplicates"})
+                                 headers={"apikey": key, **({"Authorization": f"Bearer {key}"} if key.startswith("eyJ") else {}), "Content-Type": "application/json", "Prefer": "return=minimal,resolution=merge-duplicates"})
     with urllib.request.urlopen(req, timeout=180) as r:
         t = r.read()
         return json.loads(t) if t else None

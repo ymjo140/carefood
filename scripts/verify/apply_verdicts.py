@@ -25,7 +25,7 @@ a = ap.parse_args()
 
 SB = os.environ["NEXT_PUBLIC_SUPABASE_URL"].rstrip("/") + "/rest/v1/"
 KEY = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
-H = {"apikey": KEY, "Authorization": f"Bearer {KEY}", "Content-Type": "application/json", "Prefer": "return=minimal"}
+H = {"apikey": KEY, **({"Authorization": f"Bearer {KEY}"} if KEY.startswith("eyJ") else {}), "Content-Type": "application/json", "Prefer": "return=minimal"}
 NOW = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
 rows = list(csv.DictReader(open(a.csv, encoding="utf-8-sig")))
