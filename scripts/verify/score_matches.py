@@ -61,7 +61,7 @@ def clean_mall(name):
     s = re.sub(r"x\s*\d+|\*\s*\d+|택\s*\d|\d+종|e\d{4,}", " ", s, flags=re.I)
     return s
 
-SELLER_TAGS = re.compile(r"셀러허브|홈쇼핑|하프클럽|오티마트|코스트코|트레이더스|이마트|쿠팡|당일|무료배송|특가|정품|공식|^[A-Z0-9]{6,}$|국내산|냉동|냉장|haccp|인증|名品|명품", re.I)
+SELLER_TAGS = re.compile(r"로켓프레시|로켓배송|로켓직구|초특가|당일출고|PB|셀러허브|홈쇼핑|하프클럽|오티마트|코스트코|트레이더스|이마트|쿠팡|당일|무료배송|특가|정품|공식|^[A-Z0-9]{6,}$|국내산|냉동|냉장|haccp|인증|名品|명품", re.I)
 
 def mall_brands(mall, name, brand_col=None):
     """판매처 이름에서 브랜드 후보들 — (11번가) brand 칸, [대괄호], 알려진 브랜드 낱말, (11번가·홈플러스·오아시스는) 첫 낱말"""
@@ -75,7 +75,7 @@ def mall_brands(mall, name, brand_col=None):
     for k in BRANDS:
         if len(norm(k)) >= 2 and norm(k) in nplain: out.append(k)
     # 첫 낱말은 브랜드 칸이 없을 때만 — '자이언트 부대찌개' 의 '자이언트' 처럼 제품명 낱말을 브랜드로 잘못 읽는다
-    if mall in ("homeplus", "11st", "oasis") and not (brand_col and brand_col.strip()):
+    if mall in ("homeplus", "11st", "oasis", "coupang") and not (brand_col and brand_col.strip()):
         first = plain.strip().split(" ")[0] if plain.strip() else ""
         if first and not SELLER_TAGS.search(first): out.append(first)
     seen, res = set(), []

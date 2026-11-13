@@ -1,7 +1,8 @@
 """
 판매처 4곳의 '연결된(matched)' 상품과 연결 대상 식약처 제품을 읽기만 해서 JSON 으로 내려받는다.
-  python3 scripts/verify/fetch_matches.py <출력폴더> [--catalog]
+  python3 scripts/verify/fetch_matches.py <출력폴더> [--catalog] [--coupang]
   --catalog: 다시 이을 후보를 찾도록 상용제품 전체(이름·제조사·중량)도 받는다
+  --coupang: 쿠팡 연결(coupang_lookups found)도 같은 꼴로 받는다 (id = 제품 id, name = 쿠팡 상품명)
 """
 import json, os, sys, urllib.parse, urllib.request
 
@@ -9,12 +10,13 @@ URL = os.environ["NEXT_PUBLIC_SUPABASE_URL"].rstrip("/") + "/rest/v1/"
 KEY = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
 OUT = sys.argv[1]
 CATALOG = "--catalog" in sys.argv[2:]
+COUPANG = "--coupang" in sys.argv[2:]
 H = {"apikey": KEY, **({"Authorization": f"Bearer {KEY}"} if KEY.startswith("eyJ") else {})}
 
-def get_all(table, select, filt, page=1000):
+def get_all(table, select, filt, page=1000, order="id"):
     rows, start = [], 0
     while True:
-        q = f"{URL}{table}?select={urllib.parse.quote(select, safe=',')}&{filt}&order=id"
+        q = f"{URL}{table}?select={urllib.parse.quote(select, safe=',')}&{filt}&order={order}"
         req = urllib.request.Request(q, headers={**H, "Range-Unit": "items", "Range": f"{start}-{start+page-1}"})
         with urllib.request.urlopen(req, timeout=120) as r:
             chunk = json.load(r)
@@ -33,6 +35,12 @@ for mall, (table, sel) in MALLS.items():
     rows = get_all(table, sel, "match_status=eq.matched&matched_product_id=not.is.null")
     allrows[mall] = rows
     print(mall, len(rows), flush=True)
+
+if COUPANG:
+    rows = get_all("coupang_lookups", "product_id,coupang_product_id,coupang_name", "status=eq.found", order="product_id")
+    allrows["coupang"] = [{"id": r["product_id"], "name": r.get("coupang_name") or "", "matched_product_id": r["product_id"],
+                           "url": f"https://www.coupang.com/vp/products/{r.get('coupang_product_id') or ''}"} for r in rows]
+    print("coupang", len(rows), flush=True)
 
 ids = sorted({r["matched_product_id"] for rows in allrows.values() for r in rows})
 print("products", len(ids), flush=True)

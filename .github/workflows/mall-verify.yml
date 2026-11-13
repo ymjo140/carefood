@@ -3,7 +3,7 @@
 #   st11label: 11번가 확인 못 한 연결(suspect·risky)을 공식 OpenAPI 이미지 + OCR 로 판정 (DB 는 읽기만) → 아티팩트 st11-label
 #   mark: score 실행 번호(score_run)의 판정을 남기기만 (연결은 그대로) + 확인 안 된 연결만 있는 제품 추천 보류
 #   apply: score 실행 번호(score_run)의 판정 파일을 DB 에 반영 (사람이 본 뒤에만)
-#   score: 판매처 4곳의 연결을 브랜드·제조사·이름·중량으로 다시 채점 (DB 는 읽기만) → 아티팩트 match-score
+#   score: 판매처 4곳 + 쿠팡의 연결을 브랜드·제조사·이름·중량으로 다시 채점 (DB 는 읽기만) → 아티팩트 match-score
 #   coupang: scripts/verify/input/coupang_targets.json 의 제품을 쿠팡에서 천천히 검색 → 아티팩트 coupang-prices
 # 결과: 아티팩트 label-ocr-kurly-<n> (JSONL), coupang-check (JSON) — 판정·DB 반영은 사람이 확인한 뒤 따로
 name: mall-verify
@@ -79,7 +79,7 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           mkdir -p out
-          python3 scripts/verify/fetch_matches.py out --catalog
+          python3 scripts/verify/fetch_matches.py out --catalog --coupang
           python3 scripts/verify/score_matches.py out
           rm out/matches.json   # 원본은 크다 — 채점 결과만 올린다
       - uses: actions/upload-artifact@v4
