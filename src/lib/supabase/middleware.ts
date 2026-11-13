@@ -1,6 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import { ACTOR_COOKIE, ACTOR_ID_COOKIE, actorCookieOptions, actorIdCookieOptions, hasActorSecret, idPart, newActorId, signActor, verifyActor } from "@/lib/actor";
+import { ACTOR_COOKIE, ACTOR_ID_COOKIE, actorCookieOptions, actorIdCookieOptions, checkActor, hasActorSecret, idPart, newActorId, signActor } from "@/lib/actor";
 
 export async function updateSession(request: NextRequest) {
   // 기록 주인 쿠키가 없거나 서명이 틀리면 새로 발급 — 이 요청의 API 도 바로 쓰게 요청 쿠키에도 넣는다
@@ -8,9 +8,11 @@ export async function updateSession(request: NextRequest) {
   let minted: string | null = null;
   let current: string | null = null;
   if (hasActorSecret()) {
-    current = await verifyActor(request.cookies.get(ACTOR_COOKIE)?.value);
-    if (!current) {
-      minted = await signActor(newActorId());
+    const checked = await checkActor(request.cookies.get(ACTOR_COOKIE)?.value);
+    current = checked?.id ?? null;
+    // 없거나 틀리면 새 id, 옛 서명 키로 서명됐으면 같은 id 를 새 키로 다시 서명 (서명 키를 바꿔도 기록을 잃지 않게)
+    if (!checked || checked.stale) {
+      minted = await signActor(checked?.id ?? newActorId());
       request.cookies.set(ACTOR_COOKIE, minted);
     }
   }

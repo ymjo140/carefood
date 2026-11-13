@@ -22,7 +22,8 @@ export const onRequestError: Instrumentation.onRequestError = async (err, reques
   try {
     await fetch(`${url.replace(/\/$/, "")}/rest/v1/app_errors`, {
       method: "POST",
-      headers: { apikey: key, Authorization: `Bearer ${key}`, "Content-Type": "application/json", Prefer: "return=minimal" },
+      // 예전 키(JWT)는 Authorization 에도 넣어야 서버 권한이 된다. 새 secret 키(sb_secret_…)는 apikey 헤더만
+      headers: { apikey: key, ...(key.startsWith("eyJ") ? { Authorization: `Bearer ${key}` } : {}), "Content-Type": "application/json", Prefer: "return=minimal" },
       body: JSON.stringify(row),
     });
   } catch {

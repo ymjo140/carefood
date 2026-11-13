@@ -6,7 +6,9 @@
  *
  * cf_uid 는 httpOnly(스크립트가 못 읽음). 화면이 "내 글인지" 비교할 id 는 따로 cf_me(서명 없는 id)로 내려준다 —
  * 서버는 cf_me 를 믿지 않는다.
- * 서명 키: SESSION_SECRET (없으면 SUPABASE_SERVICE_ROLE_KEY 에서 파생)
+ * 서명 키: SESSION_SECRET (없으면 SUPABASE_SERVICE_ROLE_KEY 에서 파생 — 개발용)
+ * 서명 키를 바꿀 때: 옛 키를 SESSION_SECRET_PREVIOUS 에 두면 옛 서명 쿠키도 받아들이고, proxy 가 새 키로 다시 서명해 준다.
+ *   (쿠키가 무효가 되면 로그인하지 않은 사람은 자기 기록을 잃는다.) 다들 한 번씩 들어온 뒤(두어 달) SESSION_SECRET_PREVIOUS 를 지운다.
  */
 export const ACTOR_COOKIE = "cf_uid";
 export const ACTOR_ID_COOKIE = "cf_me";
@@ -14,6 +16,7 @@ export const ACTOR_MAX_AGE = 400 * 24 * 3600; // 브라우저가 허용하는 �
 
 const enc = new TextEncoder();
 let keyPromise: Promise<CryptoKey> | null = null;
+let prevKeyPromise: Promise<CryptoKey | null> | null = null;
 
 export function hasActorSecret() {
   return !!(process.env.SESSION_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY);
@@ -25,9 +28,18 @@ function secret() {
   return s;
 }
 
+const hmacKey = (s: string) => crypto.subtle.importKey("raw", enc.encode(s), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+
 function key() {
-  keyPromise ||= crypto.subtle.importKey("raw", enc.encode(secret()), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  keyPromise ||= hmacKey(secret());
   return keyPromise;
+}
+
+/** 바꾸기 전 서명 키 (옮겨 가는 동안만) */
+function prevKey() {
+  const s = process.env.SESSION_SECRET_PREVIOUS;
+  prevKeyPromise ||= s && s !== secret() ? hmacKey(s) : Promise.resolve(null);
+  return prevKeyPromise;
 }
 
 function b64url(bytes: ArrayBuffer | Uint8Array) {
@@ -37,8 +49,15 @@ function b64url(bytes: ArrayBuffer | Uint8Array) {
   return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
-async function mac(id: string) {
-  return b64url(await crypto.subtle.sign("HMAC", await key(), enc.encode(id))).slice(0, 32);
+async function mac(id: string, k?: CryptoKey) {
+  return b64url(await crypto.subtle.sign("HMAC", k || (await key()), enc.encode(id))).slice(0, 32);
+}
+
+function same(a: string, b: string) {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let k = 0; k < a.length; k++) diff |= a.charCodeAt(k) ^ b.charCodeAt(k);
+  return diff === 0;
 }
 
 /** 새 기록 주인 id — u_ + 무작위 128비트 */
@@ -50,18 +69,22 @@ export async function signActor(id: string) {
   return `${id}.${await mac(id)}`;
 }
 
-/** 쿠키 값 → id (서명이 맞을 때만) */
-export async function verifyActor(value: string | undefined | null): Promise<string | null> {
+/** 쿠키 값 → id 와, 옛 서명 키로 서명된 것인지 (다시 서명해야 하는지) */
+export async function checkActor(value: string | undefined | null): Promise<{ id: string; stale: boolean } | null> {
   if (!value) return null;
   const i = value.lastIndexOf(".");
   if (i <= 0) return null;
   const id = value.slice(0, i), sig = value.slice(i + 1);
   if (!/^[A-Za-z0-9_-]{3,64}$/.test(id)) return null;
-  const want = await mac(id);
-  if (want.length !== sig.length) return null;
-  let diff = 0;
-  for (let k = 0; k < want.length; k++) diff |= want.charCodeAt(k) ^ sig.charCodeAt(k);
-  return diff === 0 ? id : null;
+  if (same(await mac(id), sig)) return { id, stale: false };
+  const prev = await prevKey();
+  if (prev && same(await mac(id, prev), sig)) return { id, stale: true };
+  return null;
+}
+
+/** 쿠키 값 → id (서명이 맞을 때만 — 옮겨 가는 동안은 옛 서명도) */
+export async function verifyActor(value: string | undefined | null): Promise<string | null> {
+  return (await checkActor(value))?.id ?? null;
 }
 
 export const actorCookieOptions = {
