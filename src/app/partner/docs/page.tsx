@@ -1,6 +1,6 @@
 import { Card, Page, PageHeader, SectionHeader, TextLink } from "@/components/ui";
 import { FIELDS } from "@/lib/partner/schema";
-import { CARRIERS } from "@/lib/partner/orders";
+import { CARRIERS } from "@/lib/order-status";
 
 export const metadata = { title: "입점 업체 연동 문서" };
 
@@ -83,9 +83,10 @@ const CONV_EXAMPLE = `curl -X POST "${BASE}/conversions" \\
 const ORDER_EXAMPLE = `curl "${BASE}/orders?status=new" -H "Authorization: Bearer cf_live_…"
 
 → 200  { "orders": [{
-    "order_id": "8a1f0c52-…", "ordered_at": "2026-11-12T05:30:00Z", "status": "new", "amount": 23600,
+    "order_id": "8a1f0c52-…", "ordered_at": "2026-11-12T05:30:00Z", "status": "new", "amount": 23600, "shipping_fee": 3000,
     "lines": [{ "partner_sku": "GR-2611-014", "product_name": "저당 닭가슴살 도시락", "quantity": 2, "unit_price": 11800 }],
-    "shipping": { "name": "…", "phone": "…", "postal_code": "…", "address1": "…", "address2": "…", "note": "…" }
+    "shipping": { "name": "…", "phone": "…", "postal_code": "…", "address1": "…", "address2": "…", "note": "…" },
+    "cancel_requested_at": null, "cancel_request_reason": null
   }] }
 
 curl -X PATCH "${BASE}/orders/8a1f0c52-…" \\
@@ -172,6 +173,11 @@ export default function PartnerDocsPage() {
       <p className="text-label text-ink mb-2">
         결제가 끝난 주문만 와요. 한 주문 안의 우리 업체 상품은 한 묶음으로 움직여요: new → accepted → shipped → delivered.
         받는 분 정보(shipping)는 배송에만 쓰고, 배송이 끝나면 응답에서 빠져요.
+        amount 는 상품 금액, shipping_fee 는 주문할 때 제품의 배송비·무료배송 기준으로 계산한 이 업체 배송비예요.
+      </p>
+      <p className="text-label text-ink mb-2">
+        접수하기 전에는 주문자가 바로 취소할 수 있어요 (status 가 canceled, canceled_by 가 buyer 로 와요).
+        접수한 뒤에는 취소를 요청만 해요 — cancel_requested_at 이 채워지면, 보내기 전이면 canceled 로 바꾸고(reason 없이 보내도 돼요) 이미 보냈다면 shipped 로 보내 주세요.
       </p>
       <Code>{ORDER_EXAMPLE}</Code>
       <p className="text-label text-ink-2 mt-2">

@@ -11,6 +11,8 @@ export type Placement = "home_reco" | "home_cold" | "onboarding_preview" | "prod
 export function sendImpressions(placement: Placement, ids: string[]) {
   const list = [...new Set(ids.filter(Boolean))].slice(0, 60);
   if (list.length === 0) return;
+  // 자동 브라우저(화면 검사·크롤러)는 세지 않는다
+  if (typeof navigator !== "undefined" && navigator.webdriver) return;
   try {
     fetch("/api/track/impressions", {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ placement, ids: list }), keepalive: true,

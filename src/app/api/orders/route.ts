@@ -4,7 +4,9 @@ import { createServiceRoleClient } from "@/lib/supabase/server";
 import { getActorId, noActor } from "@/lib/actor-server";
 import { ORDERING_ENABLED } from "@/lib/features";
 import { isDay } from "@/lib/day";
-import { parseShipping, partnerOffersFor } from "@/lib/partner/orders";
+import { parseShipping, sellerShipping } from "@/lib/order-status";
+import { partnerOffersFor } from "@/lib/partner/orders";
+import { listMyOrders } from "@/lib/orders";
 
 /**
  * POST /api/orders — 식단 리스트 → 한 번에 주문
@@ -13,7 +15,7 @@ import { parseShipping, partnerOffersFor } from "@/lib/partner/orders";
  * 그 밖의 제품(시판·크롤링 가격)은 주문에 넣지 않고 건너뛴 수만 돌려준다 — 장보기 목록에서 몰마다 따로 산다.
  * 받는 분 정보와 제3자 제공 동의 시각을 주문에 적고, 결제가 끝나면(paid_at) 업체 화면·API 에 보인다.
  *
- * GET /api/orders — 내 주문 내역
+ * GET /api/orders — 내 주문 내역 (판매 업체별 묶음·배송 상태·환불, lib/orders.ts)
  *
  * 통합 주문은 사업자 등록·PG 연결 후 NEXT_PUBLIC_ORDERING_ENABLED=1 로 연다 (그 전엔 POST 403)
  */
@@ -55,9 +57,18 @@ export async function POST(request: NextRequest) {
     });
     if (rows.length === 0) return NextResponse.json({ error: "지금 한 번에 주문할 수 있는 제품이 없어요" }, { status: 400 });
     const total = rows.reduce((s, r) => s + r.unit_price * r.quantity, 0);
+    // 판매 업체마다 배송비 한 번 (lib/order-status.ts sellerShipping)
+    const shipping_fees: Record<string, number> = {};
+    for (const pid of new Set(rows.map((r) => r.partner_id))) {
+      shipping_fees[pid] = sellerShipping(rows.filter((r) => r.partner_id === pid).map((r) => {
+        const o = offers.get(r.product_id)!;
+        return { price: r.unit_price, quantity: r.quantity, shipping_fee: o.shipping_fee, free_shipping_over: o.free_shipping_over };
+      })).fee;
+    }
+    const shipping_fee = Object.values(shipping_fees).reduce((s, v) => s + v, 0);
 
     const { data: order, error: oErr } = await sb.from("orders").insert({
-      user_id, status: "pending", total_items: rows.length, total_price: total, final_price: total,
+      user_id, status: "pending", total_items: rows.length, total_price: total, shipping_fee, shipping_fees, final_price: total + shipping_fee,
       delivery_week_start: isDay(body.delivery_week_start) ? body.delivery_week_start : null,
       delivery_preference: { note: parsed.shipping.note }, weekly_box_snapshot: items,
       shipping: parsed.shipping, third_party_consent_at: new Date().toISOString(),
@@ -72,7 +83,7 @@ export async function POST(request: NextRequest) {
       throw new Error(iErr.message);
     }
     return NextResponse.json({
-      order: { id: order.id, status: order.status, total_items: order.total_items, total_price: total },
+      order: { id: order.id, status: order.status, total_items: order.total_items, total_price: total, shipping_fee, final_price: total + shipping_fee },
       partner_items: rows.length, skipped: items.length - rows.length,
     });
   } catch (e) {
@@ -85,17 +96,9 @@ export async function GET() {
   await connection();
   const userId = await getActorId();
   if (!userId) return noActor();
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const sb = createServiceRoleClient() as any;
-
-  const { data: orders, error } = await sb
-    .from("orders")
-    .select("id, status, total_items, total_price, final_price, delivery_week_start, created_at, order_items(product_name, quantity, service, fulfil_status, tracking_carrier, tracking_number, shipped_at, delivered_at)")
-    .eq("user_id", userId)
-    .order("created_at", { ascending: false })
-    .limit(20);
-  if (error) return NextResponse.json({ error: "주문 내역을 불러오지 못했어요" }, { status: 500 });
-
-  return NextResponse.json({ orders: orders || [] });
+  try { return NextResponse.json({ orders: await listMyOrders(createServiceRoleClient(), userId) }); }
+  catch (e) {
+    console.error("주문 내역을 불러오지 못했어요:", (e as Error).message);
+    return NextResponse.json({ error: "주문 내역을 불러오지 못했어요" }, { status: 500 });
+  }
 }

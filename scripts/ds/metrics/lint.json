@@ -1,6 +1,6 @@
 {
-  "checkedAt": "2026-11-12T06:19:44.802Z",
-  "files": 118,
+  "checkedAt": "2026-11-13T00:58:17.931Z",
+  "files": 120,
   "total": 0,
   "warnTotal": 0,
   "allowedCount": 61,
@@ -417,7 +417,7 @@
     },
     {
       "file": "src/app/me/MeView.tsx",
-      "line": 47,
+      "line": 48,
       "rule": "silent-catch",
       "level": "warn",
       "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
@@ -426,7 +426,7 @@
     },
     {
       "file": "src/app/me/MeView.tsx",
-      "line": 63,
+      "line": 64,
       "rule": "silent-catch",
       "level": "warn",
       "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
@@ -489,7 +489,7 @@
     },
     {
       "file": "src/app/order/page.tsx",
-      "line": 121,
+      "line": 124,
       "rule": "silent-catch",
       "level": "warn",
       "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",

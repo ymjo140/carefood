@@ -17,7 +17,7 @@ import { Button, Card, EmptyState, Field, Icon, Input, LinkButton, Page, PageHea
 type BoxItem = { day: string; slot: string; product_id?: string; product_name: string };
 type Seller = { seller: string; slug: string; price: number };
 type Line = BoxItem & Seller;
-type Quote = { status: "loading" | "error" | "done"; groups: { slug: string; seller: string; lines: Line[]; total: number }[]; others: BoxItem[] };
+type Quote = { status: "loading" | "error" | "done"; groups: { slug: string; seller: string; lines: Line[]; total: number; shipping: number; free_over: number | null }[]; others: BoxItem[] };
 
 const DAY_LABELS: Record<string, string> = {
   mon: "월", tue: "화", wed: "수", thu: "목", fri: "금", sat: "토", sun: "일",
@@ -59,7 +59,7 @@ function OrderFlow() {
   const [items, setItems] = useState<BoxItem[] | null>(null);
   const [quote, setQuote] = useState<Quote>({ status: "loading", groups: [], others: [] });
   const [ordering, setOrdering] = useState(false);
-  const [orderResult, setOrderResult] = useState<{ id: string; total_price: number } | null>(null);
+  const [orderResult, setOrderResult] = useState<{ id: string; final_price: number } | null>(null);
 
   // 배송지
   const [address, setAddress] = useState({ name: "", phone: "", addr1: "", addr2: "", note: "" });
@@ -76,12 +76,13 @@ function OrderFlow() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "");
       const sellers = (data.sellers || {}) as Record<string, Seller>;
+      const ship = (data.shipping || {}) as Record<string, { fee: number; free_over: number | null }>;
       const by = new Map<string, Quote["groups"][number]>();
       const others: BoxItem[] = [];
       for (const it of list) {
         const s = it.product_id ? sellers[it.product_id] : undefined;
         if (!s) { others.push(it); continue; }
-        const g = by.get(s.slug) || by.set(s.slug, { slug: s.slug, seller: s.seller, lines: [], total: 0 }).get(s.slug)!;
+        const g = by.get(s.slug) || by.set(s.slug, { slug: s.slug, seller: s.seller, lines: [], total: 0, shipping: ship[s.slug]?.fee || 0, free_over: ship[s.slug]?.free_over ?? null }).get(s.slug)!;
         g.lines.push({ ...it, ...s });
         g.total += s.price;
       }
@@ -96,7 +97,9 @@ function OrderFlow() {
   }, [loadQuote]);
 
   const lines = quote.groups.flatMap((g) => g.lines);
-  const totalPrice = quote.groups.reduce((s, g) => s + g.total, 0);
+  const itemsPrice = quote.groups.reduce((s, g) => s + g.total, 0);
+  const shippingPrice = quote.groups.reduce((s, g) => s + g.shipping, 0);
+  const totalPrice = itemsPrice + shippingPrice;
 
   const handleOrder = async () => {
     if (ordering || lines.length === 0 || !canOrder) return;
@@ -138,9 +141,9 @@ function OrderFlow() {
           </span>
           <h1 className="text-title font-bold text-ink">주문을 접수했어요</h1>
           <p className="text-label text-ink-2">주문번호 <span className="num font-bold text-ink">{orderResult.id.slice(0, 8)}</span></p>
-          <p className="text-label text-ink-2 mb-4">판매 업체가 접수하면 배송을 준비해요</p>
+          <p className="text-label text-ink-2 mb-4">판매 업체가 접수하면 배송을 준비해요. 진행은 주문 내역에서 볼 수 있어요</p>
           <div className="flex gap-2">
-            <LinkButton href="/diary">식단 기록하기</LinkButton>
+            <LinkButton href="/me/orders">주문 내역 보기</LinkButton>
             <LinkButton href="/" variant="secondary">홈으로 가기</LinkButton>
           </div>
         </div>
@@ -218,9 +221,18 @@ function OrderFlow() {
                 </div>
               ))}
             </div>
-            <div className="px-4 py-2.5 flex justify-between text-label border-t border-line">
-              <span className="text-ink-2">소계</span>
-              <Price value={g.total} />
+            <div className="px-4 py-2.5 flex flex-col gap-1 text-label border-t border-line">
+              <div className="flex justify-between">
+                <span className="text-ink-2">배송비</span>
+                {g.shipping > 0 ? <Price value={g.shipping} /> : <span className="text-ink">무료</span>}
+              </div>
+              {g.shipping > 0 && g.free_over !== null && (
+                <p className="text-caption text-ink-2"><span className="num">{g.free_over.toLocaleString()}</span>원 이상이면 무료예요</p>
+              )}
+              <div className="flex justify-between">
+                <span className="text-ink-2">소계</span>
+                <Price value={g.total + g.shipping} />
+              </div>
             </div>
           </Card>
         ))}
@@ -259,14 +271,14 @@ function OrderFlow() {
       <Card tone="sunken" className="mb-6">
         <div className="flex justify-between text-label mb-2">
           <span className="text-ink-2">총 <span className="num">{lines.length}</span>끼</span>
-          <Price value={totalPrice} className="font-medium" />
+          <Price value={itemsPrice} className="font-medium" />
         </div>
         <div className="flex justify-between text-label mb-2">
           <span className="text-ink-2">배송비</span>
-          <span className="text-ink-2">결제할 때 업체별로 더해요</span>
+          {shippingPrice > 0 ? <Price value={shippingPrice} className="font-medium" /> : <span className="text-ink">무료</span>}
         </div>
         <div className="border-t border-line pt-2 flex justify-between items-baseline">
-          <span className="text-body font-bold text-ink">상품 금액</span>
+          <span className="text-body font-bold text-ink">결제 금액</span>
           <span className="num text-title font-bold text-ink highlight">{totalPrice.toLocaleString()}<span className="text-label font-medium text-ink-2 ml-0.5">원</span></span>
         </div>
       </Card>

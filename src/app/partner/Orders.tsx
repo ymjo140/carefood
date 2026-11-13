@@ -2,12 +2,12 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Badge, Button, Card, CardActions, EmptyState, Field, Input, Select, SectionHeader, Sheet, SkeletonList, Tabs, timeAgo, useToast } from "@/components/ui";
-import { CARRIERS, FULFIL_LABEL, type Fulfil, type PartnerOrder } from "@/lib/partner/orders";
+import { CARRIERS, FULFIL_LABEL, formatPhone, type Fulfil } from "@/lib/order-status";
+import type { PartnerOrder } from "@/lib/partner/orders";
 
 type Filter = "new" | "accepted" | "shipped" | "done";
 const DAY: Record<string, string> = { mon: "월", tue: "화", wed: "수", thu: "목", fri: "금", sat: "토", sun: "일" };
 const won = (n: number) => `${n.toLocaleString("ko-KR")}원`;
-const phone = (p: string) => p.replace(/^(\d{2,3})(\d{3,4})(\d{4})$/, "$1-$2-$3");
 const TONE: Record<Fulfil, "neutral" | "positive" | "danger" | "brand"> = { new: "brand", accepted: "neutral", shipped: "neutral", delivered: "positive", canceled: "danger" };
 
 /** 주문 — 앱에서 들어온 주문을 접수하고 발송 처리한다 (결제가 끝난 주문만 온다) */
@@ -46,12 +46,16 @@ export function Orders({ qs }: { qs: string }) {
     } finally { setBusy(null); }
   };
 
+  const requests = state.data.filter((o) => o.status === "accepted" && o.cancel_requested_at).length;
   const count = (f: Filter) => state.data.filter((o) => (f === "done" ? o.status === "delivered" || o.status === "canceled" : o.status === f)).length;
   const shown = state.data.filter((o) => (filter === "done" ? o.status === "delivered" || o.status === "canceled" : o.status === filter));
 
   return (
     <section>
       <SectionHeader title="주문" />
+      {requests > 0 && filter !== "accepted" && (
+        <p className="text-label text-ink mb-3">주문자가 취소를 요청한 주문이 <span className="num font-bold">{requests}</span>건 있어요. &lsquo;접수&rsquo;에서 확인해 주세요</p>
+      )}
       <Tabs variant="line" value={filter} onChange={setFilter} label="주문 상태" className="mb-3"
         items={[
           { value: "new", label: "새 주문", count: count("new") }, { value: "accepted", label: "접수", count: count("accepted") },
@@ -73,7 +77,7 @@ export function Orders({ qs }: { qs: string }) {
                     주문 <span className="num">{o.order_id.slice(0, 8)}</span> · {timeAgo(o.ordered_at)}
                     {o.delivery_week_start && <> · <span className="num">{o.delivery_week_start}</span> 주 배송</>}
                   </p>
-                  <Badge tone={TONE[o.status]}>{FULFIL_LABEL[o.status]}</Badge>
+                  {o.cancel_requested_at ? <Badge tone="danger">취소 요청</Badge> : <Badge tone={TONE[o.status]}>{FULFIL_LABEL[o.status]}</Badge>}
                 </div>
                 <ul className="mt-2 divide-y divide-line">
                   {o.lines.map((l, i) => (
@@ -89,11 +93,20 @@ export function Orders({ qs }: { qs: string }) {
                     </li>
                   ))}
                 </ul>
-                <p className="text-label text-ink mt-2 flex justify-between"><span className="text-ink-2">합계</span><span className="num font-bold">{won(o.amount)}</span></p>
+                <p className="text-label text-ink mt-2 flex justify-between">
+                  <span className="text-ink-2">합계 <span className="text-caption">(배송비 {o.shipping_fee > 0 ? won(o.shipping_fee) : "무료"} 포함)</span></span>
+                  <span className="num font-bold">{won(o.amount + o.shipping_fee)}</span>
+                </p>
+                {o.cancel_requested_at && (
+                  <p className="text-label text-ink mt-2">
+                    주문자가 {timeAgo(o.cancel_requested_at)} 취소를 요청했어요{o.cancel_request_reason && <> · {o.cancel_request_reason}</>}.
+                    보내기 전이면 취소해 주세요. 이미 보냈다면 발송 처리하면 돼요
+                  </p>
+                )}
 
                 {o.shipping ? (
                   <dl className="mt-3 rounded-md bg-sunken px-4 py-3 text-label grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-                    <dt className="text-ink-2">받는 분</dt><dd className="text-ink">{o.shipping.name} · <span className="num">{phone(o.shipping.phone)}</span></dd>
+                    <dt className="text-ink-2">받는 분</dt><dd className="text-ink">{o.shipping.name} · <span className="num">{formatPhone(o.shipping.phone)}</span></dd>
                     <dt className="text-ink-2">주소</dt>
                     <dd className="text-ink">{o.shipping.postal_code && <span className="num">({o.shipping.postal_code}) </span>}{o.shipping.address1} {o.shipping.address2}</dd>
                     {o.shipping.note && <><dt className="text-ink-2">메모</dt><dd className="text-ink">{o.shipping.note}</dd></>}
@@ -108,7 +121,7 @@ export function Orders({ qs }: { qs: string }) {
                     <span className="text-ink-2">발송 </span>{CARRIERS[o.carrier] || o.carrier}{o.tracking_number && <> · <span className="num">{o.tracking_number}</span></>}
                   </p>
                 )}
-                {o.cancel_reason && <p className="text-label text-ink mt-2"><span className="text-ink-2">취소 이유 </span>{o.cancel_reason}</p>}
+                {o.cancel_reason && <p className="text-label text-ink mt-2"><span className="text-ink-2">{o.canceled_by === "buyer" ? "주문자가 취소" : o.canceled_by === "admin" ? "케어푸드가 취소" : "취소 이유"} </span>{o.cancel_reason}</p>}
 
                 {(o.status === "new" || o.status === "accepted" || o.status === "shipped") && (
                   <CardActions className="mt-3">
@@ -116,7 +129,7 @@ export function Orders({ qs }: { qs: string }) {
                     {o.status === "accepted" && <Button variant="secondary" onClick={() => { setCarrier(o.carrier || "cj"); setTracking(""); setShipping(o); }}>발송 처리하기</Button>}
                     {o.status === "shipped" && <Button variant="secondary" loading={busy === o.order_id} onClick={() => send(o, { status: "delivered" }, "배송 완료로 바꿨어요", "배송 완료로 바꾸")}>배송 완료로 바꾸기</Button>}
                     {o.status === "shipped" && <Button variant="ghost" onClick={() => { setCarrier(o.carrier || "cj"); setTracking(o.tracking_number || ""); setShipping(o); }}>송장 고치기</Button>}
-                    {o.status !== "shipped" && <Button variant="ghost" onClick={() => { setReason(""); setCanceling(o); }}>취소하기</Button>}
+                    {o.status !== "shipped" && <Button variant="ghost" onClick={() => { setReason(o.cancel_requested_at ? "주문자 요청" : ""); setCanceling(o); }}>취소하기</Button>}
                   </CardActions>
                 )}
               </Card>

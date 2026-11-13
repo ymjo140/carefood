@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Page } from "@/components/ui";
+import { ORDERING_ENABLED } from "@/lib/features";
 
 export const metadata: Metadata = {
   title: "개인정보처리방침 | 케어푸드",
@@ -72,6 +73,14 @@ export default function PrivacyPage() {
                 <td className="py-2 pr-3">누른 제품, 판매처, 누른 화면, 시각</td>
                 <td className="py-2 pr-3 whitespace-nowrap">판매처 링크를 누를 때</td>
               </tr>
+              {/* 앱 안 주문은 NEXT_PUBLIC_ORDERING_ENABLED 를 켜야 열린다 — 켤 때 이 항목도 함께 보인다 */}
+              {ORDERING_ENABLED && (
+                <tr className="border-b border-line">
+                  <td className="py-2 pr-3 whitespace-nowrap">주문</td>
+                  <td className="py-2 pr-3">받는 분 이름, 연락처, 주소, 배송 메모, 주문 상품·금액, 주문·취소·환불 기록</td>
+                  <td className="py-2 pr-3 whitespace-nowrap">주문할 때</td>
+                </tr>
+              )}
             </tbody>
           </table></div>
 
@@ -148,9 +157,10 @@ export default function PrivacyPage() {
             <li>주간 식단 구성 및 건강식단 서비스 비교</li>
             <li>서비스 이용 통계 분석 및 품질 개선</li>
             <li>이용자 문의 대응</li>
+            {ORDERING_ENABLED && <li>주문한 상품의 배송, 주문 취소·환불 처리, 판매 업체와의 정산</li>}
           </ul>
           <p className="mt-2">
-            수집한 개인정보는 위 목적 외에 사용하지 않으며, 제3자에게 제공하지 않습니다.
+            수집한 개인정보는 위 목적 외에 사용하지 않으며, 제6조에서 정한 경우 외에는 제3자에게 제공하지 않습니다.
           </p>
         </section>
 
@@ -193,6 +203,31 @@ export default function PrivacyPage() {
             <li>이용자가 사전에 동의한 경우</li>
             <li>법령에 의하여 요구되는 경우</li>
           </ul>
+          {ORDERING_ENABLED && (
+            <>
+              <p className="mt-2">이용자가 케어푸드에서 상품을 주문하면서 동의한 경우, 배송을 위해 아래와 같이 판매 업체에 제공합니다.</p>
+              <div className="overflow-x-auto mt-2">
+              <table className="w-full text-caption border-collapse">
+                <thead>
+                  <tr className="border-b border-line-strong">
+                    <th className="text-left py-2 pr-3 font-bold text-ink whitespace-nowrap">받는 곳</th>
+                    <th className="text-left py-2 pr-3 font-bold text-ink">제공 항목</th>
+                    <th className="text-left py-2 pr-3 font-bold text-ink">목적</th>
+                    <th className="text-left py-2 pr-3 font-bold text-ink">보유 기간</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="border-b border-line">
+                    <td className="py-2 pr-3">주문한 상품의 판매 업체 (업체 이름은 주문 화면에 표시)</td>
+                    <td className="py-2 pr-3">받는 분 이름, 연락처, 주소, 배송 메모, 주문 상품·수량</td>
+                    <td className="py-2 pr-3">상품 배송, 주문 취소·교환·반품 처리</td>
+                    <td className="py-2 pr-3">배송이 끝나면 케어푸드의 업체 화면에서 가립니다. 업체는 전자상거래법에 따라 거래 기록을 5년간 보관합니다</td>
+                  </tr>
+                </tbody>
+              </table></div>
+              <p className="mt-2">동의하지 않을 수 있으며, 동의하지 않으면 케어푸드에서 주문할 수 없습니다. 판매처 링크로 이동해 사는 것은 동의와 관계없이 이용할 수 있습니다.</p>
+            </>
+          )}
           <p className="mt-2">
             제품 페이지의 판매처 링크(쿠팡·컬리·11번가 등)를 누르면 해당 판매처 사이트로 이동합니다.
             회사는 이때 이용자의 개인정보를 판매처에 넘기지 않습니다. 쿠팡 파트너스 링크는 쿠팡이 자체 쿠키로

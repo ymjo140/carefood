@@ -3,12 +3,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button, Card, EmptyState, Notice, SectionHeader, SkeletonList, buttonClass, useToast } from "@/components/ui";
 
-type Settlement = { commission: number; order_sales: number; order_fee: number; status: "closed" | "paid"; closed_at: string; paid_at: string | null };
+type Settlement = { commission: number; order_sales: number; order_shipping: number; order_fee: number; status: "closed" | "paid"; closed_at: string; paid_at: string | null };
 type Month = {
   month: string; clicks: number; orders: number; confirmed: number; confirmed_amount: number; commission: number; canceled: number;
-  order_sales: number; order_fee: number; open: boolean; settlement: Settlement | null;
+  order_sales: number; order_shipping: number; order_fee: number; open: boolean; settlement: Settlement | null;
 };
-type Data = { commission_rate: number | null; attribution_days: number; months: Month[] };
+type Data = { commission_rate: number | null; order_commission_rate: number | null; attribution_days: number; months: Month[] };
+const payout = (m: { order_sales: number; order_shipping: number; order_fee: number }) => m.order_sales + m.order_shipping - m.order_fee;
 type RowError = { row: number; sku?: string; message: string };
 type Result = { rows: number; saved: number; error: number; errors: RowError[] };
 
@@ -83,7 +84,7 @@ export function Commission({ qs }: { qs: string }) {
                       <th className="text-right font-medium px-3 py-2.5 whitespace-nowrap">구매확정 금액</th>
                       <th className={`text-right font-medium py-2.5 whitespace-nowrap ${appOrders ? "px-3" : "px-4"}`}>수수료</th>
                       {appOrders && <th className="text-right font-medium px-3 py-2.5 whitespace-nowrap">앱 주문 판매</th>}
-                      {appOrders && <th className="text-right font-medium px-4 py-2.5 whitespace-nowrap">앱 주문 수수료</th>}
+                      {appOrders && <th className="text-right font-medium px-4 py-2.5 whitespace-nowrap">받을 금액</th>}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-line">
@@ -107,13 +108,24 @@ export function Commission({ qs }: { qs: string }) {
                           {drift !== 0 && <span className="block text-caption font-regular text-ink-2">마감 뒤 {drift > 0 ? "+" : "−"}{won(Math.abs(drift))}</span>}
                         </td>
                         {appOrders && <td className="px-3 py-2.5 num text-right text-ink whitespace-nowrap">{won(s ? s.order_sales : m.order_sales)}</td>}
-                        {appOrders && <td className="px-4 py-2.5 num text-right text-ink whitespace-nowrap">{won(s ? s.order_fee : m.order_fee)}</td>}
+                        {appOrders && (
+                          <td className="px-4 py-2.5 num text-right font-bold text-ink whitespace-nowrap">
+                            {won(payout(s || m))}
+                            <span className="block text-caption font-regular text-ink-2">배송비 +{won((s || m).order_shipping)} · 수수료 −{won((s || m).order_fee)}</span>
+                          </td>
+                        )}
                       </tr>
                       );
                     })}
                   </tbody>
                 </table>
               </Card>
+            )}
+            {appOrders && (
+              <p className="text-caption text-ink-2 mt-2">
+                앱 주문은 배송 완료된 달에 판매액 + 배송비 − 수수료
+                {state.data.order_commission_rate !== null && <>(<span className="num">{state.data.order_commission_rate}</span>%)</>}를 드려요
+              </p>
             )}
             {state.data.months.some((m) => m.settlement && m.commission !== m.settlement.commission) && (
               <p className="text-caption text-ink-2 mt-2">&lsquo;마감 뒤&rsquo;는 마감한 다음에 주문 상태가 바뀌어 달라진 금액이에요. 케어푸드가 확인해 다음 정산에 반영해요</p>

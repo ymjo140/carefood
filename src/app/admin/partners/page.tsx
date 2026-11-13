@@ -10,7 +10,7 @@ import { ALLERGENS, CATEGORIES, REVIEW_LABELS, stable, type PartnerItem } from "
 
 type Partner = {
   id: string; slug: string; name: string; kind: string; status: "onboarding" | "active" | "paused"; contact_email: string | null;
-  commission_rate: number | null; attribution_days: number | null;
+  commission_rate: number | null; order_commission_rate: number | null; attribution_days: number | null;
   members: { email: string; role: string }[]; counts: Record<string, number>;
 };
 type Candidate = { id: string; name: string; manufacturer: string | null; calories: number | null; serving_size_g: number | null; why: string };
@@ -20,8 +20,8 @@ type ReviewItem = {
 };
 type Load<T> = { status: "loading" | "error" | "done"; data: T; error?: string };
 type SettleMonth = {
-  month: string; clicks: number; orders: number; confirmed_amount: number; commission: number; order_sales: number; order_fee: number; open: boolean;
-  settlement: { commission: number; order_sales: number; order_fee: number; status: "closed" | "paid"; closed_at: string; paid_at: string | null } | null;
+  month: string; clicks: number; orders: number; confirmed_amount: number; commission: number; order_sales: number; order_shipping: number; order_fee: number; open: boolean;
+  settlement: { commission: number; order_sales: number; order_shipping: number; order_fee: number; status: "closed" | "paid"; closed_at: string; paid_at: string | null } | null;
 };
 const won = (n: number) => `${n.toLocaleString("ko-KR")}원`;
 
@@ -221,13 +221,14 @@ function PartnerRow({ p, onDone, onFail }: { p: Partner; onDone: (m: string) => 
   const [busy, setBusy] = useState(false);
   const [rate, setRate] = useState(p.commission_rate === null ? "" : String(p.commission_rate));
   const [days, setDays] = useState(String(p.attribution_days ?? 7));
+  const [orderRate, setOrderRate] = useState(p.order_commission_rate === null ? "" : String(p.order_commission_rate));
   const [savingTerms, setSavingTerms] = useState(false);
   const [settling, setSettling] = useState(false);
   const saveTerms = async (e: React.FormEvent) => {
     e.preventDefault();
     setSavingTerms(true);
     try {
-      await api("/api/admin/partners", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: p.id, commission_rate: Number(rate), attribution_days: Number(days) }) });
+      await api("/api/admin/partners", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: p.id, commission_rate: Number(rate), order_commission_rate: orderRate.trim() === "" ? null : Number(orderRate), attribution_days: Number(days) }) });
       onDone(`${p.name} 수수료 조건을 저장했어요`);
     } catch (err) { onFail("수수료 조건을 저장", err); } finally { setSavingTerms(false); }
   };
@@ -261,8 +262,9 @@ function PartnerRow({ p, onDone, onFail }: { p: Partner; onDone: (m: string) => 
       </div>
       <form onSubmit={saveTerms} className="flex flex-wrap items-end gap-2 mt-3">
         <Field label="구매 수수료율(%)" className="w-36"><Input inputMode="decimal" value={rate} onChange={(e) => setRate(e.target.value)} placeholder="계약 뒤" /></Field>
+        <Field label="앱 주문 수수료율(%)" className="w-40"><Input inputMode="decimal" value={orderRate} onChange={(e) => setOrderRate(e.target.value)} placeholder="계약 뒤" /></Field>
         <Field label="인정 기간(일)" className="w-28"><Input inputMode="numeric" value={days} onChange={(e) => setDays(e.target.value)} /></Field>
-        <Button type="submit" size="sm" variant="secondary" loading={savingTerms} disabled={rate.trim() === "" || Number.isNaN(Number(rate))}>조건 저장하기</Button>
+        <Button type="submit" size="sm" variant="secondary" loading={savingTerms} disabled={rate.trim() === "" || Number.isNaN(Number(rate)) || (orderRate.trim() !== "" && Number.isNaN(Number(orderRate)))}>조건 저장하기</Button>
       </form>
       <form onSubmit={addMember} className="flex flex-wrap gap-2 mt-3">
         <Input type="email" aria-label="담당자 이메일" placeholder="담당자 이메일 (먼저 케어푸드에 가입)" value={email} onChange={(e) => setEmail(e.target.value)} className="flex-1 min-w-48" />
@@ -275,7 +277,7 @@ function PartnerRow({ p, onDone, onFail }: { p: Partner; onDone: (m: string) => 
   );
 }
 
-/* ── 정산: 달별 마감·입금 확인 ── */
+/* ── 정산: 달별 마감·정산 끝 ── */
 function Settlements({ partnerId, onFail }: { partnerId: string; onFail: (w: string, e: unknown) => void }) {
   const toast = useToast();
   const [state, setState] = useState<Load<SettleMonth[]>>({ status: "loading", data: [] });
@@ -290,9 +292,9 @@ function Settlements({ partnerId, onFail }: { partnerId: string; onFail: (w: str
     setBusy(month);
     try {
       await api("/api/admin/partners/settlements", post({ partner_id: partnerId, month, action }));
-      toast.show(action === "close" ? `${month} 정산을 마감했어요` : `${month} 입금을 확인했어요`);
+      toast.show(action === "close" ? `${month} 정산을 마감했어요` : `${month} 정산을 끝냈어요`);
       await load();
-    } catch (e) { onFail(action === "close" ? "마감" : "입금을 확인", e); } finally { setBusy(null); }
+    } catch (e) { onFail(action === "close" ? "마감" : "정산을 끝내", e); } finally { setBusy(null); }
   };
 
   if (state.status === "loading") return <SkeletonList rows={3} thumb={false} />;
@@ -311,11 +313,12 @@ function Settlements({ partnerId, onFail }: { partnerId: string; onFail: (w: str
             <div className="min-w-0">
               <p className="text-label text-ink">
                 <span className="num font-bold">{m.month}</span> · 수수료 <span className="num font-bold">{won(s ? s.commission : m.commission)}</span>
-                {(s ? s.order_sales : m.order_sales) > 0 && <> · 앱 주문 <span className="num">{won(s ? s.order_sales : m.order_sales)}</span> (수수료 <span className="num">{won(s ? s.order_fee : m.order_fee)}</span>)</>}
+                {(s ? s.order_sales : m.order_sales) > 0 && <> · 앱 주문 대금 <span className="num">{won((s || m).order_sales + (s || m).order_shipping - (s || m).order_fee)}</span></>}
               </p>
               <p className="text-caption text-ink-2">
                 클릭 <span className="num">{m.clicks.toLocaleString("ko-KR")}</span> · 주문 <span className="num">{m.orders.toLocaleString("ko-KR")}</span> · 구매확정 <span className="num">{won(m.confirmed_amount)}</span>
                 {drift !== 0 && <> · 마감 뒤 <span className="num">{drift > 0 ? "+" : "−"}{won(Math.abs(drift))}</span></>}
+                {(s ? s.order_sales : m.order_sales) > 0 && <> · 앱 주문 판매 <span className="num">{won((s || m).order_sales)}</span> + 배송비 <span className="num">{won((s || m).order_shipping)}</span> − 수수료 <span className="num">{won((s || m).order_fee)}</span></>}
               </p>
             </div>
             {s?.status === "paid" ? <Badge tone="positive">정산 끝</Badge>
@@ -323,7 +326,7 @@ function Settlements({ partnerId, onFail }: { partnerId: string; onFail: (w: str
               : s ? (
                 <div className="flex gap-2">
                   <Button size="sm" variant="ghost" loading={busy === m.month} onClick={() => act(m.month, "close")}>다시 마감하기</Button>
-                  <Button size="sm" variant="secondary" disabled={busy === m.month} onClick={() => act(m.month, "paid")}>입금 확인하기</Button>
+                  <Button size="sm" variant="secondary" disabled={busy === m.month} onClick={() => act(m.month, "paid")}>정산 끝내기</Button>
                 </div>
               ) : <Button size="sm" variant="secondary" loading={busy === m.month} onClick={() => act(m.month, "close")}>마감하기</Button>}
           </li>

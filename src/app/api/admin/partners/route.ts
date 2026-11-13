@@ -14,7 +14,7 @@ export async function GET() {
   const denied = await adminOnly(); if (denied) return denied;
   const sb: Sb = createServiceRoleClient();
   const [p, m, i] = await Promise.all([
-    sb.from("partners").select("id, slug, name, kind, status, contact_email, commission_rate, attribution_days, created_at").order("created_at", { ascending: false }),
+    sb.from("partners").select("id, slug, name, kind, status, contact_email, commission_rate, order_commission_rate, attribution_days, created_at").order("created_at", { ascending: false }),
     sb.from("partner_members").select("partner_id, email, role"),
     sb.from("partner_items").select("partner_id, status").limit(50000),
   ]);
@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ partner: data });
 }
 
-/** PATCH /api/admin/partners — {id, status?, commission_rate?, attribution_days?} */
+/** PATCH /api/admin/partners — {id, status?, commission_rate?, order_commission_rate?, attribution_days?} */
 export async function PATCH(req: NextRequest) {
   const denied = await adminOnly(); if (denied) return denied;
   const b = await req.json().catch(() => null);
@@ -58,6 +58,11 @@ export async function PATCH(req: NextRequest) {
     const r = Number(b.commission_rate);
     if (!(r >= 0 && r <= 50)) return NextResponse.json({ error: "수수료율은 0~50% 예요" }, { status: 400 });
     patch.commission_rate = r;
+  }
+  if (b.order_commission_rate !== undefined && b.order_commission_rate !== null && b.order_commission_rate !== "") {
+    const r = Number(b.order_commission_rate);
+    if (!(r >= 0 && r <= 50)) return NextResponse.json({ error: "앱 주문 수수료율은 0~50% 예요" }, { status: 400 });
+    patch.order_commission_rate = r;
   }
   if (b.attribution_days !== undefined) {
     const d = Number(b.attribution_days);

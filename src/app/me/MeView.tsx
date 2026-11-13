@@ -10,6 +10,7 @@ import { HEALTH_GOAL_LABELS, type HealthGoal } from "@/lib/nutrition";
 import { ALLERGIES, readLocalProfile } from "@/lib/profile-options";
 import { getOrCreateNickname, setNickname, validNickname } from "@/lib/nickname";
 import { nicknameProblem } from "@/lib/nickname-rules";
+import { ORDERING_ENABLED } from "@/lib/features";
 
 /**
  * 마이페이지 — 머리 줄 오른쪽 사람 아이콘
@@ -161,6 +162,7 @@ export function MeView() {
       <section className="mb-6">
         <SectionHeader title="내 활동" />
         <ul className="flex flex-col">
+          {ORDERING_ENABLED && <Row icon="cart" title="주문 내역" meta="배송 상태·취소·환불" href="/me/orders" />}
           <Row icon="feed" title="내가 쓴 글" href="/community?tab=mine" />
           <Row icon="bell" title="알림" href="/notifications" />
           <Row icon="bell" title="알림 설정" meta="끼니 기록·주간 요약·커뮤니티 소식" href="/me/notifications" />

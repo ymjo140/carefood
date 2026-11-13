@@ -5,48 +5,36 @@
  *  · 받는 분 정보는 주문자가 제3자 제공에 동의했고, 배송이 끝나기 전일 때만 준다.
  */
 import type { Partner } from "./ingest";
+import { CARRIERS, FULFIL, FULFIL_LABEL, type Fulfil, type Shipping } from "@/lib/order-status";
+import { recomputeRefund, syncOrderStatus } from "@/lib/orders";
+import { pushReady, sendToUser, type PushSub } from "@/lib/push";
+
+export { CARRIERS, FULFIL, FULFIL_LABEL, parseShipping, type Fulfil, type Shipping } from "@/lib/order-status";
 
 type Sb = any; // eslint-disable-line @typescript-eslint/no-explicit-any
-
-export const FULFIL = ["new", "accepted", "shipped", "delivered", "canceled"] as const;
-export type Fulfil = (typeof FULFIL)[number];
-export const FULFIL_LABEL: Record<Fulfil, string> = { new: "새 주문", accepted: "접수", shipped: "발송", delivered: "배송 완료", canceled: "취소" };
-/** 택배사 코드 — direct 는 업체가 직접 배송(새벽 배송 등)이라 송장 번호가 없어도 된다 */
-export const CARRIERS: Record<string, string> = {
-  cj: "CJ대한통운", hanjin: "한진택배", lotte: "롯데택배", epost: "우체국택배", logen: "로젠택배", direct: "직접 배송", other: "그 밖의 택배",
-};
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export type Shipping = { name: string; phone: string; postal_code: string | null; address1: string; address2: string | null; note: string | null };
 export type PartnerOrder = {
-  order_id: string; ordered_at: string; delivery_week_start: string | null; status: Fulfil; amount: number;
+  order_id: string; ordered_at: string; delivery_week_start: string | null; status: Fulfil;
+  /** 상품 금액 · 이 업체 배송비 (주문할 때 계산해 둔 값) */
+  amount: number; shipping_fee: number;
   lines: { partner_sku: string | null; product_name: string; quantity: number; unit_price: number; day_of_week: string | null; meal_type: string | null }[];
   carrier: string | null; tracking_number: string | null; accepted_at: string | null; shipped_at: string | null; delivered_at: string | null;
-  cancel_reason: string | null;
+  cancel_reason: string | null; canceled_by: "buyer" | "partner" | "admin" | null;
+  /** 주문자가 접수 뒤에 취소를 요청했으면 그 시각과 이유 */
+  cancel_requested_at: string | null; cancel_request_reason: string | null;
   /** 받는 분 — 동의가 없거나 배송이 끝났으면 null */
   shipping: Shipping | null;
 };
-
-/** 주문 화면·API 가 받는 배송 정보 검증 → 저장할 모양 */
-export function parseShipping(v: unknown): { shipping: Shipping } | { error: string } {
-  const o = (v && typeof v === "object" ? v : {}) as Record<string, unknown>;
-  const text = (k: string, max: number) => String(o[k] ?? "").trim().slice(0, max);
-  const name = text("name", 40);
-  const phone = text("phone", 20).replace(/[^\d]/g, "");
-  const address1 = text("address1", 120);
-  if (!name) return { error: "받는 분을 적어 주세요" };
-  if (!/^0\d{8,10}$/.test(phone)) return { error: "연락처를 다시 확인해 주세요" };
-  if (address1.length < 5) return { error: "주소를 적어 주세요" };
-  return { shipping: { name, phone, postal_code: text("postal_code", 10) || null, address1, address2: text("address2", 80) || null, note: text("note", 100) || null } };
-}
 
 type Row = {
   order_id: string; partner_sku: string | null; product_name: string; quantity: number | null; unit_price: number | null;
   day_of_week: string | null; meal_type: string | null; fulfil_status: Fulfil; tracking_carrier: string | null; tracking_number: string | null;
   accepted_at: string | null; shipped_at: string | null; delivered_at: string | null; cancel_reason: string | null;
-  orders: { created_at: string; delivery_week_start: string | null; shipping: Shipping | null; third_party_consent_at: string | null; status: string };
+  canceled_by: PartnerOrder["canceled_by"]; cancel_requested_at: string | null; cancel_request_reason: string | null; partner_id: string;
+  orders: { created_at: string; delivery_week_start: string | null; shipping: Shipping | null; third_party_consent_at: string | null; status: string; shipping_fees: Record<string, number> | null };
 };
-const COLS = "order_id, partner_sku, product_name, quantity, unit_price, day_of_week, meal_type, fulfil_status, tracking_carrier, tracking_number, accepted_at, shipped_at, delivered_at, cancel_reason, orders!inner(created_at, delivery_week_start, shipping, third_party_consent_at, status)";
+const COLS = "order_id, partner_id, partner_sku, product_name, quantity, unit_price, day_of_week, meal_type, fulfil_status, tracking_carrier, tracking_number, accepted_at, shipped_at, delivered_at, cancel_reason, canceled_by, cancel_requested_at, cancel_request_reason, orders!inner(created_at, delivery_week_start, shipping, third_party_consent_at, status, shipping_fees)";
 
 function group(rows: Row[]): PartnerOrder[] {
   const by = new Map<string, PartnerOrder>();
@@ -56,9 +44,11 @@ function group(rows: Row[]): PartnerOrder[] {
       const status: Fulfil = r.orders.status === "cancelled" ? "canceled" : r.fulfil_status;
       const open = status === "new" || status === "accepted" || status === "shipped";
       o = {
-        order_id: r.order_id, ordered_at: r.orders.created_at, delivery_week_start: r.orders.delivery_week_start, status, amount: 0, lines: [],
+        order_id: r.order_id, ordered_at: r.orders.created_at, delivery_week_start: r.orders.delivery_week_start, status, amount: 0,
+        shipping_fee: r.orders.shipping_fees?.[r.partner_id] || 0, lines: [],
         carrier: r.tracking_carrier, tracking_number: r.tracking_number, accepted_at: r.accepted_at, shipped_at: r.shipped_at, delivered_at: r.delivered_at,
-        cancel_reason: r.cancel_reason,
+        cancel_reason: r.cancel_reason, canceled_by: r.canceled_by,
+        cancel_requested_at: status === "accepted" ? r.cancel_requested_at : null, cancel_request_reason: status === "accepted" ? r.cancel_request_reason : null,
         shipping: open && r.orders.third_party_consent_at && r.orders.shipping ? r.orders.shipping : null,
       };
       by.set(r.order_id, o);
@@ -116,46 +106,58 @@ export async function updateFulfilment(sb: Sb, partner: Pick<Partner, "id">, ord
   } else {
     if (from === "canceled") return { ok: true, order: current, changed: false };
     if (from !== "new" && from !== "accepted") return { ok: false, code: "conflict", message: "발송한 뒤에는 취소할 수 없어요. 케어푸드에 문의해 주세요" };
-    const reason = String(input.reason ?? "").trim().slice(0, 200);
+    // 주문자가 취소를 요청한 주문은 이유 없이 받아들일 수 있다
+    const reason = String(input.reason ?? "").trim().slice(0, 200) || (current.cancel_requested_at ? "주문자 요청" : "");
     if (!reason) return { ok: false, code: "invalid", message: "취소 이유(reason)를 적어 주세요" };
     patch.cancel_reason = reason;
+    patch.canceled_by = "partner";
+    patch.canceled_at = now;
   }
 
   const { error: uErr } = await sb.from("order_items").update(patch).eq("partner_id", partner.id).eq("order_id", orderId);
   if (uErr) throw new Error(uErr.message);
   await syncOrderStatus(sb, orderId);
+  if (to === "canceled") await recomputeRefund(sb, orderId);
+  if ((to === "shipped" && from !== "shipped") || to === "canceled") await notifyBuyer(sb, orderId, partner.id, to, current);
   const { data: after, error: aErr } = await sb.from("order_items").select(COLS).eq("partner_id", partner.id).eq("order_id", orderId);
   if (aErr) throw new Error(aErr.message);
   return { ok: true, order: group((after || []) as Row[])[0], changed: true };
 }
 
-/** 업체 상품들의 진행에 맞춰 주문 전체 상태를 고친다 (업체가 맡지 않는 시판 상품은 세지 않는다) */
-async function syncOrderStatus(sb: Sb, orderId: string) {
-  const { data, error } = await sb.from("order_items").select("fulfil_status").eq("order_id", orderId).not("partner_id", "is", null);
-  if (error) throw new Error(error.message);
-  const all = ((data || []) as { fulfil_status: Fulfil }[]).map((r) => r.fulfil_status);
-  if (all.length === 0) return;
-  const live = all.filter((s) => s !== "canceled");
-  const status = live.length === 0 ? "cancelled"
-    : live.every((s) => s === "delivered") ? "delivered"
-    : live.every((s) => s === "shipped" || s === "delivered") ? "dispatched"
-    : live.some((s) => s !== "new") ? "processing" : null;
-  if (!status) return;
-  const { error: uErr } = await sb.from("orders").update({ status, updated_at: new Date().toISOString() }).eq("id", orderId);
-  if (uErr) throw new Error(uErr.message);
+/** 주문자에게 알림 — 발송·취소. 켜 둔 기기가 없으면 보내지 않는다. 알림이 안 가도 처리는 그대로 (기록만) */
+async function notifyBuyer(sb: Sb, orderId: string, partnerId: string, to: Fulfil, current: PartnerOrder) {
+  if (!pushReady()) return;
+  try {
+    const { data: o } = await sb.from("orders").select("user_id").eq("id", orderId).single();
+    const { data: subs } = await sb.from("push_subscriptions").select("endpoint, user_id, p256dh, auth").eq("user_id", o?.user_id || "");
+    if (!subs?.length) return;
+    const { data: p } = await sb.from("partners").select("name").eq("id", partnerId).single();
+    const first = current.lines[0]?.product_name || "주문한 상품";
+    const more = current.lines.length > 1 ? ` 외 ${current.lines.length - 1}개` : "";
+    await sendToUser(sb, subs as PushSub[], to === "shipped"
+      ? { title: "주문한 상품을 보냈어요", body: `${p?.name || "판매 업체"}에서 ${first}${more}을(를) 보냈어요`, url: "/me/orders", tag: `order-${orderId}` }
+      : { title: "주문이 취소됐어요", body: `${p?.name || "판매 업체"}가 ${first}${more} 주문을 취소했어요. 환불은 케어푸드가 처리해요`, url: "/me/orders", tag: `order-${orderId}` });
+  } catch (e) { console.error("주문 알림을 보내지 못했어요:", (e as Error).message); }
 }
 
-/** 주문할 제품 → 지금 팔고 있는 입점 업체 (제품마다 가장 싼 곳) */
-export async function partnerOffersFor(sb: Sb, productIds: string[]): Promise<Map<string, { partner_id: string; slug: string; name: string; partner_sku: string; price: number }>> {
-  const out = new Map<string, { partner_id: string; slug: string; name: string; partner_sku: string; price: number }>();
+export type Offer = { partner_id: string; slug: string; name: string; partner_sku: string; price: number; shipping_fee: number | null; free_shipping_over: number | null };
+const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : null);
+
+/** 주문할 제품 → 지금 팔고 있는 입점 업체 (제품마다 가장 싼 곳) + 그 업체가 적은 배송비·무료배송 기준 */
+export async function partnerOffersFor(sb: Sb, productIds: string[]): Promise<Map<string, Offer>> {
+  const out = new Map<string, Offer>();
   if (productIds.length === 0) return out;
   const { data, error } = await sb.from("partner_offers")
-    .select("product_id, price, partner_id, partners!inner(slug, name, status), partner_items!inner(partner_sku, status)")
+    .select("product_id, price, partner_id, partners!inner(slug, name, status), partner_items!inner(partner_sku, status, approved_data)")
     .in("product_id", productIds.slice(0, 100)).eq("is_available", true).eq("partners.status", "active").eq("partner_items.status", "approved");
   if (error) throw new Error(error.message);
   for (const o of data || []) {
     const cur = out.get(o.product_id);
-    if (!cur || o.price < cur.price) out.set(o.product_id, { partner_id: o.partner_id, slug: o.partners.slug, name: o.partners.name, partner_sku: o.partner_items.partner_sku, price: o.price });
+    const ad = (o.partner_items.approved_data || {}) as Record<string, unknown>;
+    if (!cur || o.price < cur.price) out.set(o.product_id, {
+      partner_id: o.partner_id, slug: o.partners.slug, name: o.partners.name, partner_sku: o.partner_items.partner_sku, price: o.price,
+      shipping_fee: num(ad.shipping_fee), free_shipping_over: num(ad.free_shipping_over),
+    });
   }
   return out;
 }

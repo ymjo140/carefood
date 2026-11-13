@@ -16,10 +16,11 @@ export async function GET(req: NextRequest) {
   if ("error" in ctx) return ctx.error;
   const sb = createServiceRoleClient() as any; // eslint-disable-line @typescript-eslint/no-explicit-any
   try {
-    const { data: pa, error } = await sb.from("partners").select("commission_rate, attribution_days").eq("id", ctx.partner.id).single();
+    const { data: pa, error } = await sb.from("partners").select("commission_rate, order_commission_rate, attribution_days").eq("id", ctx.partner.id).single();
     if (error) throw new Error(error.message);
     return NextResponse.json({
       commission_rate: pa.commission_rate === null ? null : Number(pa.commission_rate),
+      order_commission_rate: pa.order_commission_rate === null ? null : Number(pa.order_commission_rate),
       attribution_days: pa.attribution_days ?? DEFAULT_ATTRIBUTION_DAYS,
       months: await settlementMonths(sb, ctx.partner.id),
     });

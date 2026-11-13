@@ -1,18 +1,18 @@
 {
-  "auditedAt": "2026-11-12T06:26:09.528Z",
+  "auditedAt": "2026-11-13T01:04:43.252Z",
   "base": "http://localhost:3100",
-  "commit": "08496b44d294925deac9c55bb94b588f1bc03452",
+  "commit": "69e524c00c76a3e0e6c36cd5b617d53c7582d9e9",
   "ignored": null,
-  "pages": 39,
+  "pages": 40,
   "variants": [
     "데스크톱",
     "모바일",
     "모바일 다크"
   ],
-  "screenshots": 117,
-  "seconds": 348,
+  "screenshots": 120,
+  "seconds": 373,
   "totals": {
-    "error": 33,
+    "error": 29,
     "overflow": 0,
     "off-color": 0,
     "contrast": 0,
@@ -20,12 +20,12 @@
     "tiny-text": 0,
     "touch-target": 2
   },
-  "blocking": 33,
+  "blocking": 29,
   "byPage": [
     {
       "route": "/",
       "url": "/",
-      "issues": 12
+      "issues": 11
     },
     {
       "route": "/admin",
@@ -148,6 +148,11 @@
       "issues": 0
     },
     {
+      "route": "/me/orders",
+      "url": "/me/orders",
+      "issues": 0
+    },
+    {
       "route": "/me/profile",
       "url": "/me/profile",
       "issues": 0
@@ -190,7 +195,7 @@
     {
       "route": "/products",
       "url": "/products",
-      "issues": 11
+      "issues": 9
     },
     {
       "route": "/products/[id]",
@@ -200,7 +205,7 @@
     {
       "route": "/recommend",
       "url": "/recommend",
-      "issues": 10
+      "issues": 9
     },
     {
       "route": "/terms",
