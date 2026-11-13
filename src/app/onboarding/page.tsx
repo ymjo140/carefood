@@ -758,12 +758,14 @@ function StepTastes({
                 className="ds-range"
                 aria-label={`${t.label} 선호도`}
               />
-              <div className="relative h-5 mt-1">
+              {/* 기준 음식 이름은 두 줄에 번갈아 — 한 줄이면 가까운 단계끼리 겹쳤다 ('신라면불닭볶음면') */}
+              <div className="relative h-10 mt-1">
                 {t.benchmarks.map((b, i) => (
                   <span
                     key={b.lv}
                     className={cn(
-                      "absolute top-0 whitespace-nowrap text-caption",
+                      "absolute whitespace-nowrap text-caption",
+                      i % 2 === 0 ? "top-0" : "top-5",
                       i === last ? "-translate-x-full" : "-translate-x-1/2",
                       value === b.lv ? "text-ink font-bold" : "text-ink-3",
                     )}
