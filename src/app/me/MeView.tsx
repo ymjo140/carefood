@@ -16,7 +16,7 @@ import { ORDERING_ENABLED } from "@/lib/features";
  * 마이페이지 — 머리 줄 오른쪽 사람 아이콘
  * 내 건강 정보(관심사·목표·알레르기·건강검진)는 나만 보고, 커뮤니티에는 나오지 않는다.
  */
-type Me = { email: string | null; is_admin: boolean };
+type Me = { email: string | null; is_admin: boolean; partner?: string | null };
 type Local = { goals: HealthGoal[]; allergies: string[]; kcal: number | null; protein: number | null; hasProfile: boolean; hasHealth: boolean };
 
 function Row({ icon, title, meta, href }: { icon: IconName; title: string; meta?: string; href: string }) {
@@ -183,13 +183,25 @@ export function MeView() {
         </ul>
       </section>
 
+      {/* 입점 업체 담당자 — 업체 화면 입구 (전에는 주소를 알아야만 들어갈 수 있었다) */}
+      {me.status === "done" && me.data?.partner && (
+        <section className="mb-6">
+          <SectionHeader title="입점 업체" />
+          <ul className="flex flex-col">
+            <Row icon="grid" title="업체 화면" meta={me.data.partner} href="/partner" />
+            <Row icon="list" title="연동 문서" meta="엑셀 · 상품 피드 · API" href="/partner/docs" />
+          </ul>
+        </section>
+      )}
+
       {me.status === "done" && me.data?.is_admin && (
         <section className="mb-6">
           <SectionHeader title="관리자" />
           <ul className="flex flex-col">
             <Row icon="alert" title="신고 검토" href="/admin/reports" />
             <Row icon="list" title="데이터 현황" href="/admin" />
-            <Row icon="cart" title="발주 관리" href="/admin/orders" />
+            <Row icon="cart" title="주문" href="/admin/orders" />
+            <Row icon="users" title="입점 업체" meta="검수 · 업체·담당자 · 정산" href="/admin/partners" />
             <Row icon="info" title="시장 인사이트" href="/admin/insights" />
             <Row icon="grid" title="ODM 수요 분석" href="/admin/odm" />
             <Row icon="edit" title="디자인 시스템" href="/design-system" />
