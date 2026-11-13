@@ -16,7 +16,7 @@ export const ACTOR_MAX_AGE = 400 * 24 * 3600; // 브라우저가 허용하는 �
 
 const enc = new TextEncoder();
 let keyPromise: Promise<CryptoKey> | null = null;
-let prevKeyPromise: Promise<CryptoKey | null> | null = null;
+let prevKeysPromise: Promise<CryptoKey[]> | null = null;
 
 export function hasActorSecret() {
   return !!(process.env.SESSION_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY);
@@ -35,11 +35,15 @@ function key() {
   return keyPromise;
 }
 
-/** 바꾸기 전 서명 키 (옮겨 가는 동안만) */
-function prevKey() {
-  const s = process.env.SESSION_SECRET_PREVIOUS;
-  prevKeyPromise ||= s && s !== secret() ? hmacKey(s) : Promise.resolve(null);
-  return prevKeyPromise;
+/**
+ * 바꾸기 전 서명 키들 (옮겨 가는 동안만) — SESSION_SECRET_PREVIOUS, 그리고 SESSION_SECRET 이 없던 때처럼
+ * service_role 키에서 파생한 값. (service_role 키를 새 secret 키로 바꾸면 뒤엣것은 저절로 달라지므로 앞엣것이 있어야 한다)
+ */
+function prevKeys() {
+  const derived = process.env.SUPABASE_SERVICE_ROLE_KEY ? `carefood-actor-v1:${process.env.SUPABASE_SERVICE_ROLE_KEY}` : "";
+  const list = [...new Set([process.env.SESSION_SECRET_PREVIOUS?.trim() || "", derived])].filter((s) => s && s !== secret());
+  prevKeysPromise ||= Promise.all(list.map(hmacKey));
+  return prevKeysPromise;
 }
 
 function b64url(bytes: ArrayBuffer | Uint8Array) {
@@ -77,8 +81,7 @@ export async function checkActor(value: string | undefined | null): Promise<{ id
   const id = value.slice(0, i), sig = value.slice(i + 1);
   if (!/^[A-Za-z0-9_-]{3,64}$/.test(id)) return null;
   if (same(await mac(id), sig)) return { id, stale: false };
-  const prev = await prevKey();
-  if (prev && same(await mac(id, prev), sig)) return { id, stale: true };
+  for (const prev of await prevKeys()) if (same(await mac(id, prev), sig)) return { id, stale: true };
   return null;
 }
 
