@@ -1207,8 +1207,9 @@ export default function DiaryPage() {
         </div>
       )}
 
-      {/* ━━ 영양 갭 알림 ━━ */}
-      {topGap && (
+      {/* ━━ 영양 갭 알림 ━━ — 오늘 기록이 있으면 위 '남은 양 + 다음 끼니 후보'가 같은 말을 하므로 그때는 숨긴다
+          (둘이 다른 시점 값으로 단백질 58g / 60g 처럼 어긋나 보였다) */}
+      {topGap && !(isToday && allEntries.length > 0) && (
         <Link href="/products" className="flex items-center gap-3 px-4 py-3.5 mt-4 rounded-lg border border-line bg-surface hover:border-line-strong transition-colors">
           <span className={cn("size-2 rounded-full shrink-0", gapDot(topGap.nutrient))} aria-hidden="true" />
           <div className="flex-1 min-w-0">
