@@ -1037,7 +1037,8 @@ export default function WeeklyBoxPage() {
             <Button variant="secondary" block onClick={() => (stats.products > 0 ? setConfirmFill(true) : generatePlan())} loading={generating || (!precomputed && preloading)}>
               {generating ? "만드는 중" : !precomputed && preloading ? "준비 중" : "추천으로 채우기"}
             </Button>
-            <Button block onClick={savePlan} disabled={stats.products === 0} loading={saving}>
+            {/* 채운 버튼은 아래 고정 줄(장보기) 하나 — 저장하기는 테두리 버튼 */}
+            <Button variant="secondary" block onClick={savePlan} disabled={stats.products === 0} loading={saving}>
               {saving ? "저장 중" : "저장하기"}
             </Button>
           </div>

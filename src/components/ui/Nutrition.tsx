@@ -42,7 +42,8 @@ export function MacroStat({ macro, value, target, digits = 0 }: { macro: Macro; 
     <div className={cn("flex flex-col gap-1.5 rounded-md p-2.5 min-w-0", m.bg)}>
       <span className="text-caption text-ink-2">{m.label}</span>
       <span className={cn("num text-body font-bold leading-none", m.text)}>
-        {fmt(value, digits)}<span className="text-caption font-medium ml-0.5">{m.unit}</span>
+        {/* 단위는 통째로 — 좁은 칸에서 'mg' 가 'm / g' 로 쪼개지지 않게 */}
+        {fmt(value, digits)}<span className="inline-block text-caption font-medium ml-0.5">{m.unit}</span>
       </span>
       {target != null && <ProgressBar value={value || 0} max={target} tone={macro} label={`${m.label} 목표 대비`} />}
     </div>
