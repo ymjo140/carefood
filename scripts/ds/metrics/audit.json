@@ -1,8 +1,8 @@
 {
-  "auditedAt": "2026-11-13T01:04:43.252Z",
-  "base": "http://localhost:3100",
-  "commit": "69e524c00c76a3e0e6c36cd5b617d53c7582d9e9",
-  "ignored": null,
+  "auditedAt": "2026-11-13T07:39:02.913Z",
+  "base": "https://carefood-iota.vercel.app",
+  "commit": "b906ea9ef49c814e46a713ff8a787007fb68cd6c",
+  "ignored": "011st|coupangcdn|kurly|oasis|homeplus",
   "pages": 40,
   "variants": [
     "데스크톱",
@@ -10,22 +10,22 @@
     "모바일 다크"
   ],
   "screenshots": 120,
-  "seconds": 373,
+  "seconds": 363,
   "totals": {
-    "error": 29,
+    "error": 0,
     "overflow": 0,
     "off-color": 0,
     "contrast": 0,
     "word-break": 0,
     "tiny-text": 0,
-    "touch-target": 2
+    "touch-target": 0
   },
-  "blocking": 29,
+  "blocking": 0,
   "byPage": [
     {
       "route": "/",
       "url": "/",
-      "issues": 11
+      "issues": 0
     },
     {
       "route": "/admin",
@@ -195,7 +195,7 @@
     {
       "route": "/products",
       "url": "/products",
-      "issues": 9
+      "issues": 0
     },
     {
       "route": "/products/[id]",
@@ -205,7 +205,7 @@
     {
       "route": "/recommend",
       "url": "/recommend",
-      "issues": 9
+      "issues": 0
     },
     {
       "route": "/terms",
