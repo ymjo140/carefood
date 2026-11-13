@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
   const [{ data: rows, error }, { data: prof }] = await Promise.all([
     sb.from("products")
       .select("id, name, manufacturer, calories, protein_g, sodium_mg, serving_size_g, nutrient_base_g, meal_role, dish_category, image_url")
-      .eq("is_purchasable", true).gt("calories", 0).gte("protein_g", meal === "snack" ? 3 : 6)
+      .eq("is_purchasable", true).is("nutrition_flag", null).gt("calories", 0).gte("protein_g", meal === "snack" ? 3 : 6)
       // 1회 제공량이 포장 전체로 잘못 들어간 제품이 많아 350g 이하만
       .gt("serving_size_g", 0).lte("serving_size_g", 350)
       .order("health_score", { ascending: false, nullsFirst: false }).limit(400),

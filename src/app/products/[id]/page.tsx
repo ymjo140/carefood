@@ -26,10 +26,10 @@ const getProductMeta = cache(async (id: string) => {
   const sb = createServiceRoleClient() as any;
   const { data } = await sb
     .from("products")
-    .select("id, name, manufacturer, health_score, calories, protein_g, sodium_mg, category_large")
+    .select("id, name, manufacturer, health_score, nutrition_flag, calories, protein_g, sodium_mg, category_large")
     .eq("id", id)
     .single();
-  return data as { id: string; name: string; manufacturer: string | null; health_score: number | null; calories: number | null; protein_g: number | null; sodium_mg: number | null; category_large: string | null } | null;
+  return data as { id: string; name: string; manufacturer: string | null; health_score: number | null; nutrition_flag: string | null; calories: number | null; protein_g: number | null; sodium_mg: number | null; category_large: string | null } | null;
 });
 
 export async function generateMetadata(
@@ -45,7 +45,7 @@ export async function generateMetadata(
   const title = product.name;
   const desc = [
     product.manufacturer && `${product.manufacturer}`,
-    product.health_score && `건강점수 ${product.health_score}`,
+    !product.nutrition_flag && product.health_score && `건강점수 ${product.health_score}`,
     product.calories != null && `${product.calories}kcal`,
     product.protein_g != null && `단백질 ${product.protein_g}g`,
   ].filter(Boolean).join(" · ");
@@ -131,6 +131,7 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
     cholesterol_mg: number | null; ingredients_raw: string | null;
     spicy_score: number; is_active: boolean;
     health_score: number | null;
+    nutrition_flag?: string | null;
     source: string | null;
     functional_tags: string[] | null; dish_category: string | null; is_purchasable: boolean | null;
     taste_salty?: number | null; taste_sweet?: number | null; taste_fatty?: number | null;
@@ -146,6 +147,10 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
   if (error || !product) {
     notFound();
   }
+
+  // 영양값이 음식 종류에 비해 말이 안 되게 낮으면(flag_implausible_nutrition) 건강 점수를 보이지 않는다
+  const nutritionFlagged = !!product.nutrition_flag;
+  const healthScore = nutritionFlagged ? null : product.health_score;
 
   // 가격 데이터
   const { data: prices } = await supabase
@@ -305,7 +310,7 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
             </TrackableLink>
           )}
         </div>
-        {product.health_score != null && <HealthScoreGauge score={product.health_score} />}
+        {healthScore != null && <HealthScoreGauge score={healthScore} />}
       </header>
 
       {/* ── 액션 바 ── */}
@@ -321,6 +326,11 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
             <Stat size="lg" emphasis label="칼로리" value={displayCal != null ? Math.round(displayCal).toLocaleString("ko-KR") : "–"} unit="kcal" />
             {s && <span className="text-caption text-ink-2">{servingLabel}</span>}
           </div>
+          {nutritionFlagged && (
+            <Notice tone="caution" title="영양 정보 확인 필요" className="mb-3">
+              등록된 영양 성분 값이 이 음식으로 보기에 너무 낮아요. 포장의 영양 정보 표를 확인해 주세요. 이 제품은 추천과 건강 점수에서 뺐어요.
+            </Notice>
+          )}
           {servingGuessed && (
             <Estimate className="mb-3">
               표시된 1회 제공량({Math.round(Number(product.serving_size_g)).toLocaleString("ko-KR")}g)이 포장 전체 무게로 보여, {servingG}g을 한 번 먹는 양으로 계산했어요
@@ -347,7 +357,7 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
               영양 정보: 판매 업체 제공({product.nutrition_source === "lab" ? "시험성적서" : product.nutrition_source === "calculated" ? "배합비로 계산한 값" : "포장 표시사항"})
             </p>
           )}
-          {product.health_score != null && (
+          {healthScore != null && (
             <p className="text-caption text-ink-3 mt-1">건강 점수는 100g 당 열량·당류·포화지방·나트륨이 적을수록, 단백질·식이섬유가 많을수록 높아요</p>
           )}
         </Card>
@@ -439,7 +449,7 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
         reviewTaste={reviewTaste}
         scoreRow={{
           // 목록과 같은 적합도를 내려고 lib/recommend 에 그대로 넘기는 100g 기준 값
-          id: product.id, name: product.name, manufacturer: product.manufacturer, health_score: product.health_score,
+          id: product.id, name: product.name, manufacturer: product.manufacturer, health_score: healthScore,
           functional_tags: product.functional_tags, dish_category: product.dish_category, category_large: product.category_large,
           calories: product.calories, protein_g: product.protein_g, carbs_g: product.carbs_g, fat_g: product.fat_g,
           sugar_g: product.sugar_g, sodium_mg: product.sodium_mg, fiber_g: product.fiber_g, spicy_score: product.spicy_score,

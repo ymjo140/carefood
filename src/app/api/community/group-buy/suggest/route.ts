@@ -175,6 +175,7 @@ export async function GET(req: NextRequest) {
       .from("products")
       .select("id, name, manufacturer, health_score, calories, protein_g, fiber_g, sodium_mg, sugar_g")
       .eq("is_purchasable", true)
+      .is("nutrition_flag", null)
       .not("health_score", "is", null)
       .order("health_score", { ascending: false })
       .limit(3);

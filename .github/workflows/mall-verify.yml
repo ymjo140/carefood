@@ -1,5 +1,6 @@
 # 판매처 상품 ↔ 식약처 제품 연결 검증 — 상품정보 이미지 OCR(컬리) + 쿠팡 파트너스 키 확인
 # 실행: scripts/verify/input/RUN 파일을 바꿔 푸시 (첫 낱말: test | full | coupang | score) 또는 Actions 화면에서 수동 실행
+#   apply: score 실행 번호(score_run)의 판정 파일을 DB 에 반영 (사람이 본 뒤에만)
 #   score: 판매처 4곳의 연결을 브랜드·제조사·이름·중량으로 다시 채점 (DB 는 읽기만) → 아티팩트 match-score
 #   coupang: scripts/verify/input/coupang_targets.json 의 제품을 쿠팡에서 천천히 검색 → 아티팩트 coupang-prices
 # 결과: 아티팩트 label-ocr-kurly-<n> (JSONL), coupang-check (JSON) — 판정·DB 반영은 사람이 확인한 뒤 따로
@@ -8,7 +9,8 @@ name: mall-verify
 on:
   workflow_dispatch:
     inputs:
-      mode: { description: "test(20개) | full | coupang | score", default: "test" }
+      mode: { description: "test(20개) | full | coupang | score | apply", default: "test" }
+      score_run: { description: "apply 일 때: 판정을 본 score 실행 번호", default: "" }
   push:
     branches: [main]
     paths: ["scripts/verify/input/RUN"]
@@ -80,9 +82,26 @@ jobs:
       - uses: actions/upload-artifact@v4
         with: { name: match-score, path: out, retention-days: 14 }
 
+  # 사람이 본 score 실행의 판정 파일 그대로 반영 — 다시 채점하지 않는다 (그사이 바뀐 연결은 DB 함수가 건너뜀)
+  match-apply:
+    needs: plan
+    if: needs.plan.outputs.mode == 'apply'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions: { contents: read, actions: read }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: match-score, path: out, run-id: "${{ github.event.inputs.score_run }}", github-token: "${{ github.token }}" }
+      - name: 판정 반영
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: python3 scripts/verify/apply_score.py out/scored.csv --batch "score-${{ github.event.inputs.score_run }}" --apply
+
   kurly-ocr:
     needs: plan
-    if: needs.plan.outputs.mode != 'coupang' && needs.plan.outputs.mode != 'score'
+    if: needs.plan.outputs.mode != 'coupang' && needs.plan.outputs.mode != 'score' && needs.plan.outputs.mode != 'apply'
     runs-on: ubuntu-latest
     timeout-minutes: 300
     strategy:
