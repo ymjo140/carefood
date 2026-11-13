@@ -1,7 +1,7 @@
 "use client";
 
 import { useImpressions } from "@/lib/impressions";
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import Link from "next/link";
 import type { ProductWithPrices, TasteLevel, DishCategory } from "@/types/database";
 import { DISH_CATEGORY_LABELS } from "@/types/database";
@@ -22,6 +22,8 @@ type ApiResponse = {
   page: number;
   limit: number;
   totalPages: number;
+  /** 추천순 기본 목록 — 한 끼·반찬만 (api/products mealsOnly) */
+  meals_only?: boolean;
 };
 
 type SortOption = "recommend" | "taste_desc" | "nutrition_desc" | "price_asc" | "price_desc" | "protein_desc" | "calories_asc" | "name";
@@ -620,6 +622,10 @@ export default function ProductExplorer({ variant = "page" }: { variant?: "page"
 
   useEffect(() => { if (profileLoaded) fetchProducts(); }, [profileLoaded, fetchProducts]);
 
+  // 쪽을 넘기면 목록 맨 위로 — 아래 '다음'을 누르면 화면이 그대로 아래에 머물러 바뀐 줄 몰랐다
+  const listTop = useRef<HTMLDivElement>(null);
+  const goPage = (n: number) => { setPage(n); listTop.current?.scrollIntoView({ block: "start" }); };
+
   const handleSearch = () => {
     setSearch(searchInput);
     setPage(1);
@@ -689,7 +695,7 @@ export default function ProductExplorer({ variant = "page" }: { variant?: "page"
           {/* 검색 */}
           <div className="mb-4">
             <SearchField value={searchInput} onChange={setSearchInput} onSubmit={handleSearch} autoFocus={autoFocus}
-              placeholder="제품명으로 검색 (예: 닭가슴살, 샐러드)" />
+              placeholder="제품명 검색 (예: 닭가슴살)" />
           </div>
         </>
       )}
@@ -736,7 +742,7 @@ export default function ProductExplorer({ variant = "page" }: { variant?: "page"
         <div className="flex-1 min-w-0">
           <p className="text-label text-ink-2 mb-3">
             {data ? (
-              <><span className="num font-bold text-ink">{(data.total ?? 0).toLocaleString()}</span>개 제품{search && <> · &quot;{search}&quot; 검색 결과</>}</>
+              <><span className="num font-bold text-ink">{(data.total ?? 0).toLocaleString()}</span>개 {data.meals_only ? "한 끼·반찬" : "제품"}{search && <> · &quot;{search}&quot; 검색 결과</>}</>
             ) : error ? "" : "불러오는 중"}
           </p>
 
@@ -749,7 +755,7 @@ export default function ProductExplorer({ variant = "page" }: { variant?: "page"
             <SkeletonList rows={5} />
           ) : data?.products?.length ? (
             <>
-              <div className="flex flex-col gap-3">
+              <div ref={listTop} aria-busy={loading} className={cn("flex flex-col gap-3 scroll-mt-32 transition-opacity duration-150", loading && "opacity-60")}>
                 {data.products.map(product => (
                   <div key={product.id} ref={seen(product.id)}>
                     <ProductCard product={product}
@@ -761,17 +767,19 @@ export default function ProductExplorer({ variant = "page" }: { variant?: "page"
 
               {data.totalPages > 1 && (
                 <nav aria-label="페이지" className="flex items-center justify-center gap-3 mt-8">
-                  <Button variant="secondary" size="sm" icon="chevron-left" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1}>이전</Button>
+                  <Button variant="secondary" size="sm" icon="chevron-left" onClick={() => goPage(Math.max(1, page - 1))} disabled={page <= 1}>이전</Button>
                   <span className="num text-label text-ink-2">{data.page} / {data.totalPages}</span>
-                  <Button variant="secondary" size="sm" iconRight="chevron-right" onClick={() => setPage(p => Math.min(data.totalPages, p + 1))} disabled={page >= data.totalPages}>다음</Button>
+                  <Button variant="secondary" size="sm" iconRight="chevron-right" onClick={() => goPage(Math.min(data.totalPages, page + 1))} disabled={page >= data.totalPages}>다음</Button>
                 </nav>
               )}
             </>
           ) : (
             <EmptyState
               title="조건에 맞는 제품이 없어요"
-              description="필터를 줄이거나 다른 검색어로 찾아보세요"
-              action={<Button variant="secondary" size="sm" icon="refresh" onClick={resetAll}>필터 초기화하기</Button>}
+              description={hasPriceOnly ? "지금 살 수 있는 제품만 보고 있어요. 판매처가 없는 제품까지 넓혀 볼 수 있어요" : "필터를 줄이거나 다른 검색어로 찾아보세요"}
+              action={hasPriceOnly
+                ? <Button variant="secondary" size="sm" onClick={() => { setHasPriceOnly(false); setPage(1); }}>판매처 없는 제품도 보기</Button>
+                : <Button variant="secondary" size="sm" icon="refresh" onClick={resetAll}>필터 초기화하기</Button>}
             />
           )}
         </div>

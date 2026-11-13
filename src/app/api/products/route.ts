@@ -86,6 +86,15 @@ function parseSearchParams(searchParams: URLSearchParams) {
    공통: DB 쿼리 빌드
    ════════════════════════════════════════════ */
 
+/**
+ * 추천순인데 종류·검색·목적 조건이 없으면 한 끼·반찬만 (홈 추천의 '끼니 우선'과 같은 규칙).
+ * 건강 점수 상위 후보가 0kcal 음료·차로 채워져 체중관리 추천순 맨 위가 음료였다. 음료·간식은 음식 종류에서 고른다.
+ */
+function mealsOnly(params: ReturnType<typeof parseSearchParams>) {
+  return params.sort === "recommend" && !params.dishCategory && !params.search && !params.kind
+    && !params.tag && !params.tags && !params.purpose;
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function buildProductQuery(supabase: any, params: ReturnType<typeof parseSearchParams>, pool = false) {
   const {
@@ -183,6 +192,8 @@ function buildProductQuery(supabase: any, params: ReturnType<typeof parseSearchP
 
   // 검색
   if (search) query = query.ilike("name", `%${search}%`);
+
+  if (mealsOnly(params)) query = query.in("meal_role", ["meal", "side"]);
 
   // 쪽 나누기 — pool 이면 후보 전체(POOL 개)를 받아 서버에서 정렬한 뒤 나눈다
   if (pool) query = query.range(0, POOL - 1);
@@ -288,7 +299,7 @@ async function attachPricesAndFilter(supabase: any, products: any[], params: Ret
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function pageOf(rows: any[], params: ReturnType<typeof parseSearchParams>, count: number | null) {
   const from = (params.page - 1) * params.limit;
-  return { products: rows.slice(from, from + params.limit), total: Math.max(rows.length, count ?? 0), page: params.page, limit: params.limit, totalPages: Math.ceil(rows.length / params.limit), pooled: true };
+  return { products: rows.slice(from, from + params.limit), total: Math.max(rows.length, count ?? 0), page: params.page, limit: params.limit, totalPages: Math.ceil(rows.length / params.limit), pooled: true, meals_only: mealsOnly(params) };
 }
 
 export async function GET(request: NextRequest) {
@@ -315,7 +326,7 @@ export async function GET(request: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   if (!products || products.length === 0) {
-    return NextResponse.json({ products: [], total: count, page: params.page, limit: params.limit, totalPages: Math.ceil((count || 0) / params.limit) });
+    return NextResponse.json({ products: [], total: count, page: params.page, limit: params.limit, totalPages: Math.ceil((count || 0) / params.limit), meals_only: mealsOnly(params) });
   }
 
   // 알레르기 필터
@@ -331,6 +342,7 @@ export async function GET(request: NextRequest) {
     page: params.page,
     limit: params.limit,
     totalPages: Math.ceil((postFiltered ? result.length : (count || 0)) / params.limit),
+    meals_only: mealsOnly(params),
   });
 }
 
@@ -358,7 +370,7 @@ export async function POST(request: NextRequest) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error, count } = await buildProductQuery(supabase, params, true) as { data: any[] | null; error: any; count: number | null };
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  if (!data?.length) return NextResponse.json({ products: [], total: 0, page: params.page, limit: params.limit, totalPages: 0 });
+  if (!data?.length) return NextResponse.json({ products: [], total: 0, page: params.page, limit: params.limit, totalPages: 0, meals_only: mealsOnly(params) });
 
   // 거르기(가격·100g당)가 있으면 후보 전체에 가격을 먼저 붙인다
   const allergies = profile.allergies.length ? profile.allergies : params.allergies;
