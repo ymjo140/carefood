@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState, Suspense } from "react";
+import { useActionState, useState, Suspense, startTransition } from "react";
 import { useSearchParams } from "next/navigation";
 import { login, signup } from "@/app/auth/actions";
 import { Button, Field, Input, Notice, Page, PageLoading, TextLink } from "@/components/ui";
@@ -29,7 +29,12 @@ function LoginContent() {
         </div>
 
         {/* 폼 */}
-        <form action={formAction} className="flex flex-col gap-4">
+        {/* action 대신 onSubmit — form action 은 끝나면 입력 칸을 비워서, 비밀번호가 틀리면 이메일까지 다시 쳐야 했다 */}
+        <form className="flex flex-col gap-4" onSubmit={(e) => {
+          e.preventDefault();
+          const fd = new FormData(e.currentTarget);
+          startTransition(() => formAction(fd));
+        }}>
           {returnTo && (
             <input type="hidden" name="returnTo" value={returnTo} />
           )}

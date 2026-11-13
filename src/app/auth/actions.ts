@@ -26,10 +26,10 @@ export async function signup(
   const password = formData.get("password") as string;
 
   if (!email || !password) {
-    return { error: "이메일과 비밀번호를 입력해주세요." };
+    return { error: "이메일과 비밀번호를 입력해 주세요." };
   }
   if (password.length < 6) {
-    return { error: "비밀번호는 6자 이상이어야 합니다." };
+    return { error: "비밀번호는 6자 이상으로 정해 주세요." };
   }
 
   const supabase = await createServerSupabaseClient();
@@ -61,7 +61,7 @@ export async function login(
   const password = formData.get("password") as string;
 
   if (!email || !password) {
-    return { error: "이메일과 비밀번호를 입력해주세요." };
+    return { error: "이메일과 비밀번호를 입력해 주세요." };
   }
 
   const supabase = await createServerSupabaseClient();
@@ -98,7 +98,7 @@ export async function saveProfile(profileJson: string): Promise<{ error: string 
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
-    return { error: "로그인이 필요합니다." };
+    return { error: "로그인이 필요해요." };
   }
 
   const profile = JSON.parse(profileJson);
