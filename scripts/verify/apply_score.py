@@ -63,4 +63,8 @@ done = 0
 for i in range(0, len(rows), 1000):
     done += rpc("apply_link_rescore", {"p_batch": a.batch, "p_rows": rows[i:i + 1000]})
     print(f"  {min(i + 1000, len(rows))}/{len(rows)} 보냄 · 바꾼 행 {done}", flush=True)
-print("마무리", rpc("finish_link_rescore", {"p_batch": a.batch}))
+try:
+    print("마무리", rpc("finish_link_rescore", {"p_batch": a.batch}))
+except Exception as e:  # API 쪽 실행 시간 제한에 걸리면 SQL 편집기에서 직접
+    print("마무리를 API 로 끝내지 못했어요", e, f"\n  SQL 편집기에서: set statement_timeout = '10min'; select public.finish_link_rescore('{a.batch}');")
+    raise SystemExit(1)

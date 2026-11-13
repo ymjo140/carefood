@@ -30,6 +30,8 @@ type Props = {
   };
   /** 리뷰 기반 맛 체감 평균 (있으면 영양 예측을 보정) */
   reviewTaste?: ReviewTasteData;
+  /** 영양값이 음식에 비해 말이 안 되게 낮아 믿기 어려움 (products.nutrition_flag) — 영양·매칭 점수를 보이지 않는다 */
+  nutritionUnreliable?: boolean;
   /** 100g 기준 제품 행 — 적합도·맛 단계를 목록과 같은 식(lib/recommend)으로 */
   scoreRow: Record<string, unknown>;
 };
@@ -79,7 +81,7 @@ function toNutritionProfile(n: Props["nutrition"]) {
   return { protein, carbs, fat, fiber, vitamins: balance };
 }
 
-export default function ProductTasteSection({ nutrition, reviewTaste, scoreRow }: Props) {
+export default function ProductTasteSection({ nutrition, reviewTaste, scoreRow, nutritionUnreliable }: Props) {
   // 내 프로필 — 홈 추천·탐색과 같은 carefood_profile (입맛 1~10) · carefood_health
   const [mine, setMine] = useState<{ profile: Record<string, unknown>; health: Record<string, unknown> | null } | null>(null);
   const [learnedFrom, setLearnedFrom] = useState(0);
@@ -153,8 +155,8 @@ export default function ProductTasteSection({ nutrition, reviewTaste, scoreRow }
     !!scoreRow.is_purchasable,
   );
   const tasteScore = mine && scored.taste_known ? scored.taste_score : null;
-  const nutritionScore = scored.nutrition_score;
-  const matchScore = mine ? scored.match_score : null;
+  const nutritionScore = nutritionUnreliable ? 0 : scored.nutrition_score;
+  const matchScore = mine && !nutritionUnreliable ? scored.match_score : null;
 
   return (
     <section className="mb-8">
@@ -170,7 +172,7 @@ export default function ProductTasteSection({ nutrition, reviewTaste, scoreRow }
         <div className="grid grid-cols-3 gap-2 mb-3">
           {matchScore != null && <ScoreTile label="매칭" score={matchScore} />}
           {tasteScore != null && <ScoreTile label="맛" score={tasteScore} />}
-          <ScoreTile label="영양" score={nutritionScore} />
+          {!nutritionUnreliable && <ScoreTile label="영양" score={nutritionScore} />}
         </div>
       )}
 

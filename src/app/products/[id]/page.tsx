@@ -208,7 +208,7 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
 
   const ingredients: string[] = foodReport?.ingredients || [];
 
-  // 안전 정보
+  // 안전 정보 — 영양값을 믿기 어려운 제품은 "저나트륨" 같은 좋은 쪽 표시를 하지 않는다
   const safetyNotes: { type: "good" | "warn"; text: string }[] = [];
   if (product.sodium_mg !== null && product.sodium_mg < 400)
     safetyNotes.push({ type: "good", text: "저나트륨 (400mg 미만)" });
@@ -224,6 +224,7 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
     safetyNotes.push({ type: "good", text: "소화 부담 적음 (저섬유)" });
   if (product.spicy_score >= 3)
     safetyNotes.push({ type: "warn", text: `매운맛 ${product.spicy_score}단계 — 자극에 민감한 분 참고` });
+  const shownSafetyNotes = nutritionFlagged ? safetyNotes.filter((n) => n.type === "warn") : safetyNotes;
 
   // ── 영양성분 기준 보정 ──
   // DB 값 = nutrient_base_g(보통 100g) 기준
@@ -402,12 +403,12 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
       <AllergenWarning productName={product.name} />
 
       {/* ── 건강 안전 정보 ── */}
-      {safetyNotes.length > 0 && (
+      {shownSafetyNotes.length > 0 && (
         <section className="mb-6">
           <SectionHeader title="건강 안전 정보" />
           <Card>
             <ul className="flex flex-col gap-2">
-              {safetyNotes.map((note) => (
+              {shownSafetyNotes.map((note) => (
                 <li key={note.text} className="flex items-start gap-2 text-label text-ink">
                   <span className={cn("size-2 rounded-full mt-1.5 shrink-0", note.type === "good" ? "bg-positive" : "bg-ink-3")} aria-hidden="true" />
                   <span>{note.text}</span>
@@ -447,6 +448,7 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
           spicy_score: product.spicy_score,
         }}
         reviewTaste={reviewTaste}
+        nutritionUnreliable={nutritionFlagged}
         scoreRow={{
           // 목록과 같은 적합도를 내려고 lib/recommend 에 그대로 넘기는 100g 기준 값
           id: product.id, name: product.name, manufacturer: product.manufacturer, health_score: healthScore,
