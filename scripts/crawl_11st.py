@@ -1,7 +1,7 @@
 """
 11번가(11st.co.kr) 식품 크롤러
 ================================================================
-11번가 검색 API를 활용한 식품 상품 수집 → Supabase st11_products 적재
+11번가 공식 OpenAPI(상품검색)로 식품 상품 수집 → Supabase st11_products 적재
 
 수집 흐름:
   1) 식품 관련 키워드로 검색 API 호출
@@ -17,6 +17,7 @@
 환경변수:
   SUPABASE_URL  - Supabase 프로젝트 URL
   SUPABASE_KEY  - Supabase service_role 키
+  ST11_API_KEY  - 11번가 OpenAPI 키
 """
 
 import os
@@ -28,6 +29,8 @@ import argparse
 from datetime import datetime, timezone
 
 import requests
+import xml.etree.ElementTree as ET
+from urllib.parse import quote
 
 # ── 로깅 ──────────────────────────────────────────────────────
 logging.basicConfig(
@@ -43,10 +46,13 @@ sys.stdout.reconfigure(line_buffering=True)
 log = logging.getLogger(__name__)
 
 # ── 설정 ──────────────────────────────────────────────────────
-API_URL = "https://apis.11st.co.kr/search/api/tab"
-USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-MAX_PAGES = 18
-REQUEST_DELAY = 0.5  # 서버 부하 방지
+# 11번가 공식 OpenAPI (상품검색). 키는 OpenAPI 가입 때 받는 32자리 — 환경변수 ST11_API_KEY
+# 예전에는 11번가 검색 화면의 내부 API 를 불렀는데 2026-11-03 부터 막혀 공식 API 로 바꿨다.
+API_URL = "http://openapi.11st.co.kr/openapi/OpenApiService.tmall"
+ST11_API_KEY = os.environ.get("ST11_API_KEY", "")
+PAGE_SIZE = 200  # 최대
+MAX_PAGES = 5
+REQUEST_DELAY = 1.0  # 서버 부하 방지
 
 # 식품 검색 키워드 (다양한 식품 카테고리를 커버)
 SEARCH_KEYWORDS = [
@@ -152,7 +158,6 @@ def upsert_batch(products: list[dict]) -> int:
             "original_price": p.get("original_price"),
             "image_url": p.get("image_url"),
             "product_url": p.get("product_url"),
-            "brand": p.get("brand"),
             "search_keyword": p.get("search_keyword"),
             "spicy_score": calc_spicy(p["name"]),
             "is_active": True,
@@ -176,54 +181,71 @@ def upsert_batch(products: list[dict]) -> int:
 
 
 # ── 11번가 API ───────────────────────────────────────────────
-def search_products(keyword: str, page: int = 1) -> tuple[list[dict], int]:
-    """11번가 검색 API 호출 → (상품 리스트, 전체 건수)"""
-    params = {
-        "kwd": keyword,
-        "pageNo": str(page),
-        "tabId": "TOTAL_SEARCH",
-    }
-    headers = {"User-Agent": USER_AGENT}
+class QuotaExceeded(Exception):
+    pass
 
+
+def _api_get(keyword: str, page: int, enc: str):
+    q = (f"key={ST11_API_KEY}&apiCode=ProductSearch&keyword={quote(keyword.encode(enc))}"
+         f"&pageNum={page}&pageSize={PAGE_SIZE}&sortCd=CP")
+    resp = requests.get(f"{API_URL}?{q}", headers={"User-Agent": "carefood-openapi/1.0"}, timeout=20)
+    resp.raise_for_status()
+    return parse_xml(resp.content)
+
+
+def parse_xml(raw: bytes):
+    """응답은 EUC-KR XML — 파이썬 XML 파서가 EUC-KR 을 못 읽어 먼저 글자로 바꾸고 선언을 뗀다"""
+    m = re.search(rb'encoding="([^"]+)"', raw[:100])
+    enc = (m.group(1).decode() if m else "utf-8").lower()
+    text = raw.decode("cp949" if enc in ("euc-kr", "euckr", "ks_c_5601-1987") else enc, errors="replace")
+    return ET.fromstring(re.sub(r"^\s*<\?xml[^>]*\?>", "", text))
+
+
+def search_products(keyword: str, page: int = 1) -> tuple[list[dict], int]:
+    """11번가 OpenAPI 상품검색(ProductSearch) → (상품 리스트, 마지막 페이지)"""
     for attempt in range(3):
         try:
-            resp = requests.get(API_URL, params=params, headers=headers, timeout=15)
-            if resp.status_code == 200:
-                data = resp.json()
-                products = []
-                for group in data.get("data", []):
-                    if group.get("groupName") == "list":
-                        for item in group.get("items", []):
-                            title = item.get("title", "")
-                            if not title:
-                                continue
-                            prod = {
-                                "st11_id": str(item.get("id", "")),
-                                "name": title,
-                                "price": item.get("finalPrc"),
-                                "original_price": _parse_price(item.get("selPrc")),
-                                "image_url": item.get("imageUrl"),
-                                "product_url": item.get("linkUrl", f"https://www.11st.co.kr/products/{item.get('id')}"),
-                                "brand": item.get("brandEngNm") or "",
-                                "search_keyword": keyword,
-                            }
-                            products.append(prod)
-                total_count = data.get("commonTotalCount", 0)
-                max_page = data.get("maxOmRankingCount", MAX_PAGES)
-                return products, min(max_page, MAX_PAGES)
-            elif resp.status_code >= 500:
-                log.warning(f"  API 서버 에러 {resp.status_code}, 재시도 {attempt+1}/3")
-                time.sleep(2 * (attempt + 1))
-            else:
-                log.warning(f"  API 에러 {resp.status_code}: {resp.text[:200]}")
-                break
-        except requests.exceptions.Timeout:
-            log.warning(f"  API 타임아웃, 재시도 {attempt+1}/3")
-            time.sleep(2 * (attempt + 1))
+            root = None
+            for enc in ("utf-8", "euc-kr"):  # 문서에 키워드 인코딩이 없어 둘 다 본다
+                root = _api_get(keyword, page, enc)
+                if root.find(".//Product") is not None or root.find(".//ErrorCode") is not None:
+                    break
+            err = root.findtext(".//ErrorCode") or root.findtext(".//Code")
+            if err:
+                msg = root.findtext(".//ErrorMessage") or root.findtext(".//Message") or ""
+                if err.startswith("004"):
+                    raise QuotaExceeded(msg)
+                log.warning(f"  OpenAPI 오류 {err}: {msg}")
+                if err[:3] in ("097", "098", "099"):
+                    time.sleep(2 * (attempt + 1))
+                    continue
+                return [], 0
+            products = []
+            for it in root.iter("Product"):
+                code = (it.findtext("ProductCode") or "").strip()
+                name = (it.findtext("ProductName") or "").strip()
+                if not code or not name:
+                    continue
+                list_price = _parse_price(it.findtext("ProductPrice"))
+                sale = _parse_price(it.findtext("SalePrice"))
+                prices = [x for x in (sale, list_price) if x and x > 0]
+                products.append({
+                    "st11_id": code,
+                    "name": name,
+                    "price": min(prices) if prices else None,
+                    "original_price": list_price,
+                    "image_url": it.findtext("ProductImage") or it.findtext("ImageUrl"),
+                    "product_url": f"https://www.11st.co.kr/products/{code}",
+                    "search_keyword": keyword,
+                })
+            total = _parse_price(root.findtext(".//TotalCount")) or 0
+            last = -(-total // PAGE_SIZE) if total else (page + 1 if len(products) >= PAGE_SIZE else page)
+            return products, min(last, MAX_PAGES)
+        except QuotaExceeded:
+            raise
         except Exception as e:
-            log.warning(f"  API 요청 실패: {e}")
+            log.warning(f"  OpenAPI 요청 실패: {e}")
             time.sleep(2 * (attempt + 1))
-
     return [], 0
 
 
@@ -279,8 +301,8 @@ def main():
     parser.add_argument("--start-index", type=int, default=0, help="시작 키워드 인덱스 (0부터)")
     args = parser.parse_args()
 
-    if not SUPABASE_URL or not SUPABASE_KEY:
-        log.error("SUPABASE_URL, SUPABASE_KEY 환경변수 필요")
+    if not SUPABASE_URL or not SUPABASE_KEY or not ST11_API_KEY:
+        log.error("SUPABASE_URL, SUPABASE_KEY, ST11_API_KEY 환경변수 필요")
         sys.exit(1)
 
     keywords = SEARCH_KEYWORDS
@@ -305,7 +327,11 @@ def main():
 
     for i, keyword in enumerate(keywords, 1):
         log.info(f"[{i}/{len(keywords)}] 키워드: '{keyword}' 크롤링 중...")
-        result = crawl_keyword(keyword, max_pages)
+        try:
+            result = crawl_keyword(keyword, max_pages)
+        except QuotaExceeded as e:
+            log.warning(f"하루 호출 한도를 넘었어요 — 여기서 멈추고 다음 날 --start-index {args.start_index + i - 1} 부터: {e}")
+            break
         total_collected += result["collected"]
         total_upserted += result["upserted"]
         log.info(f"  → {result['collected']}개 수집, {result['upserted']}개 저장")
