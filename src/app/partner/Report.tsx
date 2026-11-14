@@ -1,62 +1,85 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Button, Card, EmptyState, ProgressBar, SectionHeader, SkeletonList, Stat, Tabs, TextLink } from "@/components/ui";
+import { AsOf, Button, Card, EmptyState, HowCounted, ProgressBar, SectionHeader, SkeletonList, Stat, Tabs, TextLink } from "@/components/ui";
 
 type Product = { product_id: string; name: string; sku: string; impressions: number; views: number; clicks: number; diary: number; favorites: number; plans: number; rating: number | null; rating_n: number };
 type Data = {
   days: number; products: Product[];
-  totals: { impressions: number; views: number; clicks: number; diary: number; favorites: number; plans: number } | null;
+  totals: Totals | null;
   placements?: { key: string; label: string; count: number }[];
   audience: {
     people: number | null; goals?: Share[]; hidden?: number; tastes?: Share[]; tastes_hidden?: number;
     meals?: Share[]; meals_hidden?: number; meal_people?: number | null;
+    category?: { label: string; people: number; goals: Record<string, number>; tastes: Record<string, number> } | null;
   } | null;
   /** 업체가 보고한 구매확정 수 — 보고가 한 번도 없으면 null */
   purchases?: number | null;
+  period?: Period; from?: string; to?: string; as_of?: string;
+  prev?: { from: string; to: string; totals: Totals | null; purchases: number | null };
 };
 type Share = { key: string; label: string; share: number };
-type Days = "7" | "28" | "90";
+type Totals = { impressions: number; views: number; clicks: number; diary: number; favorites: number; plans: number };
+type Period = "this_month" | "30d" | "last_month";
+const PERIODS: { value: Period; label: string }[] = [{ value: "this_month", label: "이번 달" }, { value: "30d", label: "지난 30일" }, { value: "last_month", label: "지난달" }];
+const day = (iso: string) => { const k = new Date(Date.parse(iso) + 9 * 3600e3); return `${k.getUTCMonth() + 1}월 ${k.getUTCDate()}일`; };
+/** 지난 기간 대비 — 지난 기간이 0이면 비교하지 않는다 */
+function Delta({ cur, prev }: { cur: number; prev: number | null | undefined }) {
+  if (prev === null || prev === undefined) return null;
+  if (prev === 0) return <span className="block text-caption text-ink-2 mt-1">지난 기간 0</span>;
+  const d = Math.round(((cur - prev) / prev) * 100);
+  return <span className="block text-caption text-ink-2 mt-1 num">지난 기간보다 {d === 0 ? "같아요" : `${d > 0 ? "+" : "−"}${Math.abs(d)}%`}</span>;
+}
 const n = (v: number) => v.toLocaleString("ko-KR");
 const pct = (a: number, b: number) => (b > 0 ? `${Math.round((a / b) * 100)}%` : "—");
 
 /** 성과 — 내 제품을 본·누른·기록한 수와, 그 사람들의 목표 분포(통계만) */
 export function Report({ qs, onMakeSegment }: { qs: string; onMakeSegment?: (goal: string) => void }) {
-  const [days, setDays] = useState<Days>("28");
+  const [period, setPeriod] = useState<Period>("30d");
   const [state, setState] = useState<{ status: "loading" | "error" | "done"; data?: Data; error?: string }>({ status: "loading" });
 
-  const load = useCallback(async (d: Days) => {
+  const load = useCallback(async (p: Period) => {
     try {
-      const r = await fetch(`/api/partner/report?days=${d}&${qs}`);
+      const r = await fetch(`/api/partner/report?period=${p}&${qs}`);
       const j = await r.json();
       if (!r.ok) throw new Error(j.error);
       setState({ status: "done", data: j });
     } catch (e) { setState({ status: "error", error: (e as Error).message || "불러오지 못했어요" }); }
   }, [qs]);
-  useEffect(() => { load(days); }, [load, days]); // eslint-disable-line react-hooks/set-state-in-effect -- 불러온 뒤에 상태를 바꾼다
+  useEffect(() => { load(period); }, [load, period]); // eslint-disable-line react-hooks/set-state-in-effect -- 불러온 뒤에 상태를 바꾼다
 
   const d = state.data;
   return (
     <section>
-      <SectionHeader title="성과" />
-      <Tabs value={days} onChange={(v) => { setDays(v); setState({ status: "loading" }); }} label="기간" className="mb-4"
-        items={[{ value: "7", label: "7일" }, { value: "28", label: "28일" }, { value: "90", label: "90일" }]} />
+      <SectionHeader title="성과" action={d?.as_of ? <AsOf at={d.as_of} /> : undefined} />
+      <Tabs value={period} onChange={(v) => { setPeriod(v); setState({ status: "loading" }); }} label="기간" className="mb-2" items={PERIODS} />
+      {d?.from && d.to && state.status === "done" && (
+        <p className="text-caption text-ink-2 mb-4">{day(d.from)} ~ {day(new Date(Date.parse(d.to) - 1).toISOString())}{d.prev && <> · 비교: {day(d.prev.from)} ~ {day(new Date(Date.parse(d.prev.to) - 1).toISOString())}</>}</p>
+      )}
       {state.status === "loading" ? <SkeletonList rows={4} thumb={false} />
         : state.status === "error" || !d ? (
           <EmptyState title="성과를 불러오지 못했어요" description={state.error}
-            action={<Button size="sm" variant="secondary" icon="refresh" onClick={() => { setState({ status: "loading" }); load(days); }}>다시 불러오기</Button>} />
+            action={<Button size="sm" variant="secondary" icon="refresh" onClick={() => { setState({ status: "loading" }); load(period); }}>다시 불러오기</Button>} />
         ) : !d.totals ? (
           <EmptyState title="아직 반영된 제품이 없어요" description="제품이 반영되고 업체가 운영 중이 되면 여기 성과가 모여요" />
         ) : (
           <>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              <Card><Stat label="노출" value={n(d.totals.impressions)} /></Card>
-              <Card><Stat label="상세 조회" value={n(d.totals.views)} /></Card>
-              <Card><Stat label="구매 링크 클릭" value={n(d.totals.clicks)} emphasis /></Card>
-              <Card><Stat label="식단 기록" value={n(d.totals.diary)} /></Card>
-              <Card><Stat label="식단 리스트 담기" value={n(d.totals.plans)} /></Card>
-              <Card><Stat label="즐겨찾기" value={n(d.totals.favorites)} /></Card>
+              {([
+                ["impressions", "노출"], ["views", "상세 조회"], ["clicks", "구매 링크 클릭"], ["diary", "식단 기록"], ["plans", "식단 리스트 담기"], ["favorites", "즐겨찾기"],
+              ] as [keyof Totals, string][]).map(([k, label]) => (
+                <Card key={k}>
+                  <Stat label={label} value={n(d.totals![k])} emphasis={k === "clicks"} />
+                  <Delta cur={d.totals![k]} prev={d.prev?.totals?.[k]} />
+                </Card>
+              ))}
             </div>
+            <HowCounted className="mt-3">
+              <p>노출은 추천·목록·식단 채우기에 내 제품이 보인 횟수예요 (11월 12일부터 세요).</p>
+              <p>상세 조회·구매 링크 클릭·즐겨찾기는 그 일이 일어난 횟수로, 한 사람이 여러 번 하면 모두 세요.</p>
+              <p>식단 기록은 그 기간 날짜의 식단에 넣은 횟수, 식단 리스트 담기는 그 기간에 저장한 식단 리스트에 들어 있는 횟수예요.</p>
+              <p>지난 기간은 같은 길이의 바로 앞 기간이에요 (이번 달이면 지난달의 같은 날짜까지).</p>
+            </HowCounted>
             <h3 className="text-label font-bold text-ink mt-8 mb-2">어디서 빠지나</h3>
             <Card>
               <ol className="grid grid-cols-5 gap-2">
@@ -135,10 +158,13 @@ export function Report({ qs, onMakeSegment }: { qs: string; onMakeSegment?: (goa
               <EmptyState title="아직 보여 드릴 만큼 모이지 않았어요" description="누구인지 짐작할 수 없도록, 본 사람이 10명 이상일 때부터 비율로만 보여 드려요" />
             ) : (
               <Card>
-                <p className="text-caption text-ink-2 mb-4">본·누른·기록한 약 <span className="num">{n(d.audience.people)}</span>명 기준 · 한 사람이 여러 칸에 들 수 있어요</p>
+                <p className="text-caption text-ink-2 mb-4">
+                  본·누른·기록한 약 <span className="num">{n(d.audience.people)}</span>명 기준 · 한 사람이 여러 칸에 들 수 있어요
+                  {d.audience.category && <> · 옆의 회색 숫자는 같은 기간 {d.audience.category.label} 제품을 본 약 <span className="num">{n(d.audience.category.people)}</span>명의 비율이에요</>}
+                </p>
                 <div className="grid gap-6 sm:grid-cols-3">
-                  <ShareList title="고른 목표" rows={d.audience.goals || []} hidden={d.audience.hidden || 0} />
-                  <ShareList title="입맛" rows={d.audience.tastes || []} hidden={d.audience.tastes_hidden || 0} />
+                  <ShareList title="고른 목표" rows={d.audience.goals || []} hidden={d.audience.hidden || 0} compare={d.audience.category?.goals} compareLabel={d.audience.category?.label} />
+                  <ShareList title="입맛" rows={d.audience.tastes || []} hidden={d.audience.tastes_hidden || 0} compare={d.audience.category?.tastes} compareLabel={d.audience.category?.label} />
                   <ShareList title="식단 기록에 넣은 끼니" rows={d.audience.meals || []} hidden={d.audience.meals_hidden || 0}
                     note={d.audience.meal_people ? `기록한 약 ${n(d.audience.meal_people)}명 기준` : "기록한 사람이 10명이 안 돼요"} />
                 </div>
@@ -156,7 +182,9 @@ export function Report({ qs, onMakeSegment }: { qs: string; onMakeSegment?: (goa
 }
 
 /** 비율 목록 — 10명 미만 칸은 가린 개수만 */
-function ShareList({ title, rows, hidden, note }: { title: string; rows: Share[]; hidden: number; note?: string }) {
+function ShareList({ title, rows, hidden, note, compare, compareLabel }: {
+  title: string; rows: Share[]; hidden: number; note?: string; compare?: Record<string, number>; compareLabel?: string;
+}) {
   return (
     <div className="min-w-0">
       <p className="text-label font-medium text-ink mb-1">{title}</p>
@@ -167,7 +195,13 @@ function ShareList({ title, rows, hidden, note }: { title: string; rows: Share[]
         <ul className="flex flex-col gap-3 mt-2">
           {rows.map((g) => (
             <li key={g.key}>
-              <div className="flex justify-between text-label mb-1"><span className="text-ink">{g.label}</span><span className="num text-ink-2">{g.share}%</span></div>
+              <div className="flex justify-between gap-2 text-label mb-1">
+                <span className="text-ink">{g.label}</span>
+                <span className="num whitespace-nowrap">
+                  <span className="text-ink font-medium">{g.share}%</span>
+                  {compare && <span className="text-ink-3 ml-1.5" title={`${compareLabel} 평균`}>{compare[g.key] !== undefined ? `${compare[g.key]}%` : "—"}</span>}
+                </span>
+              </div>
               <ProgressBar value={g.share} label={`${g.label} ${g.share}%`} />
             </li>
           ))}

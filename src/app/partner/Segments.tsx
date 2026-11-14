@@ -5,7 +5,7 @@ import {
   Badge, Button, Card, Chip, ConfirmSheet, EmptyState, Estimate, Field, Input, Notice, SectionHeader, Select, SkeletonList, Steps, Textarea,
   cn, timeAgo, useToast, type BadgeTone,
 } from "@/components/ui";
-import { checkClaims } from "@/lib/partner/claims";
+import { checkClaimsWith, type ClaimTerm } from "@/lib/partner/claims";
 import { fitsWeekly } from "@/lib/partner/quota";
 import type { Tab } from "@/lib/partner/tabs";
 
@@ -24,6 +24,7 @@ type Campaign = {
 type Segment = { id: string; name: string; conditions: Conditions; summary: string };
 type Data = {
   ready: boolean; unit_price: number | null; balance: number; pending_topup: number; booked: string[]; weekly_limit: number;
+  claim_terms?: ClaimTerm[];
   segments: Segment[]; campaigns: Campaign[]; products: { id: string; name: string }[]; partner_name: string; read_only: boolean;
   options: { goals: Option[]; needs: Option[]; behaviors: Option[]; days: number[]; templates: Record<string, { label: string; title: string; body: string }> };
 };
@@ -275,7 +276,7 @@ function Composer({ qs, data, initial, segmentId, post, onClose, onDone }: {
   const setBehavior = (b: Conditions["behavior"]) => { setPreview({ status: "loading" }); setCond((c) => ({ ...c, behavior: b })); };
 
   const p = preview.data;
-  const hits = checkClaims(title, body);
+  const hits = checkClaimsWith(data.claim_terms, title, body);
   const cost = p?.cost ?? null;
   const lacking = cost !== null && cost > data.balance;
   const full = !fitsWeekly(data.booked.map((t) => Date.parse(t)), Date.parse(sendIso), data.weekly_limit);

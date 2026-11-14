@@ -8,6 +8,7 @@ import {
   previewOf, releaseHold, sendableOf, bookedTimes, type Template,
 } from "@/lib/partner/crm";
 import { WEEK_MS, fitsWeekly } from "@/lib/partner/quota";
+import { loadClaimTerms } from "@/lib/partner/claims-server";
 
 /**
  * 고객층(CRM) — 업체 화면 API. 업체는 조건·인원·합계만 받는다 (lib/partner/crm.ts).
@@ -54,7 +55,7 @@ export async function GET(req: NextRequest) {
   for (const r of [pa, seg, camp]) if (r.error) return notReady(r.error) ? notReadyRes() : bad(r.error.message, 500);
   if (items.error) return bad(items.error.message, 500);
   try {
-    const [credit, booked] = await Promise.all([creditBalance(sb, pid), bookedTimes(sb, pid, Date.now() - WEEK_MS)]);
+    const [credit, booked, terms] = await Promise.all([creditBalance(sb, pid), bookedTimes(sb, pid, Date.now() - WEEK_MS), loadClaimTerms(sb)]);
     type C = { id: string; status: string; sent_at: string | null; conditions: unknown; [k: string]: unknown };
     const campaigns = await Promise.all(((camp.data || []) as C[]).map(async (c) => ({
       ...c,
@@ -73,6 +74,7 @@ export async function GET(req: NextRequest) {
       options: { goals: CRM_GOALS, needs: SEGMENTS.map((s) => ({ key: s.key, label: s.label })), behaviors: BEHAVIORS, days: BEHAVIOR_DAYS, templates: TEMPLATES },
       partner_name: ctx.partner.name,
       read_only: ctx.role === "admin",
+      claim_terms: terms, // 화면에서 쓰는 동안 바로 점검하려고 (요청할 때 서버가 다시 점검한다)
     });
   } catch (e) {
     return notReady(e as { code?: string; message?: string }) ? notReadyRes() : bad((e as Error).message, 500);
@@ -145,7 +147,7 @@ export async function POST(req: NextRequest) {
       const template = String(b.template) as Template;
       if (!(template in TEMPLATES)) return bad("메시지 종류를 골라 주세요");
       const title = String(b.title || "").trim(), body = String(b.body || "").trim();
-      const msg = checkMessage(title, body);
+      const msg = checkMessage(title, body, await loadClaimTerms(sb));
       if (msg.error) return bad(msg.error);
       const productId = typeof b.product_id === "string" ? b.product_id : null;
       if (!productId) return bad("메시지를 누르면 열릴 제품을 골라 주세요");

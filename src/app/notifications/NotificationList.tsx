@@ -5,9 +5,9 @@ import Link from "next/link";
 import { Button, Card, EmptyState, Icon, LinkButton, SkeletonList, cn, type IconName } from "@/components/ui";
 import { timeAgo } from "@/components/ui/FeedPost";
 
-type Item = { id: string; type: "comment" | "reply" | "like" | "follow" | "ad"; at: string; who: string; count?: number; text?: string; post_id?: string; post_excerpt?: string; user_id?: string; url?: string };
+type Item = { id: string; type: "comment" | "reply" | "like" | "follow" | "ad" | "consent"; at: string; who: string; count?: number; text?: string; post_id?: string; post_excerpt?: string; user_id?: string; url?: string };
 
-const ICON: Record<Item["type"], IconName> = { comment: "message", reply: "message", like: "heart", follow: "user", ad: "tag" };
+const ICON: Record<Item["type"], IconName> = { comment: "message", reply: "message", like: "heart", follow: "user", ad: "tag", consent: "bell" };
 
 export function NotificationList() {
   const [state, setState] = useState<{ status: "loading" | "error" | "done"; items: Item[] }>({ status: "loading", items: [] });
@@ -67,9 +67,10 @@ export function NotificationList() {
                 {n.type === "like" && <>내 글을 <b className="num font-bold">{n.count}</b>명이 좋아해요</>}
                 {n.type === "follow" && <><b className="font-bold">{n.who}</b> 님이 나를 팔로우했어요</>}
                 {n.type === "ad" && <>(광고) <b className="font-bold">{n.who}</b> 소식이에요</>}
+                {n.type === "consent" && <>업체 소식(광고) 받기 동의를 확인해 주세요</>}
               </span>
               {n.text && n.type !== "ad" && <span className="text-label text-ink-2 line-clamp-2">“{n.text}”</span>}
-              {n.type === "ad" && <span className="text-label text-ink-2 line-clamp-2">{n.text}</span>}
+              {(n.type === "ad" || n.type === "consent") && <span className="text-label text-ink-2 line-clamp-3">{n.text}</span>}
               {n.type === "ad" && <span className="text-caption text-ink-3">받지 않으려면 마이 &gt; 알림 설정에서 끌 수 있어요</span>}
               {n.post_excerpt && n.type !== "comment" && n.type !== "reply" && <span className="text-caption text-ink-2 line-clamp-1">{n.post_excerpt}</span>}
               <span className="text-caption text-ink-3">{timeAgo(n.at)}{isNew && <span className="text-brand-ink font-medium"> · 새 소식</span>}</span>
