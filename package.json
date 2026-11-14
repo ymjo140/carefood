@@ -11,7 +11,8 @@
     "ds:lint": "node scripts/ds/lint.mjs",
     "ds:measure": "node scripts/ds/measure.mjs",
     "ds:audit": "node scripts/ds/audit.mjs",
-    "ds:wiring": "node scripts/ds/wiring.mjs"
+    "ds:wiring": "node scripts/ds/wiring.mjs",
+    "test": "vitest run"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -35,7 +36,8 @@
     "eslint": "^9",
     "eslint-config-next": "16.4.0",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^3.2.7"
   },
   "overrides": {
     "exceljs": {

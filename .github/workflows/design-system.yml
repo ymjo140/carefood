@@ -7,9 +7,9 @@ name: design-system
 on:
   push:
     branches: [main]
-    paths: ["src/**", "scripts/ds/**", "DESIGN.md", ".github/workflows/design-system.yml"]
+    paths: ["src/**", "tests/**", "scripts/ds/**", "DESIGN.md", "package.json", ".github/workflows/design-system.yml"]
   pull_request:
-    paths: ["src/**", "scripts/ds/**"]
+    paths: ["src/**", "tests/**", "scripts/ds/**", "package.json"]
   deployment_status:
   workflow_dispatch:
     inputs:
@@ -37,6 +37,19 @@ jobs:
       - name: 수치 측정
         if: always()
         run: node scripts/ds/measure.mjs
+
+  test:
+    # 돈·상태 계산 시험 (tests/*.test.ts) — 정산·구매확정·환불·반품·마감·1,000줄 나눠 받기. 하나라도 틀리면 실패
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - name: 패키지 설치 (설치 스크립트 없이 — ffmpeg·sharp 바이너리는 시험에 필요 없다)
+        run: npm ci --ignore-scripts
+      - name: 시험
+        run: npm test
 
   audit:
     # 운영 배포만 검사한다. 미리보기·배포별 고유 주소는 Vercel 로그인으로 보호돼 있어 화면이 아니라 로그인 창이 찍힌다.
