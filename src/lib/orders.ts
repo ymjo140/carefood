@@ -16,14 +16,18 @@ type ItemRow = {
   order_id: string; partner_id: string | null; product_id: string | null; product_name: string; quantity: number | null; unit_price: number | null;
   day_of_week: string | null; meal_type: string | null; fulfil_status: Fulfil; tracking_carrier: string | null; tracking_number: string | null;
   shipped_at: string | null; delivered_at: string | null; cancel_reason: string | null; cancel_requested_at: string | null;
-  cancel_request_reason: string | null; canceled_by: string | null; partners: { name: string } | null;
+  cancel_request_reason: string | null; canceled_by: string | null; confirmed_at: string | null; partners: { name: string } | null;
 };
-const ITEM_COLS = "order_id, partner_id, product_id, product_name, quantity, unit_price, day_of_week, meal_type, fulfil_status, tracking_carrier, tracking_number, shipped_at, delivered_at, cancel_reason, cancel_requested_at, cancel_request_reason, canceled_by, partners(name)";
+const ITEM_COLS = "order_id, partner_id, product_id, product_name, quantity, unit_price, day_of_week, meal_type, fulfil_status, tracking_carrier, tracking_number, shipped_at, delivered_at, cancel_reason, cancel_requested_at, cancel_request_reason, canceled_by, confirmed_at, partners(name)";
+/** 구매확정 — 배송 완료 뒤 이 날수가 지나면 저절로 (lib/partner/payout.ts 와 같은 값) */
+export const AUTO_CONFIRM_DAYS = 8;
 
 export type OrderGroup = {
   partner_id: string | null; seller: string; status: Fulfil; subtotal: number; shipping_fee: number;
   carrier: string | null; tracking_number: string | null; shipped_at: string | null; delivered_at: string | null;
   cancel_reason: string | null; canceled_by: string | null; cancel_requested_at: string | null; cancel_request_reason: string | null;
+  /** 구매확정한 때 (구매자가 눌렀거나 배송 완료 8일 뒤 저절로). 배송 완료 전이거나 아직이면 null */
+  confirmed_at: string | null;
   lines: { product_id: string | null; product_name: string; quantity: number; unit_price: number; day_of_week: string | null; meal_type: string | null }[];
 };
 export type BuyerOrder = {
@@ -31,6 +35,15 @@ export type BuyerOrder = {
   refund_amount: number; refunded_amount: number; refunded_at: string | null; groups: OrderGroup[];
 };
 export type AdminOrder = BuyerOrder & { user_id: string; shipping: Shipping | null; refund_note: string | null };
+
+/** 한 줄의 구매확정 시각 — 저장된 값, 없으면 배송 완료 + 8일이 지났을 때 그 시각 (자동 확정이 아직 돌지 않았어도) */
+function confirmedAt(r: Pick<ItemRow, "fulfil_status" | "delivered_at" | "confirmed_at">): string | null {
+  if (r.fulfil_status !== "delivered") return null;
+  if (r.confirmed_at) return r.confirmed_at;
+  if (!r.delivered_at) return null;
+  const auto = Date.parse(r.delivered_at) + AUTO_CONFIRM_DAYS * 86400e3;
+  return auto <= Date.now() ? new Date(auto).toISOString() : null;
+}
 
 function groupItems(rows: ItemRow[], fees: Record<string, number>): OrderGroup[] {
   const by = new Map<string, OrderGroup>();
@@ -41,12 +54,18 @@ function groupItems(rows: ItemRow[], fees: Record<string, number>): OrderGroup[]
       g = {
         partner_id: r.partner_id, seller: r.partners?.name || "판매 업체", status: r.fulfil_status, subtotal: 0, shipping_fee: r.partner_id ? fees[r.partner_id] || 0 : 0,
         carrier: r.tracking_carrier, tracking_number: r.tracking_number, shipped_at: r.shipped_at, delivered_at: r.delivered_at,
-        cancel_reason: r.cancel_reason, canceled_by: r.canceled_by, cancel_requested_at: r.cancel_requested_at, cancel_request_reason: r.cancel_request_reason, lines: [],
+        cancel_reason: r.cancel_reason, canceled_by: r.canceled_by, cancel_requested_at: r.cancel_requested_at, cancel_request_reason: r.cancel_request_reason,
+        confirmed_at: null, lines: [],
       };
       by.set(key, g);
     }
     g.lines.push({ product_id: r.product_id, product_name: r.product_name, quantity: r.quantity || 1, unit_price: r.unit_price || 0, day_of_week: r.day_of_week, meal_type: r.meal_type });
     g.subtotal += (r.unit_price || 0) * (r.quantity || 1);
+  }
+  // 묶음의 구매확정은 살아 있는 줄이 다 확정됐을 때 — 늦은 쪽
+  for (const [key, g] of by) {
+    const cs = rows.filter((r) => (r.partner_id || "none") === key && r.fulfil_status !== "canceled").map(confirmedAt);
+    g.confirmed_at = cs.length && cs.every((c) => c) ? (cs as string[]).sort().pop()! : null;
   }
   return [...by.values()];
 }
@@ -231,4 +250,27 @@ export async function markRefunded(sb: Sb, orderId: string, note: string | null)
     refunded_amount: o.refund_amount, refunded_at: new Date().toISOString(), refund_note: note?.trim().slice(0, 200) || null, updated_at: new Date().toISOString(),
   }).eq("id", orderId).eq("refunded_amount", o.refunded_amount); // 두 번 눌러도 한 번만
   if (uErr) throw new Error(uErr.message);
+}
+
+/**
+ * 구매자 구매확정 — 내 주문의 한 판매 업체 묶음. 살아 있는 줄이 모두 배송 완료여야 하고, 배송 완료 8일 전까지만 직접 누를 수 있다
+ * (그 뒤는 저절로 확정된 것으로 본다 — 정산 달이 바뀌지 않게). 조건부 update 로 두 번 눌러도 한 번만.
+ */
+export async function buyerConfirm(sb: Sb, userId: string, orderId: string, partnerId: string): Promise<{ ok: true } | { ok: false; code: "not_found" | "conflict"; message: string }> {
+  if (!UUID.test(orderId) || !UUID.test(partnerId)) return { ok: false, code: "not_found", message: "주문을 찾지 못했어요" };
+  const { data: o, error } = await sb.from("orders").select("id").eq("id", orderId).eq("user_id", userId).not("paid_at", "is", null).maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!o) return { ok: false, code: "not_found", message: "주문을 찾지 못했어요" };
+  const { data: items, error: iErr } = await sb.from("order_items").select("fulfil_status, delivered_at, confirmed_at").eq("order_id", orderId).eq("partner_id", partnerId);
+  if (iErr) throw new Error(iErr.message);
+  const live = ((items || []) as Pick<ItemRow, "fulfil_status" | "delivered_at" | "confirmed_at">[]).filter((i) => i.fulfil_status !== "canceled");
+  if (live.length === 0) return { ok: false, code: "not_found", message: "주문을 찾지 못했어요" };
+  if (live.some((i) => i.fulfil_status !== "delivered")) return { ok: false, code: "conflict", message: "배송 완료된 뒤에 구매확정할 수 있어요" };
+  if (live.every((i) => confirmedAt(i))) return { ok: false, code: "conflict", message: "이미 구매확정됐어요" };
+  const now = new Date();
+  const { error: uErr } = await sb.from("order_items").update({ confirmed_at: now.toISOString(), confirm_by: "buyer" })
+    .eq("order_id", orderId).eq("partner_id", partnerId).eq("fulfil_status", "delivered").is("confirmed_at", null)
+    .gt("delivered_at", new Date(now.getTime() - AUTO_CONFIRM_DAYS * 86400e3).toISOString());
+  if (uErr) throw new Error(uErr.message);
+  return { ok: true };
 }

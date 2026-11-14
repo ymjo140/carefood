@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
   catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: 500 }); }
 }
 
-/** POST /api/admin/partners/settlements — {partner_id, month, action: "close" | "paid", note?} */
+/** POST /api/admin/partners/settlements — {partner_id, month, action: "close" | "paid", note?, paid_amount?} (paid_amount: 실제 보낸 금액, 업체 화면에서 계산과 맞춰 본다) */
 export async function POST(req: NextRequest) {
   const denied = await adminOnly(); if (denied) return denied;
   const b = await req.json().catch(() => null);
@@ -30,7 +30,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ settlement: await closeMonth(sb, id, month, admin?.id ?? null) });
     }
     if (b?.action === "paid") {
-      await markPaid(sb, id, month, typeof b?.note === "string" ? b.note : null);
+      const amt = b?.paid_amount === null || b?.paid_amount === undefined || b?.paid_amount === "" ? null : Number(b.paid_amount);
+      await markPaid(sb, id, month, typeof b?.note === "string" ? b.note : null, amt);
       return NextResponse.json({ ok: true });
     }
     return NextResponse.json({ error: "action 은 close 또는 paid 예요" }, { status: 400 });
