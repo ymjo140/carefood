@@ -37,6 +37,19 @@ export function RangeInput({ className, ...rest }: Omit<InputHTMLAttributes<HTML
   return <input type="range" className={cn("ds-range", className)} {...rest} />;
 }
 
+/**
+ * 체크 — 디자인 시스템의 .ds-check. 한 줄 전체가 누르는 영역(44px)이다.
+ * label 을 비우면 칸만 그린다(표 줄 고르기) — 그때는 aria-label 을 꼭 준다.
+ */
+export function Checkbox({ label, className, ...rest }: Omit<InputHTMLAttributes<HTMLInputElement>, "type"> & { label?: ReactNode }) {
+  return (
+    <label className={cn("inline-flex items-center gap-2 min-h-11 min-w-11 cursor-pointer text-body text-ink", rest.disabled && "opacity-50 cursor-default", className)}>
+      <input type="checkbox" className="ds-check shrink-0" {...rest} />
+      {label}
+    </label>
+  );
+}
+
 /** 라벨 + 입력 + 도움말 묶음 */
 export function Field({ label, hint, error, children, className }: {
   label?: ReactNode; hint?: ReactNode; error?: ReactNode; children: ReactNode; className?: string;

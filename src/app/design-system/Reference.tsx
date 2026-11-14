@@ -7,7 +7,7 @@ import {
   ProgressBar, SearchField, SectionHeader, Select, Sheet, Spinner, Stat, Steps, Tabs, Textarea, TextLink, TextButton, Thumb, ProductImage,
   Avatar, useToast, cn, type BadgeTone,
   BottomNavItems, SkeletonList, FoodEntryForm, DragArea, DragGhost, DragHandle, useDragItem, useDropTarget, type DragData, ChoiceCard, ChoiceList, LinkTabs, RatingStars, RatingInput, ScaleInput, QuickRating, PostAuthor, PostAction, PostActions, PostTags, ThreadItem, MealAttach, PlanAttach, ProductTagLinks, PhotoGrid, PollAttach, DayDots, Switch,
-  ReelRow, ReelTile, ReelAddTile, ReelSkeleton, ReelMedia, CommentItem, VideoAttach, OfferOptionList, QtyStepper, UnitInput, RangeInput,
+  ReelRow, ReelTile, ReelAddTile, ReelSkeleton, ReelMedia, CommentItem, VideoAttach, OfferOptionList, QtyStepper, UnitInput, RangeInput, Checkbox, FilePick,
   StoryFrame, StoryProgress, StoryHeader, StoryMedia, StorySticker, StoryCaption, StoryAction, StoryReply, ShareCardPreview, ShareSteps,
 } from "@/components/ui";
 
@@ -667,12 +667,16 @@ export default function Reference({ status }: { status: DsStatus }) {
               <SearchField value={q} onChange={setQ} onSubmit={() => toast.show(`"${q}" 검색했어요`)} placeholder="제품 이름 검색" />
             </div>
           </Demo>
-          <Demo label="슬라이더 · 체크" code='className="ds-range" / "ds-check"'>
+          <Demo label="슬라이더 · 체크" code='<RangeInput/> <Checkbox label/>'>
             <div className="flex flex-col gap-3">
               <div className="flex justify-between text-label"><span className="text-ink">매운맛</span><span className="text-ink-2"><span className="num font-bold text-ink">{range}</span> · 라면 정도</span></div>
-              <input type="range" min={1} max={10} value={range} onChange={(e) => setRange(Number(e.target.value))} className="ds-range" aria-label="매운맛" />
-              <label className="flex items-center gap-2 min-h-11 text-body text-ink"><input type="checkbox" className="ds-check" defaultChecked /> 알레르기 성분 제외</label>
+              <RangeInput min={1} max={10} value={range} onChange={(e) => setRange(Number(e.target.value))} aria-label="매운맛" />
+              <Checkbox label="알레르기 성분 제외" defaultChecked />
+              <div className="flex items-center gap-1 text-label text-ink-2"><Checkbox aria-label="이 주문 고르기" defaultChecked /> 표 줄 고르기는 라벨 없이 칸만 (aria-label)</div>
             </div>
+          </Demo>
+          <Demo label="파일 고르기 — 엑셀 올리기 (진짜 입력은 숨기고 버튼 모양 라벨 + 파일 이름)" code='<FilePick accept=".xlsx" file onChange />'>
+            <FilePickDemo />
           </Demo>
           <Demo label="켜고 끄기 — 알림 설정처럼 바로 저장되는 설정 (한 줄 전체를 누름)" code="<Switch checked onChange label description />">
             <SwitchDemo />
@@ -1159,6 +1163,11 @@ function PollDemo() {
 }
 
 /** 켜고 끄기 데모 */
+function FilePickDemo() {
+  const [f, setF] = useState<File | null>(null);
+  return <FilePick accept=".xlsx" file={f} onChange={setF} />;
+}
+
 function SwitchDemo() {
   const [a, setA] = useState(true);
   const [b, setB] = useState(false);

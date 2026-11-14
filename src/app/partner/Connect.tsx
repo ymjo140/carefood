@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Button, Card, EmptyState, Icon, LinkButton, Notice, SectionHeader, Skeleton, buttonClass, timeAgo, useToast } from "@/components/ui";
+import { Button, Card, EmptyState, Icon, LinkButton, Notice, SectionHeader, Skeleton, FilePick, buttonClass, timeAgo, useToast } from "@/components/ui";
 import type { ConnectStatus } from "@/lib/partner/connect-status";
 import { Feed } from "./Feed";
 import { ApiKeys } from "./ApiKeys";
@@ -65,7 +65,6 @@ export function ProductUpload({ qs, batches, isDemo = false, readOnly = false, o
   const [uploading, setUploading] = useState(false);
   const [result, setResult] = useState<Batch | null>(null);
   const [tick, setTick] = useState(0);
-  const fileRef = useRef<HTMLInputElement>(null);
   const last = result || batches.find((b) => b.channel === "excel") || null;
 
   const upload = async () => {
@@ -82,7 +81,6 @@ export function ProductUpload({ qs, batches, isDemo = false, readOnly = false, o
         unchanged_count: d.unchanged, errors: d.errors, created_at: new Date().toISOString(),
       });
       setFile(null);
-      if (fileRef.current) fileRef.current.value = "";
       toast.show(`${d.rows}줄을 올렸어요`);
       onChanged();
       setTick((t) => t + 1);
@@ -103,11 +101,7 @@ export function ProductUpload({ qs, batches, isDemo = false, readOnly = false, o
           </p>
           {readOnly ? <p className="text-label text-ink-2 mt-4">관리자 보기에서는 올릴 수 없어요</p> : (
             <div className="flex flex-wrap items-center gap-2 mt-4">
-              <label className={buttonClass({ variant: "secondary" })}>
-                파일 고르기
-                <input ref={fileRef} type="file" accept=".xlsx" className="sr-only" onChange={(e) => setFile(e.target.files?.[0] || null)} />
-              </label>
-              <span className="text-label text-ink-2 min-w-0 truncate">{file ? file.name : "고른 파일이 없어요"}</span>
+              <FilePick accept=".xlsx" file={file} onChange={setFile} />
               <Button className="ml-auto" disabled={!file} loading={uploading} onClick={upload}>올리기</Button>
             </div>
           )}

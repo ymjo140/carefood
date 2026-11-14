@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Button, Card, EmptyState, Field, Input, Notice, SectionHeader, SkeletonList, TextButton, buttonClass, useToast } from "@/components/ui";
+import { useCallback, useEffect, useState } from "react";
+import { Button, Card, EmptyState, Field, Input, Notice, SectionHeader, SkeletonList, TextButton, FilePick, buttonClass, useToast } from "@/components/ui";
 import { DisputeList, DisputeSheet, type DisputeTarget } from "./Disputes";
 import { Payout } from "./Payout";
 
@@ -138,7 +138,6 @@ export function LinkSalesUpload({ qs, readOnly = false }: { qs: string; readOnly
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<Result | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
   const upload = async () => {
     if (!file) return;
     setBusy(true);
@@ -150,7 +149,6 @@ export function LinkSalesUpload({ qs, readOnly = false }: { qs: string; readOnly
       if (!r.ok) throw new Error(d.error);
       setResult(d);
       setFile(null);
-      if (fileRef.current) fileRef.current.value = "";
       toast.show(`판매 ${d.saved}건을 올렸어요. 정산의 달별 정산에 반영돼요`);
     } catch (e) {
       toast.show(`올리지 못했어요. ${(e as Error).message || "다시 시도해 주세요"}`, { tone: "danger" });
@@ -167,11 +165,7 @@ export function LinkSalesUpload({ qs, readOnly = false }: { qs: string; readOnly
         </p>
         {readOnly ? <p className="text-label text-ink-2 mt-4">관리자 보기에서는 올릴 수 없어요</p> : (
           <div className="flex flex-wrap items-center gap-2 mt-4">
-            <label className={buttonClass({ variant: "secondary" })}>
-              판매 파일 고르기
-              <input ref={fileRef} type="file" accept=".xlsx" className="sr-only" onChange={(e) => setFile(e.target.files?.[0] || null)} />
-            </label>
-            <span className="text-label text-ink-2 min-w-0 truncate">{file ? file.name : "고른 파일이 없어요"}</span>
+            <FilePick accept=".xlsx" label="판매 파일 고르기" file={file} onChange={setFile} />
             <Button variant="secondary" className="ml-auto" disabled={!file} loading={busy} onClick={upload}>판매 올리기</Button>
           </div>
         )}

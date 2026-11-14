@@ -111,11 +111,16 @@ export async function buildOrdersTemplate(): Promise<Buffer> {
 
 /** 올린 엑셀에서 줄을 읽는다 — 2행의 필드 키로 칸을 찾는다. kind: 제품(기본) 또는 주문 */
 export async function readWorkbook(buf: ArrayBuffer, kind: "products" | "orders" = "products"): Promise<{ rows: SheetRow[]; unknownKeys: string[] }> {
+  return readSheet(buf, kind === "orders" ? ORDER_SHEET : SHEET, kind === "orders" ? ORDER_FIELDS.map((f) => f.key) : FIELDS.map((f) => f.key));
+}
+
+/** 시트 하나를 읽는다 — 이름이 같은 시트(없으면 첫 시트), 2행의 필드 키로 칸을 찾고 3행부터 값이 있는 줄만 */
+export async function readSheet(buf: ArrayBuffer, sheet: string, keyList: readonly string[], maxRows = MAX_ROWS): Promise<{ rows: SheetRow[]; unknownKeys: string[] }> {
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.load(buf);
-  const ws = wb.getWorksheet(kind === "orders" ? ORDER_SHEET : SHEET) || wb.worksheets[0];
+  const ws = wb.getWorksheet(sheet) || wb.worksheets[0];
   if (!ws) throw new Error("시트를 찾지 못했어요");
-  const known = new Set<string>(kind === "orders" ? ORDER_FIELDS.map((f) => f.key) : FIELDS.map((f) => f.key));
+  const known = new Set<string>(keyList);
   const keys: (string | null)[] = [];
   const unknownKeys: string[] = [];
   ws.getRow(2).eachCell({ includeEmpty: true }, (cell, col) => {
@@ -126,7 +131,7 @@ export async function readWorkbook(buf: ArrayBuffer, kind: "products" | "orders"
   if (!keys.some(Boolean)) throw new Error("2행에 필드 키가 없어요. 케어푸드 양식 파일에 적어 주세요");
 
   const rows: SheetRow[] = [];
-  for (let r = 3; r <= Math.min(ws.rowCount, MAX_ROWS + 2); r++) {
+  for (let r = 3; r <= Math.min(ws.rowCount, maxRows + 2); r++) {
     const values: Record<string, unknown> = {};
     let any = false;
     ws.getRow(r).eachCell({ includeEmpty: false }, (cell, col) => {
@@ -137,7 +142,7 @@ export async function readWorkbook(buf: ArrayBuffer, kind: "products" | "orders"
     });
     if (any) rows.push({ row: r, values });
   }
-  if (ws.rowCount > MAX_ROWS + 2) throw new Error(`한 번에 ${MAX_ROWS}개까지 올릴 수 있어요. 나눠서 올려 주세요`);
+  if (ws.rowCount > maxRows + 2) throw new Error(`한 번에 ${maxRows}줄까지 올릴 수 있어요. 나눠서 올려 주세요`);
   return { rows, unknownKeys };
 }
 
