@@ -229,9 +229,8 @@ export async function rejectItem(sb: Sb, itemId: string, note: string) {
 /** 업체 상태가 바뀌면 그 업체 제품의 '살 수 있음'도 맞춘다 (운영 중일 때만 추천·식단 채우기에 나온다) */
 export async function syncPartnerProducts(sb: Sb, partnerId: string) {
   const { data: pa } = await sb.from("partners").select("status, is_demo").eq("id", partnerId).single();
-  const { data: items, error } = await sb.from("partner_items").select("product_id, approved_data, stock").eq("partner_id", partnerId).not("product_id", "is", null);
-  if (error) throw new Error(error.message);
-  for (const it of items || []) {
+  const items = await selectAll<{ product_id: string; approved_data: PartnerItem | null; stock: number | null }>(() => sb.from("partner_items").select("id, product_id, approved_data, stock").eq("partner_id", partnerId).not("product_id", "is", null), "id");
+  for (const it of items) {
     if (!it.approved_data) continue;
     const { error: uErr } = await sb.from("products").update({ is_purchasable: pa?.status === "active" && !pa?.is_demo && onSale(it.approved_data) && (it.stock ?? 1) > 0, updated_at: new Date().toISOString() }).eq("id", it.product_id);
     if (uErr) throw new Error(uErr.message);

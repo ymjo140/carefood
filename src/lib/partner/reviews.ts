@@ -5,7 +5,7 @@
  *  · 리뷰 글은 제품 화면에 공개된 글이라 그대로 보여 준다.
  */
 import { customerCode } from "./customers";
-import { selectAllIn } from "@/lib/supabase/all";
+import { selectAll, selectAllIn } from "@/lib/supabase/all";
 
 type Sb = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
@@ -14,9 +14,7 @@ export type PartnerReview = { id: string; item_id: string; name: string; rating:
 
 /** 내 제품별 요약(리뷰 많은 순) + 최근 리뷰(item 을 주면 그 제품만) */
 export async function partnerReviews(sb: Sb, partnerId: string, opt: { item?: string | null; limit?: number } = {}): Promise<{ products: ReviewSummary[]; reviews: PartnerReview[]; total: number }> {
-  const { data: items, error } = await sb.from("partner_items").select("id, product_id, data->>name").eq("partner_id", partnerId).not("product_id", "is", null).limit(1000);
-  if (error) throw new Error(error.message);
-  const list = (items || []) as { id: string; product_id: string; name: string }[];
+  const list = await selectAll<{ id: string; product_id: string; name: string }>(() => sb.from("partner_items").select("id, product_id, data->>name").eq("partner_id", partnerId).not("product_id", "is", null), "id");
   if (list.length === 0) return { products: [], reviews: [], total: 0 };
   const itemOf = new Map(list.map((i) => [i.product_id, i]));
   type R = { id: string; product_id: string; user_id: string; rating: number; would_rebuy: boolean | null; comment: string | null; created_at: string };

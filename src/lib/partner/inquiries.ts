@@ -9,6 +9,7 @@ import { INQUIRY_KINDS, INQUIRY_LATE_HOURS, INQUIRY_OPEN_MAX, type InquiryInfo, 
 import { pushReady, sendToUser, type PushSub } from "@/lib/push";
 import { checkClaimsWith, type ClaimTerm } from "./claims";
 import { customerCode } from "./customers";
+import { selectAllIn } from "@/lib/supabase/all";
 
 type Sb = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -36,7 +37,7 @@ export async function buyerAsk(sb: Sb, userId: string, orderId: string, partnerI
   if (oErr) throw new Error(oErr.message);
   if (((open || []) as { body: string }[]).some((q) => q.body === body)) return { ok: false, code: "conflict", message: "같은 문의를 이미 남겼어요. 판매 업체가 답하면 알려 드려요" };
   if ((open || []).length >= INQUIRY_OPEN_MAX) return { ok: false, code: "conflict", message: `답을 기다리는 문의가 ${INQUIRY_OPEN_MAX}개 있어요. 답을 받은 뒤 다시 물어봐 주세요` };
-  const { data, error: iErr } = await sb.from("order_inquiries").insert({ order_id: orderId, partner_id: partnerId, user_id: userId, kind, body, answer: null, answered_at: null }).select(COLS).single();
+  const { data, error: iErr } = await sb.from("order_inquiries").insert({ order_id: orderId, partner_id: partnerId, user_id: userId, kind, body, answer: null, answered_at: null, created_at: new Date().toISOString() }).select(COLS).single();
   if (iErr) throw new Error(iErr.message);
   return { ok: true, inquiry: info(data as Row) };
 }
@@ -45,9 +46,9 @@ export async function buyerAsk(sb: Sb, userId: string, orderId: string, partnerI
 export async function inquiriesByBundle(sb: Sb, orderIds: string[]): Promise<Map<string, InquiryInfo[]>> {
   const out = new Map<string, InquiryInfo[]>();
   if (orderIds.length === 0) return out;
-  const { data, error } = await sb.from("order_inquiries").select(COLS).in("order_id", orderIds).order("created_at");
-  if (error) throw new Error(error.message);
-  for (const r of (data || []) as Row[]) {
+  const rows = (await selectAllIn<Row>(orderIds, 100, (part) => sb.from("order_inquiries").select(COLS).in("order_id", part), "id"))
+    .sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id));
+  for (const r of rows) {
     const k = `${r.order_id}|${r.partner_id}`;
     (out.get(k) || out.set(k, []).get(k)!).push(info(r));
   }
@@ -72,16 +73,14 @@ export async function listPartnerInquiries(sb: Sb, partnerId: string, opt: { ans
   const rows = (data || []) as Row[];
   if (rows.length === 0) return [];
   const ids = [...new Set(rows.map((r) => r.order_id))];
-  const [items, orders] = await Promise.all([
-    sb.from("order_items").select("order_id, product_name, quantity, fulfil_status").in("order_id", ids).eq("partner_id", partnerId),
-    sb.from("orders").select("id, paid_at").in("id", ids),
-  ]);
-  if (items.error) throw new Error(items.error.message);
-  if (orders.error) throw new Error(orders.error.message);
   type It = { order_id: string; product_name: string; quantity: number | null; fulfil_status: string };
+  const [items, orders] = await Promise.all([
+    selectAllIn<It>(ids, 100, (part) => sb.from("order_items").select("id, order_id, product_name, quantity, fulfil_status").in("order_id", part).eq("partner_id", partnerId), "id"),
+    selectAllIn<{ id: string; paid_at: string | null }>(ids, 100, (part) => sb.from("orders").select("id, paid_at").in("id", part), "id"),
+  ]);
   const lines = new Map<string, It[]>();
-  for (const l of (items.data || []) as It[]) (lines.get(l.order_id) || lines.set(l.order_id, []).get(l.order_id)!).push(l);
-  const paid = new Map(((orders.data || []) as { id: string; paid_at: string | null }[]).map((o) => [o.id, o.paid_at]));
+  for (const l of items) (lines.get(l.order_id) || lines.set(l.order_id, []).get(l.order_id)!).push(l);
+  const paid = new Map(orders.map((o) => [o.id, o.paid_at]));
   return rows.map((r) => {
     const ls = lines.get(r.order_id) || [];
     const live = ls.filter((l) => l.fulfil_status !== "canceled");

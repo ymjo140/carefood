@@ -4,7 +4,7 @@
  * 주문 수는 결제한 주문 중 이 업체 묶음이 통째로 취소되지 않은 것. 금액은 상품 금액 − 쿠폰 할인 (배송비 뺌).
  */
 import { createHash } from "node:crypto";
-import { selectAll } from "@/lib/supabase/all";
+import { selectAll, selectAllIn } from "@/lib/supabase/all";
 
 type Sb = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 const DAY = 86400e3;
@@ -80,16 +80,9 @@ export type Buyer = Awaited<ReturnType<typeof loadBuyers>>[number];
 // 묶음 상태 — 덜 진행된 것을 묶음 상태로 본다
 const ORDER_RANK: Record<string, number> = { new: 0, accepted: 1, shipped: 2, delivered: 3 };
 
-async function chunkIn<T>(sb: Sb, table: string, cols: string, key: string, ids: string[], extra?: (q: Sb) => Sb): Promise<T[]> {
-  const out: T[] = [];
-  for (let i = 0; i < ids.length; i += 300) {
-    let q = sb.from(table).select(cols).in(key, ids.slice(i, i + 300));
-    if (extra) q = extra(q);
-    const { data, error } = await q;
-    if (error) throw new Error(error.message);
-    out.push(...(data || []));
-  }
-  return out;
+/** id 목록을 300개씩 묻고 묶음마다 1,000줄 넘게도 끝까지 받는다 (한 사람에게 쿠폰이 여러 장일 수 있다) */
+async function chunkIn<T>(sb: Sb, table: string, cols: string, key: string, ids: string[], extra?: (q: Sb) => Sb, order = key): Promise<T[]> {
+  return selectAllIn<T>(ids, 300, (part) => { const q = sb.from(table).select(cols).in(key, part); return extra ? extra(q) : q; }, order);
 }
 
 /** 광고 동의한 사람 */
@@ -105,7 +98,7 @@ export async function listCustomers(sb: Sb, partnerId: string) {
   const users = buyers.map((b) => b.user);
   const [ads, grants] = await Promise.all([
     adsConsented(sb, users),
-    chunkIn<{ user_id: string }>(sb, "coupon_grants", "user_id", "user_id", users, (q) => q.eq("partner_id", partnerId).eq("status", "active").gt("expires_at", new Date(now).toISOString())),
+    chunkIn<{ user_id: string }>(sb, "coupon_grants", "user_id", "user_id", users, (q) => q.eq("partner_id", partnerId).eq("status", "active").gt("expires_at", new Date(now).toISOString()), "id"),
   ]);
   const coupons = new Map<string, number>();
   for (const g of grants) coupons.set(g.user_id, (coupons.get(g.user_id) || 0) + 1);

@@ -12,6 +12,7 @@ export { AUTO_CONFIRM_DAYS };
 import { restoreCoupons } from "./partner/coupons";
 import { putBackRows } from "./partner/stock";
 import { inquiriesByBundle } from "./partner/inquiries";
+import { selectAllIn } from "./supabase/all";
 
 type Sb = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -97,9 +98,10 @@ const ORDER_COLS = "id, created_at, status, paid_at, total_price, shipping_fee, 
 
 async function withGroups<T extends { id: string; shipping_fees: Record<string, number> | null }>(sb: Sb, orders: T[]) {
   if (orders.length === 0) return [];
-  const { data, error } = await sb.from("order_items").select(ITEM_COLS).in("order_id", orders.map((o) => o.id)).order("created_at");
-  if (error) throw new Error(error.message);
-  const rows = (data || []) as ItemRow[];
+  // 주문 30~100개 × 식단 줄 수십 개 — 1,000줄을 넘을 수 있어 끝까지 받는다
+  const rows = (await selectAllIn<ItemRow & { id: string; created_at: string }>(orders.map((o) => o.id), 100,
+    (part) => sb.from("order_items").select(`id, created_at, ${ITEM_COLS}`).in("order_id", part), "id"))
+    .sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id));
   const asked = await inquiriesByBundle(sb, orders.map((o) => o.id));
   return orders.map(({ shipping_fees, ...o }) => {
     const groups = groupItems(rows.filter((r) => r.order_id === o.id), shipping_fees || {});
