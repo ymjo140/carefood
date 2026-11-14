@@ -67,14 +67,14 @@ export function SeasonDetail() {
         <span className="text-label text-ink-2">{head[0]}</span>
         <h1 className="text-display font-bold text-ink text-balance">{head.slice(1).join(" · ") || s.title}</h1>
         <p className="text-label text-ink-2 num">
-          {md(s.start_on)} ~ {md(s.ends_on)} · {s.days / 7}주
+          {md(s.start_on)} ~ {md(s.ends_on)} · {s.days}일
           {s.days_left != null ? <> · <span className="font-bold text-ink">{s.days_left}일 남았어요</span></> : <> · {s.starts_in}일 뒤 시작</>}
           {s.people != null && <> · {won(s.people)}명</>}
         </p>
         {s.intro && <p className="text-body text-ink">{s.intro}</p>}
         {s.closed ? <Notice>남은 날이 7일보다 적어 지금은 들어갈 수 없어요. 다음 시즌에 같이 해요</Notice>
           : s.late ? <Notice>지금 들어오면 남은 {s.late.remaining}일 중 {s.late.goal}일을 해내면 완주예요</Notice>
-          : s.starts_in != null ? <Notice>지금 고르면 {md(s.start_on)} 월요일에 다 같이 시작해요</Notice> : null}
+          : s.starts_in != null ? <Notice>지금 고르면 {md(s.start_on)}에 다 같이 시작해요</Notice> : null}
       </section>
 
       {s.challenges.map((c) => {

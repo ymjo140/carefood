@@ -104,7 +104,7 @@ export function ChallengeHome() {
             <LinkButton block href={`/community/challenges/s/${main.slug}`}>{main.days_left != null ? "시즌에서 고르기" : "미리 보고 고르기"}</LinkButton>
             {sv?.current && sv.next ? (
               <div className="flex items-center justify-between gap-3 border-t border-line pt-3">
-                <span className="text-label text-ink">{sv.next.title.split(" · ")[0]} · {md(sv.next.start_on)} 시작 · {sv.next.days / 7}주</span>
+                <span className="text-label text-ink">{sv.next.title.split(" · ")[0]} · {md(sv.next.start_on)} 시작 · {sv.next.days}일</span>
                 <TextButton disabled={busy === sv.next.id} onClick={() => watch(sv.next!)}>{sv.next.watching ? "알림 끄기" : "시작 알림 받기"}</TextButton>
               </div>
             ) : !sv?.current && main ? (
