@@ -12,6 +12,7 @@ import { runFlows } from "@/lib/partner/flows";
 import { notifyPartners } from "@/lib/partner/notify";
 import { autoCloseLastMonth } from "@/lib/partner/settlement";
 import { AUTO_CONFIRM_DAYS, expireUnpaidOrders } from "@/lib/orders";
+import { asResult, selectAll, selectAllIn } from "@/lib/supabase/all";
 
 /**
  * POST /api/push/run — 보낼 때가 된 알림을 보낸다. Supabase 예약 작업(pg_cron + pg_net, 30분마다)이 부른다.
@@ -120,8 +121,9 @@ export async function POST(req: NextRequest) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sb = createServiceRoleClient() as any;
   const today = todayKst();
-  const { data: subRows, error: sErr } = await sb.from("push_subscriptions").select("endpoint, user_id, p256dh, auth").limit(5000);
-  if (sErr) return NextResponse.json({ error: sErr.message }, { status: 500 });
+  let subRows: PushSub[];
+  try { subRows = await selectAll<PushSub>(() => sb.from("push_subscriptions").select("endpoint, user_id, p256dh, auth"), "endpoint", 1_000_000); }
+  catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: 500 }); }
   const subsBy = new Map<string, PushSub[]>();
   for (const s of (subRows || []) as PushSub[]) subsBy.set(s.user_id, [...(subsBy.get(s.user_id) || []), s]);
   const users = [...subsBy.keys()];
@@ -129,13 +131,14 @@ export async function POST(req: NextRequest) {
 
   const lastMonday = addDays(mondayOf(today), -7);
   const [pRes, dRes, lRes, mRes, planRes] = await Promise.all([
-    sb.from("notification_prefs").select("user_id, meals, weekly, community, challenge, community_pushed_at").in("user_id", users),
-    sb.from("meal_diary").select("user_id, date, meal_type, calories, protein_g, sodium_mg").in("user_id", users).gte("date", addDays(today, -14)).lte("date", today).limit(20000),
-    sb.from("push_log").select("user_id, kind, key").in("user_id", users).gte("sent_at", new Date(Date.now() - 8 * 86400e3).toISOString()).limit(20000),
-    sb.from("community_challenge_members").select("user_id, started_on, challenge_groups(start_on), community_challenges(title, days, is_active)").in("user_id", users),
+    // 사람이 많으면 주소가 길어지고 1,000줄에서 잘린다 — 200명씩 나눠 끝까지 받는다 (lib/supabase/all.ts)
+    asResult(selectAllIn(users, 200, (p) => sb.from("notification_prefs").select("user_id, meals, weekly, community, challenge, community_pushed_at").in("user_id", p), "user_id")),
+    asResult(selectAllIn(users, 200, (p) => sb.from("meal_diary").select("user_id, date, meal_type, calories, protein_g, sodium_mg").in("user_id", p).gte("date", addDays(today, -14)).lte("date", today), "id", 1_000_000)),
+    asResult(selectAllIn(users, 200, (p) => sb.from("push_log").select("user_id, kind, key").in("user_id", p).gte("sent_at", new Date(Date.now() - 8 * 86400e3).toISOString()), ["user_id", "sent_at", "kind", "key"], 1_000_000)),
+    asResult(selectAllIn(users, 200, (p) => sb.from("community_challenge_members").select("user_id, started_on, challenge_groups(start_on), community_challenges(title, days, is_active)").in("user_id", p), ["challenge_id", "user_id"])),
     // 저장한 식단 (끼니 알림에 계획 이름을 넣으려고) — 사람마다 가장 최근의 한 주
-    slotOf(hour) ? sb.from("saved_meal_plans").select("user_id, grid, updated_at").in("user_id", users).eq("is_active", true)
-      .gte("updated_at", new Date(Date.now() - 28 * 86400e3).toISOString()).order("updated_at", { ascending: false }).limit(Math.min(5000, users.length * 5))
+    slotOf(hour) ? asResult(selectAllIn(users, 200, (p) => sb.from("saved_meal_plans").select("user_id, grid, updated_at").in("user_id", p).eq("is_active", true)
+      .gte("updated_at", new Date(Date.now() - 28 * 86400e3).toISOString()), ["-updated_at", "id"]))
       : Promise.resolve({ data: [], error: null }),
   ]);
   for (const r of [pRes, dRes, lRes, mRes, planRes]) if (r.error) return NextResponse.json({ error: r.error.message }, { status: 500 });

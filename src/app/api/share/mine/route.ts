@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { connection } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { getActorId, noActor } from "@/lib/actor-server";
+import { selectAllIn } from "@/lib/supabase/all";
 
 /**
  * GET /api/share/mine — 내가 실제로 공유한 링크(공유·저장·복사를 누른 것)와 링크마다 본 사람 수·같이 시작한 사람 수.
@@ -19,9 +20,10 @@ export async function GET() {
   const codes = ((links || []) as { code: string }[]).map((l) => l.code);
   const counts = new Map<string, { visitors: Set<string>; joins: Set<string> }>();
   if (codes.length) {
-    const { data: ev, error: eErr } = await sb.from("share_events").select("code, visitor, type").in("code", codes).limit(20000);
-    if (eErr) return NextResponse.json({ error: eErr.message }, { status: 500 });
-    for (const e of (ev || []) as { code: string; visitor: string; type: string }[]) {
+    let ev: unknown[];
+    try { ev = await selectAllIn(codes, 200, (p) => sb.from("share_events").select("code, visitor, type").in("code", p), "id", 1_000_000); }
+    catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: 500 }); }
+    for (const e of ev as { code: string; visitor: string; type: string }[]) {
       const c = counts.get(e.code) || counts.set(e.code, { visitors: new Set(), joins: new Set() }).get(e.code)!;
       if (e.type === "visit") c.visitors.add(e.visitor);
       if (e.type === "join") c.joins.add(e.visitor);

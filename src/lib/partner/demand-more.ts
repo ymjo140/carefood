@@ -5,6 +5,7 @@
  * 공구: 내 제품에 연결된 공구의 인원·바라는 가격. 질환 관련 목표는 쓰지 않는다.
  */
 import { DISH_CATEGORY_LABELS, type DishCategory } from "@/types/database";
+import { selectAll, selectUpTo } from "@/lib/supabase/all";
 
 type Sb = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 const MIN_PEOPLE = 10;
@@ -31,9 +32,7 @@ export type PriceRow = { product_id: string; name: string; category: string; lab
 export type GroupBuyRow = { id: string; title: string; current: number; target: number; original_price: number | null; target_price: number | null; discount: number | null; goal: string | null; status: string; expires_at: string | null };
 
 export async function buildDemandMore(sb: Sb, pid: string): Promise<{ meals: MealRow[]; prices: PriceRow[]; group_buys: GroupBuyRow[] }> {
-  const { data: items, error } = await sb.from("partner_items").select("product_id, data->>name").eq("partner_id", pid).eq("status", "approved").not("product_id", "is", null).limit(5000);
-  if (error) throw new Error(error.message);
-  const mine = (items || []) as { product_id: string; name: string }[];
+  const mine = await selectAll<{ product_id: string; name: string }>(() => sb.from("partner_items").select("product_id, data->>name").eq("partner_id", pid).eq("status", "approved").not("product_id", "is", null), "id");
   const ids = [...new Set(mine.map((m) => m.product_id))];
   if (!ids.length) return { meals: [], prices: [], group_buys: [] };
 
@@ -45,9 +44,8 @@ export async function buildDemandMore(sb: Sb, pid: string): Promise<{ meals: Mea
 
   // ── 끼니: 지난 28일 식단 기록 중 내 카테고리 제품 ──
   const sinceDay = new Date(Date.now() + 9 * 3600e3 - 28 * DAY).toISOString().slice(0, 10);
-  const { data: diary, error: dErr } = await sb.from("meal_diary").select("user_id, meal_type, product_id").gte("date", sinceDay).not("product_id", "is", null).limit(50000);
-  if (dErr) throw new Error(dErr.message);
-  const dRows = (diary || []) as { user_id: string; meal_type: string | null; product_id: string }[];
+  // 최근 기록부터 20,000줄 표본 (끼니 비율만 본다)
+  const dRows = await selectUpTo<{ user_id: string; meal_type: string | null; product_id: string }>(() => sb.from("meal_diary").select("user_id, meal_type, product_id").gte("date", sinceDay).not("product_id", "is", null), "-id", 20000);
   const dCats = await chunks<{ id: string; dish_category: string | null }>([...new Set(dRows.map((r) => r.product_id))], 150,
     (p) => sb.from("products").select("id, dish_category").in("id", p).in("dish_category", cats));
   const dCatOf = new Map(dCats.map((p) => [p.id, p.dish_category || "other"]));

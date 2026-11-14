@@ -7,6 +7,7 @@ import { rateLimit } from "@/lib/rate-limit";
 import { ensureNickname } from "@/lib/community-profile";
 import { DIARY_COLS, type DiaryRow } from "@/lib/challenges";
 import { JOIN_MESSAGES, memberRun, openGroup, startDate, type ChallengeRow, type GroupRow, type MemberRow, type StartChoice } from "@/lib/challenge-groups";
+import { asResult, selectAll } from "@/lib/supabase/all";
 
 /**
  * GET /api/community/challenges — 공식 챌린지 + 내가 하는 사람이 만든 챌린지(kind user, 위에) + 지금 하는 사람 수 + (참여했으면) 내 진행과 내 묶음(초대 코드·인원)
@@ -25,10 +26,8 @@ async function load(sb: any, actor: string | null) {
     .eq("is_active", true).eq("kind", "official").order("sort");
   if (error) throw new Error(error.message);
   const challenges = (rows || []) as (Row & { kind?: string; creator_id?: string | null; note?: string | null })[];
-  const { data: mems, error: mErr } = await sb.from("community_challenge_members")
-    .select("challenge_id, user_id, started_on, joined_on, goal_days_eff, group_id, finished_runs, show_values, challenge_groups(start_on)").limit(20000);
-  if (mErr) throw new Error(mErr.message);
-  const members = (mems || []) as Member[];
+  const members = await selectAll<Member>(() => sb.from("community_challenge_members")
+    .select("challenge_id, user_id, started_on, joined_on, goal_days_eff, group_id, finished_runs, show_values, challenge_groups(start_on)"), ["challenge_id", "user_id"], 1_000_000);
   // 내가 하는 '사람이 만든' 챌린지도 목록 위에 (링크로만 들어가는 것이라 공식 목록에는 없다)
   const myUserIds = actor ? [...new Set(members.filter((m) => m.user_id === actor).map((m) => m.challenge_id))].filter((id) => !challenges.some((c) => c.id === id)) : [];
   if (myUserIds.length) {
@@ -46,7 +45,7 @@ async function load(sb: any, actor: string | null) {
     const from = mine.map((m) => m.started_on).sort()[0];
     const gids = mine.map((m) => m.group_id).filter(Boolean) as string[];
     const [d, g] = await Promise.all([
-      sb.from("meal_diary").select(DIARY_COLS).eq("user_id", actor).gte("date", from).lte("date", today).limit(5000),
+      asResult(selectAll(() => sb.from("meal_diary").select(DIARY_COLS).eq("user_id", actor).gte("date", from).lte("date", today), "id")),
       gids.length ? sb.from("challenge_groups").select("*").in("id", gids) : { data: [], error: null },
     ]);
     if (d.error) throw new Error(d.error.message);

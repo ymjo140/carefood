@@ -17,6 +17,7 @@ import { parseRow } from "./schema";
 type Sb = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
 import { DEMO_SKU_PREFIX, DEMO_USER_PREFIX } from "./demo-ids";
+import { selectAll } from "@/lib/supabase/all";
 export { DEMO_SKU_PREFIX, DEMO_USER_PREFIX };
 
 const DAY = 86400e3;
@@ -213,9 +214,8 @@ async function seedDemoCoupons(sb: Sb, partner: Partner, used: { id: string; use
 
 /** 이 업체의 예시 주문만 지운다 (주문 제품은 같이 지워진다) */
 export async function clearDemoOrders(sb: Sb, partnerId: string) {
-  const { data, error } = await sb.from("order_items").select("order_id, orders!inner(is_demo)").eq("partner_id", partnerId).eq("orders.is_demo", true).limit(5000);
-  if (error) throw new Error(error.message);
-  const ids = [...new Set(((data || []) as { order_id: string }[]).map((r) => r.order_id))];
+  const data = await selectAll<{ order_id: string }>(() => sb.from("order_items").select("order_id, orders!inner(is_demo)").eq("partner_id", partnerId).eq("orders.is_demo", true), "id");
+  const ids = [...new Set(data.map((r) => r.order_id))];
   for (let i = 0; i < ids.length; i += 200) {
     const { error: dErr } = await sb.from("orders").delete().in("id", ids.slice(i, i + 200)).eq("is_demo", true);
     if (dErr) throw new Error(dErr.message);

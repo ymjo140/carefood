@@ -14,6 +14,7 @@ import { kstHour } from "@/lib/day";
 import { checkClaimsWith, type ClaimHit, type ClaimTerm } from "./claims";
 import { wants, SEGMENTS, type SegmentKey } from "./demand";
 import { WEEK_MS } from "./quota";
+import { selectAll, selectAllIn } from "@/lib/supabase/all";
 
 type Sb = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
@@ -99,20 +100,14 @@ export function notReady(e: { code?: string; message?: string } | null | undefin
   return !!e && (e.code === "42P01" || e.code === "PGRST205" || /does not exist|Could not find the table/i.test(e.message || ""));
 }
 
-async function chunked<T>(ids: string[], run: (part: string[]) => Promise<{ data: T[] | null; error: { message: string } | null }>): Promise<T[]> {
-  const out: T[] = [];
-  for (let i = 0; i < ids.length; i += 300) {
-    const { data, error } = await run(ids.slice(i, i + 300));
-    if (error) throw new Error(error.message);
-    out.push(...(data || []));
-  }
-  return out;
+/** id 300개씩 나눠 묻고, 묶음마다 1,000줄씩 끝까지 받는다 (PostgREST max-rows — lib/supabase/all.ts) */
+function chunked<T>(ids: string[], run: (part: string[]) => any, order: string | string[] = "id"): Promise<T[]> { // eslint-disable-line @typescript-eslint/no-explicit-any
+  return selectAllIn<T>(ids, 300, run, order);
 }
 
 async function partnerProductIds(sb: Sb, partnerId: string): Promise<string[]> {
-  const { data, error } = await sb.from("partner_items").select("product_id").eq("partner_id", partnerId).not("product_id", "is", null).limit(5000);
-  if (error) throw new Error(error.message);
-  return [...new Set(((data || []) as { product_id: string }[]).map((r) => r.product_id))];
+  const data = await selectAll<{ product_id: string }>(() => sb.from("partner_items").select("product_id").eq("partner_id", partnerId).not("product_id", "is", null), "id");
+  return [...new Set(data.map((r) => r.product_id))];
 }
 
 /** 최근 행동으로 고른 사람 */
@@ -126,17 +121,15 @@ async function behaviorSet(sb: Sb, partnerId: string, b: NonNullable<Conditions[
   type Row = { user_id: string | null };
   const add = (rows: Row[]) => { for (const r of rows) if (r.user_id) out.add(r.user_id); };
   if (b.action === "viewed" || b.action === "never_seen") {
-    add(await chunked<Row>(ids, (p) => sb.from("user_interactions").select("user_id").eq("action", "view").in("product_id", p).gte("created_at", since).limit(100000)));
+    add(await chunked<Row>(ids, (p) => sb.from("user_interactions").select("user_id").eq("action", "view").in("product_id", p).gte("created_at", since)));
   } else if (b.action === "saved") {
     const [f, d] = await Promise.all([
-      chunked<Row>(ids, (p) => sb.from("user_favorites").select("user_id").in("product_id", p).gte("created_at", since).limit(100000)),
-      chunked<Row>(ids, (p) => sb.from("meal_diary").select("user_id").in("product_id", p).gte("date", sinceDay).limit(100000)),
+      chunked<Row>(ids, (p) => sb.from("user_favorites").select("user_id").in("product_id", p).gte("created_at", since)),
+      chunked<Row>(ids, (p) => sb.from("meal_diary").select("user_id").in("product_id", p).gte("date", sinceDay)),
     ]);
     add(f); add(d);
   } else if (b.action === "clicked") {
-    const { data, error } = await sb.from("product_clicks").select("user_id").eq("partner_id", partnerId).gte("created_at", since).limit(100000);
-    if (error) throw new Error(error.message);
-    add(data || []);
+    add(await selectAll<Row>(() => sb.from("product_clicks").select("user_id").eq("partner_id", partnerId).gte("created_at", since), "id", 500_000));
   }
   return out;
 }
@@ -170,9 +163,8 @@ export type Audience = {
 export async function buildAudience(sb: Sb, partnerId: string, c: Conditions, sendAt: number, excludeCampaign?: string): Promise<Audience> {
   const needsTargeting = !!(c.goals?.length || c.needs?.length);
   const night = isNight(sendAt);
-  const { data: cons, error } = await sb.from("marketing_consents").select("user_id, night, targeting").eq("ads", true).limit(200000);
-  if (error) throw error;
-  let people = ((cons || []) as { user_id: string; night: boolean; targeting: boolean }[])
+  const cons = await selectAll<{ user_id: string; night: boolean; targeting: boolean }>(() => sb.from("marketing_consents").select("user_id, night, targeting").eq("ads", true), "user_id", 1_000_000);
+  let people = cons
     .filter((r) => !needsTargeting || r.targeting);
 
   if (needsTargeting && people.length) {
@@ -206,7 +198,7 @@ export async function buildAudience(sb: Sb, partnerId: string, c: Conditions, se
     const since = new Date(sendAt - WEEK_MS).toISOString();
     type R = { user_id: string; campaign_id: string; partner_campaigns: { partner_id: string } | null };
     const recent = await chunked<R>(people.map((p) => p.user_id), (part) =>
-      sb.from("campaign_recipients").select("user_id, campaign_id, partner_campaigns(partner_id)").in("user_id", part).eq("holdout", false).gte("sent_at", since).limit(100000));
+      sb.from("campaign_recipients").select("user_id, campaign_id, partner_campaigns(partner_id)").in("user_id", part).eq("holdout", false).gte("sent_at", since), ["campaign_id", "user_id"]);
     const total = new Map<string, number>(), mine = new Map<string, number>();
     for (const r of recent) {
       if (r.campaign_id === excludeCampaign) continue;
@@ -257,10 +249,9 @@ export function adText(partnerName: string, title: string, body: string) {
 
 /** 충전금 잔액 (확정된 것만) + 확인을 기다리는 충전 */
 export async function creditBalance(sb: Sb, partnerId: string) {
-  const { data, error } = await sb.from("partner_credit_ledger").select("amount, status, kind").eq("partner_id", partnerId).limit(20000);
-  if (error) throw error;
+  const data = await selectAll<{ amount: number; status: string; kind: string }>(() => sb.from("partner_credit_ledger").select("amount, status, kind").eq("partner_id", partnerId), "id");
   let balance = 0, pending = 0;
-  for (const r of (data || []) as { amount: number; status: string; kind: string }[]) {
+  for (const r of data) {
     if (r.status === "confirmed") balance += r.amount;
     else if (r.status === "requested" && r.kind === "topup") pending += r.amount;
   }
@@ -292,22 +283,20 @@ export type CampaignResult = {
 export async function campaignResult(sb: Sb, partnerId: string, c: { id: string; sent_at: string | null }): Promise<CampaignResult> {
   const empty = { sent: null, opened: null, clicked: null, click_rate: null, holdout_click_rate: null, purchases: null, purchase_amount: null, final: false };
   if (!c.sent_at) return empty;
-  const { data: rec, error } = await sb.from("campaign_recipients").select("user_id, holdout, opened_at").eq("campaign_id", c.id).limit(200000);
-  if (error) throw error;
-  const rows = (rec || []) as { user_id: string; holdout: boolean; opened_at: string | null }[];
+  const rows = await selectAll<{ user_id: string; holdout: boolean; opened_at: string | null }>(() => sb.from("campaign_recipients").select("user_id, holdout, opened_at").eq("campaign_id", c.id), "user_id", 1_000_000);
   const sentIds = rows.filter((r) => !r.holdout).map((r) => r.user_id);
   const holdIds = rows.filter((r) => r.holdout).map((r) => r.user_id);
   const from = c.sent_at, until = new Date(Date.parse(c.sent_at) + RESULT_DAYS * 86400e3).toISOString();
   type Click = { user_id: string; click_id: string | null };
   const clicksOf = (ids: string[]) => chunked<Click>(ids, (p) =>
-    sb.from("product_clicks").select("user_id, click_id").eq("partner_id", partnerId).in("user_id", p).gte("created_at", from).lt("created_at", until).limit(100000));
+    sb.from("product_clicks").select("user_id, click_id").eq("partner_id", partnerId).in("user_id", p).gte("created_at", from).lt("created_at", until));
   const [cs, ch] = await Promise.all([sentIds.length ? clicksOf(sentIds) : [], holdIds.length ? clicksOf(holdIds) : []]);
   const clickers = new Set(cs.map((x) => x.user_id)), holdClickers = new Set(ch.map((x) => x.user_id));
   const clickIds = cs.map((x) => x.click_id).filter((x): x is string => !!x);
   let purchases = 0, amount = 0;
   if (clickIds.length) {
     const conv = await chunked<{ amount: number; status: string }>(clickIds, (p) =>
-      sb.from("partner_conversions").select("amount, status").eq("partner_id", partnerId).in("click_id", p).limit(100000));
+      sb.from("partner_conversions").select("amount, status").eq("partner_id", partnerId).in("click_id", p));
     for (const v of conv) if (v.status === "confirmed") { purchases++; amount += v.amount; }
   }
   const opened = rows.filter((r) => !r.holdout && r.opened_at).length;

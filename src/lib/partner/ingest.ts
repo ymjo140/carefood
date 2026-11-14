@@ -5,6 +5,7 @@
  */
 import { anyChanged, CATEGORIES, contentChanged, parseRow, type PartnerItem } from "./schema";
 import { healthScore } from "./health-score";
+import { selectAll } from "@/lib/supabase/all";
 
 type Sb = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 export type Partner = { id: string; slug: string; name: string; kind: "meal_service" | "brand" | "mall"; status: string; is_demo?: boolean };
@@ -72,9 +73,8 @@ export async function ingestRows(sb: Sb, partner: Partner, rows: { row: number; 
   // 같은 바코드·품목보고번호가 이 업체의 다른 제품 코드에 있으면 검수로 (같은 제품을 두 번 올린 것일 수 있다)
   const codeOwner = new Map<string, string>();
   {
-    const { data, error } = await sb.from("partner_items").select("partner_sku, data->>barcode, data->>report_no").eq("partner_id", partner.id).limit(20000);
-    if (error) throw new Error(error.message);
-    for (const it of data || []) for (const c of [it.barcode, it.report_no]) if (c) codeOwner.set(c, it.partner_sku);
+    const data = await selectAll<{ partner_sku: string; barcode: string | null; report_no: string | null }>(() => sb.from("partner_items").select("partner_sku, data->>barcode, data->>report_no").eq("partner_id", partner.id), "id");
+    for (const it of data) for (const c of [it.barcode, it.report_no]) if (c) codeOwner.set(c, it.partner_sku);
   }
 
   const seen = new Set<string>();
@@ -241,10 +241,9 @@ export async function syncPartnerProducts(sb: Sb, partnerId: string) {
  * 팔던 제품이 10개 이상인데 절반 넘게 사라지면 내리지 않고 건수만 알린다(skipped).
  */
 export async function retireMissing(sb: Sb, partner: Partner, present: Set<string>): Promise<{ retired: number; skipped: number }> {
-  const { data, error } = await sb.from("partner_items")
+  const data = await selectAll(() => sb.from("partner_items")
     .select("id, partner_sku, product_id, data, approved_data, status, ingest_batches(channel)")
-    .eq("partner_id", partner.id).in("status", ["approved", "pending"]).limit(20000);
-  if (error) throw new Error(error.message);
+    .eq("partner_id", partner.id).in("status", ["approved", "pending"]), "id");
   type Row = { id: string; partner_sku: string; product_id: string | null; data: PartnerItem; approved_data: PartnerItem | null; status: string; ingest_batches: { channel: string } | null };
   const fromFeed = ((data || []) as Row[]).filter((it) => it.ingest_batches?.channel === "feed");
   const missing = fromFeed.filter((it) => !present.has(it.partner_sku));

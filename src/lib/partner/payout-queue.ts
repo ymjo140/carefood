@@ -5,6 +5,7 @@
  */
 import { payDate } from "./payout";
 import { closeMonth, orderPayout, previousMonth, type Settlement } from "./settlement";
+import { asResult, selectAll } from "@/lib/supabase/all";
 
 type Sb = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
@@ -21,7 +22,7 @@ const kstToday = () => new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 
 export async function payoutQueue(sb: Sb): Promise<{ items: PayoutItem[]; unclosed: Unclosed[]; month: string }> {
   const month = previousMonth();
   const [st, ps] = await Promise.all([
-    sb.from("partner_settlements").select("partner_id, month, commission, order_sales, order_shipping, order_discount, order_fee, status, closed_at, auto_closed").in("status", ["closed"]).order("month").limit(2000),
+    asResult(selectAll(() => sb.from("partner_settlements").select("partner_id, month, commission, order_sales, order_shipping, order_discount, order_fee, status, closed_at, auto_closed").in("status", ["closed"]), ["month", "id"])),
     sb.from("partners").select("id, name, slug, status, is_demo, tax_email, business_number, bank_name, bank_holder, bank_account"),
   ]);
   if (st.error) throw new Error(st.error.message);

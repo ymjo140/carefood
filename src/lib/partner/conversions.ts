@@ -4,6 +4,7 @@
  * 수수료 = 구매확정 금액 × 받은 때의 수수료율. 같은 주문 번호를 다시 올리면 상태·금액을 고친다.
  */
 import type { RowError } from "./ingest";
+import { selectAll } from "@/lib/supabase/all";
 
 type Sb = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -91,15 +92,29 @@ export type MonthSummary = { month: string; clicks: number; orders: number; conf
 /** 최근 6개월 — 한국 시간 달별 클릭·주문·구매확정·수수료 */
 export async function monthlySummary(sb: Sb, partnerId: string): Promise<MonthSummary[]> {
   const since = new Date(Date.now() - 185 * 86400e3).toISOString();
-  const [c, o] = await Promise.all([
-    sb.from("product_clicks").select("created_at").eq("partner_id", partnerId).gte("created_at", since).limit(100000),
-    sb.from("partner_conversions").select("ordered_at, amount, status, commission").eq("partner_id", partnerId).gte("ordered_at", since).limit(100000),
-  ]);
-  if (c.error || o.error) throw new Error((c.error || o.error).message);
   const month = (iso: string) => new Date(Date.parse(iso) + 9 * 3600e3).toISOString().slice(0, 7);
+  // 클릭은 줄을 다 받지 않고 달마다 건수만 센다(한국 시간 달 경계, 첫 달은 since 부터)
+  const months: { m: string; from: string; to: string }[] = [];
+  for (let m = month(since); ; ) {
+    const [y, mm] = m.split("-").map(Number);
+    const next = mm === 12 ? `${y + 1}-01` : `${y}-${String(mm + 1).padStart(2, "0")}`;
+    const from = new Date(`${m}-01T00:00:00+09:00`).toISOString();
+    months.push({ m, from: from < since ? since : from, to: new Date(`${next}-01T00:00:00+09:00`).toISOString() });
+    if (m === month(new Date().toISOString())) break;
+    m = next;
+  }
+  const [counts, conv] = await Promise.all([
+    Promise.all(months.map((x) => sb.from("product_clicks").select("id", { count: "exact", head: true }).eq("partner_id", partnerId).gte("created_at", x.from).lt("created_at", x.to))),
+    selectAll<{ ordered_at: string; amount: number; status: string; commission: number | null }>(() => sb.from("partner_conversions").select("ordered_at, amount, status, commission").eq("partner_id", partnerId).gte("ordered_at", since), "id", 1_000_000),
+  ]);
+  const o = { data: conv };
   const by = new Map<string, MonthSummary>();
   const get = (m: string) => by.get(m) || by.set(m, { month: m, clicks: 0, orders: 0, confirmed: 0, confirmed_amount: 0, commission: 0, canceled: 0 }).get(m)!;
-  for (const r of c.data || []) get(month(r.created_at)).clicks++;
+  months.forEach((x, i) => {
+    const r = counts[i] as { count: number | null; error: { message: string } | null };
+    if (r.error) throw new Error(r.error.message);
+    if (r.count) get(x.m).clicks += r.count;
+  });
   for (const r of o.data || []) {
     const s = get(month(r.ordered_at));
     s.orders++;

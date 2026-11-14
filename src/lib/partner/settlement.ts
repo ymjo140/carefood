@@ -8,6 +8,7 @@
  */
 import { monthlySummary, type MonthSummary } from "./conversions";
 import { CONFIRM_WINDOW, loadBundles, monthMs, monthlyOf } from "./payout";
+import { asResult, selectAll } from "@/lib/supabase/all";
 
 type Sb = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
@@ -72,7 +73,7 @@ export async function closeMonth(sb: Sb, partnerId: string, month: string, userI
   const [prev, c, o, bundles] = await Promise.all([
     sb.from("partner_settlements").select("status").eq("partner_id", partnerId).eq("month", month).maybeSingle(),
     sb.from("product_clicks").select("id", { count: "exact", head: true }).eq("partner_id", partnerId).gte("created_at", start).lt("created_at", end),
-    sb.from("partner_conversions").select("amount, status, commission").eq("partner_id", partnerId).gte("ordered_at", start).lt("ordered_at", end).limit(100000),
+    asResult(selectAll<{ amount: number; status: string; commission: number | null }>(() => sb.from("partner_conversions").select("amount, status, commission").eq("partner_id", partnerId).gte("ordered_at", start).lt("ordered_at", end), "id", 1_000_000)),
     // 이 달에 확정된 묶음 — 확정은 배송 완료 뒤 8일 안이라, 배송 완료가 달 시작 8일 전 ~ 달 끝인 줄이면 충분하다
     loadBundles(sb, partnerId, rates.order, { deliveredFrom: win.from - CONFIRM_WINDOW, deliveredTo: win.to }),
   ]);

@@ -11,6 +11,7 @@ import { RETURN_REASON_LABEL, returnOpen, type ReturnReason, type ReturnStatus, 
 import { loadBuyers } from "./customers";
 import { putBackRows } from "./stock";
 import { pushReady, sendToUser, type PushSub } from "@/lib/push";
+import { asResult, selectAll, selectUpTo } from "@/lib/supabase/all";
 
 export { CARRIERS, FULFIL, FULFIL_LABEL, deliverableAt, parseShipping, type Fulfil, type Shipping } from "@/lib/order-status";
 
@@ -85,16 +86,23 @@ export async function listPartnerOrders(sb: Sb, partnerId: string, opt: { status
   const cap = opt.cap || 200;
   const size = Math.min(Math.max(opt.limit || (status === "done" ? PAGE : cap), 1), cap);
   const page = Math.max(0, Math.floor(opt.page || 0));
-  // 묶음 수로 자르려면 줄을 넉넉히 — 한 묶음이 줄 여러 개
-  let q = sb.from("order_items").select(COLS).eq("partner_id", partnerId).not("orders.paid_at", "is", null).order("created_at", { ascending: status === "new" || status === "accepted" || status === "returns" || !!opt.open }).limit(5000);
-  if (status === "done") q = q.in("fulfil_status", ["delivered", "canceled"]);
-  else if (status === "returns") q = q.eq("fulfil_status", "delivered").in("return_status", ["requested", "approved"]);
-  else if (status) q = q.eq("fulfil_status", status);
-  else if (opt.open) q = q.in("fulfil_status", ["new", "accepted"]);
-  if (opt.since) q = q.gte("created_at", opt.since);
-  const { data, error } = await q;
-  if (error) throw new Error(error.message);
-  let all = group((data || []) as Row[]);
+  const asc = status === "new" || status === "accepted" || status === "returns" || !!opt.open;
+  const make = () => {
+    let q = sb.from("order_items").select(COLS).eq("partner_id", partnerId).not("orders.paid_at", "is", null);
+    if (status === "done") q = q.in("fulfil_status", ["delivered", "canceled"]);
+    else if (status === "returns") q = q.eq("fulfil_status", "delivered").in("return_status", ["requested", "approved"]);
+    else if (status) q = q.eq("fulfil_status", status);
+    else if (opt.open) q = q.in("fulfil_status", ["new", "accepted"]);
+    if (opt.since) q = q.gte("created_at", opt.since);
+    return q;
+  };
+  // 처리할 주문(열린 상태)은 끝까지 받는다(1,000줄씩). 끝난 주문·전체는 이 쪽까지 필요한 만큼만 — 한 주문은 줄 60개까지라 (쪽+1)×크기×60줄이면 모자라지 않는다
+  const order = asc ? ["created_at", "id"] : ["-created_at", "-id"];
+  const openOnly = status === "new" || status === "accepted" || status === "shipped" || status === "returns" || !!opt.open;
+  const data = openOnly
+    ? await selectAll<Row>(make, order, 1_000_000)
+    : await selectUpTo<Row>(make, order, (page + 1) * size * 60);
+  let all = group(data);
   // 처리할 주문은 오래된 것부터(먼저 들어온 주문을 먼저), 끝난 주문은 최근 것부터
   if (status === "new" || status === "accepted" || status === "returns" || opt.open) all = all.reverse();
   const list = all.slice(page * size, page * size + size);
@@ -112,9 +120,9 @@ export const DELIVER_PENDING_DAYS = 5;
 /** 처리할 주문 건수 — 상태별 묶음 수, 취소 요청, 24시간 넘게 못 보낸 주문, 5일 넘게 배송 완료를 안 누른 발송 */
 export async function countPartnerOrders(sb: Sb, partnerId: string, now = Date.now()): Promise<OrderCounts> {
   const [{ data, error }, ret] = await Promise.all([
-    sb.from("order_items").select("order_id, fulfil_status, cancel_requested_at, shipped_at, orders!inner(paid_at, status)")
-      .eq("partner_id", partnerId).in("fulfil_status", ["new", "accepted", "shipped"]).not("orders.paid_at", "is", null).limit(20000),
-    sb.from("order_items").select("order_id, return_status").eq("partner_id", partnerId).eq("fulfil_status", "delivered").in("return_status", ["requested", "approved"]).limit(5000),
+    asResult(selectAll(() => sb.from("order_items").select("order_id, fulfil_status, cancel_requested_at, shipped_at, orders!inner(paid_at, status)")
+      .eq("partner_id", partnerId).in("fulfil_status", ["new", "accepted", "shipped"]).not("orders.paid_at", "is", null), "id", 1_000_000)),
+    asResult(selectAll(() => sb.from("order_items").select("order_id, return_status").eq("partner_id", partnerId).eq("fulfil_status", "delivered").in("return_status", ["requested", "approved"]), "id")),
   ]);
   if (error) throw new Error(error.message);
   if (ret.error) throw new Error(ret.error.message);

@@ -5,6 +5,7 @@ import { adminOnly } from "@/lib/actor-server";
 import { addDays, kstDay, mondayOf, todayKst } from "@/lib/day";
 import { DIARY_COLS, type DiaryRow } from "@/lib/challenges";
 import { memberRun, type ChallengeRow, type GroupRow, type MemberRow } from "@/lib/challenge-groups";
+import { asResult, selectAll, selectAllIn } from "@/lib/supabase/all";
 
 /**
  * GET  /api/admin/challenges — 관리자: 인증 공유와 같이 하기가 도는지
@@ -26,9 +27,10 @@ export async function GET() {
   const firstMonday = addDays(mondayOf(today), -7 * 7);
   try {
     const [diary, links, events, ucs] = await Promise.all([
-      sb.from("meal_diary").select("user_id, date").gte("date", firstMonday).lte("date", today).limit(100000),
-      sb.from("share_links").select("code, owner, shared_at").not("shared_at", "is", null).gte("shared_at", `${firstMonday}T00:00:00+09:00`).limit(50000),
-      sb.from("share_events").select("code, visitor, type, day").gte("day", firstMonday).limit(100000),
+      // 1,000줄에서 잘리지 않게 끝까지 (lib/supabase/all.ts)
+      asResult(selectAll(() => sb.from("meal_diary").select("user_id, date").gte("date", firstMonday).lte("date", today), "id", 2_000_000)),
+      asResult(selectAll(() => sb.from("share_links").select("code, owner, shared_at").not("shared_at", "is", null).gte("shared_at", `${firstMonday}T00:00:00+09:00`), "code", 1_000_000)),
+      asResult(selectAll(() => sb.from("share_events").select("code, visitor, type, day").gte("day", firstMonday), "id", 2_000_000)),
       sb.from("community_challenges").select("id, title, note, creator_id, is_active, created_at, metric, days").eq("kind", "user").order("created_at", { ascending: false }).limit(50),
     ]);
     for (const r of [diary, links, events, ucs]) if (r.error) throw new Error(r.error.message);
@@ -47,25 +49,19 @@ export async function GET() {
     });
 
     // ── 완주율: 최근 28일 안에 끝난 묶음 ──
-    const { data: gs, error: gErr } = await sb.from("challenge_groups").select("*, community_challenges(id, slug, title, rule, metric, target, days, goal_days, is_active)")
-      .gte("start_on", addDays(today, -28 - 30)).lte("start_on", today).limit(2000);
-    if (gErr) throw new Error(gErr.message);
-    const ended = ((gs || []) as (GroupRow & { community_challenges: ChallengeRow })[]).filter((g) => {
+    const gs = await selectAll(() => sb.from("challenge_groups").select("*, community_challenges(id, slug, title, rule, metric, target, days, goal_days, is_active)")
+      .gte("start_on", addDays(today, -28 - 30)).lte("start_on", today), "id", 1_000_000);
+    const ended = (gs as (GroupRow & { community_challenges: ChallengeRow })[]).filter((g) => {
       const end = addDays(g.start_on, g.community_challenges.days - 1);
       return end < today && end >= addDays(today, -28);
     });
     const comp = { solo: { people: 0, reached: 0 }, together: { people: 0, reached: 0 } };
     if (ended.length) {
-      const { data: ms, error: mErr } = await sb.from("community_challenge_members").select("challenge_id, user_id, started_on, joined_on, goal_days_eff, group_id, finished_runs, show_values")
-        .in("group_id", ended.map((g) => g.id)).limit(5000);
-      if (mErr) throw new Error(mErr.message);
-      const members = (ms || []) as MemberRow[];
+      const members = await selectAllIn<MemberRow>(ended.map((g) => g.id), 200, (p) => sb.from("community_challenge_members").select("challenge_id, user_id, started_on, joined_on, goal_days_eff, group_id, finished_runs, show_values")
+        .in("group_id", p), ["challenge_id", "user_id"], 1_000_000);
       const users = [...new Set(members.map((m) => m.user_id))];
       const from = ended.map((g) => g.start_on).sort()[0];
-      const { data: dr, error: dErr } = users.length
-        ? await sb.from("meal_diary").select(`user_id, ${DIARY_COLS}`).in("user_id", users).gte("date", from).lte("date", today).limit(100000)
-        : { data: [], error: null };
-      if (dErr) throw new Error(dErr.message);
+      const dr = await selectAllIn(users, 200, (p) => sb.from("meal_diary").select(`user_id, ${DIARY_COLS}`).in("user_id", p).gte("date", from).lte("date", today), "id", 2_000_000);
       const byUser = new Map<string, DiaryRow[]>();
       for (const r of (dr || []) as (DiaryRow & { user_id: string })[]) byUser.set(r.user_id, [...(byUser.get(r.user_id) || []), r]);
       for (const m of members) {
@@ -83,7 +79,7 @@ export async function GET() {
     const ids = list.map((c) => c.id);
     const creators = [...new Set(list.map((c) => c.creator_id))];
     const [mc, names] = await Promise.all([
-      ids.length ? sb.from("community_challenge_members").select("challenge_id").in("challenge_id", ids).limit(10000) : { data: [], error: null },
+      ids.length ? asResult(selectAllIn(ids, 100, (p) => sb.from("community_challenge_members").select("challenge_id").in("challenge_id", p), ["challenge_id", "user_id"], 1_000_000)) : { data: [], error: null },
       creators.length ? sb.from("community_profiles").select("actor_id, nickname").in("actor_id", creators) : { data: [], error: null },
     ]);
     if (mc.error || names.error) throw new Error((mc.error || names.error).message);

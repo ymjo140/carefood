@@ -9,6 +9,7 @@ import { memberRun, type ChallengeRow, type MemberRow } from "@/lib/challenge-gr
 import { enrichGroupBuys, type GroupBuyRow } from "@/lib/group-buy-server";
 import { bestOption, discountOf, readOffer } from "@/lib/group-buy";
 import { dayTarget } from "@/lib/share-links";
+import { selectAll } from "@/lib/supabase/all";
 
 /**
  * GET /api/community/share-card?kind=meal|challenge|group_buy&id= — 인증 카드에 그릴 것 (내 것만)
@@ -25,9 +26,8 @@ type Sb = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 /** 오늘(오늘 기록이 없으면 어제)부터 거꾸로 하루도 빠짐없이 식단을 기록한 날 수 */
 async function streakOf(sb: Sb, actor: string) {
   const today = todayKst();
-  const { data, error } = await sb.from("meal_diary").select("date").eq("user_id", actor).gte("date", addDays(today, -365)).lte("date", today).limit(5000);
-  if (error) throw new Error(error.message);
-  const days = new Set(((data || []) as { date: string }[]).map((r) => r.date));
+  const data = await selectAll<{ date: string }>(() => sb.from("meal_diary").select("date").eq("user_id", actor).gte("date", addDays(today, -365)).lte("date", today), "id");
+  const days = new Set(data.map((r) => r.date));
   let d = days.has(today) ? today : addDays(today, -1);
   let n = 0;
   while (days.has(d)) { n++; d = addDays(d, -1); }
@@ -52,7 +52,7 @@ export async function GET(request: NextRequest) {
       // 오늘(오늘 기록이 없으면 어제)까지 이어진 날 수 + 최근 14일 기록 여부
       const today = todayKst();
       const [{ data: rows, error }, { data: prof, error: pErr }, target, streak] = await Promise.all([
-        sb.from("meal_diary").select("date").eq("user_id", actor).gte("date", addDays(today, -13)).lte("date", today).limit(2000),
+        sb.from("meal_diary").select("date").eq("user_id", actor).gte("date", addDays(today, -13)).lte("date", today).order("id").limit(1000), // 14일 기록 여부만 — 1,000줄이면 충분
         sb.from("community_profiles").select("nickname").eq("actor_id", actor).maybeSingle(),
         dayTarget(sb, actor),
         streakOf(sb, actor),
@@ -118,9 +118,8 @@ export async function GET(request: NextRequest) {
       if (!m) return NextResponse.json({ error: "참여한 챌린지만 인증 카드로 만들 수 있어요" }, { status: 403 });
       const today = todayKst();
       const g = m.challenge_groups as { id: string; code: string; start_on: string; member_count: number } | null;
-      const { data: rows, error: dErr } = await sb.from("meal_diary").select(DIARY_COLS)
-        .eq("user_id", actor).gte("date", m.started_on).lte("date", today).limit(5000);
-      if (dErr) throw new Error(dErr.message);
+      const rows = await selectAll(() => sb.from("meal_diary").select(DIARY_COLS)
+        .eq("user_id", actor).gte("date", m.started_on).lte("date", today), "id");
       const run = memberRun(c as ChallengeRow, g, m as MemberRow, (rows || []) as DiaryRow[], today);
       return NextResponse.json({
         card: {

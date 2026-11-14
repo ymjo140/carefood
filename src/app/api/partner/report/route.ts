@@ -5,6 +5,7 @@ import { getPartnerContext } from "@/lib/partner/auth";
 import { buildReport } from "@/lib/partner/report";
 import { periodOf } from "@/lib/partner/period";
 import { dailySales, productSales } from "@/lib/partner/product-sales";
+import { selectAll } from "@/lib/supabase/all";
 
 /**
  * GET /api/partner/report?period=30d|this_month|last_month[&as=slug] — 내 제품의 성과와 본 사람들 (통계만, lib/partner/report.ts)
@@ -19,8 +20,7 @@ export async function GET(req: NextRequest) {
   const period = periodOf(sp.get("period"));
   const sb = createServiceRoleClient() as any; // eslint-disable-line @typescript-eslint/no-explicit-any
   try {
-    const { data: items, error } = await sb.from("partner_items").select("product_id, partner_sku, data->>name").eq("partner_id", ctx.partner.id).not("product_id", "is", null).limit(20000);
-    if (error) throw new Error(error.message);
+    const items = await selectAll<{ product_id: string; partner_sku: string; name: string }>(() => sb.from("partner_items").select("product_id, partner_sku, data->>name").eq("partner_id", ctx.partner.id).not("product_id", "is", null), "id");
     const iso = (ms: number) => new Date(ms).toISOString();
     const conv = (r: { from: number; to: number }) => sb.from("partner_conversions").select("id", { count: "exact", head: true })
       .eq("partner_id", ctx.partner.id).eq("status", "confirmed").gte("ordered_at", iso(r.from)).lt("ordered_at", iso(r.to));

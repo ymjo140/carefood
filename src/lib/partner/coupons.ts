@@ -8,6 +8,7 @@
  */
 import { adText, isNight } from "./crm";
 import { adsConsented } from "./customers";
+import { selectAll } from "@/lib/supabase/all";
 
 type Sb = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 const DAY = 86400e3;
@@ -48,8 +49,7 @@ export function parseCoupon(b: Record<string, unknown>): { coupon: Omit<Coupon, 
 
 /** 쿠폰마다 준 수·쓴 수·할인한 금액·쓴 주문의 상품 금액 */
 export async function couponStats(sb: Sb, partnerId: string) {
-  const { data, error } = await sb.from("coupon_grants").select("coupon_id, status, discount_amount, used_order_id").eq("partner_id", partnerId).limit(50000);
-  if (error) throw new Error(error.message);
+  const data = await selectAll(() => sb.from("coupon_grants").select("coupon_id, status, discount_amount, used_order_id").eq("partner_id", partnerId), "id", 1_000_000);
   const out = new Map<string, { granted: number; used: number; discount: number }>();
   for (const g of (data || []) as { coupon_id: string; status: string; discount_amount: number }[]) {
     const s = out.get(g.coupon_id) || out.set(g.coupon_id, { granted: 0, used: 0, discount: 0 }).get(g.coupon_id)!;

@@ -4,6 +4,8 @@
  * 전체가 10명 미만이거나 그 조건에 10명 미만이면 비율을 주지 않는다.
  * 제품 수는 DB 함수 demand_gap_supply 가 센다 — 조건 키는 그 함수와 같아야 한다.
  */
+import { selectAll } from "@/lib/supabase/all";
+
 type Sb = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 const MIN_PEOPLE = 10;
 
@@ -45,26 +47,27 @@ export type DemandRow = {
 };
 
 export async function buildDemand(sb: Sb, partnerId: string): Promise<{ people: number | null; segments: DemandRow[] }> {
-  const [pr, su] = await Promise.all([
-    sb.from("user_profiles").select("concerns, diet_type, taste_salty, taste_sweet").eq("onboarding_completed", true).limit(100000),
+  // 프로필은 조합마다 사람 수로 받는다 (한 줄씩 받으면 1,000줄에서 잘리고 느리다 — 20261117e_demand_profile_combos.sql)
+  const [combos, su] = await Promise.all([
+    selectAll<Profile & { n: number }>(() => sb.rpc("demand_profile_combos"), ["diet_type", "taste_salty", "taste_sweet", "concerns"]),
     sb.rpc("demand_gap_supply", { p_partner: partnerId }),
   ]);
-  if (pr.error || su.error) throw new Error((pr.error || su.error).message);
-  const profiles = (pr.data || []) as Profile[];
+  if (su.error) throw new Error(su.error.message);
+  const total = combos.reduce((s, c) => s + Number(c.n), 0);
   const tally = new Map<string, number>();
-  for (const p of profiles) for (const k of wants(p)) tally.set(k, (tally.get(k) || 0) + 1);
+  for (const c of combos) for (const k of wants(c)) tally.set(k, (tally.get(k) || 0) + Number(c.n));
   const supply = new Map<string, { supply: number; partner_supply: number; mine: number }>(
     ((su.data || []) as { segment: string; supply: number; partner_supply: number; mine: number }[])
       .map((r) => [r.segment, { supply: Number(r.supply), partner_supply: Number(r.partner_supply), mine: Number(r.mine) }]),
   );
-  const enough = profiles.length >= MIN_PEOPLE;
+  const enough = total >= MIN_PEOPLE;
   const segments: DemandRow[] = SEGMENTS.map((s) => {
     const n = tally.get(s.key) || 0;
     const sp = supply.get(s.key) || { supply: 0, partner_supply: 0, mine: 0 };
-    return { ...s, share: enough && n >= MIN_PEOPLE ? Math.round((n / profiles.length) * 100) : null, ...sp };
+    return { ...s, share: enough && n >= MIN_PEOPLE ? Math.round((n / total) * 100) : null, ...sp };
   });
   // 빈틈이 큰 순 — 찾는 사람이 많고 제품이 적을수록 앞. 비율을 모르는 조건은 제품이 적은 순으로 뒤에
   const gap = (r: DemandRow) => (r.share === null ? -1 : r.share / Math.log2(r.supply + 2));
   segments.sort((a, b) => gap(b) - gap(a) || a.supply - b.supply);
-  return { people: enough ? Math.floor(profiles.length / 10) * 10 : null, segments };
+  return { people: enough ? Math.floor(total / 10) * 10 : null, segments };
 }
