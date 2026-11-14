@@ -15,6 +15,7 @@ import { checkPersonalKcal } from "@/lib/challenge-rules";
  * POST { challenge_id, start?: "today"|"tomorrow"|"monday" } — 참여하기 = 내 묶음을 연다 (끝난 뒤 다시 누르면 새 묶음)
  *   start 를 주면 그날 시작하는 묶음 (친구와 같이 시작하려고 날짜를 정할 때). 응답에 초대 코드
  * PATCH { challenge_id, target } — 열량 구간 챌린지의 내 구간 바꾸기 (1,200~3,000kcal, 본인만 본다)
+ *       { challenge_id, visibility: "public"|"link" } — 내가 만든 챌린지 공개하기(순위·추천에 나옴) / 링크로만
  * DELETE { challenge_id } — 그만두기 (묶음에서 빠진다)
  * 다른 사람의 기록은 보여 주지 않는다 — 사람 수만. 같은 묶음 사람끼리는 진행표(/api/community/challenges/groups/[id])에서 해낸 날만.
  */
@@ -27,13 +28,13 @@ async function load(sb: any, actor: string | null) {
   const { data: rows, error } = await sb.from("community_challenges").select("id, slug, title, rule, metric, target, days, goal_days, is_active, sort")
     .eq("is_active", true).eq("kind", "official").order("sort");
   if (error) throw new Error(error.message);
-  const challenges = (rows || []) as (Row & { kind?: string; creator_id?: string | null; note?: string | null })[];
+  const challenges = (rows || []) as (Row & { kind?: string; creator_id?: string | null; note?: string | null; visibility?: string })[];
   const members = await selectAll<Member>(() => sb.from("community_challenge_members")
     .select("challenge_id, user_id, started_on, joined_on, goal_days_eff, group_id, finished_runs, show_values, target_eff, challenge_groups(start_on)"), ["challenge_id", "user_id"], 1_000_000);
   // 내가 하는 '사람이 만든' 챌린지도 목록 위에 (링크로만 들어가는 것이라 공식 목록에는 없다)
   const myUserIds = actor ? [...new Set(members.filter((m) => m.user_id === actor).map((m) => m.challenge_id))].filter((id) => !challenges.some((c) => c.id === id)) : [];
   if (myUserIds.length) {
-    const { data: ur, error: uErr } = await sb.from("community_challenges").select("id, slug, title, rule, metric, target, days, goal_days, is_active, sort, kind, creator_id, note")
+    const { data: ur, error: uErr } = await sb.from("community_challenges").select("id, slug, title, rule, metric, target, days, goal_days, is_active, sort, kind, creator_id, note, visibility")
       .in("id", myUserIds).eq("is_active", true);
     if (uErr) throw new Error(uErr.message);
     challenges.unshift(...((ur || []) as typeof challenges));
@@ -65,7 +66,8 @@ async function load(sb: any, actor: string | null) {
       // 열량 구간은 사람마다 — 만든 사람의 구간을 다른 사람에게 보내지 않는다 (내 구간만)
       id: c.id, slug: c.slug, title: c.title, rule: c.rule, metric: c.metric,
       target: c.metric === "kcal_band" ? (me ? memberTarget(c, me) : null) : Number(c.target), days: c.days,
-      kind: c.kind === "user" ? "user" : "official", mine_created: !!actor && c.creator_id === actor, note: c.note ?? null,
+      kind: c.kind === "user" ? "user" : c.kind === "season" ? "season" : "official", mine_created: !!actor && c.creator_id === actor, note: c.note ?? null,
+      visibility: c.kind === "user" && actor && c.creator_id === actor ? (c.visibility === "public" ? "public" : "link") : null,
       active_count: active.length,
       finished_count: finishedPeople,
       me: me ? {
@@ -136,8 +138,17 @@ export async function DELETE(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   const actor = await getActorId();
   if (!actor) return noActor();
-  const { challenge_id, target } = await request.json().catch(() => ({}));
+  const { challenge_id, target, visibility } = await request.json().catch(() => ({}));
   if (typeof challenge_id !== "string" || !UUID.test(challenge_id)) return NextResponse.json({ error: "챌린지를 골라 주세요" }, { status: 400 });
+  // 만든 사람만: 공개(순위·추천에 나옴) / 링크로만
+  if (visibility === "public" || visibility === "link") {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sbv = createServiceRoleClient() as any;
+    const { data, error } = await sbv.from("community_challenges").update({ visibility }).eq("id", challenge_id).eq("kind", "user").eq("creator_id", actor).select("id");
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (!data?.length) return NextResponse.json({ error: "내가 만든 챌린지만 바꿀 수 있어요" }, { status: 403 });
+    return NextResponse.json({ ok: true, visibility });
+  }
   const v = checkPersonalKcal(target);
   if (v == null) return NextResponse.json({ error: "구간은 1,200~3,000kcal 사이로 정해 주세요" }, { status: 400 });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

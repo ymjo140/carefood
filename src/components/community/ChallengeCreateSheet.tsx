@@ -13,7 +13,7 @@ import { getOrCreateNickname } from "@/lib/nickname";
  * 내 챌린지 만들기 — 위는 템플릿(누르면 숫자가 채워짐), 아래는 묶음 탭 → 규칙 → 숫자 (규칙·제목을 글로 쓰지 않는다).
  * 열량은 '…이하'가 없고 구간(±10%)만 — 6구간 중 내 목표에 가장 가까운 것을 먼저 고른다. 구간 숫자는 나만 본다.
  * 탄단지는 5유형, 저탄수·저지방은 추천하지 않고 고를 때만.
- * 기간 → 성공 기준 → 시작일 → 각오(선택). 만들면 내 묶음이 열리고 onCreated 로 초대 카드를 띄운다.
+ * 기간 → 성공 기준 → 시작일 → 공개 범위(기본 링크로만) → 각오(선택). 만들면 내 묶음이 열리고 onCreated 로 초대 카드를 띄운다.
  */
 type Start = "today" | "tomorrow" | "monday";
 const START_LABEL: Record<Start, string> = { today: "오늘", tomorrow: "내일", monday: "다음 월요일" };
@@ -33,6 +33,8 @@ export default function ChallengeCreateSheet({ open, onClose, onCreated }: {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [tpl, setTpl] = useState<string | null>(null);
+  /** 공개 — 순위·추천에 나온다 (기본은 링크로만) */
+  const [pub, setPub] = useState(false);
   /** 식단 기록 화면의 하루 열량 목표 — 열량 구간 추천에 쓴다 (없으면 2,000kcal 기준) */
   const [goalKcal, setGoalKcal] = useState<number | null>(null);
 
@@ -75,7 +77,7 @@ export default function ChallengeCreateSheet({ open, onClose, onCreated }: {
     try {
       const r = await fetch("/api/community/challenges/new", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ metric, target: value, days, goal, start, note, nickname: getOrCreateNickname() }),
+        body: JSON.stringify({ metric, target: value, days, goal, start, note, nickname: getOrCreateNickname(), public: pub }),
       });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) { setError(d.error || "만들지 못했어요. 다시 시도해 주세요"); return; }
@@ -178,6 +180,15 @@ export default function ChallengeCreateSheet({ open, onClose, onCreated }: {
           <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="시작일">
             {(["today", "tomorrow", "monday"] as const).map((k) => <Chip key={k} role="radio" aria-checked={start === k} selected={start === k} onClick={() => setStart(k)}>{START_LABEL[k]}</Chip>)}
           </div>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <span className="text-label font-medium text-ink">누가 볼 수 있나요</span>
+          <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="공개 범위">
+            <ChoiceCard size="sm" selected={!pub} onClick={() => setPub(false)} title="링크로만" description="초대한 친구만" />
+            <ChoiceCard size="sm" selected={pub} onClick={() => setPub(true)} title="공개" description="순위·추천에 나와요" />
+          </div>
+          {metric === "kcal_band" && <p className="text-caption text-ink-2">공개해도 구간 숫자와 내 열량은 나만 봐요</p>}
         </div>
 
         <Field label={<>한 줄 각오 <span className="font-regular text-ink-2">· 선택</span></>} hint={`${NOTE_MAX}자까지 · 효능 표현은 쓸 수 없어요`}>

@@ -33,6 +33,7 @@ import type { MascotKind } from "@/components/ui/Mascot";
  *     (최근 14일 기록이 없으면 7일 안에 저장한 식단일 때만)
  *     최근 14일 기록이 없는 사람은 저녁 알림만, 일주일에 한 번
  *   - 챌린지 20~22시: 하고 있는 챌린지가 있는데 오늘 기록이 하나도 없으면 (그날 저녁 알림 대신)
+ *   - 시즌 시작: 첫날 9~12시, 시작 알림 받기를 누른 사람에게
  *   - 캐릭터 삐짐(광고): 낮 12시대, 광고 동의자에게만 '(광고)'를 붙여 — 어제 처음 빠졌을 때 · 사흘째 (lib/mascot-push.ts)
  *   - 가족: 약 먹을 시간(정한 시각부터 1시간 안, 체크 전) · 저녁 8시대 가족의 오늘 기록이 없으면 보는 사람에게만 (lib/family-alerts.ts)
  *   - 같이 하기: 묶음 전원이 해낸 날 '다 같이 해냈어요' · 저녁 7시대 '오늘 나만 남았어요' (lib/challenge-alerts.ts)
@@ -211,6 +212,22 @@ export async function POST(req: NextRequest) {
       await send(a.user, "family", a.key, a.payload);
     }
   } catch (e) { console.error("가족 알림을 만들지 못했어요:", (e as Error).message); }
+
+  // ── 시즌 시작: '시작 알림 받기'를 누른 사람에게 첫날 아침 9~12시 한 번 ──
+  if (hour >= 9 && hour < 12) {
+    try {
+      const { data: ss, error } = await sb.from("challenge_seasons").select("id, slug, title").eq("start_on", today);
+      if (error) throw new Error(error.message);
+      for (const s of (ss || []) as { id: string; slug: string; title: string }[]) {
+        const ws = await selectAll<{ user_id: string }>(() => sb.from("season_watchers").select("user_id").eq("season_id", s.id), "user_id", 1_000_000);
+        for (const { user_id: u } of ws) {
+          const prefs = prefsBy.get(u);
+          if (!subsBy.has(u) || (prefs && !prefs.challenge)) continue;
+          await send(u, "challenge", `season:${s.slug}`, { title: `${s.title} · 오늘 시작했어요`, body: "시즌 챌린지를 골라 같이 시작해요. 열량 구간은 내 목표에 맞게 골라 드려요", url: `/community/challenges/s/${s.slug}`, tag: "challenge" });
+        }
+      }
+    } catch (e) { console.error("시즌 시작 알림을 보내지 못했어요:", (e as Error).message); }
+  }
 
   // ── 캐릭터 삐짐 (광고 — 광고 동의자에게만, 낮 12시대) (lib/mascot-push.ts) ──
   if (hour === MASCOT_PUSH_HOUR) {

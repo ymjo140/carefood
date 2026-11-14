@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { Button, Card, Chip, ConfirmSheet, DayDots, EmptyState, Notice, Sheet, SkeletonList, TextButton, TextLink, useToast } from "@/components/ui";
 import ShareCardSheet from "@/components/community/ShareCardSheet";
 import ChallengeCreateSheet from "@/components/community/ChallengeCreateSheet";
-import { MascotBanner } from "@/components/community/MascotBanner";
 import { getOrCreateNickname } from "@/lib/nickname";
 import { todayKst } from "@/lib/day";
 import { kcalRange, todayLine, type ChallengeMetric, type DayState } from "@/lib/challenges";
@@ -27,10 +26,10 @@ const START_LABEL: Record<Start, string> = { today: "오늘", tomorrow: "내일"
 type Item = {
   id: string; title: string; rule: string; metric: ChallengeMetric; target: number | null; days: number; active_count: number; finished_count: number; me: Run | null;
   /** user: 사람이 만든 챌린지(링크로만 들어옴) */
-  kind?: "official" | "user"; mine_created?: boolean; note?: string | null;
+  kind?: "official" | "user" | "season"; mine_created?: boolean; note?: string | null; visibility?: "public" | "link" | null;
 };
 
-export function ChallengeList() {
+export function ChallengeList({ reloadKey = 0 }: { reloadKey?: number }) {
   const toast = useToast();
   const [state, setState] = useState<{ status: "loading" | "error" | "done"; items: Item[] }>({ status: "loading", items: [] });
   const [attempt, setAttempt] = useState(0);
@@ -50,7 +49,7 @@ export function ChallengeList() {
       .then(async (r) => { const d = await r.json(); if (!r.ok) throw new Error(d.error); if (alive) setState({ status: "done", items: d.challenges || [] }); })
       .catch(() => { if (alive) setState({ status: "error", items: [] }); });
     return () => { alive = false; };
-  }, [attempt]);
+  }, [attempt, reloadKey]);
 
   /** invite: 친구랑 날짜 정해 시작 — 묶음을 열고 바로 초대 카드 */
   const join = async (c: Item, when: Start = "today", invite = false) => {
@@ -86,6 +85,19 @@ export function ChallengeList() {
     } finally { setBusy(null); }
   };
 
+  const setVisibility = async (c: Item, v: "public" | "link") => {
+    setBusy(c.id);
+    try {
+      const r = await fetch("/api/community/challenges", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ challenge_id: c.id, visibility: v }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || "");
+      setState((s) => ({ ...s, items: s.items.map((x) => (x.id === c.id ? { ...x, visibility: v } : x)) }));
+      toast.show(v === "public" ? "공개했어요. 순위·추천에 나와요" : "링크로만 바꿨어요");
+    } catch (e) {
+      toast.show((e as Error).message || "바꾸지 못했어요. 다시 시도해 주세요", { tone: "danger" });
+    } finally { setBusy(null); }
+  };
+
   const leave = async (c: Item) => {
     setBusy(c.id);
     try {
@@ -117,7 +129,7 @@ export function ChallengeList() {
     return (
       <>
         <EmptyState title="지금 열린 챌린지가 없어요" description="규칙을 골라 내 챌린지를 만들고 친구를 초대할 수 있어요"
-          action={<Button size="sm" icon="plus" onClick={() => setCreating(true)}>챌린지 만들기</Button>} />
+          action={<Button size="sm" variant="secondary" icon="plus" onClick={() => setCreating(true)}>챌린지 만들기</Button>} />
         {create}
       </>
     );
@@ -125,8 +137,7 @@ export function ChallengeList() {
 
   return (
     <>
-      <MascotBanner reloadKey={attempt} />
-      <Button block icon="plus" className="mb-4" onClick={() => setCreating(true)}>내 챌린지 만들기</Button>
+      <Button block variant="secondary" icon="plus" className="mb-4" onClick={() => setCreating(true)}>내 챌린지 만들기</Button>
       <ul className="flex flex-col gap-3">
         {items.map((c) => {
           const run = c.me;
@@ -135,7 +146,12 @@ export function ChallengeList() {
             <li key={c.id}>
               <Card className="flex flex-col gap-3">
                 <div className="flex flex-col gap-0.5">
-                  {c.kind === "user" && <p className="text-caption text-brand-ink">{c.mine_created ? "내가 만든 챌린지" : "초대받은 챌린지"}</p>}
+                  {c.kind === "user" && (
+                    <p className="text-caption text-brand-ink">
+                      {c.mine_created ? <>내가 만든 챌린지 · {c.visibility === "public" ? "공개" : "링크로만"}</> : "초대받은 챌린지"}
+                    </p>
+                  )}
+                  {c.kind === "season" && <p className="text-caption text-brand-ink">시즌 챌린지</p>}
                   <h2 className="text-body font-bold text-ink">{c.title}</h2>
                   {c.note && <p className="text-label text-ink">“{c.note}”</p>}
                   <p className="text-label text-ink-2">{c.rule}을 <span className="num">{c.days}</span>일 동안 채워요</p>
@@ -181,9 +197,14 @@ export function ChallengeList() {
                     {run.low_streak && !run.finished && (
                       <Notice tone="caution">요즘 기록이 구간보다 많이 적어요. 구간을 바꾸거나 쉬어 가도 괜찮아요</Notice>
                     )}
+                    {c.mine_created && !run.finished && (
+                      <TextButton className="self-start" disabled={busy === c.id} onClick={() => setVisibility(c, c.visibility === "public" ? "link" : "public")}>
+                        {c.visibility === "public" ? "링크로만 바꾸기" : "공개하기 · 순위·추천에 나와요"}
+                      </TextButton>
+                    )}
                     <div className="flex gap-2">
                       {(run.done_count > 0 || !run.finished) && (
-                        <Button size="sm" variant="secondary" icon={run.done_count > 0 ? "share" : "users"} onClick={() => setCard(c.id)}>{run.done_count > 0 ? "인증하기" : "친구 초대하기"}</Button>
+                        <Button size="sm" variant="secondary" icon={run.done_count > 0 ? "share" : "users"} onClick={() => setCard(c.id)}>{run.finished && run.reached ? "완주 카드 만들기" : run.done_count > 0 ? "인증하기" : "친구 초대하기"}</Button>
                       )}
                       {run.finished
                         ? <Button size="sm" variant="secondary" icon="refresh" loading={busy === c.id} onClick={() => join(c)}>다시 하기</Button>

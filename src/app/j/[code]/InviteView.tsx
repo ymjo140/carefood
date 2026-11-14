@@ -12,7 +12,7 @@ import { getOrCreateNickname } from "@/lib/nickname";
  * 초대 링크를 받은 화면 (/j/<code>) — 인스타·카톡 링크로 들어온 사람이 처음 보는 곳.
  * 1순위는 '같이 하기' 하나. 가입 없이 바로 참여하고 진행표로 간다.
  * 위: 연 사람의 인증 카드 → 챌린지 이름·규칙·기간 → 같이 하는 사람 → 무엇이 보이는지 안내
- * 상태: open(같이 하기) · member(진행표 보기) · closed/full(같은 챌린지 내 날짜로) · blocked(챌린지 목록)
+ * 상태: open(같이 하기 · 나도 하기 — 같은 규칙으로 내 묶음을 따로) · member(진행표 보기) · closed/full(같은 챌린지 내 날짜로) · blocked(챌린지 목록)
  */
 type Invite = {
   group: { id: string; code: string; start_on: string; ends_on: string; member_count: number; max_members: number };
@@ -148,7 +148,13 @@ export default function InviteView() {
       {d.status === "blocked" && <Notice className="mt-3" icon="info">이 초대로는 들어갈 수 없어요. 다른 챌린지를 둘러볼 수 있어요</Notice>}
 
       <BottomBar>
-        {d.status === "open" && <Button block loading={busy} onClick={join}>같이 하기</Button>}
+        {/* 같이 하기 = 이 묶음에 들어가기 · 나도 하기 = 같은 규칙으로 내 묶음을 따로 */}
+        {d.status === "open" && (
+          <div className="flex w-full gap-2">
+            <Button variant="secondary" disabled={busy} onClick={startOwn}>나도 하기</Button>
+            <Button block loading={busy} onClick={join}>같이 하기</Button>
+          </div>
+        )}
         {d.status === "member" && <LinkButton block href={`/community/challenges/g/${d.group.id}`}>진행표 보기</LinkButton>}
         {(d.status === "closed" || d.status === "full") && <Button block loading={busy} onClick={startOwn}>오늘부터 시작하기</Button>}
         {d.status === "blocked" && <LinkButton block variant="secondary" href="/community/challenges">챌린지 보기</LinkButton>}

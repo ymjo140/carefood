@@ -20,7 +20,7 @@ export type MealCardData = {
   meals?: number;
 };
 export type ChallengeCardData = {
-  kind: "challenge"; author: string | null; url: string; title: string; rule: string; total_days: number; done: number; goal?: number; finished: boolean;
+  kind: "challenge"; author: string | null; url: string; title: string; rule: string; total_days: number; done: number; goal?: number; finished: boolean; reached?: boolean;
   days: DayMark[]; streak: number; people?: number;
 };
 export type GroupBuyCardData = {
@@ -287,7 +287,7 @@ function drawRecord(ctx: Ctx, p: Palette, f: Fonts, d: CardData, o: CardOptions)
     const vw = ctx.measureText(v).width;
     ctx.fillStyle = p.highlight; ctx.fillRect(L - 10, 920, vw + 260, 110);
     numUnit(ctx, f, L, 1000, v, `/${d.total_days}일`, 300, p.ink, p.ink2);
-    font(ctx, f, 56, 700); ctx.fillStyle = p.ink; ctx.fillText(d.finished ? "해냈어요" : "해내는 중이에요", L, 1110);
+    font(ctx, f, 56, 700); ctx.fillStyle = p.ink; ctx.fillText(d.finished ? (d.reached ? "완주했어요" : "끝까지 함께했어요") : "해내는 중이에요", L, 1110);
     dots(ctx, p, d.days, L, 1200, W - L * 2, Math.min(120, Math.floor((W - L * 2 - 28 * 6) / Math.max(7, d.days.length)) + 6));
     font(ctx, f, 40, 400); ctx.fillStyle = p.ink2;
     wrap(ctx, d.rule, W - L * 2, 2).forEach((line, i) => ctx.fillText(line, L, 1420 + i * 56));

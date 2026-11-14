@@ -119,7 +119,7 @@ export async function cardFor(sb: Sb, actor: string, kind: string | null, id: st
       return {
         card: {
           kind: "challenge", author: prof?.nickname || null, url: g ? `/j/${g.code}` : "/community/challenges",
-          title: c.title, rule: c.rule, total_days: c.days, done: run.done_count, goal: run.goal, finished: run.finished,
+          title: c.title, rule: c.rule, total_days: c.days, done: run.done_count, goal: run.goal, finished: run.finished, reached: run.reached,
           days: run.days.map((d) => ({ date: d.date, state: d.state })),
           people: g?.member_count ?? 1,
           streak: await streakOf(sb, actor),

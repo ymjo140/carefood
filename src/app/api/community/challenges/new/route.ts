@@ -10,7 +10,7 @@ import { JOIN_MESSAGES, ensurePersonalTarget, newCode, startDate, type StartChoi
 import { NOTE_MAX, checkSpec } from "@/lib/challenge-rules";
 
 /**
- * POST /api/community/challenges/new { metric, target, days, goal, start, note?, nickname? } — 내 챌린지 만들기
+ * POST /api/community/challenges/new { metric, target, days, goal, start, note?, nickname?, public? } — 내 챌린지 만들기 (public 이면 순위·추천에 나옴)
  *   규칙은 목록(lib/challenge-rules)에서만, 제목·규칙 문장은 자동. 각오(30자)는 금지 표현 사전으로 검사.
  *   만들면 내 묶음이 열리고 만든 사람이 첫 참여자. 링크가 있는 사람만 볼 수 있다.
  *   한도: 하루 3개, 진행 중 5개 (DB 함수 challenge_user_create 가 같은 사람의 요청을 줄 세워 센다)
@@ -58,6 +58,11 @@ export async function POST(request: NextRequest) {
       }
       // 열량 구간: 만든 사람이 고른 구간이 그 사람의 내 구간 (다른 사람은 들어올 때 자기 목표로)
       if (checked.spec.personal) await ensurePersonalTarget(sb, data.challenge_id, actor, checked.target);
+      // 공개를 골랐으면 순위·추천에 나오게 (기본은 링크로만)
+      if (body.public === true) {
+        const { error: vErr } = await sb.from("community_challenges").update({ visibility: "public" }).eq("id", data.challenge_id).eq("creator_id", actor);
+        if (vErr) throw new Error(vErr.message);
+      }
       return NextResponse.json({ challenge_id: data.challenge_id, group_id: data.group_id, code: data.code, title: checked.title });
     }
     throw new Error("초대 코드를 만들지 못했어요. 다시 시도해 주세요");
