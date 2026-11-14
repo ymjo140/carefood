@@ -126,7 +126,7 @@ export function VideoAttach({ status, video, onRemove }: {
     return (
       <div role="status" className="flex items-center gap-3 rounded-md bg-sunken px-3 py-3 text-label text-ink-2">
         <Spinner size={18} />
-        {status === "uploading" ? "영상을 올리고 있어요" : "위치 같은 촬영 정보를 빼고 다듬고 있어요 (30초쯤 걸려요)"}
+        {status === "uploading" ? "영상을 올리고 있어요" : "위치 같은 촬영 정보를 빼고 다듬고 있어요 (영상 길이에 따라 10~30초)"}
       </div>
     );
   }
