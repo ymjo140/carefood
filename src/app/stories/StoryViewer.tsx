@@ -10,7 +10,7 @@ import ShareCardSheet, { type ShareTarget } from "@/components/community/ShareCa
 import { getOrCreateNickname } from "@/lib/nickname";
 
 /**
- * 스토리 보기 — 피드 맨 위 '오늘의 식단 · 공구' 칸을 누르면 여기로 (/stories?at=meal-<id> | group_buy-<id>).
+ * 스토리 보기 — 피드 맨 위 '스토리' 칸을 누르면 여기로 (/stories?at=meal-<id> | group_buy-<id>).
  * 인스타 스토리처럼 사진·영상만 크게, 스티커 하나(누르면 게시물), 아래는 답글 칸.
  * - 사진은 5초, 영상은 끝까지 보여 주고 다음 사람으로. 왼쪽 1/3 누르면 이전, 꾹 누르면 멈춤, 화살표·Esc
  * - 답글은 그 게시물의 답글(공구는 질문)로 남고 올린 사람에게 알림이 간다 (1:1 메시지는 없음)

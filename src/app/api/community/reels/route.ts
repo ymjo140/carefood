@@ -7,7 +7,7 @@ import { enrichGroupBuys, type GroupBuyRow } from "@/lib/group-buy-server";
 import { bestOption, discountOf, readOffer } from "@/lib/group-buy";
 
 /**
- * GET /api/community/reels — 피드 맨 위 '오늘의 식단 · 공구' 줄
+ * GET /api/community/reels — 피드 맨 위 '스토리' 줄
  *   사진·영상이 붙은 최근 30일 식단 글 + 관심을 모으는 공구, 새것부터 12개. 영상은 표지 사진 + 길이(seconds)
  *   보는 사람이 차단한 사람·숨긴 글·신고로 가려진 글은 뺀다.
  *   응답: items[{ kind: "meal"|"group_buy", id, image, video, author, created_at, mine, liked, like_count, comment_count, ...종류별 숫자 }]

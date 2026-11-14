@@ -1,5 +1,5 @@
 {
-  "checkedAt": "2026-11-14T09:08:18.436Z",
+  "checkedAt": "2026-11-14T09:48:47.932Z",
   "files": 180,
   "total": 0,
   "warnTotal": 0,
@@ -174,7 +174,7 @@
     },
     {
       "file": "src/app/community/page.tsx",
-      "line": 59,
+      "line": 60,
       "rule": "silent-catch",
       "level": "warn",
       "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
@@ -183,7 +183,7 @@
     },
     {
       "file": "src/app/community/page.tsx",
-      "line": 129,
+      "line": 130,
       "rule": "silent-catch",
       "level": "warn",
       "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",

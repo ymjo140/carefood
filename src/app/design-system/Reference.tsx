@@ -807,13 +807,13 @@ export default function Reference({ status }: { status: DsStatus }) {
               <span className="flex items-center gap-2 text-label text-ink"><AvatarStack names={["민지", "서연", "준호", "하늘", "다인", "유나", "지호"]} /><span className="num font-bold">7</span>명</span>
             </div>
           </Demo>
-          <Demo label="숏폼 줄 — 피드 맨 위 '오늘의 식단 · 공구'. 맨 앞 칸이 글쓰기 입구 하나, 사진 위 글자는 아래 띠(media-scrim) 한 곳" code="<ReelRow><ReelAddTile /><ReelTile tag author line /></ReelRow>">
+          <Demo label="스토리 줄 — 피드 맨 위 '스토리'. 식단·공구 종류는 적지 않고 섞어서, 표는 마감(D-3)만. 맨 앞 칸이 글쓰기 입구 하나, 사진 위 글자는 아래 띠(media-scrim) 한 곳" code="<ReelRow><ReelAddTile /><ReelTile tag author line /></ReelRow>">
             <div className="overflow-hidden px-4">
               <ReelRow label="숏폼 줄 예시">
                 <ReelAddTile onClick={() => {}} sub="식단 · 공구" />
-                <ReelTile href="#" tag="공구" author="민지" label="민지의 공구: 닭가슴살 현미 볶음밥, 23명 모임"
+                <ReelTile href="#" tag="D-3" author="민지" label="민지의 공구: 닭가슴살 현미 볶음밥, 23명 모임"
                   line={<>알림 <span className="num font-bold">23</span>/30명</>} />
-                <ReelTile href="#" tag="식단" author="준호" label="준호의 식단 영상" seconds={24}
+                <ReelTile href="#" author="준호" label="준호의 식단 영상" seconds={24}
                   line={<>단백질 <span className="num font-bold">38</span>g 점심</>} />
                 <ReelSkeleton count={1} />
               </ReelRow>
