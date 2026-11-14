@@ -103,54 +103,57 @@ type GapPoint = { key: string; label: string; x: number; y: number };
 
 /**
  * 빈틈 그림 — 가로: 찾는 사람 비율, 세로: 맞는 제품 수. 오른쪽 아래(많이 찾는데 제품이 적은 곳)를 옅게 칠해 먼저 보이게.
- * 점을 누르거나 Enter 로 고른다. 축은 하나씩(가로·세로가 다른 값이라 두 개의 y축이 아니다)
+ * 점은 진짜 버튼(누르는 영역 44px)이라 누르거나 Tab·Enter 로 고른다. 높이는 화면 폭과 상관없이 같아서 휴대폰에서도 점이 겹치지 않는다.
+ * 축은 하나씩(가로·세로가 다른 값이라 두 개의 y축이 아니다). 값은 마우스를 올리거나 포커스하면 보이고, 고른 점은 테두리로 표시한다
  */
 export function GapChart({ points, selected, onSelect, xLabel, yLabel, xFormat, yFormat }: {
   points: GapPoint[]; selected?: string | null; onSelect?: (key: string) => void;
   xLabel: string; yLabel: string; xFormat: (n: number) => string; yFormat: (n: number) => string;
 }) {
   const [hover, setHover] = useState<string | null>(null);
-  const W = 600, H = 300, P = 16;
   const xMax = Math.max(1, ...points.map((p) => p.x)) * 1.1;
   const yMax = Math.max(1, ...points.map((p) => p.y)) * 1.1;
   const xs = [...points.map((p) => p.x)].sort((a, b) => a - b), ys = [...points.map((p) => p.y)].sort((a, b) => a - b);
   const xMid = xs.length ? xs[Math.floor(xs.length / 2)] : xMax / 2, yMid = ys.length ? ys[Math.floor(ys.length / 2)] : yMax / 2;
-  const sx = (v: number) => P + (v / xMax) * (W - P * 2);
-  const sy = (v: number) => H - P - (v / yMax) * (H - P * 2);
+  // 판 안에서의 % 자리 (가장자리 점이 잘리지 않게 4%~96%)
+  const px = (v: number) => 4 + (v / xMax) * 92;
+  const py = (v: number) => 96 - (v / yMax) * 92;
   const gap = (p: GapPoint) => p.x >= xMid && p.y <= yMid;
-  const shown = points.find((p) => p.key === (hover ?? selected));
+  const shown = points.find((p) => p.key === hover);
 
   return (
     <figure className="flex flex-col gap-2">
-      <div className="relative">
-        <svg viewBox={`0 0 ${W} ${H}`} className="block w-full h-auto" role="group" aria-label={`${yLabel}와 ${xLabel}. 오른쪽 아래가 많이 찾는데 제품이 적은 곳이에요`}>
-          <rect x={sx(xMid)} y={sy(yMid)} width={W - P - sx(xMid)} height={H - P - sy(yMid)} className="fill-sunken" rx={8} />
-          <line x1={P} x2={W - P} y1={H - P} y2={H - P} className="stroke-line-strong" strokeWidth={1} />
-          <line x1={P} x2={P} y1={P} y2={H - P} className="stroke-line-strong" strokeWidth={1} />
-          {points.map((p) => {
-            const on = p.key === selected, hot = p.key === hover;
-            return (
-              <circle key={p.key} cx={sx(p.x)} cy={sy(p.y)} r={on || hot ? 9 : 7} tabIndex={onSelect ? 0 : -1} role={onSelect ? "button" : undefined}
-                aria-label={`${p.label}: ${xLabel} ${xFormat(p.x)}, ${yLabel} ${yFormat(p.y)}${gap(p) ? " · 빈틈" : ""}`} aria-pressed={onSelect ? on : undefined}
-                className={cn(gap(p) ? "fill-brand" : "fill-ink-3", on ? "stroke-brand-ink" : "stroke-surface", onSelect && "cursor-pointer", "outline-none focus-visible:stroke-brand-ink")}
-                strokeWidth={on ? 3 : 2}
-                onPointerEnter={() => setHover(p.key)} onPointerLeave={() => setHover(null)} onFocus={() => setHover(p.key)} onBlur={() => setHover(null)}
-                onClick={() => onSelect?.(p.key)} onKeyDown={(e) => { if (onSelect && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onSelect(p.key); } }} />
-            );
-          })}
-        </svg>
+      <div className="relative h-64 sm:h-72 border-l border-b border-line-strong" role="group" aria-label={`${yLabel}와 ${xLabel}. 오른쪽 아래가 많이 찾는데 제품이 적은 곳이에요`}>
+        <div className="absolute right-0 bottom-0 rounded-md bg-sunken" style={{ left: `${px(xMid)}%`, top: `${py(yMid)}%` }} aria-hidden />
+        {points.map((p) => {
+          const on = p.key === selected;
+          return (
+            <button key={p.key} type="button" disabled={!onSelect}
+              aria-label={`${p.label}: ${xLabel} ${xFormat(p.x)}, ${yLabel} ${yFormat(p.y)}${gap(p) ? " · 빈틈" : ""}`} aria-pressed={onSelect ? on : undefined}
+              className="group absolute size-11 -translate-x-1/2 -translate-y-1/2 grid place-items-center rounded-full outline-none disabled:cursor-default"
+              style={{ left: `${px(p.x)}%`, top: `${py(p.y)}%` }}
+              onPointerEnter={() => setHover(p.key)} onPointerLeave={() => setHover(null)} onFocus={() => setHover(p.key)} onBlur={() => setHover(null)}
+              onClick={() => onSelect?.(p.key)}>
+              <span className={cn("block size-3.5 rounded-full border-2 transition-transform duration-150 ease-out group-hover:scale-125 group-focus-visible:scale-125",
+                gap(p) ? "bg-brand" : "bg-ink-3", on ? "border-brand-ink scale-125" : "border-surface", "group-focus-visible:border-brand-ink")} />
+            </button>
+          );
+        })}
         {shown && (
           <div role="status" className="pointer-events-none absolute z-10 rounded-md border border-line bg-surface px-3 py-2 text-caption shadow-overlay whitespace-nowrap"
-            style={{ left: `${(sx(shown.x) / W) * 100}%`, top: `${(sy(shown.y) / H) * 100}%`, transform: `translate(${shown.x > xMax / 2 ? "calc(-100% - 12px)" : "12px"}, -50%)` }}>
+            style={{ left: `${px(shown.x)}%`, top: `${py(shown.y)}%`, transform: `translate(${shown.x > xMax / 2 ? "calc(-100% - 16px)" : "16px"}, ${shown.y > yMax / 2 ? "0" : "-100%"})` }}>
             <p className="font-bold text-ink">{shown.label}</p>
             <p className="num text-ink-2">{xLabel} {xFormat(shown.x)} · {yLabel} {yFormat(shown.y)}</p>
           </div>
         )}
       </div>
-      <div className="flex flex-wrap justify-between gap-2 text-caption text-ink-2">
+      <div className="flex justify-between gap-2 text-caption text-ink-2">
         <span>↑ {yLabel}</span>
-        <span className="inline-flex items-center gap-1.5"><span className="size-2.5 rounded-full bg-brand" aria-hidden />많이 찾는데 제품이 적은 곳 <span className="size-2.5 rounded-full bg-ink-3 ml-2" aria-hidden />그 밖</span>
         <span>{xLabel} →</span>
+      </div>
+      <div className="flex flex-wrap gap-x-4 gap-y-1 text-caption text-ink-2">
+        <span className="inline-flex items-center gap-1.5"><span className="size-2.5 rounded-full bg-brand" aria-hidden />많이 찾는데 제품이 적은 곳</span>
+        <span className="inline-flex items-center gap-1.5"><span className="size-2.5 rounded-full bg-ink-3" aria-hidden />그 밖</span>
       </div>
     </figure>
   );

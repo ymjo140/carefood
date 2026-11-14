@@ -265,9 +265,16 @@ async function seedDemoCreators(sb: Sb, partner: Partner) {
   const { data: coupon, error: qErr } = await sb.from("partner_coupons").select("id, valid_days").eq("partner_id", partner.id).eq("name", `${DEMO_COUPON}다시 찾아 주세요`).maybeSingle();
   if (qErr) throw new Error(qErr.message);
   const code = `CF${partner.id.replace(/-/g, "").slice(0, 6).toUpperCase()}`;
+  // 예시 기획 하나 — 협업 관리에서 기획별로 묶인 모습을 본다 (기획 표가 아직 없으면 기획 없이)
+  const { error: xErr } = await sb.from("partner_plans").delete().eq("partner_id", partner.id).like("name", `${DEMO_COUPON}%`);
+  if (xErr && xErr.code !== "42P01" && xErr.code !== "PGRST205") throw new Error(xErr.message);
+  const { data: plan, error: plErr } = xErr ? { data: null, error: null } : await sb.from("partner_plans").insert({
+    partner_id: partner.id, segment: "meal_protein_low_sodium", name: `${DEMO_COUPON}고단백 저염 도시락`, note: "단백질 25g 이상 · 나트륨 600mg 이하, 1식 450kcal 아래로", target_price: 7900, status: "making",
+  }).select("id").single();
+  if (plErr) throw new Error(plErr.message);
   const { data: cs, error: iErr } = await sb.from("partner_collabs").insert([
-    { partner_id: partner.id, user_id: people[0].id, title: "고단백 도시락 써 보실래요?", offer: "신제품 5식을 보내 드려요. 드셔 보고 솔직한 후기를 커뮤니티에 남겨 주세요", product_name: "닭가슴살 현미 볶음밥 도시락", coupon_id: coupon?.id || null, code, status: "accepted", decided_at: new Date(Date.now() - 5 * DAY).toISOString(), created_at: new Date(Date.now() - 7 * DAY).toISOString() },
-    { partner_id: partner.id, user_id: people[1].id, title: "저염 한 끼 같이 알려요", offer: "나트륨 600mg 이하 도시락 3식을 보내 드려요. 마음에 들면 글 하나 부탁드려요", product_name: "두부 버섯 덮밥", coupon_id: null, code: null, status: "proposed", decided_at: null, created_at: new Date(Date.now() - DAY).toISOString() },
+    { partner_id: partner.id, plan_id: plan?.id || null, user_id: people[0].id, title: "고단백 도시락 써 보실래요?", offer: "신제품 5식을 보내 드려요. 드셔 보고 솔직한 후기를 커뮤니티에 남겨 주세요", product_name: "닭가슴살 현미 볶음밥 도시락", coupon_id: coupon?.id || null, code, status: "accepted", decided_at: new Date(Date.now() - 5 * DAY).toISOString(), created_at: new Date(Date.now() - 7 * DAY).toISOString() },
+    { partner_id: partner.id, plan_id: plan?.id || null, user_id: people[1].id, title: "저염 한 끼 같이 알려요", offer: "나트륨 600mg 이하 도시락 3식을 보내 드려요. 마음에 들면 글 하나 부탁드려요", product_name: "두부 버섯 덮밥", coupon_id: null, code: null, status: "proposed", decided_at: null, created_at: new Date(Date.now() - DAY).toISOString() },
   ]).select("id, status");
   if (iErr) throw new Error(iErr.message);
   const accepted = cs.find((c: { status: string }) => c.status === "accepted");
@@ -291,6 +298,8 @@ export async function clearDemo(sb: Sb, partnerId: string) {
   if (uErr) throw new Error(uErr.message);
   const { error: kErr } = await sb.from("partner_collabs").delete().eq("partner_id", partnerId).like("user_id", `${DEMO_USER_PREFIX}%`);
   if (kErr) throw new Error(kErr.message);
+  const { error: pErr } = await sb.from("partner_plans").delete().eq("partner_id", partnerId).like("name", `${DEMO_COUPON}%`);
+  if (pErr && pErr.code !== "42P01" && pErr.code !== "PGRST205") throw new Error(pErr.message);
   const { error: cErr } = await sb.from("partner_coupons").delete().eq("partner_id", partnerId).like("name", `${DEMO_COUPON}%`); // 준 쿠폰도 같이 지워진다
   if (cErr) throw new Error(cErr.message);
   return { orders, items: ids.length };
