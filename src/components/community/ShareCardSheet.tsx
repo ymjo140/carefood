@@ -7,10 +7,14 @@ import { hasPhoto, renderCard, type CardData, type CardStyle } from "@/lib/share
 /**
  * 인증 카드 만들기 — 내 식단·챌린지·공구를 9:16 카드로 그려 인스타 스토리에 올린다.
  * 모양: 사진(내 사진 + 스티커) · 스티커만(투명, 내 사진 위에 붙이기) · 기록(큰 숫자)
- * 인스타에 공유하기: 게시물 주소를 복사해 두고 휴대폰 공유 창을 연다 → 인스타그램 → 스토리 → 링크 스티커에 붙여 넣기
+ * 인스타에 공유하기: 공유 링크(/s/<code>)를 복사해 두고 휴대폰 공유 창을 연다 → 인스타그램 → 스토리 → 링크 스티커에 붙여 넣기
  * 공유 창이 없는 브라우저(컴퓨터 등)는 그림을 저장한다.
+ * 공유 링크: 카드를 다 그리면 그 그림과 함께 미리 만든다(공유 창은 누른 순간에만 열려 그때 서버를 기다릴 수 없다).
+ *   모양을 바꾸면 같은 링크의 그림만 바꾼다. 실제로 공유·저장·복사를 눌렀을 때만 '공유함'으로 센다.
+ *   챌린지 카드의 링크는 내 묶음 초대 화면(/j/<code>)으로 간다.
  */
-export type ShareTarget = { kind: "meal" | "challenge" | "group_buy"; id: string };
+/** day 의 id 는 날짜(YYYY-MM-DD) */
+export type ShareTarget = { kind: "meal" | "challenge" | "group_buy" | "day"; id: string };
 
 const STYLE_LABEL: Record<CardStyle, string> = { photo: "사진", sticker: "스티커만", record: "기록" };
 
@@ -23,14 +27,19 @@ export default function ShareCardSheet({ target, open, onClose }: { target: Shar
   const [img, setImg] = useState<{ blob: Blob; url: string } | null>(null);
   const [drawError, setDrawError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [share, setShare] = useState<{ status: "idle" | "making" | "ready" | "error"; code?: string; error?: string }>({ status: "idle" });
   const seq = useRef(0);
+  const linkSeq = useRef(0);
+  const codeRef = useRef<string | null>(null);
 
   // 카드에 그릴 것 불러오기
   const kind = target?.kind, tid = target?.id;
   useEffect(() => {
     if (!open || !kind || !tid) return;
     let alive = true;
-    setData({ status: "loading", card: null }); // eslint-disable-line react-hooks/set-state-in-effect -- 열 때마다 새로
+    setData({ status: "loading", card: null });  
+    setShare({ status: "idle" });
+    codeRef.current = null;
     fetch(`/api/community/share-card?kind=${kind}&id=${tid}`)
       .then(async (r) => {
         const d = await r.json().catch(() => ({}));
@@ -47,7 +56,7 @@ export default function ShareCardSheet({ target, open, onClose }: { target: Shar
   useEffect(() => {
     if (data.status !== "done" || !data.card) return;
     const n = ++seq.current;
-    setImg(null); // eslint-disable-line react-hooks/set-state-in-effect -- 다시 그리는 동안 스켈레톤
+    setImg(null);  
     setDrawError(null);
     renderCard(data.card, { style, showKcal, site: window.location.host })
       .then((blob) => { if (n === seq.current) setImg({ blob, url: URL.createObjectURL(blob) }); })
@@ -56,13 +65,45 @@ export default function ShareCardSheet({ target, open, onClose }: { target: Shar
 
   useEffect(() => () => { if (img) URL.revokeObjectURL(img.url); }, [img]);
 
+  // 그린 카드로 공유 링크 만들기·바꾸기 (마지막 그림만 남긴다)
+  useEffect(() => {
+    if (!img || !kind || !tid) return;
+    const n = ++linkSeq.current;
+    const t = setTimeout(async () => {
+      setShare((s) => ({ ...s, status: s.code ? "ready" : "making" }));
+      try {
+        const image = await new Promise<string>((resolve, reject) => { const fr = new FileReader(); fr.onload = () => resolve(String(fr.result)); fr.onerror = () => reject(new Error("카드 그림을 읽지 못했어요")); fr.readAsDataURL(img.blob); });
+        const r = await fetch("/api/share", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind, id: tid, image, code: codeRef.current }) });
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(d.error || "");
+        if (n !== linkSeq.current) return;
+        codeRef.current = d.code;
+        setShare({ status: "ready", code: d.code });
+      } catch (e) {
+        if (n === linkSeq.current) setShare((s) => (s.code ? s : { status: "error", error: (e as Error).message || undefined }));
+      }
+    }, 400);
+    return () => clearTimeout(t);
+  }, [img, kind, tid]);
+
   const card = data.card;
-  const link = card && typeof window !== "undefined" ? `${window.location.origin}${card.url}` : "";
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  // 공유 링크가 없으면(만드는 중·실패) 대상 주소를 그대로 쓴다
+  const link = share.code ? `${origin}/s/${share.code}` : card ? `${origin}${card.url}` : "";
+
+  /** 공유·저장·복사를 누르면 '공유함'으로 표시 (세기용) */
+  const markShared = () => {
+    if (!share.code) return;
+    fetch("/api/share", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code: share.code }) })
+      .then((r) => { if (!r.ok) console.error("공유 표시를 남기지 못했어요", r.status); })
+      .catch((e) => console.error("공유 표시를 남기지 못했어요", e)); // ds-allow: 세기는 보조 — 공유는 이미 했다
+  };
   const fileName = `carefood-${card?.kind || "card"}-${style}.png`;
 
   const copyLink = async (quiet = false) => {
     try {
       await navigator.clipboard.writeText(link);
+      markShared();
       if (!quiet) toast.show("링크를 복사했어요");
       return true;
     } catch {
@@ -76,6 +117,7 @@ export default function ShareCardSheet({ target, open, onClose }: { target: Shar
     const a = document.createElement("a");
     a.href = img.url; a.download = fileName;
     document.body.appendChild(a); a.click(); a.remove();
+    markShared();
   };
 
   /** 공유 창 — 링크를 먼저 복사해 두고(기다리지 않음: 공유 창은 누른 순간에만 열린다) 그림 파일을 넘긴다 */
@@ -87,6 +129,7 @@ export default function ShareCardSheet({ target, open, onClose }: { target: Shar
     try {
       if (navigator.canShare?.({ files: [file] })) {
         await navigator.share({ files: [file] });
+        markShared();
         toast.show((await copied) ? "링크는 복사돼 있어요. 스토리의 링크 스티커에 붙여 넣어 주세요" : "공유했어요");
       } else {
         save();
@@ -103,6 +146,7 @@ export default function ShareCardSheet({ target, open, onClose }: { target: Shar
     if (!img) return;
     try {
       await navigator.clipboard.write([new ClipboardItem({ "image/png": img.blob })]);
+      markShared();
       toast.show("스티커를 복사했어요. 인스타 스토리에서 화면을 길게 눌러 붙여 넣어 주세요");
     } catch {
       toast.show("이 브라우저는 그림 복사를 막아요. 카드 저장하기로 내려받아 주세요", { tone: "danger" });
@@ -142,8 +186,12 @@ export default function ShareCardSheet({ target, open, onClose }: { target: Shar
           )}
           <ShareSteps steps={style === "sticker"
             ? ["스티커 복사하기를 눌러요", "인스타 스토리에서 내 사진을 고르고 화면을 길게 눌러 붙여 넣어요", "링크 스티커에 게시물 링크를 붙이면 친구가 바로 볼 수 있어요"]
-            : ["인스타에 공유하기 → 인스타그램 → 스토리를 골라요", "링크는 미리 복사돼요. 스티커 버튼 → 링크에 붙여 넣어요", "친구가 링크를 누르면 이 게시물이 바로 열려요"]} />
+            : ["인스타에 공유하기 → 인스타그램 → 스토리를 골라요", "링크는 미리 복사돼요. 스티커 버튼 → 링크에 붙여 넣어요",
+              card.kind === "challenge" || kind === "day" ? "친구가 링크를 누르면 같이 기록을 시작할 수 있어요" : "친구가 링크를 누르면 이 게시물이 바로 열려요"]} />
           <p className="text-caption text-ink-2 flex items-center gap-1"><Icon name="link" size={14} /><span className="min-w-0 truncate">{link}</span></p>
+          {share.status === "error" && (
+            <p className="text-caption text-ink-2">공유 링크를 만들지 못해 게시물 주소를 그대로 써요. 친구가 열어 본 수는 세지 않아요{share.error ? ` (${share.error})` : ""}</p>
+          )}
         </div>
       )}
     </Sheet>

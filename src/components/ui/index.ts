@@ -28,6 +28,7 @@ export { PostAuthor, PostAction, PostActions, PostTags, ThreadItem, MealAttach, 
 export { DragArea, DragHandle, DragGhost, useDragItem, useDropTarget, dropClass, type DragData } from "./Drag";
 export { FoodEntryForm, type FoodBase, type FoodEntry } from "./FoodEntry";
 export { DayDots, type DayDot } from "./Challenge";
+export { MemberProgressRow, AvatarStack } from "./ChallengeGroup";
 export { Switch } from "./Switch";
 export { ReelRow, ReelTile, ReelAddTile, ReelSkeleton, clock } from "./Reel";
 export { ReelMedia, VideoClip, VideoAttach } from "./ReelMedia";
