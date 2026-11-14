@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Button, Card, Chip, ConfirmSheet, DayDots, EmptyState, Sheet, SkeletonList, TextButton, TextLink, useToast } from "@/components/ui";
 import ShareCardSheet from "@/components/community/ShareCardSheet";
+import ChallengeCreateSheet from "@/components/community/ChallengeCreateSheet";
 import { getOrCreateNickname } from "@/lib/nickname";
 import { METRIC_META, metricValue, type ChallengeMetric, type DayState } from "@/lib/challenges";
 
@@ -20,7 +21,11 @@ type Run = {
 };
 type Start = "today" | "tomorrow" | "monday";
 const START_LABEL: Record<Start, string> = { today: "오늘", tomorrow: "내일", monday: "다음 월요일" };
-type Item = { id: string; title: string; rule: string; metric: ChallengeMetric; target: number; days: number; active_count: number; finished_count: number; me: Run | null };
+type Item = {
+  id: string; title: string; rule: string; metric: ChallengeMetric; target: number; days: number; active_count: number; finished_count: number; me: Run | null;
+  /** user: 사람이 만든 챌린지(링크로만 들어옴) */
+  kind?: "official" | "user"; mine_created?: boolean; note?: string | null;
+};
 
 export function ChallengeList() {
   const toast = useToast();
@@ -29,6 +34,7 @@ export function ChallengeList() {
   const [busy, setBusy] = useState<string | null>(null);
   const [leaving, setLeaving] = useState<Item | null>(null);
   const [card, setCard] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
   const [planning, setPlanning] = useState<Item | null>(null);
   const [start, setStart] = useState<Start>("tomorrow");
 
@@ -80,15 +86,26 @@ export function ChallengeList() {
         action={<Button size="sm" variant="secondary" icon="refresh" onClick={() => { setState({ status: "loading", items: [] }); setAttempt((n) => n + 1); }}>다시 불러오기</Button>} />
     );
   }
-  if (state.items.length === 0) {
-    return <EmptyState title="지금 열린 챌린지가 없어요" description="새 챌린지가 열리면 여기에 나와요" />;
-  }
-
   // 하고 있는 것 먼저
   const items = [...state.items].sort((a, b) => Number(!!b.me && !b.me.finished) - Number(!!a.me && !a.me.finished));
+  const create = (
+    <ChallengeCreateSheet open={creating} onClose={() => setCreating(false)}
+      onCreated={(r) => { setCreating(false); setAttempt((n) => n + 1); setCard(r.challenge_id); }} />
+  );
+
+  if (state.items.length === 0) {
+    return (
+      <>
+        <EmptyState title="지금 열린 챌린지가 없어요" description="규칙을 골라 내 챌린지를 만들고 친구를 초대할 수 있어요"
+          action={<Button size="sm" icon="plus" onClick={() => setCreating(true)}>챌린지 만들기</Button>} />
+        {create}
+      </>
+    );
+  }
 
   return (
     <>
+      <Button block icon="plus" className="mb-4" onClick={() => setCreating(true)}>내 챌린지 만들기</Button>
       <ul className="flex flex-col gap-3">
         {items.map((c) => {
           const m = METRIC_META[c.metric];
@@ -97,7 +114,9 @@ export function ChallengeList() {
             <li key={c.id}>
               <Card className="flex flex-col gap-3">
                 <div className="flex flex-col gap-0.5">
+                  {c.kind === "user" && <p className="text-caption text-brand-ink">{c.mine_created ? "내가 만든 챌린지" : "초대받은 챌린지"}</p>}
                   <h2 className="text-body font-bold text-ink">{c.title}</h2>
+                  {c.note && <p className="text-label text-ink">“{c.note}”</p>}
                   <p className="text-label text-ink-2">{c.rule}을 <span className="num">{c.days}</span>일 동안 채워요</p>
                   {/* 0명이면 '지금 0명이 하고 있어요' 대신 아무것도 적지 않는다 — 참여 수는 사람이 있을 때만 */}
                   {(c.active_count > 0 || c.finished_count > 0) && (
@@ -133,7 +152,7 @@ export function ChallengeList() {
                     )}
                     <div className="flex gap-2">
                       {(run.done_count > 0 || !run.finished) && (
-                        <Button size="sm" icon={run.done_count > 0 ? "share" : "users"} onClick={() => setCard(c.id)}>{run.done_count > 0 ? "인증하기" : "친구 초대하기"}</Button>
+                        <Button size="sm" variant="secondary" icon={run.done_count > 0 ? "share" : "users"} onClick={() => setCard(c.id)}>{run.done_count > 0 ? "인증하기" : "친구 초대하기"}</Button>
                       )}
                       {run.finished
                         ? <Button size="sm" variant="secondary" icon="refresh" loading={busy === c.id} onClick={() => join(c)}>다시 하기</Button>
@@ -158,6 +177,7 @@ export function ChallengeList() {
         description="지금까지 채운 날은 사라져요. 식단 기록은 그대로 남아요"
         confirmLabel="그만두기" onConfirm={() => leaving && leave(leaving)} />
       <ShareCardSheet target={card ? { kind: "challenge", id: card } : null} open={!!card} onClose={() => setCard(null)} />
+      {create}
 
       {/* 친구랑 날짜 정해 시작 — 그날 시작하는 묶음을 열고 초대 카드 */}
       <Sheet open={!!planning} onClose={() => setPlanning(null)} title={planning ? `${planning.title} 같이 시작하기` : ""} size="sm"

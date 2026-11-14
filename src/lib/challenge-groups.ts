@@ -4,7 +4,7 @@
  * 들어가기·열기·나가기·응원은 DB 함수(challenge_group_*)가 줄을 잠그고 한 번에 한다.
  */
 import { addDays, todayKst, weekday } from "@/lib/day";
-import { runProgress, type ChallengeMetric, type DiaryRow, type RunProgress } from "@/lib/challenges";
+import { DIARY_COLS, runProgress, type ChallengeMetric, type DiaryRow, type RunProgress } from "@/lib/challenges";
 
 type Sb = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
@@ -65,7 +65,7 @@ export function memberRun(c: ChallengeRow, g: Pick<GroupRow, "start_on"> | null,
 /** 여러 사람의 기간 안 식단 기록 (진행표용) */
 export async function diaryOf(sb: Sb, users: string[], from: string, to: string) {
   if (!users.length) return new Map<string, DiaryRow[]>();
-  const { data, error } = await sb.from("meal_diary").select("user_id, date, meal_type, calories, protein_g, sugar_g, sodium_mg")
+  const { data, error } = await sb.from("meal_diary").select(`user_id, ${DIARY_COLS}`)
     .in("user_id", users).gte("date", from).lte("date", to).limit(20000);
   if (error) throw new Error(error.message);
   const by = new Map<string, DiaryRow[]>();

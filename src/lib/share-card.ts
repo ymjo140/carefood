@@ -26,7 +26,9 @@ export type GroupBuyCardData = {
   kind: "group_buy"; author: string | null; url: string; photo: string | null; product_name: string;
   best: { packs: number; price: number; pct: number | null } | null; count: number; target: number; days_left: number | null;
 };
-export type CardData = MealCardData | ChallengeCardData | GroupBuyCardData;
+/** 연속 기록 — 오늘까지 하루도 빠짐없이 기록한 날 수와 최근 14일 */
+export type StreakCardData = { kind: "streak"; author: string | null; url: string; day: string; streak: number; days: DayMark[] };
+export type CardData = MealCardData | ChallengeCardData | GroupBuyCardData | StreakCardData;
 export type CardStyle = "photo" | "sticker" | "record";
 export type CardOptions = { style: CardStyle; showKcal: boolean; site: string };
 
@@ -153,6 +155,7 @@ const SW = 900, PAD = 52;
 function stickerHeight(d: CardData) {
   if (d.kind === "meal") return 520;
   if (d.kind === "challenge") return 540;
+  if (d.kind === "streak") return 500;
   return 560;
 }
 
@@ -216,10 +219,20 @@ function drawSticker(ctx: Ctx, p: Palette, f: Fonts, d: CardData, o: CardOptions
     ctx.fillText(`${d.count}/${d.target}명 모였어요`, L, by + 78);
   }
 
+  if (d.kind === "streak") {
+    font(ctx, f, 34, 500); ctx.fillStyle = p.ink2; ctx.fillText(`${dayLabel(d.day)}까지`, L, y + 84);
+    const end = numUnit(ctx, f, L, y + 210, String(d.streak), "일째", 120, p.brandInk, p.ink);
+    font(ctx, f, 38, 500); ctx.fillStyle = p.ink; ctx.fillText("하루도 빠짐없이 기록", end + 20, y + 206);
+    const last = d.days.slice(-14);
+    const size = Math.floor((IW - 16 * 6) / 7);
+    dots(ctx, p, last.slice(0, 7), L, y + 250, IW, Math.min(72, size));
+    if (last.length > 7) dots(ctx, p, last.slice(7), L, y + 330, IW, Math.min(72, size));
+  }
+
   // 아래 띠 — 연속 기록 + 케어푸드
   const fy = y + h - 44;
   font(ctx, f, 32, 700); ctx.fillStyle = p.brandInk;
-  const streak = d.kind === "group_buy" ? null : d.streak;
+  const streak = d.kind === "group_buy" || d.kind === "streak" ? null : d.streak;
   ctx.textAlign = "left";
   ctx.fillText(streak && streak > 1 ? `기록 ${streak}일째` : d.author || "", L, fy);
   ctx.textAlign = "right"; ctx.fillStyle = p.ink;
@@ -278,6 +291,21 @@ function drawRecord(ctx: Ctx, p: Palette, f: Fonts, d: CardData, o: CardOptions)
     font(ctx, f, 40, 400); ctx.fillStyle = p.ink2;
     wrap(ctx, d.rule, W - L * 2, 2).forEach((line, i) => ctx.fillText(line, L, 1420 + i * 56));
     if (d.streak > 1) { font(ctx, f, 64, 700); ctx.fillStyle = p.brandInk; ctx.fillText(`기록 ${d.streak}일째`, L, 1640); }
+  }
+  if (d.kind === "streak") {
+    font(ctx, f, 52, 500); ctx.fillStyle = p.ink2; ctx.fillText(`${dayLabel(d.day)}까지`, L, 400);
+    font(ctx, f, 88, 700); ctx.fillStyle = p.ink; ctx.fillText("하루도 빠짐없이", L, 510);
+    font(ctx, f, 340, 700, true);
+    const v = String(d.streak);
+    const vw = ctx.measureText(v).width;
+    ctx.fillStyle = p.highlight; ctx.fillRect(L - 10, 790, vw + 250, 120);
+    numUnit(ctx, f, L, 880, v, "일째", 340, p.ink, p.ink2);
+    font(ctx, f, 56, 700); ctx.fillStyle = p.ink; ctx.fillText("식단을 기록했어요", L, 1000);
+    const last = d.days.slice(-14);
+    const size = Math.min(110, Math.floor((W - L * 2 - 24 * 6) / 7));
+    dots(ctx, p, last.slice(0, 7), L, 1110, W - L * 2, size);
+    if (last.length > 7) dots(ctx, p, last.slice(7), L, 1110 + size + 30, W - L * 2, size);
+    font(ctx, f, 40, 400); ctx.fillStyle = p.ink2; ctx.fillText("최근 14일", L, 1110 + (size + 30) * 2 + 30);
   }
   if (d.kind === "group_buy") {
     drawSticker(ctx, p, f, d, o, (W - SW) / 2, (H - stickerHeight(d)) / 2);

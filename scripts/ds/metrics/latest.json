@@ -1,6 +1,6 @@
 {
-  "measuredAt": "2026-11-14T05:56:33.277Z",
-  "files": 132,
+  "measuredAt": "2026-11-14T06:34:57.970Z",
+  "files": 140,
   "distinctColors": 2,
   "gradients": 2,
   "shadows": 1,
@@ -21,15 +21,15 @@
   "fontSizes": [
     [
       "ds:label",
-      399
+      419
     ],
     [
       "ds:caption",
-      325
+      337
     ],
     [
       "ds:body",
-      103
+      108
     ],
     [
       "ds:title",
@@ -43,11 +43,11 @@
   "radii": [
     [
       "md",
-      44
+      45
     ],
     [
       "lg",
-      29
+      30
     ],
     [
       "full",
@@ -85,6 +85,13 @@
       {
         "colors": 0,
         "inline": 1
+      }
+    ],
+    [
+      "src/app/admin/challenges/page.tsx",
+      {
+        "colors": 0,
+        "inline": 0
       }
     ],
     [
@@ -152,13 +159,6 @@
     ],
     [
       "src/app/admin/partners/Crm.tsx",
-      {
-        "colors": 0,
-        "inline": 0
-      }
-    ],
-    [
-      "src/app/admin/partners/Disputes.tsx",
       {
         "colors": 0,
         "inline": 0

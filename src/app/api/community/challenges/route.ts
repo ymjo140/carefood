@@ -5,11 +5,11 @@ import { addDays, todayKst } from "@/lib/day";
 import { getActorId, noActor } from "@/lib/actor-server";
 import { rateLimit } from "@/lib/rate-limit";
 import { ensureNickname } from "@/lib/community-profile";
-import { type DiaryRow } from "@/lib/challenges";
+import { DIARY_COLS, type DiaryRow } from "@/lib/challenges";
 import { JOIN_MESSAGES, memberRun, openGroup, startDate, type ChallengeRow, type GroupRow, type MemberRow, type StartChoice } from "@/lib/challenge-groups";
 
 /**
- * GET /api/community/challenges — 챌린지 목록 + 지금 하는 사람 수 + (참여했으면) 내 진행과 내 묶음(초대 코드·인원)
+ * GET /api/community/challenges — 공식 챌린지 + 내가 하는 사람이 만든 챌린지(kind user, 위에) + 지금 하는 사람 수 + (참여했으면) 내 진행과 내 묶음(초대 코드·인원)
  * POST { challenge_id, start?: "today"|"tomorrow"|"monday" } — 참여하기 = 내 묶음을 연다 (끝난 뒤 다시 누르면 새 묶음)
  *   start 를 주면 그날 시작하는 묶음 (친구와 같이 시작하려고 날짜를 정할 때). 응답에 초대 코드
  * DELETE { challenge_id } — 그만두기 (묶음에서 빠진다)
@@ -24,11 +24,19 @@ async function load(sb: any, actor: string | null) {
   const { data: rows, error } = await sb.from("community_challenges").select("id, slug, title, rule, metric, target, days, goal_days, is_active, sort")
     .eq("is_active", true).eq("kind", "official").order("sort");
   if (error) throw new Error(error.message);
-  const challenges = (rows || []) as Row[];
+  const challenges = (rows || []) as (Row & { kind?: string; creator_id?: string | null; note?: string | null })[];
   const { data: mems, error: mErr } = await sb.from("community_challenge_members")
     .select("challenge_id, user_id, started_on, joined_on, goal_days_eff, group_id, finished_runs, show_values, challenge_groups(start_on)").limit(20000);
   if (mErr) throw new Error(mErr.message);
   const members = (mems || []) as Member[];
+  // 내가 하는 '사람이 만든' 챌린지도 목록 위에 (링크로만 들어가는 것이라 공식 목록에는 없다)
+  const myUserIds = actor ? [...new Set(members.filter((m) => m.user_id === actor).map((m) => m.challenge_id))].filter((id) => !challenges.some((c) => c.id === id)) : [];
+  if (myUserIds.length) {
+    const { data: ur, error: uErr } = await sb.from("community_challenges").select("id, slug, title, rule, metric, target, days, goal_days, is_active, sort, kind, creator_id, note")
+      .in("id", myUserIds).eq("is_active", true);
+    if (uErr) throw new Error(uErr.message);
+    challenges.unshift(...((ur || []) as typeof challenges));
+  }
   const endOf = (m: Member, c: Row) => addDays(m.challenge_groups?.start_on || m.started_on, c.days - 1);
 
   const mine = actor ? members.filter((m) => m.user_id === actor) : [];
@@ -38,7 +46,7 @@ async function load(sb: any, actor: string | null) {
     const from = mine.map((m) => m.started_on).sort()[0];
     const gids = mine.map((m) => m.group_id).filter(Boolean) as string[];
     const [d, g] = await Promise.all([
-      sb.from("meal_diary").select("date, meal_type, calories, protein_g, sugar_g, sodium_mg").eq("user_id", actor).gte("date", from).lte("date", today).limit(5000),
+      sb.from("meal_diary").select(DIARY_COLS).eq("user_id", actor).gte("date", from).lte("date", today).limit(5000),
       gids.length ? sb.from("challenge_groups").select("*").in("id", gids) : { data: [], error: null },
     ]);
     if (d.error) throw new Error(d.error.message);
@@ -54,6 +62,7 @@ async function load(sb: any, actor: string | null) {
     const g = me?.group_id ? groups.get(me.group_id) ?? null : null;
     return {
       id: c.id, slug: c.slug, title: c.title, rule: c.rule, metric: c.metric, target: Number(c.target), days: c.days,
+      kind: c.kind === "user" ? "user" : "official", mine_created: !!actor && c.creator_id === actor, note: c.note ?? null,
       active_count: active.length,
       finished_count: finishedPeople,
       me: me ? {

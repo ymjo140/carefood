@@ -7,7 +7,7 @@ import { SHARE_BUCKET, dayTarget } from "@/lib/share-links";
 
 /**
  * POST  /api/share { kind, id, image, code? } — 인증 카드 공유 링크 만들기(code 를 주면 그 링크의 카드 그림만 바꾼다)
- *   kind: meal(내 글) · challenge(내가 하는 챌린지 → 내 묶음 초대 링크) · group_buy(내가 연 공구) · day(내 하루 기록 → 하고 있는 챌린지 초대, 없으면 첫 화면)
+ *   kind: meal(내 글) · challenge(내가 하는 챌린지 → 내 묶음 초대 링크) · group_buy(내가 연 공구) · day·streak(내 하루 기록·연속 기록 → 하고 있는 챌린지 초대, 없으면 첫 화면)
  *   image: 카드 PNG (data URL, 3MB 이하) → 공개 버킷 share-cards 에 무작위 이름으로. 링크 미리보기 그림이 된다
  *   응답 { code, url(/s/<code>), card_url }
  * PATCH /api/share { code } — 실제로 공유했다고 표시 (공유 창·저장·링크 복사를 눌렀을 때). 공유 수는 이것만 센다
@@ -31,7 +31,7 @@ async function targetOf(sb: Sb, actor: string, kind: string, id: string): Promis
     if (!data?.group_id || !data.challenge_groups?.code) return { error: "참여한 챌린지만 공유할 수 있어요", status: 403 };
     return { target_url: `/j/${data.challenge_groups.code}`, group_id: data.group_id };
   }
-  if (kind === "day") {
+  if (kind === "day" || kind === "streak") {
     const { data, error } = await sb.from("meal_diary").select("id").eq("user_id", actor).eq("date", id).limit(1);
     if (error) throw new Error(error.message);
     if (!data?.length) return { error: "이날 기록이 없어요", status: 404 };
@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({}));
   const kind = String(body.kind || "");
   const id = String(body.id || "");
-  if (kind === "day" ? !/^\d{4}-\d{2}-\d{2}$/.test(id) : !UUID.test(id)) return NextResponse.json({ error: "공유할 것을 골라 주세요" }, { status: 400 });
+  if (kind === "day" || kind === "streak" ? !/^\d{4}-\d{2}-\d{2}$/.test(id) : !UUID.test(id)) return NextResponse.json({ error: "공유할 것을 골라 주세요" }, { status: 400 });
   const image = pngFrom(body.image);
   if (!image) return NextResponse.json({ error: "카드 그림을 읽지 못했어요 (PNG, 3MB 이하)" }, { status: 400 });
   const sb = createServiceRoleClient() as Sb;

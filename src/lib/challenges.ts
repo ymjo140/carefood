@@ -5,10 +5,12 @@
  */
 import { addDays } from "./day";
 
-export type ChallengeMetric = "sodium_max" | "protein_min" | "sugar_max" | "meals_min" | "kcal_max";
+export type ChallengeMetric = "sodium_max" | "protein_min" | "sugar_max" | "meals_min" | "kcal_max" | "fiber_min" | "breakfast" | "record_any";
 export type DayState = "done" | "missed" | "today" | "future" | "before";
 
-export type DiaryRow = { date: string; meal_type: string | null; calories: number | null; protein_g: number | null; sugar_g: number | null; sodium_mg: number | null };
+export type DiaryRow = { date: string; meal_type: string | null; calories: number | null; protein_g: number | null; sugar_g: number | null; sodium_mg: number | null; fiber_g?: number | null };
+/** 판정에 필요한 식단 기록 칸 (select 에 그대로 쓴다) */
+export const DIARY_COLS = "date, meal_type, calories, protein_g, sugar_g, sodium_mg, fiber_g";
 
 export const METRIC_META: Record<ChallengeMetric, { label: string; unit: string; field?: keyof DiaryRow; max: boolean }> = {
   sodium_max: { label: "나트륨", unit: "mg", field: "sodium_mg", max: true },
@@ -16,6 +18,9 @@ export const METRIC_META: Record<ChallengeMetric, { label: string; unit: string;
   sugar_max: { label: "당류", unit: "g", field: "sugar_g", max: true },
   kcal_max: { label: "열량", unit: "kcal", field: "calories", max: true },
   meals_min: { label: "기록한 끼니", unit: "끼", max: false },
+  fiber_min: { label: "식이섬유", unit: "g", field: "fiber_g", max: false },
+  breakfast: { label: "아침 기록", unit: "끼", max: false },
+  record_any: { label: "기록", unit: "끼", max: false },
 };
 
 export { addDays };
@@ -24,6 +29,8 @@ export { addDays };
 export function dayValue(metric: ChallengeMetric, rows: DiaryRow[]): number | null {
   if (!rows.length) return null;
   if (metric === "meals_min") return new Set(rows.map((r) => r.meal_type).filter((m) => m === "breakfast" || m === "lunch" || m === "dinner")).size;
+  if (metric === "breakfast") return rows.some((r) => r.meal_type === "breakfast") ? 1 : 0;
+  if (metric === "record_any") return rows.length > 0 ? 1 : 0;
   const f = METRIC_META[metric].field!;
   return Math.round(rows.reduce((s, r) => s + (Number(r[f]) || 0), 0) * 10) / 10;
 }
