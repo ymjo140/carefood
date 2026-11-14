@@ -153,6 +153,24 @@ export async function buildMonthWorkbook(sb: Sb, partnerId: string, month: strin
   ];
   head(o);
   for (const r of rows) o.addRow({ ...r, by: r.confirm_by === "buyer" ? "구매자" : `${CONFIRM_DAYS}일 자동`, items: r.lines.map((l) => `${l.name} × ${l.qty}`).join(", ") });
-  for (const ws of [d, o]) ws.eachRow((row, i) => { if (i > 1) row.eachCell((c) => { if (typeof c.value === "number" && ws.getColumn(c.col).key !== "orders") c.numFmt = money; }); });
+  // 과세 구분 — 제품 > 판매·재고에서 적은 과세·면세로 판매액을 나눈다 (쿠폰 할인 전 상품 금액, 업체 묶음 쿠폰은 제품에 나누지 않는다)
+  const { data: taxRows, error: tErr } = await sb.from("partner_items").select("partner_sku, tax_type").eq("partner_id", partnerId).not("tax_type", "is", null).limit(5000);
+  if (tErr) throw new Error(tErr.message);
+  const taxOf = new Map(((taxRows || []) as { partner_sku: string; tax_type: string }[]).map((r) => [r.partner_sku, r.tax_type]));
+  const tax = { taxable: { qty: 0, amount: 0 }, exempt: { qty: 0, amount: 0 }, unknown: { qty: 0, amount: 0 } };
+  for (const r of rows) for (const l of r.lines) {
+    const t = (l.sku && taxOf.get(l.sku)) as "taxable" | "exempt" | undefined;
+    const v = tax[t || "unknown"];
+    v.qty += l.qty; v.amount += l.amount;
+  }
+  const t = wb.addWorksheet("과세 구분");
+  t.columns = [{ header: "구분", key: "k", width: 14 }, { header: "수량", key: "qty", width: 10 }, { header: "판매액(쿠폰 할인 전)", key: "amount", width: 20 }];
+  head(t);
+  t.addRow({ k: "과세", ...tax.taxable }); t.addRow({ k: "면세", ...tax.exempt }); t.addRow({ k: "미정", ...tax.unknown });
+  t.addRow({ k: "합계", qty: tax.taxable.qty + tax.exempt.qty + tax.unknown.qty, amount: tax.taxable.amount + tax.exempt.amount + tax.unknown.amount }).font = { bold: true };
+  t.addRow({});
+  t.addRow({ k: "미정은 제품 > 판매·재고 > 원가 · 마진에서 과세 구분을 적지 않은 제품이에요. 쿠폰 할인·배송비는 나누지 않았어요" });
+
+  for (const ws of [d, o, t]) ws.eachRow((row, i) => { if (i > 1) row.eachCell((c) => { if (typeof c.value === "number" && !["orders", "qty"].includes(String(ws.getColumn(c.col).key))) c.numFmt = money; }); });
   return Buffer.from(await wb.xlsx.writeBuffer());
 }

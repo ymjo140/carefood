@@ -21,7 +21,7 @@ type Data = {
   sales?: { rows: SalesRow[]; totals: SalesTotals };
   daily?: { day: string; revenue: number; orders: number; prev_revenue: number | null; prev_orders: number | null }[];
 };
-type SalesRow = { sku: string; name: string; quantity: number; revenue: number; buyers: number; repeat_buyers: number; repeat_rate: number | null; avg_gap: number | null; canceled: number; cancel_rate: number | null };
+type SalesRow = { sku: string; name: string; quantity: number; revenue: number; buyers: number; repeat_buyers: number; repeat_rate: number | null; avg_gap: number | null; canceled: number; cancel_rate: number | null; gross?: number | null; gross_rate?: number | null };
 type SalesTotals = { quantity: number; revenue: number; buyers: number; repeat_buyers: number; orders?: number };
 type Share = { key: string; label: string; share: number };
 type SortKey = "impressions" | "views" | "saves" | "clicks";
@@ -221,6 +221,7 @@ function ShareList({ title, rows, hidden, note, compare, compareLabel }: {
 
 /** 앱 주문 판매 — 제품별 판매 수량·판매액·구매자·재주문율·재주문 간격·취소율 (같은 기간, 결제 시각 기준) */
 function AppSales({ sales }: { sales: { rows: SalesRow[]; totals: SalesTotals } }) {
+  const costed = sales.rows.some((r) => r.gross !== null && r.gross !== undefined);
   return (
     <div className="mb-10">
       <h3 className="text-label font-bold text-ink mb-2">앱 주문 제품별</h3>
@@ -231,6 +232,7 @@ function AppSales({ sales }: { sales: { rows: SalesRow[]; totals: SalesTotals } 
               <th className="px-4 py-2 font-medium min-w-40">제품</th>
               <th className="px-3 py-2 font-medium text-right whitespace-nowrap">수량</th>
               <th className="px-3 py-2 font-medium text-right whitespace-nowrap">판매액</th>
+              {costed && <th className="px-3 py-2 font-medium text-right whitespace-nowrap">원가 뺀 이익</th>}
               <th className="px-3 py-2 font-medium text-right whitespace-nowrap">구매자</th>
               <th className="px-3 py-2 font-medium text-right whitespace-nowrap">재주문율</th>
               <th className="px-3 py-2 font-medium text-right whitespace-nowrap">재주문 간격</th>
@@ -243,6 +245,11 @@ function AppSales({ sales }: { sales: { rows: SalesRow[]; totals: SalesTotals } 
                 <td className="px-4 py-2.5 min-w-40"><span className="text-ink">{r.name}</span><span className="block text-caption text-ink-2 num">{r.sku}</span></td>
                 <td className="px-3 py-2.5 num text-right whitespace-nowrap">{n(r.quantity)}</td>
                 <td className="px-3 py-2.5 num text-right whitespace-nowrap">{n(r.revenue)}원</td>
+                {costed && (
+                  <td className="px-3 py-2.5 num text-right whitespace-nowrap">
+                    {r.gross === null || r.gross === undefined ? <span className="text-ink-3">원가 없음</span> : <>{n(r.gross)}원<span className="block text-caption text-ink-2">{r.gross_rate === null ? "—" : `${r.gross_rate}%`}</span></>}
+                  </td>
+                )}
                 <td className="px-3 py-2.5 num text-right whitespace-nowrap">{n(r.buyers)}명</td>
                 <td className="px-3 py-2.5 num text-right whitespace-nowrap">{r.repeat_rate === null ? "—" : `${r.repeat_rate}%`}<span className="block text-caption text-ink-2">{n(r.repeat_buyers)}명</span></td>
                 <td className="px-3 py-2.5 num text-right whitespace-nowrap">{r.avg_gap === null ? "—" : `${r.avg_gap}일`}</td>
@@ -256,6 +263,7 @@ function AppSales({ sales }: { sales: { rows: SalesRow[]; totals: SalesTotals } 
         <p>앱에서 결제한 주문만 세요 (자사몰 주문은 들어가지 않아요). 결제한 때가 이 기간 안인 것, 취소된 줄은 판매에서 빼고 취소율에 넣어요.</p>
         <p>재주문율은 이 기간에 그 제품을 산 사람 중, 기간 끝까지 그 제품을 서로 다른 주문으로 두 번 이상 산 사람의 비율이에요. 재주문 간격은 그 사람들의 주문 사이 날 수 평균이에요.</p>
         <p>판매액은 쿠폰 할인 전 상품 금액이에요. 쿠폰 할인과 배송비는 정산에서 셈해요.</p>
+        {costed && <p>원가 뺀 이익은 제품 &gt; 판매·재고에서 원가를 적은 제품만 판매액 − 원가 × 수량으로 셈해요(쿠폰 할인·배송비·수수료 전). 원가는 지금 적힌 값이라 예전 원가와 다를 수 있어요.</p>}
       </HowCounted>
     </div>
   );

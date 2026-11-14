@@ -26,27 +26,47 @@ async function rows(sb: Sb, partnerId: string, until?: number): Promise<Row[]> {
 export type BoardRow = {
   item_id: string | null; sku: string; name: string; status: string | null; stock: number | null; low: boolean;
   new: number; accepted: number; shipped: number; cancel_requests: number; sold_30: number;
+  /** 지난 30일 하루 평균 판매로 재고가 떨어지는 날까지 (팔린 게 없거나 재고를 세지 않으면 null) — 추정 */
+  days_left: number | null;
+  /** 지금 판매가 · 적어 둔 원가 · 마진율(%) · 과세 구분 */
+  price: number | null; unit_cost: number | null; margin: number | null; tax_type: "taxable" | "exempt" | null;
 };
+/** 소진 예상 이 날 이하면 재고 적음과 같이 알린다 */
+export const DAYS_LEFT_WARN = 7;
+export const marginOf = (price: number | null, cost: number | null) => (price && price > 0 && cost !== null ? Math.round(((price - cost) / price) * 100) : null);
 
 /** 판매 현황 — 내 제품(판매 종료 제외) + 주문이 있었던 코드 */
 export async function productBoard(sb: Sb, partnerId: string): Promise<BoardRow[]> {
   const now = Date.now();
-  const [its, rs] = await Promise.all([
-    sb.from("partner_items").select("id, partner_sku, status, stock, data->>name").eq("partner_id", partnerId).neq("status", "discontinued").limit(5000),
+  const [its, rs, offs] = await Promise.all([
+    sb.from("partner_items").select("id, partner_sku, status, stock, unit_cost, tax_type, data->>name").eq("partner_id", partnerId).neq("status", "discontinued").limit(5000),
     rows(sb, partnerId),
+    sb.from("partner_offers").select("item_id, price").eq("partner_id", partnerId).limit(10000),
   ]);
   if (its.error) throw new Error(its.error.message);
+  if (offs.error) throw new Error(offs.error.message);
+  const priceOf = new Map<string, number>();
+  for (const o of (offs.data || []) as { item_id: string; price: number }[]) if (o.price > 0) priceOf.set(o.item_id, Math.min(priceOf.get(o.item_id) ?? Infinity, o.price));
+  const blank = { new: 0, accepted: 0, shipped: 0, cancel_requests: 0, sold_30: 0, days_left: null };
   const by = new Map<string, BoardRow>();
-  for (const it of (its.data || []) as { id: string; partner_sku: string; stock: number | null; name: string; status: string }[]) {
-    by.set(it.partner_sku, { item_id: it.id, sku: it.partner_sku, name: it.name || it.partner_sku, status: it.status, stock: it.stock, low: it.stock !== null && it.stock <= LOW_STOCK, new: 0, accepted: 0, shipped: 0, cancel_requests: 0, sold_30: 0 });
+  for (const it of (its.data || []) as { id: string; partner_sku: string; stock: number | null; unit_cost: number | null; tax_type: BoardRow["tax_type"]; name: string; status: string }[]) {
+    const price = priceOf.get(it.id) ?? null;
+    by.set(it.partner_sku, { item_id: it.id, sku: it.partner_sku, name: it.name || it.partner_sku, status: it.status, stock: it.stock, low: it.stock !== null && it.stock <= LOW_STOCK, ...blank,
+      price, unit_cost: it.unit_cost, margin: marginOf(price, it.unit_cost), tax_type: it.tax_type });
   }
   for (const r of rs) {
     const sku = r.partner_sku || r.product_name || "제품";
-    const b = by.get(sku) || by.set(sku, { item_id: null, sku, name: r.product_name || sku, status: null, stock: null, low: false, new: 0, accepted: 0, shipped: 0, cancel_requests: 0, sold_30: 0 }).get(sku)!;
+    const b = by.get(sku) || by.set(sku, { item_id: null, sku, name: r.product_name || sku, status: null, stock: null, low: false, ...blank, price: null, unit_cost: null, margin: null, tax_type: null }).get(sku)!;
     if (r.fulfil_status === "new") b.new++;
     else if (r.fulfil_status === "accepted") { b.accepted++; if (r.cancel_requested_at) b.cancel_requests++; }
     else if (r.fulfil_status === "shipped") b.shipped++;
     if (r.fulfil_status !== "canceled" && Date.parse(r.orders.paid_at) >= now - 30 * DAY) b.sold_30 += r.quantity || 1;
+  }
+  // 소진 예상 — 30일 하루 평균 판매로 (팔린 게 있고 재고를 세는 제품만)
+  for (const b of by.values()) {
+    if (b.stock === null || b.sold_30 <= 0) continue;
+    b.days_left = Math.floor(b.stock / (b.sold_30 / 30));
+    if (b.days_left <= DAYS_LEFT_WARN) b.low = true;
   }
   // 처리할 것이 많은 제품 먼저
   return [...by.values()].sort((a, b) => (b.cancel_requests * 10 + b.new + b.accepted) - (a.cancel_requests * 10 + a.new + a.accepted) || b.sold_30 - a.sold_30);
@@ -55,11 +75,18 @@ export async function productBoard(sb: Sb, partnerId: string): Promise<BoardRow[
 export type SalesRow = {
   sku: string; name: string; quantity: number; revenue: number; buyers: number; repeat_buyers: number; repeat_rate: number | null;
   avg_gap: number | null; canceled: number; cancel_rate: number | null;
+  /** 원가를 적은 제품만 — 판매액(쿠폰 할인 전) − 원가 × 수량, 그 비율(%) */
+  gross: number | null; gross_rate: number | null;
 };
 
 /** 기간 성과 — 제품별 */
 export async function productSales(sb: Sb, partnerId: string, range: { from: number; to: number }) {
-  const rs = await rows(sb, partnerId, range.to);
+  const [rs, costs] = await Promise.all([
+    rows(sb, partnerId, range.to),
+    sb.from("partner_items").select("partner_sku, unit_cost").eq("partner_id", partnerId).not("unit_cost", "is", null).limit(5000),
+  ]);
+  if (costs.error) throw new Error(costs.error.message);
+  const costOf = new Map(((costs.data || []) as { partner_sku: string; unit_cost: number }[]).map((c) => [c.partner_sku, c.unit_cost]));
   type Acc = { name: string; qty: number; rev: number; canceled: number; buyers: Set<string>; orders: Map<string, Set<string>>; times: Map<string, number[]> };
   const by = new Map<string, Acc>();
   for (const r of rs) {
@@ -87,6 +114,7 @@ export async function productSales(sb: Sb, partnerId: string, range: { from: num
       repeat_rate: a.buyers.size ? Math.round((repeaters.length / a.buyers.size) * 100) : null,
       avg_gap: gaps.length ? Math.round(gaps.reduce((s, v) => s + v, 0) / gaps.length) : null,
       canceled: a.canceled, cancel_rate: total ? Math.round((a.canceled / total) * 100) : null,
+      ...(() => { const c = costOf.get(sku); if (c === undefined) return { gross: null, gross_rate: null }; const g = a.rev - c * a.qty; return { gross: g, gross_rate: a.rev > 0 ? Math.round((g / a.rev) * 100) : null }; })(),
     };
   }).sort((x, y) => y.revenue - x.revenue);
   // 합계는 모든 제품으로 — 구매자는 사람 단위로 한 번
@@ -95,7 +123,12 @@ export async function productSales(sb: Sb, partnerId: string, range: { from: num
   for (const a of by.values()) for (const u of a.buyers) { allBuyers.add(u); if ((a.orders.get(u)?.size || 0) >= 2) allRepeat.add(u); }
   return {
     rows: out,
-    totals: { quantity: out.reduce((s, r) => s + r.quantity, 0), revenue: out.reduce((s, r) => s + r.revenue, 0), buyers: allBuyers.size, repeat_buyers: allRepeat.size, orders: orderIds.size },
+    totals: {
+      quantity: out.reduce((s, r) => s + r.quantity, 0), revenue: out.reduce((s, r) => s + r.revenue, 0), buyers: allBuyers.size, repeat_buyers: allRepeat.size, orders: orderIds.size,
+      // 원가를 적은 제품끼리만 — 분자(이익)와 분모(판매액)가 같은 제품
+      gross: out.some((r) => r.gross !== null) ? out.reduce((s, r) => s + (r.gross ?? 0), 0) : null,
+      gross_revenue: out.reduce((s, r) => s + (r.gross !== null ? r.revenue : 0), 0),
+    },
   };
 }
 
