@@ -154,7 +154,7 @@ export async function buildReport(sb: Sb, items: ReportItem[], range: Range | nu
     goals: { key: string; label: string; share: number }[]; hidden: number;
     tastes: { key: string; label: string; share: number }[]; tastes_hidden: number;
     meals: { key: string; label: string; share: number }[]; meals_hidden: number; meal_people: number | null;
-    category: CategoryShares | null;
+    category: CategoryShares | null; category_failed: boolean;
   };
   let audience: Audience | { people: null } = { people: null };
   if (!opts.totalsOnly && people.size >= MIN_PEOPLE) {
@@ -169,7 +169,11 @@ export async function buildReport(sb: Sb, items: ReportItem[], range: Range | nu
         people: Math.floor(mine.n / 10) * 10,
         goals: mine.goals.rows, hidden: mine.goals.hidden, tastes: mine.tastes.rows, tastes_hidden: mine.tastes.hidden,
         meals: m.rows, meals_hidden: m.hidden, meal_people: diaryPeople.size >= MIN_PEOPLE ? Math.floor(diaryPeople.size / 10) * 10 : null,
-        category: await categoryShares(sb, ids, since, until).catch(() => null), // 비교는 덤 — 못 세면 내 숫자만
+        ...(await categoryShares(sb, ids, since, until).then(
+          (category) => ({ category, category_failed: false }),
+          // 비교는 덤 — 못 세면 내 숫자는 그대로 보이고, 화면에 비교를 못 불러왔다고 알린다
+          (e: Error) => { console.error("같은 카테고리 비교를 세지 못했어요:", e.message); return { category: null, category_failed: true }; },
+        )),
       };
     }
   }

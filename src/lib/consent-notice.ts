@@ -29,8 +29,8 @@ export async function runConsentNotices(sb: Sb, push?: (userId: string, payload:
     if (uErr) throw new Error(uErr.message);
     sent++;
     if (push) {
-      // ds-allow: 푸시는 덤 — 알림함에는 이미 들어갔다
-      try { await push(r.user_id, { title: "업체 소식 받기 동의 확인", body: consentNoticeText(r.ads_at), url: "/me/notifications", tag: "consent-2y" }); } catch { /* 알림함으로 충분 */ }
+      try { await push(r.user_id, { title: "업체 소식 받기 동의 확인", body: consentNoticeText(r.ads_at), url: "/me/notifications", tag: "consent-2y" }); }
+      catch (e) { console.error("동의 확인 푸시를 보내지 못했어요:", (e as Error).message); } // ds-allow: 푸시는 덤 — 알림함에는 이미 들어갔다
     }
   }
   return { sent };

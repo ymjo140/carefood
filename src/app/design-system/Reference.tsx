@@ -2,9 +2,9 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
-  Badge, Button, Card, CardActions, Chip, ChipRow, ConfirmSheet, EmptyState, Field, Icon, ICON_NAMES, IconButton, IconLink,
+  Badge, Button, Card, CardActions, CardButton, Chip, ChipRow, ConfirmSheet, EmptyState, Field, Icon, ICON_NAMES, IconButton, IconLink,
   Input, Kcal, LinkButton, ListRow, MacroGrid, MacroInline, MealSlot, MealTag, Notice, Estimate, HowCounted, AsOf, Page, PageHeader, Price,
-  ProgressBar, SearchField, SectionHeader, Select, Sheet, Spinner, Stat, Steps, Tabs, Textarea, TextLink, Thumb, ProductImage,
+  ProgressBar, SearchField, SectionHeader, Select, Sheet, Spinner, Stat, Steps, Tabs, Textarea, TextLink, TextButton, Thumb, ProductImage,
   Avatar, useToast, cn, type BadgeTone,
   BottomNavItems, SkeletonList, FoodEntryForm, DragArea, DragGhost, DragHandle, useDragItem, useDropTarget, type DragData, ChoiceCard, ChoiceList, LinkTabs, RatingStars, RatingInput, ScaleInput, QuickRating, PostAuthor, PostAction, PostActions, PostTags, ThreadItem, MealAttach, PlanAttach, ProductTagLinks, PhotoGrid, PollAttach, DayDots, Switch,
 } from "@/components/ui";
@@ -565,10 +565,11 @@ export default function Reference({ status }: { status: DsStatus }) {
               <IconLink href="#buttons" icon="user" label="마이페이지" />
             </div>
           </Demo>
-          <Demo label="링크 버튼 · 글자 링크" code="<LinkButton> <TextLink>">
+          <Demo label="링크 버튼 · 글자 링크 · 글자 버튼" code="<LinkButton> <TextLink> <TextButton>">
             <div className="flex flex-wrap gap-3 items-center">
               <LinkButton href="#buttons" variant="secondary" iconRight="arrow-right">식단 리스트 보기</LinkButton>
               <TextLink href="#buttons">전체 보기 <Icon name="chevron-right" size={16} /></TextLink>
+              <TextButton>다르게 보여요</TextButton>
             </div>
           </Demo>
         </div>
@@ -711,6 +712,10 @@ export default function Reference({ status }: { status: DsStatus }) {
           </Card>
           <Card tone="sunken"><p className="text-label text-ink-2">tone=&quot;sunken&quot; — 카드 안의 옅은 구역, 보조 정보 묶음</p></Card>
           <Card tone="brand"><p className="text-label text-brand-ink font-medium">tone=&quot;brand&quot; — 화면에서 한 곳만 강조할 때</p></Card>
+          <CardButton onClick={() => toast.show("성과 탭으로 갔어요")}>
+            <Stat label="이번 주 구매 링크 클릭" value="312" unit="번" />
+            <span className="block text-caption text-ink-2 mt-1">&lt;CardButton&gt; — 카드 전체가 하나의 동작일 때</span>
+          </CardButton>
         </div>
         <div className="grid gap-4 md:grid-cols-2 mt-4">
           <Demo label="목록 한 줄" code="<ListRow leading title meta trailing />" className="p-2">

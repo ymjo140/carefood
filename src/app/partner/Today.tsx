@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { AsOf, Button, Card, EmptyState, HowCounted, Icon, SectionHeader, Skeleton, Stat, cn } from "@/components/ui";
+import { AsOf, Button, Card, CardButton, EmptyState, HowCounted, Icon, SectionHeader, Skeleton, Stat, cn } from "@/components/ui";
 import type { Tab } from "@/lib/partner/tabs";
 
 type Kpi = { label: string; value: string; unit?: string; tab: Tab; note?: string; how?: string };
@@ -79,10 +79,10 @@ export function Today({ qs, go }: { qs: string; go: (tab: Tab, opts?: { filter?:
       <div>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {d.kpis.map((k) => (
-          <button key={k.label} type="button" onClick={() => go(k.tab)} className="press text-left rounded-lg border border-line bg-surface p-4 hover:border-line-strong transition-colors">
+          <CardButton key={k.label} onClick={() => go(k.tab)}>
             <Stat label={k.label} value={k.value} unit={k.unit} />
             {k.note && <span className="block text-caption text-ink-2 mt-1">{k.note}</span>}
-          </button>
+          </CardButton>
         ))}
       </div>
       <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1 mt-3">
@@ -90,7 +90,7 @@ export function Today({ qs, go }: { qs: string; go: (tab: Tab, opts?: { filter?:
           {d.kpis.filter((k) => k.how).map((k) => <p key={k.label}><span className="text-ink">{k.label}</span> — {k.how}</p>)}
           <p>사람 수가 10명 미만인 값은 누구인지 짐작할 수 없도록 —로 가려요.</p>
         </HowCounted>
-        {state.at && <AsOf at={state.at} />}
+        {state.at && <AsOf at={state.at} className="leading-6" />}
       </div>
       </div>
 

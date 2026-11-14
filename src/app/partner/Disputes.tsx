@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { Button, Card, Field, SectionHeader, Sheet, Textarea, timeAgo, useToast } from "@/components/ui";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Button, Card, EmptyState, Field, SectionHeader, Sheet, SkeletonList, Textarea, timeAgo, useToast } from "@/components/ui";
 
 export type DisputeTarget = { target: "month"; month: string; label: string } | { target: "ledger"; ledger_id: string; label: string };
 type Dispute = { id: string; target: "month" | "ledger"; month: string | null; ledger_id: string | null; reason: string; status: "open" | "resolved" | "rejected"; reply: string | null; created_at: string; resolved_at: string | null };
@@ -40,26 +40,29 @@ export function DisputeSheet({ qs, target, onClose, onSent }: { qs: string; targ
 /** 내가 남긴 이의 — 확인 중 · 답 */
 export function DisputeList({ qs, refresh }: { qs: string; refresh: number }) {
   const [state, setState] = useState<{ status: "loading" | "error" | "done"; disputes?: Dispute[]; ready?: boolean; error?: string }>({ status: "loading" });
+  const seq = useRef(0); // 다시 불러오기가 겹치면 마지막 응답만 쓴다
   const load = useCallback(async () => {
+    const my = ++seq.current;
     try {
       const r = await fetch(`/api/partner/disputes?${qs}`);
       const d = await r.json();
       if (!r.ok) throw new Error(d.error);
-      setState({ status: "done", disputes: d.disputes, ready: d.ready });
-    } catch (e) { setState({ status: "error", error: (e as Error).message || "불러오지 못했어요" }); }
+      if (my === seq.current) setState({ status: "done", disputes: d.disputes, ready: d.ready });
+    } catch (e) { if (my === seq.current) setState({ status: "error", error: (e as Error).message || "불러오지 못했어요" }); }
   }, [qs]);
   useEffect(() => { load(); }, [load, refresh]); // eslint-disable-line react-hooks/set-state-in-effect -- 불러온 뒤에 상태를 바꾼다
 
-  // 남긴 이의가 없으면 구역을 그리지 않는다 (각 줄의 '다르게 보여요'가 입구)
-  if (state.status === "loading" || (state.status === "done" && (!state.ready || !state.disputes?.length))) return null;
+  // 표가 아직 없는 DB(준비 전)에서만 구역을 그리지 않는다. 그 밖에는 불러오는 중 · 비어 있음 · 실패 · 채워짐을 모두 그린다
+  if (state.status === "done" && !state.ready) return null;
   return (
     <section className="mt-10">
       <SectionHeader title="남긴 이의" />
-      {state.status === "error" ? (
-        <Card>
-          <p className="text-label text-ink-2">남긴 이의를 불러오지 못했어요. {state.error}</p>
-          <Button size="sm" variant="secondary" icon="refresh" className="mt-3" onClick={() => { setState({ status: "loading" }); load(); }}>다시 불러오기</Button>
-        </Card>
+      {state.status === "loading" ? <SkeletonList rows={2} thumb={false} />
+      : state.status === "error" ? (
+        <EmptyState title="남긴 이의를 불러오지 못했어요" description={state.error}
+          action={<Button size="sm" variant="secondary" icon="refresh" onClick={() => { setState({ status: "loading" }); load(); }}>다시 불러오기</Button>} />
+      ) : !state.disputes?.length ? (
+        <EmptyState title="남긴 이의가 없어요" description="정산이나 충전금 내역이 다르게 보이면 그 줄의 '다르게 보여요'를 눌러 남겨 주세요" />
       ) : (
         <Card padding="none">
           <ul className="divide-y divide-line">

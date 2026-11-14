@@ -5,10 +5,10 @@
  */
 export { cn } from "./cn";
 export { Icon, ICON_NAMES, type IconName } from "./Icon";
-export { Button, LinkButton, IconButton, IconLink, TextLink, buttonClass, type ButtonVariant, type ButtonSize } from "./Button";
+export { Button, LinkButton, IconButton, IconLink, TextLink, TextButton, buttonClass, type ButtonVariant, type ButtonSize } from "./Button";
 export { Badge, type BadgeTone } from "./Badge";
 export { Chip, ChipRow } from "./Chip";
-export { Card, CardActions } from "./Card";
+export { Card, CardActions, CardButton } from "./Card";
 export { Input, Textarea, Select, Field, SearchField } from "./Field";
 export { Tabs, type TabItem } from "./Tabs";
 export { Sheet, ConfirmSheet } from "./Sheet";
