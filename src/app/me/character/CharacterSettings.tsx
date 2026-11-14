@@ -85,8 +85,8 @@ export function CharacterSettings() {
         <h2 id="plan-h" className="text-body font-bold text-ink">내 요금제</h2>
         {a.mode === "beta" ? (
           <Notice icon="info" title="지금은 체험 기간이라 모든 캐릭터를 쓸 수 있어요">
-            구독이 시작되면 끼록이는 끼록이 플랜, 람이·끼냥이는 모든 캐릭터 플랜에서 쓸 수 있어요. 구독하지 않으면 &lsquo;캐릭터 없이&rsquo;로 바뀌고, 저절로 결제되지는 않아요.
-            <TextButton className="block" onClick={() => setSheet(kind ?? "kkirok")}>요금제 보기</TextButton>
+            <p>구독이 시작되면 끼록이는 끼록이 플랜, 람이·끼냥이는 모든 캐릭터 플랜에서 쓸 수 있어요. 구독하지 않으면 &lsquo;캐릭터 없이&rsquo;로 바뀌고, 저절로 결제되지는 않아요.</p>
+            <div><TextButton onClick={() => setSheet(kind ?? "kkirok")}>요금제 보기</TextButton></div>
           </Notice>
         ) : (
           <Card className="p-0">
@@ -168,7 +168,7 @@ function PlanSheet({ open, focus, access, plans, onClose }: { open: boolean; foc
           {paid.map((p) => (
             <ChoiceCard key={p.code} selected={code === p.code} onClick={() => setCode(p.code)}
               title={<span className="flex items-baseline justify-between gap-3"><span>{p.name}</span><span className="num whitespace-nowrap">월 {won(p.price)}</span></span>}
-              description={`${p.characters.map((k) => NAME[k]).join("·")} · ${p.about}${p.characters.includes(kind) ? "" : ` · ${NAME[kind]}는 들어 있지 않아요`}`} />
+              description={p.characters.includes(kind) ? p.about : `${p.about} · ${NAME[kind]}는 들어 있지 않아요`} />
           ))}
           <p className="text-caption text-ink-2">기본(무료)은 캐릭터 없이 글자로만 알려 드려요. 기록·챌린지·가족 기능은 요금제와 상관없이 그대로예요</p>
         </div>
