@@ -173,7 +173,7 @@ export function MeView() {
           <Row icon="user" title="차단한 사람" meta="차단을 풀 수 있어요" href="/me/blocked" />
           <Row icon="users" title="관심 표시한 공구" href="/group-buy?view=mine" />
           <Row icon="notebook" title="주간 식단 리포트" meta="지난 7일 식단 기록으로 정리" href="/diary/report" />
-          <Row icon="users" title="가족 건강 관리" meta="로그인하면 가족 프로필을 함께 관리해요" href="/family" />
+          <Row icon="users" title="가족" meta="가족 초대 · 보여 줄 것 고르기 · 약 체크" href="/family" />
         </ul>
       </section>
 

@@ -16,6 +16,7 @@ import { AUTO_CONFIRM_DAYS, expireUnpaidOrders } from "@/lib/orders";
 import { asResult, selectAll, selectAllIn } from "@/lib/supabase/all";
 import { BRAND } from "@/lib/brand";
 import { loadGroupAlerts } from "@/lib/challenge-alerts";
+import { loadFamilyAlerts } from "@/lib/family-alerts";
 
 /**
  * POST /api/push/run — 보낼 때가 된 알림을 보낸다. Supabase 예약 작업(pg_cron + pg_net, 30분마다)이 부른다.
@@ -30,6 +31,7 @@ import { loadGroupAlerts } from "@/lib/challenge-alerts";
  *     (최근 14일 기록이 없으면 7일 안에 저장한 식단일 때만)
  *     최근 14일 기록이 없는 사람은 저녁 알림만, 일주일에 한 번
  *   - 챌린지 20~22시: 하고 있는 챌린지가 있는데 오늘 기록이 하나도 없으면 (그날 저녁 알림 대신)
+ *   - 가족: 약 먹을 시간(정한 시각부터 1시간 안, 체크 전) · 저녁 8시대 가족의 오늘 기록이 없으면 보는 사람에게만 (lib/family-alerts.ts)
  *   - 같이 하기: 묶음 전원이 해낸 날 '다 같이 해냈어요' · 저녁 7시대 '오늘 나만 남았어요' (lib/challenge-alerts.ts)
  *   - 주간 요약 월요일 9~12시: 지난주(월~일)에 하루라도 기록했으면 기록한 날 수 · 하루 평균
  *   - 커뮤니티 8~22시: 내 글 답글 · 내 답글의 답글 · 새 팔로워 (좋아요는 보내지 않음), 여러 개면 묶어서
@@ -174,7 +176,7 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const counts: Record<string, number> = { meal: 0, challenge: 0, weekly: 0, community: 0 };
+  const counts: Record<string, number> = { meal: 0, challenge: 0, weekly: 0, community: 0, family: 0 };
   const send = async (user: string, kind: string, key: string, payload: PushPayload) => {
     if (logged.has(`${user}|${kind}|${key}`)) return false;
     if (dry) { counts[kind] += 1; return true; }
@@ -198,6 +200,14 @@ export async function POST(req: NextRequest) {
       await send(a.user, "challenge", a.key, a.payload);
     }
   } catch (e) { console.error("같이 하기 알림을 만들지 못했어요:", (e as Error).message); }
+
+  // ── 가족: 약 먹을 시간(나에게) · 저녁 8시대 가족 기록 확인(보는 사람에게만) (lib/family-alerts.ts) ──
+  try {
+    for (const a of await loadFamilyAlerts(sb, today, hour)) {
+      if (!subsBy.has(a.user)) continue;
+      await send(a.user, "family", a.key, a.payload);
+    }
+  } catch (e) { console.error("가족 알림을 만들지 못했어요:", (e as Error).message); }
 
   for (const user of users) {
     const prefs = prefsBy.get(user) || { user_id: user, meals: true, weekly: true, community: true, challenge: true, community_pushed_at: null };

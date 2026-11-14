@@ -1,6 +1,6 @@
 export const metadata = {
-  title: "가족 건강 관리 | 오늘끼록",
-  description: "가족의 건강 정보를 등록하고 맞춤 식품 추천을 대신 받아보세요.",
+  title: "가족 | 오늘끼록",
+  description: "가족이 보여 주기로 한 끼니 기록·고른 제품·약 체크를 함께 봐요.",
 };
 
 export default function FamilyLayout({ children }: { children: React.ReactNode }) {

@@ -1,9 +1,9 @@
 {
-  "checkedAt": "2026-11-14T11:37:59.498Z",
-  "files": 187,
+  "checkedAt": "2026-11-14T11:47:45.534Z",
+  "files": 190,
   "total": 0,
   "warnTotal": 0,
-  "allowedCount": 68,
+  "allowedCount": 69,
   "rules": [
     {
       "id": "hex-color",
@@ -351,6 +351,15 @@
       "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
       "match": ".catch(() => null)",
       "snippet": "const res = await fetch(`/api/diary?id=${id}`, { method: \"DELETE\" }).catch(() => null); // ds-allow: 실패는 바로 아래에서 알림"
+    },
+    {
+      "file": "src/app/family/FamilyConnect.tsx",
+      "line": 212,
+      "rule": "silent-catch",
+      "level": "warn",
+      "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
+      "match": ".catch(() => null)",
+      "snippet": "const r = await fetch(\"/api/family/links\", { method: \"PATCH\", headers: { \"Content-Type\": \"application/json\" }, body: JSON.stringify({ id: li"
     },
     {
       "file": "src/app/health/page.tsx",

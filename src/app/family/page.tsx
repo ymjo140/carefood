@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from "react";
 import {
-  Badge, Button, Card, Chip, ConfirmSheet, EmptyState, Field, Icon, Input, LinkButton, Notice, Page, PageHeader, PageLoading, Select, useToast,
+  Badge, Button, Card, Chip, ConfirmSheet, EmptyState, Field, Icon, Input, LinkButton, Notice, Page, PageHeader, PageLoading, SectionHeader, Select, useToast,
 } from "@/components/ui";
 import { createClient } from "@/lib/supabase/client";
+import { FamilyConnect } from "./FamilyConnect";
 
 type FamilyProfile = {
   id: string;
@@ -147,10 +148,10 @@ export default function FamilyPage() {
   if (!userId) {
     return (
       <Page width="narrow">
-        <PageHeader title="가족 건강 관리" />
+        <PageHeader title="가족" />
         <EmptyState
-          title="가족 관리는 로그인이 필요해요"
-          description="로그인하면 가족 건강 정보를 등록하고 맞춤 추천을 대신 받아볼 수 있어요"
+          title="가족과 연결하려면 로그인이 필요해요"
+          description="로그인하면 가족을 초대해 끼니 기록·고른 제품·약 체크를 함께 볼 수 있어요"
           action={<LinkButton href="/login?returnTo=/family">로그인하기</LinkButton>}
         />
       </Page>
@@ -161,15 +162,16 @@ export default function FamilyPage() {
 
   return (
     <Page width="narrow">
-      <PageHeader
-        title="가족 건강 관리"
-        description="가족의 건강 정보를 등록하고 맞춤 추천을 받아보세요"
-        actions={
-          <Button size="sm" variant={showForm ? "secondary" : "primary"} icon={showForm ? undefined : "plus"} onClick={() => setShowForm(!showForm)}>
-            {showForm ? "취소" : "가족 추가하기"}
+      <PageHeader title="가족" description="가족이 보여 주기로 한 것만 보고, 내 것도 고른 만큼만 보여 줘요" />
+
+      <FamilyConnect />
+
+      <SectionHeader title="직접 입력한 가족 프로필" description="가족 대신 맞춤 추천을 받아볼 때"
+        action={
+          <Button size="sm" variant="secondary" icon={showForm ? undefined : "plus"} onClick={() => setShowForm(!showForm)}>
+            {showForm ? "취소" : "프로필 추가하기"}
           </Button>
-        }
-      />
+        } />
 
       {/* 추가 폼 */}
       {showForm && (
@@ -238,7 +240,7 @@ export default function FamilyPage() {
             </details>
 
             <Button block onClick={handleSave} disabled={!form.nickname.trim()} loading={saving}>
-              {saving ? "저장 중" : "가족 추가하기"}
+              {saving ? "저장 중" : "프로필 추가하기"}
             </Button>
           </div>
         </Card>
@@ -247,9 +249,9 @@ export default function FamilyPage() {
       {/* 가족 목록 */}
       {profiles.length === 0 && !showForm ? (
         <EmptyState
-          title="아직 등록된 가족이 없어요"
-          description="가족을 추가하면 맞춤 식품 추천을 대신 받아볼 수 있어요"
-          action={<Button size="sm" icon="plus" onClick={() => setShowForm(true)}>가족 추가하기</Button>}
+          title="직접 입력한 프로필이 없어요"
+          description="가족 정보를 입력하면 맞춤 식품 추천을 대신 받아볼 수 있어요"
+          action={<Button size="sm" variant="secondary" icon="plus" onClick={() => setShowForm(true)}>프로필 추가하기</Button>}
         />
       ) : (
         <div className="flex flex-col gap-3">
