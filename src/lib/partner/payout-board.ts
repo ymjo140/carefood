@@ -4,6 +4,7 @@
  */
 import { CONFIRM_DAYS, CONFIRM_WINDOW, PAY_DAY, dailyOf, kstDay, kstMonthOf, loadBundles, monthMs, payDate, type Bundle } from "./payout";
 import { currentMonth, orderPayout, settlementMonths } from "./settlement";
+import { selectAll } from "@/lib/supabase/all";
 
 type Sb = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
@@ -154,9 +155,8 @@ export async function buildMonthWorkbook(sb: Sb, partnerId: string, month: strin
   head(o);
   for (const r of rows) o.addRow({ ...r, by: r.confirm_by === "buyer" ? "구매자" : `${CONFIRM_DAYS}일 자동`, items: r.lines.map((l) => `${l.name} × ${l.qty}`).join(", ") });
   // 과세 구분 — 제품 > 판매·재고에서 적은 과세·면세로 판매액을 나눈다 (쿠폰 할인 전 상품 금액, 업체 묶음 쿠폰은 제품에 나누지 않는다)
-  const { data: taxRows, error: tErr } = await sb.from("partner_items").select("partner_sku, tax_type").eq("partner_id", partnerId).not("tax_type", "is", null).limit(5000);
-  if (tErr) throw new Error(tErr.message);
-  const taxOf = new Map(((taxRows || []) as { partner_sku: string; tax_type: string }[]).map((r) => [r.partner_sku, r.tax_type]));
+  const taxRows = await selectAll<{ partner_sku: string; tax_type: string }>(() => sb.from("partner_items").select("partner_sku, tax_type").eq("partner_id", partnerId).not("tax_type", "is", null), "id");
+  const taxOf = new Map(taxRows.map((r) => [r.partner_sku, r.tax_type]));
   const tax = { taxable: { qty: 0, amount: 0 }, exempt: { qty: 0, amount: 0 }, unknown: { qty: 0, amount: 0 } };
   for (const r of rows) for (const l of r.lines) {
     const t = (l.sku && taxOf.get(l.sku)) as "taxable" | "exempt" | undefined;

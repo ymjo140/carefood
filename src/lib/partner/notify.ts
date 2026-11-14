@@ -6,6 +6,7 @@
  *  · 업무 알림이라 광고 동의·야간 규칙과 무관하다(내용에 혜택·광고 없음).
  */
 import { sendToUser, type PushSub } from "@/lib/push";
+import { asResult, selectUpTo } from "@/lib/supabase/all";
 
 type Sb = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 type Line = { id: string; partner_id: string; order_id: string; orders: { is_demo: boolean | null } };
@@ -40,13 +41,15 @@ function byPartner(lines: Line[]) {
 }
 
 export async function notifyPartners(sb: Sb, send: boolean): Promise<{ new_orders: number; cancel_requests: number; return_requests: number; pushed: number }> {
+  // 한 번에 10,000줄까지(1,000줄씩) — 남은 줄은 30분 뒤 다음 차례에 (알린 줄만 적는다)
+  const take = (make: () => any) => asResult(selectUpTo<Line>(make, "id", 10000)); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [nw, cr, rr] = await Promise.all([
-    sb.from("order_items").select("id, partner_id, order_id, orders!inner(is_demo)").eq("fulfil_status", "new").is("partner_notified_at", null)
-      .not("partner_id", "is", null).not("orders.paid_at", "is", null).limit(2000),
-    sb.from("order_items").select("id, partner_id, order_id, orders!inner(is_demo)").eq("fulfil_status", "accepted").not("cancel_requested_at", "is", null)
-      .is("cancel_notified_at", null).not("partner_id", "is", null).limit(2000),
-    sb.from("order_items").select("id, partner_id, order_id, orders!inner(is_demo)").eq("fulfil_status", "delivered").eq("return_status", "requested")
-      .is("return_notified_at", null).not("partner_id", "is", null).limit(2000),
+    take(() => sb.from("order_items").select("id, partner_id, order_id, orders!inner(is_demo)").eq("fulfil_status", "new").is("partner_notified_at", null)
+      .not("partner_id", "is", null).not("orders.paid_at", "is", null)),
+    take(() => sb.from("order_items").select("id, partner_id, order_id, orders!inner(is_demo)").eq("fulfil_status", "accepted").not("cancel_requested_at", "is", null)
+      .is("cancel_notified_at", null).not("partner_id", "is", null)),
+    take(() => sb.from("order_items").select("id, partner_id, order_id, orders!inner(is_demo)").eq("fulfil_status", "delivered").eq("return_status", "requested")
+      .is("return_notified_at", null).not("partner_id", "is", null)),
   ]);
   for (const r of [nw, cr, rr]) if (r.error) throw new Error(r.error.message);
   const newLines = (nw.data || []) as Line[], cancelLines = (cr.data || []) as Line[], returnLines = (rr.data || []) as Line[];

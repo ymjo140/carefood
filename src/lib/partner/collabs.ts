@@ -12,6 +12,7 @@ import { checkClaimsWith } from "./claims";
 import { loadClaimTerms } from "./claims-server";
 import { COMMUNITY_TOPICS } from "@/lib/community-topics";
 import { DEMO_USER_PREFIX } from "./demo-ids";
+import { selectAll, selectAllIn } from "@/lib/supabase/all";
 
 type Sb = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 const DAY = 86400e3;
@@ -55,32 +56,25 @@ export function fitScore(c: { chose: boolean; topic_posts: number; per_post: num
   return { score: Math.round(parts.reduce((a, b) => a + b, 0)), reasons };
 }
 
-async function chunk<T>(ids: string[], q: (part: string[]) => Promise<{ data: T[] | null; error: { message: string } | null }>): Promise<T[]> {
-  const out: T[] = [];
-  for (let i = 0; i < ids.length; i += 300) {
-    const { data, error } = await q(ids.slice(i, i + 300));
-    if (error) throw new Error(error.message);
-    out.push(...(data || []));
-  }
-  return out;
+/** id 300개씩 나눠 묻고, 묶음마다 1,000줄씩 끝까지 받는다 (PostgREST max-rows — lib/supabase/all.ts) */
+function chunk<T>(ids: string[], q: (part: string[]) => any, order: string | string[] = "id"): Promise<T[]> { // eslint-disable-line @typescript-eslint/no-explicit-any
+  return selectAllIn<T>(ids, 300, q, order);
 }
 
 /** 협업 제안을 받기로 한 사람들 — 고른 주제가 먼저, 그다음 반응이 많은 순 */
 export async function listCandidates(sb: Sb, partnerId: string, topic: string | null, isDemo = false) {
-  const { data: open, error } = await sb.from("creator_profiles").select("user_id, intro, topics").eq("is_open", true).limit(2000);
-  if (error) throw new Error(error.message);
+  const open = await selectAll<{ user_id: string; intro: string | null; topics: string[] }>(() => sb.from("creator_profiles").select("user_id, intro, topics").eq("is_open", true), "user_id");
   // 예시 사람(demo-)은 테스트 업체에만 보인다
-  const people = ((open || []) as { user_id: string; intro: string | null; topics: string[] }[]).filter((p) => isDemo || !p.user_id.startsWith(DEMO_USER_PREFIX));
+  const people = open.filter((p) => isDemo || !p.user_id.startsWith(DEMO_USER_PREFIX));
   if (people.length === 0) return [];
   const ids = people.map((p) => p.user_id);
   const since = new Date(Date.now() - 90 * DAY).toISOString();
   const [names, posts, follows, collabs] = await Promise.all([
-    chunk<{ actor_id: string; nickname: string }>(ids, (p) => sb.from("community_profiles").select("actor_id, nickname").in("actor_id", p)),
+    chunk<{ actor_id: string; nickname: string }>(ids, (p) => sb.from("community_profiles").select("actor_id, nickname").in("actor_id", p), "actor_id"),
     chunk<{ user_id: string; like_count: number; comment_count: number; tags: string[] | null; created_at: string }>(ids, (p) =>
-      sb.from("community_feed").select("user_id, like_count, comment_count, tags, created_at").in("user_id", p).gte("created_at", since).limit(20000)),
-    chunk<{ following_id: string }>(ids, (p) => sb.from("community_follows").select("following_id").in("following_id", p).limit(50000)),
-    sb.from("partner_collabs").select("user_id, status").eq("partner_id", partnerId).in("status", ["proposed", "accepted"]).limit(2000)
-      .then((r: { data: { user_id: string; status: string }[] | null; error: { message: string } | null }) => { if (r.error) throw new Error(r.error.message); return r.data || []; }),
+      sb.from("community_feed").select("user_id, like_count, comment_count, tags, created_at").in("user_id", p).gte("created_at", since)),
+    chunk<{ following_id: string }>(ids, (p) => sb.from("community_follows").select("following_id").in("following_id", p)),
+    selectAll<{ user_id: string; status: string }>(() => sb.from("partner_collabs").select("user_id, status").eq("partner_id", partnerId).in("status", ["proposed", "accepted"]), "id"),
   ]);
   const nick = new Map(names.map((n) => [n.actor_id, n.nickname]));
   const recent = Date.now() - 30 * DAY;
@@ -115,11 +109,10 @@ export async function listCandidates(sb: Sb, partnerId: string, topic: string | 
 
 /** 가명 번호 → 사람 (협업 제안 받기를 켠 사람 중에서만) */
 async function resolveCreator(sb: Sb, partnerId: string, code: string): Promise<string | null> {
-  const { data, error } = await sb.from("creator_profiles").select("user_id").eq("is_open", true).limit(2000);
-  if (error) throw new Error(error.message);
+  const data = await selectAll<{ user_id: string }>(() => sb.from("creator_profiles").select("user_id").eq("is_open", true), "user_id");
   const { data: pa, error: pErr } = await sb.from("partners").select("is_demo").eq("id", partnerId).single();
   if (pErr) throw new Error(pErr.message);
-  return ((data || []) as { user_id: string }[]).filter((p) => pa.is_demo || !p.user_id.startsWith(DEMO_USER_PREFIX)).find((p) => creatorCode(partnerId, p.user_id) === code)?.user_id || null;
+  return data.filter((p) => pa.is_demo || !p.user_id.startsWith(DEMO_USER_PREFIX)).find((p) => creatorCode(partnerId, p.user_id) === code)?.user_id || null;
 }
 
 export type ProposeInput = { code: string; title: string; offer: string; product_name?: string | null; coupon_id?: string | null; plan_id?: string | null };
@@ -167,7 +160,7 @@ export async function partnerCollabs(sb: Sb, partnerId: string) {
   type R = { id: string; user_id: string; title: string; offer: string; product_name: string | null; coupon_id: string | null; plan_id: string | null; code: string | null; status: string; reply: string | null; created_at: string; decided_at: string | null; partner_coupons: Pick<Coupon, "name" | "kind" | "value" | "max_discount" | "min_order"> | null };
   const rows = (data || []) as R[];
   const ids = rows.map((r) => r.id);
-  const grants = ids.length ? await chunk<{ collab_id: string; status: string; used_order_id: string | null }>(ids, (p) => sb.from("coupon_grants").select("collab_id, status, used_order_id").in("collab_id", p).limit(20000)) : [];
+  const grants = ids.length ? await chunk<{ collab_id: string; status: string; used_order_id: string | null }>(ids, (p) => sb.from("coupon_grants").select("collab_id, status, used_order_id").in("collab_id", p)) : [];
   const orderIds = [...new Set(grants.map((g) => g.used_order_id).filter((x): x is string => !!x))];
   const lines = orderIds.length ? await chunk<{ order_id: string; unit_price: number | null; quantity: number | null; fulfil_status: string }>(orderIds, (p) =>
     sb.from("order_items").select("order_id, unit_price, quantity, fulfil_status").eq("partner_id", partnerId).in("order_id", p)) : [];

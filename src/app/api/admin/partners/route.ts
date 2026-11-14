@@ -3,6 +3,7 @@ import { connection } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { adminOnly } from "@/lib/actor-server";
 import { syncPartnerProducts } from "@/lib/partner/ingest";
+import { asResult, selectAll } from "@/lib/supabase/all";
 
 type Sb = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 const KINDS = ["meal_service", "brand", "mall"];
@@ -16,7 +17,7 @@ export async function GET() {
   const [p, m, i] = await Promise.all([
     sb.from("partners").select("id, slug, name, kind, status, contact_email, commission_rate, order_commission_rate, attribution_days, created_at").order("created_at", { ascending: false }),
     sb.from("partner_members").select("partner_id, email, role"),
-    sb.from("partner_items").select("partner_id, status").limit(50000),
+    asResult(selectAll<{ partner_id: string; status: string }>(() => sb.from("partner_items").select("partner_id, status"), "id", 1_000_000)),
   ]);
   for (const r of [p, m, i]) if (r.error) return NextResponse.json({ error: r.error.message }, { status: 500 });
   const partners = (p.data || []).map((x: { id: string }) => {

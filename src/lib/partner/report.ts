@@ -5,6 +5,7 @@
 import { cellFoods, type PlanGrid } from "@/lib/weekly-plan";
 import { CRM_GOALS, goalsOf } from "./crm";
 import { DISH_CATEGORY_LABELS, type DishCategory } from "@/types/database";
+import { selectAll, selectAllIn, selectUpTo } from "@/lib/supabase/all";
 
 type Sb = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 /** 이 수보다 적은 사람 수는 숫자를 주지 않는다 (누구인지 짐작할 수 없게) */
@@ -23,14 +24,9 @@ function shares(tally: Map<string, Set<string>>, base: number, label: (k: string
   return { rows: shown.map((r) => ({ key: r.key, label: r.label as string, share: Math.round((r.n / base) * 100) })), hidden: rows.length - shown.length };
 }
 
-async function inChunks<T>(ids: string[], run: (part: string[]) => Promise<{ data: T[] | null; error: { message: string } | null }>): Promise<T[]> {
-  const out: T[] = [];
-  for (let i = 0; i < ids.length; i += 150) {
-    const { data, error } = await run(ids.slice(i, i + 150));
-    if (error) throw new Error(error.message);
-    out.push(...(data || []));
-  }
-  return out;
+/** id 150개씩 나눠 묻고, 묶음마다 1,000줄씩 끝까지 받는다 (PostgREST max-rows — lib/supabase/all.ts) */
+function inChunks<T>(ids: string[], run: (part: string[]) => any, order: string | string[] = "id"): Promise<T[]> { // eslint-disable-line @typescript-eslint/no-explicit-any
+  return selectAllIn<T>(ids, 150, run, order, 1_000_000);
 }
 
 const TASTE: Record<string, string> = { less_salty: "싱겁게 먹는 편", less_sweet: "덜 달게 먹는 편", spicy: "맵게 먹는 편", less_fatty: "담백하게 먹는 편" };
@@ -65,10 +61,13 @@ async function categoryShares(sb: Sb, myIds: string[], since: string, until: str
   for (const r of mine) if (r.dish_category) count.set(r.dish_category, (count.get(r.dish_category) || 0) + 1);
   const cat = [...count.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
   if (!cat) return null;
-  const { data: peers, error } = await sb.from("products").select("id").eq("is_purchasable", true).eq("dish_category", cat).limit(2000);
-  if (error) throw new Error(error.message);
-  const views = await inChunks<{ user_id: string | null }>(((peers || []) as { id: string }[]).map((p) => p.id),
-    (p) => sb.from("user_interactions").select("user_id").eq("action", "view").in("product_id", p).gte("created_at", since).lt("created_at", until).limit(5000));
+  // 같은 종류 제품 2,000개까지 · 본 기록 20,000줄까지 표본 (사람 3,000명이면 충분하다)
+  const peers = await selectUpTo<{ id: string }>(() => sb.from("products").select("id").eq("is_purchasable", true).eq("dish_category", cat), "id", 2000);
+  const views: { user_id: string | null }[] = [];
+  for (let i = 0; i < peers.length && views.length < 20000; i += 150) {
+    const part = peers.slice(i, i + 150).map((p) => p.id);
+    views.push(...(await selectUpTo<{ user_id: string | null }>(() => sb.from("user_interactions").select("user_id").eq("action", "view").in("product_id", part).gte("created_at", since).lt("created_at", until), "id", 20000 - views.length)));
+  }
   const people = [...new Set(views.map((v) => v.user_id).filter(Boolean) as string[])].slice(0, 3000);
   if (people.length < MIN_PEOPLE) return null;
   const sh = await profileShares(sb, people);
@@ -101,16 +100,15 @@ export async function buildReport(sb: Sb, items: ReportItem[], range: Range | nu
   type Ev = { product_id: string; user_id: string | null };
   type Diary = Ev & { meal_type: string | null };
   const [views, clicks, diary, favs, reviews, imps, plans] = await Promise.all([
-    inChunks<Ev>(ids, (p) => sb.from("user_interactions").select("product_id, user_id").eq("action", "view").in("product_id", p).gte("created_at", since).lt("created_at", until).limit(50000)),
-    inChunks<Ev>(ids, (p) => sb.from("product_clicks").select("product_id, user_id").in("product_id", p).gte("created_at", since).lt("created_at", until).limit(50000)),
-    inChunks<Diary>(ids, (p) => sb.from("meal_diary").select("product_id, user_id, meal_type").in("product_id", p).gte("date", sinceDay).lte("date", lastDay).limit(50000)),
-    inChunks<Ev>(ids, (p) => sb.from("user_favorites").select("product_id, user_id").in("product_id", p).gte("created_at", since).lt("created_at", until).limit(50000)),
+    inChunks<Ev>(ids, (p) => sb.from("user_interactions").select("product_id, user_id").eq("action", "view").in("product_id", p).gte("created_at", since).lt("created_at", until)),
+    inChunks<Ev>(ids, (p) => sb.from("product_clicks").select("product_id, user_id").in("product_id", p).gte("created_at", since).lt("created_at", until)),
+    inChunks<Diary>(ids, (p) => sb.from("meal_diary").select("product_id, user_id, meal_type").in("product_id", p).gte("date", sinceDay).lte("date", lastDay)),
+    inChunks<Ev>(ids, (p) => sb.from("user_favorites").select("product_id, user_id").in("product_id", p).gte("created_at", since).lt("created_at", until)),
     opts.totalsOnly ? Promise.resolve([] as { product_id: string; rating: number | null }[])
-      : inChunks<{ product_id: string; rating: number | null }>(ids, (p) => sb.from("product_reviews").select("product_id, rating").in("product_id", p).limit(50000)),
-    inChunks<{ product_id: string; count: number; placement: string }>(ids, (p) => sb.from("product_impressions").select("product_id, count, placement").in("product_id", p).gte("day", sinceDay).lte("day", lastDay).limit(50000)),
-    sb.from("saved_meal_plans").select("user_id, grid").eq("is_active", true).gte("updated_at", since).lt("updated_at", until).limit(2000),
+      : inChunks<{ product_id: string; rating: number | null }>(ids, (p) => sb.from("product_reviews").select("product_id, rating").in("product_id", p)),
+    inChunks<{ product_id: string; count: number; placement: string }>(ids, (p) => sb.from("product_impressions").select("product_id, count, placement").in("product_id", p).gte("day", sinceDay).lte("day", lastDay), ["product_id", "day", "placement"]),
+    selectAll<{ user_id: string; grid: unknown }>(() => sb.from("saved_meal_plans").select("user_id, grid").eq("is_active", true).gte("updated_at", since).lt("updated_at", until), "id"),
   ]);
-  if (plans.error) throw new Error(plans.error.message);
 
   const idSet = new Set(ids);
   const blank = () => ({ impressions: 0, views: 0, clicks: 0, diary: 0, favorites: 0, plans: 0, rating_sum: 0, rating_n: 0 });
@@ -128,7 +126,7 @@ export async function buildReport(sb: Sb, items: ReportItem[], range: Range | nu
   // 노출은 사람이 아니라 횟수라 가리지 않는다
   const placements = [...place.entries()].map(([key, count]) => ({ key, label: PLACEMENT_LABEL[key] || "그 밖의 자리", count })).sort((a, b) => b.count - a.count);
   for (const r of reviews) { const b = by.get(r.product_id); if (b && r.rating) { b.rating_sum += r.rating; b.rating_n++; } }
-  for (const pl of (plans.data || []) as { user_id: string | null; grid: PlanGrid | null }[]) {
+  for (const pl of plans as { user_id: string | null; grid: PlanGrid | null }[]) {
     for (const day of Object.values(pl.grid || {})) for (const cell of Object.values(day || {})) {
       for (const f of cellFoods(cell)) if (f.product_id && idSet.has(f.product_id)) { by.get(f.product_id)!.plans++; if (pl.user_id) people.add(pl.user_id); }
     }

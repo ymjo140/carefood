@@ -5,6 +5,7 @@
  */
 import { addDays, todayKst, weekday } from "@/lib/day";
 import { runProgress, type ChallengeMetric, type DiaryRow, type RunProgress } from "@/lib/challenges";
+import { selectAllIn } from "@/lib/supabase/all";
 
 type Sb = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
@@ -65,11 +66,10 @@ export function memberRun(c: ChallengeRow, g: Pick<GroupRow, "start_on"> | null,
 /** 여러 사람의 기간 안 식단 기록 (진행표용) */
 export async function diaryOf(sb: Sb, users: string[], from: string, to: string) {
   if (!users.length) return new Map<string, DiaryRow[]>();
-  const { data, error } = await sb.from("meal_diary").select("user_id, date, meal_type, calories, protein_g, sugar_g, sodium_mg")
-    .in("user_id", users).gte("date", from).lte("date", to).limit(20000);
-  if (error) throw new Error(error.message);
+  const data = await selectAllIn(users, 200, (p) => sb.from("meal_diary").select("user_id, date, meal_type, calories, protein_g, sugar_g, sodium_mg")
+    .in("user_id", p).gte("date", from).lte("date", to), "id", 1_000_000);
   const by = new Map<string, DiaryRow[]>();
-  for (const r of (data || []) as (DiaryRow & { user_id: string })[]) by.set(r.user_id, [...(by.get(r.user_id) || []), r]);
+  for (const r of data as (DiaryRow & { user_id: string })[]) by.set(r.user_id, [...(by.get(r.user_id) || []), r]);
   return by;
 }
 

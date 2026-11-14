@@ -5,6 +5,7 @@
  *    재주문율 = 기간 안에 이 제품을 산 사람 중, 기간 끝까지 이 제품을 서로 다른 주문으로 두 번 이상 산 사람. 우리 구매자라 가리지 않는다.
  */
 import { LOW_STOCK } from "./stock";
+import { asResult, selectAll } from "@/lib/supabase/all";
 
 type Sb = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 const DAY = 86400e3;
@@ -16,11 +17,11 @@ type Row = {
 const COLS = "order_id, partner_sku, product_name, quantity, unit_price, fulfil_status, cancel_requested_at, orders!inner(user_id, paid_at)";
 
 async function rows(sb: Sb, partnerId: string, until?: number): Promise<Row[]> {
-  let q = sb.from("order_items").select(COLS).eq("partner_id", partnerId).not("orders.paid_at", "is", null).limit(50000);
-  if (until) q = q.lt("orders.paid_at", new Date(until).toISOString());
-  const { data, error } = await q;
-  if (error) throw new Error(error.message);
-  return data || [];
+  return selectAll<Row>(() => {
+    let q = sb.from("order_items").select(COLS).eq("partner_id", partnerId).not("orders.paid_at", "is", null);
+    if (until) q = q.lt("orders.paid_at", new Date(until).toISOString());
+    return q;
+  }, "id", 1_000_000);
 }
 
 export type BoardRow = {
@@ -39,9 +40,9 @@ export const marginOf = (price: number | null, cost: number | null) => (price &&
 export async function productBoard(sb: Sb, partnerId: string): Promise<BoardRow[]> {
   const now = Date.now();
   const [its, rs, offs] = await Promise.all([
-    sb.from("partner_items").select("id, partner_sku, status, stock, unit_cost, tax_type, data->>name").eq("partner_id", partnerId).neq("status", "discontinued").limit(5000),
+    asResult(selectAll(() => sb.from("partner_items").select("id, partner_sku, status, stock, unit_cost, tax_type, data->>name").eq("partner_id", partnerId).neq("status", "discontinued"), "id")),
     rows(sb, partnerId),
-    sb.from("partner_offers").select("item_id, price").eq("partner_id", partnerId).limit(10000),
+    asResult(selectAll(() => sb.from("partner_offers").select("item_id, price").eq("partner_id", partnerId), "id")),
   ]);
   if (its.error) throw new Error(its.error.message);
   if (offs.error) throw new Error(offs.error.message);
@@ -83,7 +84,7 @@ export type SalesRow = {
 export async function productSales(sb: Sb, partnerId: string, range: { from: number; to: number }) {
   const [rs, costs] = await Promise.all([
     rows(sb, partnerId, range.to),
-    sb.from("partner_items").select("partner_sku, unit_cost").eq("partner_id", partnerId).not("unit_cost", "is", null).limit(5000),
+    asResult(selectAll(() => sb.from("partner_items").select("partner_sku, unit_cost").eq("partner_id", partnerId).not("unit_cost", "is", null), "id")),
   ]);
   if (costs.error) throw new Error(costs.error.message);
   const costOf = new Map(((costs.data || []) as { partner_sku: string; unit_cost: number }[]).map((c) => [c.partner_sku, c.unit_cost]));

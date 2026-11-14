@@ -3,6 +3,7 @@ import { connection } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { adminOnly } from "@/lib/actor-server";
 import { enrichGroupBuys, type GroupBuyRow } from "@/lib/group-buy-server";
+import { selectAllIn } from "@/lib/supabase/all";
 
 /**
  * GET  /api/admin/group-buys?view=reached|open — 관리자: 공구
@@ -30,9 +31,8 @@ export async function GET(request: NextRequest) {
     const ids = list.map((g) => g.id);
     const demand = new Map<string, Map<number, { people: number; sets: number }>>();
     if (ids.length) {
-      const { data: parts, error: pErr } = await sb.from("group_buy_participants").select("group_buy_id, option, qty").in("group_buy_id", ids).not("option", "is", null).limit(20000);
-      if (pErr) throw new Error(pErr.message);
-      for (const p of (parts || []) as { group_buy_id: string; option: number; qty: number }[]) {
+      const parts = await selectAllIn(ids, 200, (p) => sb.from("group_buy_participants").select("group_buy_id, option, qty").in("group_buy_id", p).not("option", "is", null), "id");
+      for (const p of parts as { group_buy_id: string; option: number; qty: number }[]) {
         const m = demand.get(p.group_buy_id) || demand.set(p.group_buy_id, new Map()).get(p.group_buy_id)!;
         const cur = m.get(p.option) || { people: 0, sets: 0 };
         m.set(p.option, { people: cur.people + 1, sets: cur.sets + (p.qty || 1) });

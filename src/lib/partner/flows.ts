@@ -10,6 +10,7 @@ import { adText, isNight } from "./crm";
 import { adsConsented, loadBuyers } from "./customers";
 import { COUPON_COLS, couponText, grantCoupon, type Coupon } from "./coupons";
 import { WEEK_MS } from "./quota";
+import { selectAll } from "@/lib/supabase/all";
 
 type Sb = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 const DAY = 86400e3;
@@ -75,9 +76,9 @@ export async function runFlows(sb: Sb, push?: Push) {
       const buyers = await loadBuyers(sb, pid, now);
       const ads = await adsConsented(sb, buyers.map((b) => b.user));
       // 7일 안에 이 업체 자동 알림을 받은 사람은 건너뛴다
-      const { data: recent, error: rErr } = await sb.from("flow_sends").select("user_id").eq("partner_id", pid).gte("sent_at", new Date(now - WEEK_MS).toISOString()).limit(50000);
-      if (rErr) throw new Error(rErr.message);
-      const capped = new Set(((recent || []) as { user_id: string }[]).map((r) => r.user_id));
+      // 1,000줄에서 잘리면 받은 사람이 빠져 한 주에 두 번 보낼 수 있다 — 끝까지 받는다
+      const recent = await selectAll<{ user_id: string }>(() => sb.from("flow_sends").select("user_id").eq("partner_id", pid).gte("sent_at", new Date(now - WEEK_MS).toISOString()), "id", 1_000_000);
+      const capped = new Set(recent.map((r) => r.user_id));
       for (const f of list) {
         let coupon: Coupon | null = null;
         if (f.coupon_id) {
@@ -119,10 +120,9 @@ export async function runFlows(sb: Sb, push?: Push) {
 
 /** 업체 화면 — 자동 알림마다 지난 30일 보낸 수 */
 export async function flowCounts(sb: Sb, partnerId: string) {
-  const { data, error } = await sb.from("flow_sends").select("kind").eq("partner_id", partnerId).gte("sent_at", new Date(Date.now() - 30 * DAY).toISOString()).limit(50000);
-  if (error) throw new Error(error.message);
+  const data = await selectAll<{ kind: string }>(() => sb.from("flow_sends").select("kind").eq("partner_id", partnerId).gte("sent_at", new Date(Date.now() - 30 * DAY).toISOString()), "id", 1_000_000);
   const out: Record<string, number> = {};
-  for (const r of (data || []) as { kind: string }[]) out[r.kind] = (out[r.kind] || 0) + 1;
+  for (const r of data) out[r.kind] = (out[r.kind] || 0) + 1;
   return out;
 }
 

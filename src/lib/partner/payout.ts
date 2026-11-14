@@ -90,9 +90,9 @@ export async function loadBundles(sb: Sb, partnerId: string, rate: number | null
     let q = sb.from("order_items").select(COLS).eq("partner_id", partnerId).eq("fulfil_status", "delivered").not("orders.paid_at", "is", null)
       .gte("delivered_at", new Date(opts.deliveredFrom).toISOString());
     if (opts.deliveredTo) q = q.lt("delivered_at", new Date(opts.deliveredTo).toISOString());
-    return q.order("delivered_at");
+    return q.order("delivered_at").order("id");
   });
-  const live = opts.live ? page(() => sb.from("order_items").select(COLS).eq("partner_id", partnerId).in("fulfil_status", ["new", "accepted", "shipped"]).not("orders.paid_at", "is", null).order("created_at")) : Promise.resolve([]);
+  const live = opts.live ? page(() => sb.from("order_items").select(COLS).eq("partner_id", partnerId).in("fulfil_status", ["new", "accepted", "shipped"]).not("orders.paid_at", "is", null).order("created_at").order("id")) : Promise.resolve([]);
   const [a, b] = await Promise.all([delivered, live]);
   // 한 주문의 줄이 두 쪽에 나뉘면(일부만 배송 완료) 같은 묶음으로 합친다
   return toBundles([...a, ...b], partnerId, rate, now);

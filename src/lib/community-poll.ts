@@ -2,6 +2,7 @@
  * 커뮤니티 투표 — 글에 선택지 2~4개, 한 사람 한 표(마감 전에는 바꿀 수 있음).
  * 글(community_feed.poll)에는 선택지와 마감 시각만, 표는 community_poll_votes 에.
  */
+import { selectAllIn } from "@/lib/supabase/all";
 export const POLL_DAYS = [1, 3, 7] as const;
 export const POLL_MAX_OPTIONS = 4;
 export const POLL_OPTION_MAX = 40;
@@ -46,9 +47,8 @@ export async function withPolls<T extends { id: string; poll?: unknown }>(sb: an
   const ids = posts.filter((p) => isStored(p.poll)).map((p) => p.id);
   const votes = new Map<string, { choice: number; user_id: string }[]>();
   if (ids.length) {
-    const { data, error } = await sb.from("community_poll_votes").select("post_id, user_id, choice").in("post_id", ids).limit(20000);
-    if (error) throw new Error(error.message);
-    for (const v of (data || []) as { post_id: string; user_id: string; choice: number }[]) {
+    const data = await selectAllIn(ids, 100, (p) => sb.from("community_poll_votes").select("post_id, user_id, choice").in("post_id", p), ["post_id", "user_id"], 1_000_000);
+    for (const v of data as { post_id: string; user_id: string; choice: number }[]) {
       votes.set(v.post_id, [...(votes.get(v.post_id) || []), v]);
     }
   }

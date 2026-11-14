@@ -12,6 +12,7 @@ import { loadBuyers } from "./customers";
 import { countPartnerOrders, DELIVER_PENDING_DAYS, type OrderCounts } from "./orders";
 import { LOW_STOCK } from "./stock";
 import { periodOf } from "./period";
+import { asResult, selectAll } from "@/lib/supabase/all";
 
 type Sb = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 const DAY = 86400e3;
@@ -31,10 +32,10 @@ export async function buildToday(sb: Sb, partner: { id: string; kind: string; na
   const p30 = periodOf("30d", now).cur;
 
   const [itemsRes, offersRes, clicks7, conv28, convLast] = await Promise.all([
-    sb.from("partner_items").select("id, partner_sku, status, reject_note, product_id, stock, data->>name, data->>available_to").eq("partner_id", pid).limit(5000),
-    sb.from("partner_offers").select("item_id, updated_at, is_available").eq("partner_id", pid).limit(10000),
+    asResult(selectAll(() => sb.from("partner_items").select("id, partner_sku, status, reject_note, product_id, stock, data->>name, data->>available_to").eq("partner_id", pid), "id")),
+    asResult(selectAll(() => sb.from("partner_offers").select("item_id, updated_at, is_available").eq("partner_id", pid), "id")),
     sb.from("product_clicks").select("id", { count: "exact", head: true }).eq("partner_id", pid).gte("created_at", iso(now - 7 * DAY)),
-    sb.from("partner_conversions").select("amount, status, ordered_at").eq("partner_id", pid).gte("ordered_at", iso(p30.from)).limit(20000),
+    asResult(selectAll(() => sb.from("partner_conversions").select("amount, status, ordered_at").eq("partner_id", pid).gte("ordered_at", iso(p30.from)), "id")),
     sb.from("partner_conversions").select("created_at").eq("partner_id", pid).order("created_at", { ascending: false }).limit(1),
   ]);
   for (const r of [itemsRes, offersRes, clicks7, conv28, convLast]) if (r.error) throw new Error(r.error.message);

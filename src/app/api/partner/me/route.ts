@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { connection } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { canAct, getPartnerContext } from "@/lib/partner/auth";
+import { asResult, selectAll } from "@/lib/supabase/all";
 
 /** GET /api/partner/me[?as=slug] — 내 업체, 제품 상태별 수, 최근 받은 기록 10개 (엑셀·피드·API·대행) */
 export async function GET(req: NextRequest) {
@@ -11,7 +12,7 @@ export async function GET(req: NextRequest) {
   if ("error" in ctx) return ctx.reason ? NextResponse.json({ state: ctx.reason }) : ctx.error;
   const sb = createServiceRoleClient() as any; // eslint-disable-line @typescript-eslint/no-explicit-any
   const [items, batches] = await Promise.all([
-    sb.from("partner_items").select("status").eq("partner_id", ctx.partner.id).limit(20000),
+    asResult(selectAll<{ status: string }>(() => sb.from("partner_items").select("status").eq("partner_id", ctx.partner.id), "id")),
     sb.from("ingest_batches").select("id, channel, file_name, row_count, ok_count, review_count, error_count, unchanged_count, errors, created_at")
       .eq("partner_id", ctx.partner.id).order("created_at", { ascending: false }).limit(10),
   ]);

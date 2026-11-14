@@ -4,6 +4,7 @@
  * 주문 수는 결제한 주문 중 이 업체 묶음이 통째로 취소되지 않은 것. 금액은 상품 금액 − 쿠폰 할인 (배송비 뺌).
  */
 import { createHash } from "node:crypto";
+import { selectAll } from "@/lib/supabase/all";
 
 type Sb = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 const DAY = 86400e3;
@@ -37,10 +38,9 @@ type Row = {
 
 /** 업체 주문을 사람별로 — 내부용 (user_id 를 가진다. 업체 응답에는 code 만 내보낸다) */
 export async function loadBuyers(sb: Sb, partnerId: string, now = Date.now()) {
-  const { data, error } = await sb.from("order_items")
+  const data = await selectAll<Row>(() => sb.from("order_items")
     .select("order_id, product_name, partner_sku, quantity, unit_price, fulfil_status, orders!inner(user_id, paid_at, discount_fees)")
-    .eq("partner_id", partnerId).not("orders.paid_at", "is", null).limit(50000);
-  if (error) throw new Error(error.message);
+    .eq("partner_id", partnerId).not("orders.paid_at", "is", null), "id", 1_000_000);
   // 주문 하나 = 이 업체 묶음 하나
   const orders = new Map<string, { user: string; at: number; amount: number; discount: number; statuses: Set<string>; lines: Map<string, number> }>();
   for (const r of (data || []) as Row[]) {

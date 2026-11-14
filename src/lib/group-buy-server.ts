@@ -6,6 +6,7 @@
  * - 제품 영양 한 줄 (단백질·열량)
  */
 import { addDays, todayKst } from "@/lib/day";
+import { asResult, selectAll } from "@/lib/supabase/all";
 
 type Sb = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
@@ -28,7 +29,7 @@ export async function enrichGroupBuys(sb: Sb, list: GroupBuyRow[]) {
     pids.length ? sb.from("products").select("id, image_url, protein_g, calories").in("id", pids) : { data: [] },
     hosts.length ? sb.from("community_profiles").select("actor_id, nickname").in("actor_id", hosts) : { data: [] },
     pids.length && hosts.length
-      ? sb.from("meal_diary").select("user_id, product_id").in("user_id", hosts).in("product_id", pids).gte("date", since).limit(5000)
+      ? asResult(selectAll(() => sb.from("meal_diary").select("user_id, product_id").in("user_id", hosts).in("product_id", pids).gte("date", since), "id"))
       : { data: [] },
   ]);
   for (const r of [prices, prods, names, diary]) if (r.error) throw new Error(r.error.message);

@@ -2,6 +2,8 @@
  * 연동 상태 — 내 정보가 최신인가 (v3 7.8). 서버 전용.
  * 마지막으로 받은 때 · 그때 실패한 줄 · 확인이 오래된 가격 · 구매 확정 보고(마지막 보고, 클릭 대비, 끊긴 날)
  */
+import { asResult, selectAll } from "@/lib/supabase/all";
+
 type Sb = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 const DAY = 86400e3;
 /** 제품 상세에서 고친 것의 기록 이름 (ingest_batches.file_name) */
@@ -20,7 +22,7 @@ export async function buildConnectStatus(sb: Sb, pid: string): Promise<ConnectSt
   const [batch, feed, offers, convLast, conv28, clicks28] = await Promise.all([
     sb.from("ingest_batches").select("channel, file_name, created_at, row_count, error_count, review_count").eq("partner_id", pid).order("created_at", { ascending: false }).limit(1),
     sb.from("partner_feeds").select("is_active, last_status, failures, last_error").eq("partner_id", pid).maybeSingle(),
-    sb.from("partner_offers").select("updated_at").eq("partner_id", pid).eq("is_available", true).limit(20000),
+    asResult(selectAll<{ updated_at: string }>(() => sb.from("partner_offers").select("updated_at").eq("partner_id", pid).eq("is_available", true), "id")),
     sb.from("partner_conversions").select("created_at").eq("partner_id", pid).order("created_at", { ascending: false }).limit(1),
     sb.from("partner_conversions").select("id", { count: "exact", head: true }).eq("partner_id", pid).gte("created_at", since),
     sb.from("product_clicks").select("id", { count: "exact", head: true }).eq("partner_id", pid).gte("created_at", since),

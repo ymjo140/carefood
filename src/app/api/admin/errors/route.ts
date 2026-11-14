@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { connection } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { adminOnly } from "@/lib/actor-server";
+import { selectUpTo } from "@/lib/supabase/all";
 
 /**
  * GET /api/admin/errors — 최근 오류 (app_errors: 서버 instrumentation.ts · 브라우저 ErrorReporter)
@@ -17,10 +18,10 @@ export async function GET() {
   const now = Date.now();
   const del = await sb.from("app_errors").delete().lt("created_at", new Date(now - 30 * 864e5).toISOString());
   if (del.error) return NextResponse.json({ error: del.error.message }, { status: 500 });
-  const { data, error } = await sb.from("app_errors").select("source, path, kind, message, created_at")
-    .gte("created_at", new Date(now - 7 * 864e5).toISOString()).order("created_at", { ascending: false }).limit(2000);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  const rows = (data || []) as { source: string; path: string | null; kind: string | null; message: string; created_at: string }[];
+  let data: unknown[];
+  try { data = await selectUpTo(() => sb.from("app_errors").select("source, path, kind, message, created_at").gte("created_at", new Date(now - 7 * 864e5).toISOString()), ["-created_at", "-id"], 5000); }
+  catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: 500 }); }
+  const rows = data as { source: string; path: string | null; kind: string | null; message: string; created_at: string }[];
   const dayAgo = now - 864e5;
   const last24h = { server: 0, client: 0 };
   const groups = new Map<string, { source: string; path: string | null; message: string; count: number; last: string }>();
