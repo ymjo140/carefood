@@ -5,9 +5,10 @@ import { Button, Card, EmptyState, Icon, LinkButton, Notice, SectionHeader, Skel
 import type { ConnectStatus } from "@/lib/partner/connect-status";
 import { Feed } from "./Feed";
 import { ApiKeys } from "./ApiKeys";
+import { Agency, Examples, History } from "./ConnectExtras";
 
 export type Batch = {
-  id: string; file_name: string | null; row_count: number; ok_count: number; review_count: number; error_count: number;
+  id: string; channel?: "excel" | "feed" | "api" | "agency"; file_name: string | null; row_count: number; ok_count: number; review_count: number; error_count: number;
   unchanged_count: number; errors: RowError[]; created_at: string;
 };
 type RowError = { row: number; sku?: string; field?: string; message: string };
@@ -15,15 +16,18 @@ type RowError = { row: number; sku?: string; field?: string; message: string };
 /**
  * 연동 — 내 정보가 최신인가. 세 방식을 나란히 두고 피드·API를 권한다 (v3 7.8).
  * 엑셀 올리기는 제품 탭에서 여기로 옮겼다 — 가격·재고 갱신이 연동의 일이라서.
+ * 케어푸드가 대신 올린 파일(대행)은 업체가 반영하기를 눌러야 들어간다. 예시 엑셀·API 예시와 받은 기록을 같이 둔다 (v3 10.6).
  */
-export function Connect({ qs, batches, onChanged, onReport }: { qs: string; batches: Batch[]; onChanged: () => void; onReport?: () => void }) {
+export function Connect({ qs, batches, isDemo = false, readOnly = false, onChanged, onReport }: {
+  qs: string; batches: Batch[]; isDemo?: boolean; readOnly?: boolean; onChanged: () => void; onReport?: () => void;
+}) {
   const toast = useToast();
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [result, setResult] = useState<Batch | null>(null);
   const [tick, setTick] = useState(0); // 올리기·피드 가져오기 뒤에 연동 상태를 다시 불러온다
   const fileRef = useRef<HTMLInputElement>(null);
-  const last = result || batches[0] || null;
+  const last = result || batches.find((b) => b.channel === "excel") || null;
 
   const upload = async () => {
     if (!file) return;
@@ -51,6 +55,7 @@ export function Connect({ qs, batches, onChanged, onReport }: { qs: string; batc
   return (
     <div className="flex flex-col gap-10">
       <Status qs={qs} refresh={tick} onReport={onReport} />
+      <Agency qs={qs} refresh={tick} onChanged={() => { onChanged(); setTick((t) => t + 1); }} />
 
       <section>
         <SectionHeader title="연동 방식" />
@@ -65,7 +70,7 @@ export function Connect({ qs, batches, onChanged, onReport }: { qs: string; batc
           </Card>
           <Card>
             <p className="text-body font-bold text-ink">대행 연동 (유료)</p>
-            <p className="text-label text-ink-2 mt-1">표시사항 사진·상품 목록만 보내 주면 케어푸드가 옮겨 적어요. 업체가 &lsquo;확인했어요&rsquo;를 누른 뒤 반영해요</p>
+            <p className="text-label text-ink-2 mt-1">표시사항 사진·상품 목록만 보내 주면 케어푸드가 옮겨 적어요. 업체가 미리보기를 보고 &lsquo;반영하기&rsquo;를 눌러야 들어가요</p>
           </Card>
         </div>
       </section>
@@ -92,6 +97,9 @@ export function Connect({ qs, batches, onChanged, onReport }: { qs: string; batc
         </Card>
         {last && <BatchResult batch={last} fresh={!!result} />}
       </section>
+
+      <Examples qs={qs} isDemo={isDemo} readOnly={readOnly} onChanged={() => { onChanged(); setTick((t) => t + 1); }} />
+      <History batches={batches} />
 
       <section>
         <SectionHeader title="연동 안내" />
@@ -131,7 +139,7 @@ function BatchResult({ batch, fresh }: { batch: Batch; fresh: boolean }) {
   );
 }
 
-const VIA: Record<string, string> = { excel: "엑셀", feed: "피드", api: "API", web: "화면에서 고침" };
+export const VIA: Record<string, string> = { excel: "엑셀", feed: "피드", api: "API", agency: "대행", web: "화면에서 고침" };
 const n = (v: number) => v.toLocaleString("ko-KR");
 
 /** 연동 상태 — 마지막 수신 · 오래된 가격 · 구매 확정 보고. 문제가 있는 줄에는 경고 아이콘과 할 일 */

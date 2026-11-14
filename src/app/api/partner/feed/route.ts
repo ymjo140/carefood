@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connection } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
-import { getPartnerContext } from "@/lib/partner/auth";
+import { canAct, getPartnerContext, readOnly } from "@/lib/partner/auth";
 import { assertSafeUrl, runFeed } from "@/lib/partner/feed";
 import { limitRequest } from "@/lib/rate-limit";
 
@@ -26,6 +26,7 @@ export async function PUT(req: NextRequest) {
   if (limited) return limited;
   const ctx = await getPartnerContext(req.nextUrl.searchParams.get("as"));
   if ("error" in ctx) return ctx.error;
+  if (!canAct(ctx)) return readOnly();
   const b = await req.json().catch(() => null);
   const raw = String(b?.url || "").trim();
   if (raw.length > 500) return NextResponse.json({ error: "주소가 너무 길어요" }, { status: 400 });
@@ -46,6 +47,7 @@ export async function POST(req: NextRequest) {
   if (limited) return limited;
   const ctx = await getPartnerContext(req.nextUrl.searchParams.get("as"));
   if ("error" in ctx) return ctx.error;
+  if (!canAct(ctx)) return readOnly();
   const sb: Sb = createServiceRoleClient();
   const { data: feed, error } = await sb.from("partner_feeds").select("partner_id, url, last_hash, failures").eq("partner_id", ctx.partner.id).maybeSingle();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -58,6 +60,7 @@ export async function POST(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   const ctx = await getPartnerContext(req.nextUrl.searchParams.get("as"));
   if ("error" in ctx) return ctx.error;
+  if (!canAct(ctx)) return readOnly();
   const sb: Sb = createServiceRoleClient();
   const { error } = await sb.from("partner_feeds").delete().eq("partner_id", ctx.partner.id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

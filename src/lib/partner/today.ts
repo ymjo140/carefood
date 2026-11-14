@@ -18,7 +18,7 @@ export type Task = { kind: string; title: string; reason: string; action: string
 
 const n = (v: number) => v.toLocaleString("ko-KR");
 
-export async function buildToday(sb: Sb, partner: { id: string; kind: string; name: string }) {
+export async function buildToday(sb: Sb, partner: { id: string; kind: string; name: string; is_demo?: boolean }) {
   const pid = partner.id;
   const now = Date.now();
   const iso = (ms: number) => new Date(ms).toISOString();
@@ -90,9 +90,9 @@ export async function buildToday(sb: Sb, partner: { id: string; kind: string; na
     if (half) groupBuy = { title: half.title, current: half.current_count, target: half.target_count };
   }
 
-  // 앱 주문 (켜진 경우만) — 이번 주 주문 · 재주문률 · 주문 간격이 벌어진 고객 수
+  // 앱 주문 (켜진 경우 · 테스트 업체는 예시 주문) — 이번 주 주문 · 재주문률 · 주문 간격이 벌어진 고객 수
   let orders: { week: number; repeat: number | null; gap: number } | null = null;
-  if (ORDERING_ENABLED) {
+  if (ORDERING_ENABLED || partner.is_demo) {
     const { data, error } = await sb.from("order_items").select("order_id, orders!inner(user_id, created_at, paid_at)").eq("partner_id", pid)
       .gte("orders.created_at", iso(now - 90 * DAY)).not("orders.paid_at", "is", null).limit(20000);
     if (error) throw new Error(error.message);

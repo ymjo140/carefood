@@ -113,3 +113,8 @@ export function Steps({ total, current, className }: { total: number; current: n
     </div>
   );
 }
+
+/** 코드 예시 — API 요청·응답처럼 그대로 복사할 글. 가로로 넘치면 이 칸만 스크롤된다 */
+export function CodeBlock({ children, className }: { children: string; className?: string }) {
+  return <pre className={`font-mono text-caption text-ink bg-sunken rounded-md p-3 overflow-x-auto whitespace-pre ${className || ""}`} data-ds-allow-break>{children}</pre>;
+}

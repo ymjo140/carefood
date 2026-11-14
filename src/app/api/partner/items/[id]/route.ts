@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connection } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
-import { getPartnerContext } from "@/lib/partner/auth";
+import { canAct, getPartnerContext } from "@/lib/partner/auth";
 import { checkClaimsWith } from "@/lib/partner/claims";
 import { loadClaimTerms } from "@/lib/partner/claims-server";
 import { flatten } from "@/lib/partner/feed";
@@ -64,7 +64,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     offers: ((offers.data || []) as { updated_at: string }[]).map((o) => ({ ...o, age_days: Math.floor((Date.now() - Date.parse(o.updated_at)) / 86400e3) })),
     claims: checkClaimsWith(terms, d.name, d.description, d.claims),
     dropped,
-    read_only: ctx.role === "admin",
+    read_only: !canAct(ctx),
   });
 }
 
@@ -75,7 +75,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!UUID.test(id)) return bad("제품을 찾지 못했어요", 404);
   const ctx = await getPartnerContext(req.nextUrl.searchParams.get("as"));
   if ("error" in ctx) return ctx.error;
-  if (ctx.role === "admin") return bad("관리자 보기에서는 고칠 수 없어요", 403);
+  if (!canAct(ctx)) return bad("관리자 보기에서는 고칠 수 없어요", 403);
   const b = await req.json().catch(() => null);
   if (!b || typeof b.values !== "object" || Array.isArray(b.values)) return bad("고친 값을 보내 주세요");
 

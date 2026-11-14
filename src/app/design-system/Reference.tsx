@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Badge, Button, Card, CardActions, CardButton, Chip, ChipRow, ConfirmSheet, EmptyState, Field, Icon, ICON_NAMES, IconButton, IconLink,
-  Input, Kcal, LinkButton, ListRow, MacroGrid, MacroInline, MealSlot, MealTag, Notice, Estimate, HowCounted, AsOf, Page, PageHeader, Price,
+  Input, Kcal, LinkButton, ListRow, MacroGrid, MacroInline, MealSlot, MealTag, Notice, Estimate, HowCounted, AsOf, CodeBlock, Page, PageHeader, Price,
   ProgressBar, SearchField, SectionHeader, Select, Sheet, Spinner, Stat, Steps, Tabs, Textarea, TextLink, TextButton, Thumb, ProductImage,
   Avatar, useToast, cn, type BadgeTone,
   BottomNavItems, SkeletonList, FoodEntryForm, DragArea, DragGhost, DragHandle, useDragItem, useDropTarget, type DragData, ChoiceCard, ChoiceList, LinkTabs, RatingStars, RatingInput, ScaleInput, QuickRating, PostAuthor, PostAction, PostActions, PostTags, ThreadItem, MealAttach, PlanAttach, ProductTagLinks, PhotoGrid, PollAttach, DayDots, Switch,
@@ -858,6 +858,8 @@ export default function Reference({ status }: { status: DsStatus }) {
             <span className="text-caption text-ink-2"><Code>{'<Estimate>'}</Code> — 계산으로 짐작한 값 옆에 한 줄. 실제 측정·평가처럼 보이지 않게</span>
             <div className="flex flex-wrap items-center gap-3"><HowCounted>지난 28일 동안 구매 링크를 누른 횟수예요. 같은 사람이 여러 번 누르면 모두 세요</HowCounted><AsOf at="2026-11-14T01:32:00Z" /></div>
             <span className="text-caption text-ink-2"><Code>{'<HowCounted>'}</Code> — 숫자 묶음 옆 &ldquo;어떻게 셌나요&rdquo; 펼치기 · <Code>{'<AsOf>'}</Code> — 데이터 기준 시각</span>
+            <CodeBlock>{'curl -X POST "https://carefood-iota.vercel.app/api/partner/v1/products/batch" \\\n  -H "Authorization: Bearer cf_live_…"'}</CodeBlock>
+            <span className="text-caption text-ink-2"><Code>{'<CodeBlock>'}</Code> — 그대로 복사할 요청·응답 예시. 넘치면 이 칸만 가로로 스크롤</span>
           </div>
           <div className="flex flex-col gap-4">
             <EmptyState title="아직 저장한 식단이 없어요" description="AI 추천으로 7일 식단을 채우거나 커뮤니티에서 따라하기 해 보세요"

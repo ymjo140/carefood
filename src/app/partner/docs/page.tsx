@@ -1,4 +1,4 @@
-import { Card, Page, PageHeader, SectionHeader, TextLink } from "@/components/ui";
+import { Card, CodeBlock, Page, PageHeader, SectionHeader, TextLink } from "@/components/ui";
 import { FIELDS } from "@/lib/partner/schema";
 import { CARRIERS } from "@/lib/order-status";
 
@@ -101,9 +101,7 @@ const ERROR_EXAMPLE = `→ 422
   "errors": [{ "field": "serving_size", "message": "1회 제공량이 총 내용량보다 커요" }]
 }`;
 
-function Code({ children }: { children: string }) {
-  return <pre className="font-mono text-caption text-ink bg-sunken rounded-md p-3 overflow-x-auto whitespace-pre" data-ds-allow-break>{children}</pre>;
-}
+const Code = CodeBlock;
 function Table({ head, rows }: { head: string[]; rows: string[][] }) {
   return (
     <Card padding="none" className="overflow-x-auto">

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connection } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
-import { getPartnerContext } from "@/lib/partner/auth";
+import { canAct, getPartnerContext, readOnly } from "@/lib/partner/auth";
 import { listPartnerOrders, updateFulfilment } from "@/lib/partner/orders";
 
 /** GET /api/partner/orders[?as=slug&status=new] — 앱에서 들어온 주문 (결제가 끝난 것만) */
@@ -18,6 +18,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const ctx = await getPartnerContext(req.nextUrl.searchParams.get("as"));
   if ("error" in ctx) return ctx.error;
+  if (!canAct(ctx)) return readOnly();
   const b = await req.json().catch(() => null);
   try {
     const r = await updateFulfilment(createServiceRoleClient(), ctx.partner, String(b?.order_id || ""), b || { status: null });

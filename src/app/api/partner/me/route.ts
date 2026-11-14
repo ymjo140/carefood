@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connection } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
-import { getPartnerContext } from "@/lib/partner/auth";
+import { canAct, getPartnerContext } from "@/lib/partner/auth";
 
-/** GET /api/partner/me[?as=slug] — 내 업체, 제품 상태별 수, 최근 올린 기록 5개 */
+/** GET /api/partner/me[?as=slug] — 내 업체, 제품 상태별 수, 최근 받은 기록 10개 (엑셀·피드·API·대행) */
 export async function GET(req: NextRequest) {
   await connection();
   const ctx = await getPartnerContext(req.nextUrl.searchParams.get("as"));
@@ -13,11 +13,10 @@ export async function GET(req: NextRequest) {
   const [items, batches] = await Promise.all([
     sb.from("partner_items").select("status").eq("partner_id", ctx.partner.id).limit(20000),
     sb.from("ingest_batches").select("id, channel, file_name, row_count, ok_count, review_count, error_count, unchanged_count, errors, created_at")
-      .eq("partner_id", ctx.partner.id).neq("channel", "api") // API 로 보낸 것은 응답으로 결과를 받는다 — 화면에는 엑셀·피드만
-      .order("created_at", { ascending: false }).limit(5),
+      .eq("partner_id", ctx.partner.id).order("created_at", { ascending: false }).limit(10),
   ]);
   if (items.error || batches.error) return NextResponse.json({ error: (items.error || batches.error).message }, { status: 500 });
   const counts: Record<string, number> = { pending: 0, approved: 0, rejected: 0, discontinued: 0 };
   for (const r of items.data || []) counts[r.status] = (counts[r.status] || 0) + 1;
-  return NextResponse.json({ partner: ctx.partner, role: ctx.role, counts, batches: batches.data || [] });
+  return NextResponse.json({ partner: ctx.partner, role: ctx.role, read_only: !canAct(ctx), counts, batches: batches.data || [] });
 }

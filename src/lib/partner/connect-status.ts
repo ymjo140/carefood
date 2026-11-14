@@ -8,7 +8,7 @@ const DAY = 86400e3;
 export const WEB_EDIT = "화면에서 고침";
 
 export type ConnectStatus = {
-  last: { at: string; via: "excel" | "feed" | "api" | "web"; rows: number; failed: number; review: number } | null;
+  last: { at: string; via: "excel" | "feed" | "api" | "agency" | "web"; rows: number; failed: number; review: number } | null;
   feed: { active: boolean; status: string | null; failures: number; error: string | null } | null;
   prices: { total: number; stale50: number; stale60: number };
   reports: { last_at: string | null; gap_days: number | null; clicks_28: number; reports_28: number };
@@ -27,7 +27,7 @@ export async function buildConnectStatus(sb: Sb, pid: string): Promise<ConnectSt
   ]);
   for (const r of [batch, feed, offers, convLast, conv28, clicks28]) if (r.error) throw new Error(r.error.message);
 
-  const b = batch.data?.[0] as { channel: "excel" | "feed" | "api"; file_name: string | null; created_at: string; row_count: number; error_count: number; review_count: number } | undefined;
+  const b = batch.data?.[0] as { channel: "excel" | "feed" | "api" | "agency"; file_name: string | null; created_at: string; row_count: number; error_count: number; review_count: number } | undefined;
   const ages = ((offers.data || []) as { updated_at: string }[]).map((o) => (now - Date.parse(o.updated_at)) / DAY);
   const lastConv = convLast.data?.[0]?.created_at as string | undefined;
   return {

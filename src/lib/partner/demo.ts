@@ -1,0 +1,220 @@
+/**
+ * 예시 데이터 — 테스트 업체(partners.is_demo)만. 서버 전용 (서비스 키).
+ *
+ * "예시로 채워 보기"는 실제 연동 길을 그대로 탄다:
+ *   · 엑셀: 예시 제품 6개 → ingestRows("excel") → 새 제품이라 검수 대기
+ *   · API : 그중 2개 가격·판매 상태만 바꿈 → ingestRows("api")
+ *   · 대행: 예시 제품 3개를 케어푸드가 대신 올린 것으로 → 업체가 '반영하기'를 눌러야 들어간다
+ *   · 주문: 예시 고객 18명 · 지난 170일 주문 (orders.is_demo) — 고객·주문·정산 화면을 채운다
+ * 예시 제품은 검수 대기로만 둔다. 승인하면 실제 제품 목록(products)에 들어가 다른 사용자에게 보이기 때문이다.
+ * 제품 코드는 EX- 로 시작하고, 예시 고객은 demo- 로 시작한다. "예시 지우기"가 이것만 지운다.
+ */
+import { ingestRows, type IngestResult, type Partner } from "./ingest";
+import { parseRow } from "./schema";
+
+type Sb = any; // eslint-disable-line @typescript-eslint/no-explicit-any
+
+export const DEMO_SKU_PREFIX = "EX-";
+export const DEMO_USER_PREFIX = "demo-";
+
+const DAY = 86400e3;
+const kstDay = (t: number) => new Date(t + 9 * 3600e3).toISOString().slice(0, 10);
+
+/** 예시 제품 한 줄 — 양식 칸 키 그대로 */
+type Sample = Record<string, string>;
+
+function base(i: number, over: Sample): Sample {
+  const now = Date.now();
+  return {
+    brand: "예시브랜드", manufacturer: "예시식품(주)", food_type: "즉석조리식품", category: "lunchbox", meal_role_hint: "meal",
+    total_weight: "300", weight_unit: "g", serving_size: "300", pack_count: "1",
+    nutrition_basis: "serving", nutrition_source: "label",
+    calories_kcal: "420", sodium_mg: "640", carbs_g: "52", sugars_g: "6", fat_g: "11", trans_fat_g: "0", saturated_fat_g: "3",
+    cholesterol_mg: "55", protein_g: "28", fiber_g: "4",
+    ingredients_raw: "현미밥(국산), 닭가슴살(브라질산), 양파, 간장(대두, 밀)", allergens: "닭고기, 대두, 밀",
+    storage: "frozen", shelf_life_days: "180", status: "on_sale", price: "5900", list_price: "6900",
+    channel: "own_mall", url: `https://shop.example.com/p/${100 + i}`,
+    shipping_type: "parcel", shipping_fee: "3000", free_shipping_over: "30000",
+    available_from: kstDay(now - 7 * DAY), available_to: kstDay(now + 60 * DAY),
+    image_url_1: `https://shop.example.com/img/${100 + i}.jpg`,
+    ...over,
+  };
+}
+
+export function excelSamples(): Sample[] {
+  return [
+    base(1, { partner_sku: "EX-001", name: "닭가슴살 현미 볶음밥 도시락" }),
+    base(2, { partner_sku: "EX-002", name: "연어 퀴노아 샐러드 도시락", calories_kcal: "380", sodium_mg: "420", protein_g: "24", fat_g: "14", ingredients_raw: "퀴노아, 연어(노르웨이산), 양상추, 올리브유, 레몬즙", allergens: "없음", price: "7900", list_price: "8900" }),
+    base(3, { partner_sku: "EX-003", name: "두부 버섯 덮밥", calories_kcal: "450", sodium_mg: "580", protein_g: "19", ingredients_raw: "현미밥(국산), 두부(대두), 표고버섯, 간장(대두, 밀)", allergens: "대두, 밀", price: "5500", list_price: "5500" }),
+    base(4, { partner_sku: "EX-004", name: "쇠고기 곤약 비빔밥", calories_kcal: "390", sodium_mg: "610", protein_g: "22", ingredients_raw: "곤약밥, 쇠고기(호주산), 시금치, 고사리, 고추장(밀)", allergens: "쇠고기, 밀", price: "6500", list_price: "7200" }),
+    base(5, { partner_sku: "EX-005", name: "그릭요거트 그래놀라 컵", category: "dairy", meal_role_hint: "snack", total_weight: "150", serving_size: "150", calories_kcal: "210", sodium_mg: "80", carbs_g: "24", sugars_g: "9", fat_g: "7", saturated_fat_g: "3", cholesterol_mg: "10", protein_g: "12", fiber_g: "3", storage: "chilled", shelf_life_days: "14", ingredients_raw: "그릭요거트(우유), 귀리, 아몬드, 꿀", allergens: "우유", price: "3900", list_price: "3900" }),
+    base(6, { partner_sku: "EX-006", name: "닭가슴살 스테이크 3팩", pack_count: "3", total_weight: "100", serving_size: "100", calories_kcal: "140", sodium_mg: "390", carbs_g: "3", sugars_g: "1", fat_g: "3", saturated_fat_g: "1", cholesterol_mg: "60", protein_g: "24", fiber_g: "0", category: "protein", meal_role_hint: "side", ingredients_raw: "닭가슴살(국산), 정제소금, 마늘, 후추", allergens: "닭고기", price: "8900", list_price: "9900" }),
+  ];
+}
+
+/** API 로 보낸 것처럼 — 가격·판매 상태만 바뀐 두 줄 */
+export function apiSamples(): Sample[] {
+  const ex = excelSamples();
+  return [
+    { ...ex[0], price: "5600" },
+    { ...ex[3], status: "sold_out" },
+  ];
+}
+
+/** 대행 — 업체가 보내 준 상품 목록을 케어푸드가 옮겨 적은 것 (한 줄은 일부러 빠진 칸이 있어 오류로 보인다) */
+export function agencySamples(): Sample[] {
+  return [
+    base(7, { partner_sku: "EX-101", name: "고등어 구이 정식", calories_kcal: "480", sodium_mg: "690", protein_g: "27", fat_g: "18", ingredients_raw: "현미밥(국산), 고등어(노르웨이산), 무, 간장(대두, 밀)", allergens: "고등어, 대두, 밀", price: "6900", list_price: "6900" }),
+    base(8, { partner_sku: "EX-102", name: "단호박 닭가슴살 샐러드", calories_kcal: "310", sodium_mg: "350", carbs_g: "30", protein_g: "26", fat_g: "8", ingredients_raw: "단호박, 닭가슴살(국산), 양상추, 발사믹드레싱", allergens: "닭고기", price: "6200", list_price: "6200" }),
+    base(9, { partner_sku: "EX-103", name: "현미 김밥 2줄", ingredients_raw: "", price: "4500" }),
+  ];
+}
+
+export const asRows = (s: Sample[]) => s.map((values, i) => ({ row: i + 3, values }));
+
+/** 반영하기 전에 보여 줄 미리보기 — 바로 반영·검수·오류 줄 수와 줄별 오류 */
+export function previewRows(rows: { row: number; values: Record<string, unknown> }[], kind: Partner["kind"]) {
+  let ok = 0, review = 0, error = 0;
+  const errors: { row: number; sku?: string; field?: string; message: string }[] = [];
+  for (const r of rows) {
+    const p = parseRow(r.values, kind);
+    const sku = String(r.values.partner_sku ?? "").trim() || undefined;
+    if (p.errors.length || !p.item) { error++; for (const e of p.errors.slice(0, 3)) errors.push({ row: r.row, sku, field: e.field, message: e.message }); }
+    else if (p.review.length) review++;
+    else ok++;
+  }
+  return { ok, review, error, errors: errors.slice(0, 50) };
+}
+
+/** 작은 고정 난수 — 다시 채워도 같은 모양 */
+function rng(seed: number) {
+  let s = seed >>> 0;
+  return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 2 ** 32; };
+}
+
+/** 예시 고객 — [주문 수, 마지막 주문이 며칠 전, 주문 간격(일)] */
+const CUSTOMERS: [number, number, number][] = [
+  [1, 2, 0], [1, 9, 0], [1, 18, 0], [1, 26, 0], // 첫 주문
+  [2, 6, 21], [3, 12, 18], [2, 33, 25], [3, 48, 20], // 다시 산
+  [5, 3, 14], [7, 8, 10], [4, 20, 15], // 단골
+  [1, 45, 0], [1, 72, 0], [1, 101, 0], // 한 번 사고 뜸한
+  [3, 75, 20], [2, 104, 30], // 뜸해지는
+  [3, 133, 18], [4, 168, 14], // 떠난
+];
+
+type Prod = { sku: string; name: string; price: number; meal: string };
+
+/** 예시 주문 만들기 — 이미 있던 예시 주문은 지우고 다시 만든다 */
+export async function seedDemoOrders(sb: Sb, partner: Partner) {
+  await clearDemoOrders(sb, partner.id);
+  const prods: Prod[] = excelSamples().map((s) => ({ sku: s.partner_sku, name: s.name, price: Number(s.price), meal: s.meal_role_hint === "snack" ? "snack" : "lunch" }));
+  const rand = rng(20261115);
+  const now = Date.now();
+  const days = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+  const orders: Record<string, unknown>[] = [];
+  const items: Record<string, unknown>[] = [];
+  let n = 0;
+  CUSTOMERS.forEach(([count, lastAgo, gap], ci) => {
+    const user = `${DEMO_USER_PREFIX}${partner.slug}-${String(ci + 1).padStart(2, "0")}`;
+    // 이 고객이 주로 사는 제품 1~2개 + 가끔 다른 것
+    const fav = [prods[ci % prods.length], prods[(ci * 3 + 1) % prods.length]];
+    for (let k = count - 1; k >= 0; k--) {
+      const ago = lastAgo + k * gap + Math.floor(rand() * 3);
+      const at = now - ago * DAY - Math.floor(rand() * 10) * 3600e3;
+      const id = crypto.randomUUID();
+      const lines = (rand() < 0.35 ? [fav[0], fav[1]] : [fav[0]]).concat(rand() < 0.15 ? [prods[Math.floor(rand() * prods.length)]] : []);
+      const uniq = [...new Map(lines.map((p) => [p.sku, p])).values()];
+      const rows = uniq.map((p) => ({ p, q: 1 + Math.floor(rand() * (p.meal === "snack" ? 4 : 5)) }));
+      const subtotal = rows.reduce((s, r) => s + r.p.price * r.q, 0);
+      const fee = subtotal >= 30000 ? 0 : 3000;
+      // 상태: 하루 안은 새 주문, 사흘 안은 확인, 6일 안은 배송 중, 그 뒤는 배송 완료 (가끔 취소·취소 요청)
+      n++;
+      const canceled = n % 17 === 0 && ago > 7;
+      const fulfil = canceled ? "canceled" : ago <= 1 ? "new" : ago <= 3 ? "accepted" : ago <= 6 ? "shipped" : "delivered";
+      // 구매자 취소 요청은 업체가 확인한 뒤(accepted)에 생긴다 — 그 전에는 구매자가 바로 취소한다
+      const cancelAsk = fulfil === "accepted" && ci % 2 === 0;
+      orders.push({
+        id, user_id: user, status: fulfil === "delivered" ? "delivered" : fulfil === "canceled" ? "cancelled" : "paid",
+        total_items: rows.length, total_price: subtotal, shipping_fee: fee, shipping_fees: { [partner.id]: fee },
+        final_price: subtotal + fee, payment_method: "demo", paid_at: new Date(at).toISOString(),
+        created_at: new Date(at - 60e3).toISOString(), updated_at: new Date(at).toISOString(),
+        third_party_consent_at: new Date(at - 60e3).toISOString(), is_demo: true,
+        shipping: { name: `예시 고객 ${ci + 1}`, phone: "01000000000", postal_code: null, address1: "서울특별시 예시구 예시로 1", address2: null, note: null },
+        delivery_preference: { note: null }, weekly_box_snapshot: [],
+        refund_amount: canceled ? subtotal + fee : 0,
+      });
+      for (const r of rows) {
+        items.push({
+          order_id: id, product_id: null, day_of_week: days[Math.floor(rand() * 7)], meal_type: r.p.meal,
+          product_name: r.p.name, service: partner.slug, quantity: r.q, unit_price: r.p.price,
+          partner_id: partner.id, partner_sku: r.p.sku, fulfil_status: fulfil, created_at: new Date(at).toISOString(),
+          accepted_at: ["accepted", "shipped", "delivered"].includes(fulfil) ? new Date(at + 3 * 3600e3).toISOString() : null,
+          shipped_at: ["shipped", "delivered"].includes(fulfil) ? new Date(at + DAY).toISOString() : null,
+          delivered_at: fulfil === "delivered" ? new Date(at + 2 * DAY).toISOString() : null,
+          tracking_carrier: ["shipped", "delivered"].includes(fulfil) ? "cj" : null,
+          tracking_number: ["shipped", "delivered"].includes(fulfil) ? `5${String(100000000 + n).slice(1)}0` : null,
+          cancel_requested_at: cancelAsk ? new Date(at + 3600e3).toISOString() : null,
+          cancel_request_reason: cancelAsk ? "주소를 잘못 적었어요" : null,
+          canceled_by: canceled ? "buyer" : null, canceled_at: canceled ? new Date(at + 3600e3).toISOString() : null,
+          cancel_reason: canceled ? "단순 변심" : null,
+        });
+      }
+    }
+  });
+  for (let i = 0; i < orders.length; i += 200) {
+    const { error } = await sb.from("orders").insert(orders.slice(i, i + 200));
+    if (error) throw new Error(`예시 주문을 만들지 못했어요: ${error.message}`);
+  }
+  for (let i = 0; i < items.length; i += 300) {
+    const { error } = await sb.from("order_items").insert(items.slice(i, i + 300));
+    if (error) throw new Error(`예시 주문 제품을 만들지 못했어요: ${error.message}`);
+  }
+  return { customers: CUSTOMERS.length, orders: orders.length };
+}
+
+/** 이 업체의 예시 주문만 지운다 (주문 제품은 같이 지워진다) */
+export async function clearDemoOrders(sb: Sb, partnerId: string) {
+  const { data, error } = await sb.from("order_items").select("order_id, orders!inner(is_demo)").eq("partner_id", partnerId).eq("orders.is_demo", true).limit(5000);
+  if (error) throw new Error(error.message);
+  const ids = [...new Set(((data || []) as { order_id: string }[]).map((r) => r.order_id))];
+  for (let i = 0; i < ids.length; i += 200) {
+    const { error: dErr } = await sb.from("orders").delete().in("id", ids.slice(i, i + 200)).eq("is_demo", true);
+    if (dErr) throw new Error(dErr.message);
+  }
+  return ids.length;
+}
+
+export type DemoResult = { excel: IngestResult; api: IngestResult; agency_id: string; customers: number; orders: number };
+
+/** 예시로 채워 보기 — 엑셀·API·대행·주문 */
+export async function seedDemo(sb: Sb, partner: Partner, userId: string | null): Promise<DemoResult> {
+  const excel = await ingestRows(sb, partner, asRows(excelSamples()), "excel", "예시_제품목록.xlsx", userId);
+  const api = await ingestRows(sb, partner, asRows(apiSamples()), "api", null, userId);
+  // 대행 — 기다리는 예시가 이미 있으면 새로 만들지 않는다
+  const { error: cErr } = await sb.from("partner_agency_uploads").update({ status: "canceled", decided_at: new Date().toISOString(), decided_note: "예시를 다시 채워서 닫음" })
+    .eq("partner_id", partner.id).eq("status", "waiting").eq("file_name", "예시_대행_목록.xlsx");
+  if (cErr) throw new Error(cErr.message);
+  const rows = asRows(agencySamples());
+  const { data: up, error: aErr } = await sb.from("partner_agency_uploads").insert({
+    partner_id: partner.id, file_name: "예시_대행_목록.xlsx", rows, row_count: rows.length,
+    preview: previewRows(rows, partner.kind), note: "보내 주신 상품 목록 3개를 옮겨 적었어요. 김밥은 원재료명이 없어 비워 뒀어요", created_by: null,
+  }).select("id").single();
+  if (aErr) throw new Error(aErr.message);
+  const o = await seedDemoOrders(sb, partner);
+  return { excel, api, agency_id: up.id, ...o };
+}
+
+/** 예시 지우기 — 예시 주문·예시 제품(승인 안 된 EX- 만)·기다리는 예시 대행 */
+export async function clearDemo(sb: Sb, partnerId: string) {
+  const orders = await clearDemoOrders(sb, partnerId);
+  const { data: its, error } = await sb.from("partner_items").select("id").eq("partner_id", partnerId).like("partner_sku", `${DEMO_SKU_PREFIX}%`).is("product_id", null).limit(1000);
+  if (error) throw new Error(error.message);
+  const ids = ((its || []) as { id: string }[]).map((r) => r.id);
+  if (ids.length) {
+    const { error: dErr } = await sb.from("partner_items").delete().in("id", ids);
+    if (dErr) throw new Error(dErr.message);
+  }
+  const { error: uErr } = await sb.from("partner_agency_uploads").delete().eq("partner_id", partnerId).eq("file_name", "예시_대행_목록.xlsx");
+  if (uErr) throw new Error(uErr.message);
+  return { orders, items: ids.length };
+}
