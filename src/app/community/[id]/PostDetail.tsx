@@ -5,12 +5,13 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import ThreadCard, { type FeedPostData } from "@/components/community/ThreadCard";
 import PostMenu from "@/components/community/PostMenu";
+import ShareCardSheet from "@/components/community/ShareCardSheet";
 import { Avatar, BottomBar, Button, Chip, EmptyState, Icon, Input, Page, PageLoading, SectionHeader, useToast } from "@/components/ui";
 import { timeAgo } from "@/components/ui/FeedPost";
 import { getOrCreateNickname } from "@/lib/nickname";
 
 /**
- * 글 상세 — 글(쓰레드형) → 답글 목록 → 아래 고정 답글 입력.
+ * 글 상세 — 글(쓰레드형) → 답글 목록 → 아래 고정 답글 입력. 내 글이면 오른쪽 위 '인증 카드 만들기'(인스타 공유).
  * 작성자 건강 관심사는 보여 주지 않는다 (API 도 내보내지 않음).
  */
 type Comment = { id: string; author_nickname: string; content: string; created_at: string; user_id: string; parent_id: string | null; is_mine?: boolean; hidden?: boolean };
@@ -32,6 +33,7 @@ export default function PostDetail() {
   const [reloadKey, setReloadKey] = useState(0);
   const toast = useToast();
   const inputRef = useRef<HTMLInputElement>(null);
+  const [card, setCard] = useState(false);
 
   /* ── 글 + 답글 ── */
   useEffect(() => {
@@ -157,7 +159,9 @@ export default function PostDetail() {
     <Page width="narrow" className="pb-32">
       <div className="flex items-center justify-between gap-2 -ml-2">
         <Button variant="ghost" size="sm" icon="chevron-left" onClick={() => router.back()}>뒤로</Button>
-        {!post.is_mine && (
+        {post.is_mine ? (
+          <Button size="sm" variant="secondary" icon="share" onClick={() => setCard(true)}>인증 카드 만들기</Button>
+        ) : (
           <Button size="sm" variant="secondary" icon={following ? "check" : "plus"} aria-pressed={following} loading={followBusy} onClick={handleFollow}>
             {following ? "팔로잉" : "팔로우하기"}
           </Button>
@@ -204,6 +208,7 @@ export default function PostDetail() {
           </div>
         </form>
       </BottomBar>
+      {post.is_mine && <ShareCardSheet target={{ kind: "meal", id: post.id }} open={card} onClose={() => setCard(false)} />}
     </Page>
   );
 }

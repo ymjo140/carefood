@@ -54,6 +54,8 @@
   /* 사진·영상 위 글자 띠 — 사진은 테마와 상관없으니 두 테마에 같은 값 */
   --ds-media-scrim: rgb(20 16 12 / 0.64);
   --ds-on-media: #FFFFFF;
+  /* 스토리 보기 바탕 — 사진·영상 둘레. 두 테마에 같은 값 */
+  --ds-media: #0E0B08;
   --ds-overlay-shadow: 0 12px 32px rgb(20 16 12 / 0.16), 0 2px 6px rgb(20 16 12 / 0.06);
 }
 
@@ -215,6 +217,7 @@
   --color-scrim: var(--ds-scrim);
   --color-media-scrim: var(--ds-media-scrim);
   --color-on-media: var(--ds-on-media);
+  --color-media: var(--ds-media);
 }
 
 /* ── 4. 디자인 시스템 유틸리티 ── */

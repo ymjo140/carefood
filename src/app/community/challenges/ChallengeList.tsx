@@ -2,11 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { Button, Card, ConfirmSheet, DayDots, EmptyState, SkeletonList, TextLink, useToast } from "@/components/ui";
+import ShareCardSheet from "@/components/community/ShareCardSheet";
 import { METRIC_META, metricValue, type ChallengeMetric, type DayState } from "@/lib/challenges";
 
 /**
  * 챌린지 목록 — 규칙 · 지금 하는 사람 수 · (참여했으면) 날짜 줄과 해낸 날 수.
  * 달성 여부는 식단 기록의 성분 합계로만 계산한다. 다른 사람의 기록은 보이지 않는다.
+ * 하루라도 해냈으면 '인증하기' — 해낸 날 줄을 9:16 카드로 그려 인스타 스토리에 올린다.
  */
 type Run = {
   started_on: string; ends_on: string; finished: boolean; done_count: number; finished_runs: number;
@@ -20,6 +22,7 @@ export function ChallengeList() {
   const [attempt, setAttempt] = useState(0);
   const [busy, setBusy] = useState<string | null>(null);
   const [leaving, setLeaving] = useState<Item | null>(null);
+  const [card, setCard] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -107,6 +110,7 @@ export function ChallengeList() {
                       </p>
                     )}
                     <div className="flex gap-2">
+                      {run.done_count > 0 && <Button size="sm" icon="share" onClick={() => setCard(c.id)}>인증하기</Button>}
                       {run.finished
                         ? <Button size="sm" variant="secondary" icon="refresh" loading={busy === c.id} onClick={() => join(c)}>다시 하기</Button>
                         : <Button size="sm" variant="ghost" disabled={busy === c.id} onClick={() => setLeaving(c)}>그만두기</Button>}
@@ -126,6 +130,7 @@ export function ChallengeList() {
         title={leaving ? `${leaving.title} 챌린지를 그만둘까요?` : ""}
         description="지금까지 채운 날은 사라져요. 식단 기록은 그대로 남아요"
         confirmLabel="그만두기" onConfirm={() => leaving && leave(leaving)} />
+      <ShareCardSheet target={card ? { kind: "challenge", id: card } : null} open={!!card} onClose={() => setCard(null)} />
     </>
   );
 }

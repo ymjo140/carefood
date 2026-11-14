@@ -15,7 +15,7 @@ import { getOrCreateNickname, setNickname } from "@/lib/nickname";
 
 /**
  * 피드 (쓰레드형) — 맨 위 숏폼 줄(오늘의 식단 · 공구, 맨 앞 칸이 글쓰기 입구) → 챌린지 한 줄 → 보기(추천·팔로잉·모임·내 글) → 줄로 나눈 글 목록
- * 숏폼 줄: 사진이 붙은 식단 글 + 관심 모으는 공구 (/api/community/reels). 공구 칸은 공구 보기(/group-buy/[id])로
+ * 숏폼 줄: 사진이 붙은 식단 글 + 관심 모으는 공구 (/api/community/reels). 칸을 누르면 스토리 보기(/stories)로 — 게시물은 거기서 ↗
  * ds-wiring-drop: /api/community/follow — 팔로우는 글 상세에서 (목록의 카드마다 있던 채운 버튼을 뺌)
  * 글마다 ··· 메뉴: 숨기기·차단·신고·(내 글) 지우기 → 목록에서 바로 뺀다
  */
@@ -173,14 +173,14 @@ export default function CommunityPage() {
           <ReelAddTile onClick={() => setPicker(true)} sub="식단 · 공구" />
           {reels.status === "loading" && <ReelSkeleton count={3} />}
           {reels.status === "done" && reels.items.map((r) => r.kind === "group_buy" ? (
-            <ReelTile key={`g-${r.id}`} href={`/group-buy/${r.id}`} image={r.image} author={r.author} seconds={r.seconds}
+            <ReelTile key={`g-${r.id}`} href={`/stories?at=group_buy-${r.id}`} image={r.image} author={r.author} seconds={r.seconds}
               tag={r.days_left != null ? (r.days_left === 0 ? "공구 D-day" : `공구 D-${r.days_left}`) : "공구"}
               label={`${r.author}의 공구${r.seconds != null ? ` 영상 ${r.seconds}초` : ""}: ${r.product_name}${r.pct ? `, ${r.pct}% 할인 희망` : ""}, ${r.current_count}명 모임`}
               line={r.pct
                 ? <><span className="num font-bold">{r.pct}%</span> · <span className="num">{r.current_count}/{r.target_count}</span>명</>
                 : <>알림 <span className="num font-bold">{r.current_count}</span>/{r.target_count}명</>} />
           ) : (
-            <ReelTile key={`m-${r.id}`} href={`/community/${r.id}`} image={r.image} tag="식단" author={r.author} seconds={r.seconds}
+            <ReelTile key={`m-${r.id}`} href={`/stories?at=meal-${r.id}`} image={r.image} tag="식단" author={r.author} seconds={r.seconds}
               label={`${r.author}의 식단${r.seconds != null ? ` 영상 ${r.seconds}초` : ""}${r.text ? `: ${r.text}` : ""}`}
               line={r.protein_g != null
                 ? <>단백질 <span className="num font-bold">{Math.round(r.protein_g)}</span>g {r.meal_type ? mealMeta(r.meal_type).label : ""}</>

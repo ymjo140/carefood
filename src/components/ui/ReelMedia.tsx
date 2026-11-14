@@ -12,14 +12,15 @@ import { clock } from "./Reel";
 /**
  * 숏폼 보기 위쪽 — 사진을 옆으로 넘기고(스냅), 위 띠에 몇 번째 사진인지 · 올린 사람 · 닫기.
  * 사진이 없으면 제품 사진 한 장(fallback). 화면 폭을 꽉 채우도록 부모의 좌우 여백만큼 바깥으로 나간다(-mx-4).
+ * header·closeHref 를 빼면 게시물 화면용 — 띠 없이 둥근 칸, 여러 장이면 아래에 점.
  */
 export function ReelMedia({ urls, video, fallback, alt, header, closeHref, className }: {
   urls: string[]; fallback?: string | null; alt: string;
   /** 영상 — 첫 장으로, 소리 없이 반복 재생 (동작 줄이기면 멈춘 채) */
   video?: { url: string; poster: string } | null;
-  /** 위 띠의 올린 사람 줄 */
-  header: ReactNode;
-  closeHref: string;
+  /** 위 띠의 올린 사람 줄 — 없으면(게시물 화면) 띠 없이 둥근 칸 + 아래 점 */
+  header?: ReactNode;
+  closeHref?: string;
   className?: string;
 }) {
   const list = urls.length || video ? urls : [fallback ?? null];
@@ -30,8 +31,9 @@ export function ReelMedia({ urls, video, fallback, alt, header, closeHref, class
     const el = box.current;
     if (el) setAt(Math.round(el.scrollLeft / Math.max(1, el.clientWidth)));
   };
+  const overlay = header != null && closeHref != null;
   return (
-    <div className={cn("relative -mx-4 -mt-5 bg-sunken", className)}>
+    <div className={cn("relative bg-sunken", overlay ? "-mx-4 -mt-5" : "rounded-lg border border-line overflow-hidden", className)}>
       <div ref={box} onScroll={onScroll} className="flex overflow-x-auto snap-x snap-mandatory scroll-row" aria-label={`${alt} ${video ? "영상과 " : ""}사진 ${list.length}장`}>
         {video && (
           <div className="snap-start shrink-0 w-full aspect-square">
@@ -44,7 +46,12 @@ export function ReelMedia({ urls, video, fallback, alt, header, closeHref, class
           </div>
         ))}
       </div>
-      <div className="absolute inset-x-0 top-0 px-4 pt-3 pb-3 bg-media-scrim text-on-media flex flex-col gap-3">
+      {!overlay && total > 1 && (
+        <div className="absolute inset-x-0 bottom-2 flex justify-center gap-1.5" aria-hidden="true">
+          {Array.from({ length: total }, (_, i) => <span key={i} className={cn("size-1.5 rounded-full bg-on-media transition-opacity duration-150", i === at ? "opacity-100" : "opacity-50")} />)}
+        </div>
+      )}
+      {overlay && <div className="absolute inset-x-0 top-0 px-4 pt-3 pb-3 bg-media-scrim text-on-media flex flex-col gap-3">
         {total > 1 && (
           <div className="flex gap-1" aria-hidden="true">
             {Array.from({ length: total }, (_, i) => <span key={i} className={cn("h-1 flex-1 rounded-full bg-on-media transition-opacity duration-150", i === at ? "opacity-100" : "opacity-40")} />)}
@@ -52,11 +59,11 @@ export function ReelMedia({ urls, video, fallback, alt, header, closeHref, class
         )}
         <div className="flex items-center gap-3">
           <div className="flex-1 min-w-0">{header}</div>
-          <Link href={closeHref} aria-label="닫기" className="press size-11 -mr-2.5 flex items-center justify-center text-on-media">
+          <Link href={closeHref ?? "/community"} aria-label="닫기" className="press size-11 -mr-2.5 flex items-center justify-center text-on-media">
             <Icon name="close" size={22} />
           </Link>
         </div>
-      </div>
+      </div>}
     </div>
   );
 }

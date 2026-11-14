@@ -55,6 +55,10 @@ const PATHS = {
   grid: "M4 4h6.5v6.5H4zM13.5 4H20v6.5h-6.5zM4 13.5h6.5V20H4zM13.5 13.5H20V20h-6.5z",
   poll: "M5 19.5h14M7 16.5v-5M12 16.5v-11M17 16.5v-8",
   flag: "M6 20.5v-16M6 5h11.5l-2.5 4 2.5 4H6",
+  send: "M20.5 3.5L10 14M20.5 3.5l-6.5 17-4-6.5-6.5-4z",
+  download: "M12 4v11M7.5 10.5L12 15l4.5-4.5M5 19.5h14",
+  link: "M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1",
+  pause: "M8 5.5v13M16 5.5v13",
 } as const;
 
 export type IconName = keyof typeof PATHS;

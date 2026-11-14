@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
+import ShareCardSheet from "@/components/community/ShareCardSheet";
 import {
   Avatar, BottomBar, Button, EmptyState, Icon, LinkButton, ListRow, Notice, OfferOptionList, Page, PostAction, PostActions, ProgressBar, QtyStepper,
   ReelMedia, SectionHeader, Sheet, Skeleton, TextButton, Thumb, timeAgo, useToast,
@@ -11,8 +12,8 @@ import { GROUP_BUY_ENABLED } from "@/lib/features";
 import { giftLabel, groupBuyWords, offerRows, readOffer, shippingLabel, wishLabel, PER_PERSON_MAX } from "@/lib/group-buy";
 
 /**
- * 공구 보기 — 숏폼 줄·공구 목록에서 들어온다. 인플루언서 공구 글처럼 진행자 사진이 위, 정보가 아래.
- * 위 띠: 진행자 · 최근 30일 이 제품 기록 횟수(써 본 사람) · 닫기
+ * 공구 게시물 — 스토리 보기의 '게시물'·공구 목록·공유 링크에서 들어온다. 글 상세와 같은 모양(뒤로 → 진행자 → 사진).
+ * 진행자 줄: 이름 · 최근 30일 이 제품 기록 횟수(써 본 사람). 진행자에게는 '인증 카드 만들기'(인스타 공유)
  * 아래: 먹어 본 이야기 → 좋아요·질문·보내기 → 제품(영양·지금 최저가) → 모인 인원 → 사람당 묶음·바라는 것 → 질문 → 주 버튼(열리면 알림 받기)
  */
 type GroupBuy = {
@@ -35,7 +36,9 @@ const WORD = groupBuyWords(OPEN);
 
 export default function GroupBuyView() {
   const { id } = useParams<{ id: string }>();
+  const router = useRouter();
   const toast = useToast();
+  const [card, setCard] = useState(false);
   const [state, setState] = useState<{ status: "loading" | "error" | "missing" | "done"; gb: GroupBuy | null; marked: boolean; liked: boolean; choice: Choice | null }>({ status: "loading", gb: null, marked: false, liked: false, choice: null });
   // 알림 받기 시트 — 구성·수량 고르기 (조건표가 있는 공구)
   const [picking, setPicking] = useState(false);
@@ -129,7 +132,8 @@ export default function GroupBuyView() {
     return (
       <Page width="narrow">
         <div role="status" aria-label="불러오는 중" className="flex flex-col gap-4">
-          <Skeleton className="-mx-4 -mt-5 aspect-square" />
+          <Skeleton className="h-10 w-2/3" />
+          <Skeleton className="aspect-square w-full" />
           <Skeleton className="h-5 w-4/5" />
           <Skeleton className="h-16 w-full" />
           <Skeleton className="h-10 w-full" />
@@ -161,21 +165,27 @@ export default function GroupBuyView() {
   const rows = offer ? offerRows(offer, gb.lowest_unit_price) : [];
   const gift = offer ? giftLabel(offer.gift) : null;
   const maxQty = offer?.per_person_max || PER_PERSON_MAX;
+  const gbTarget = { kind: "group_buy" as const, id: gb.id };
 
   return (
     <Page width="narrow">
-      <ReelMedia urls={gb.image_urls} fallback={gb.image_url} video={gb.video_url && gb.video_poster ? { url: gb.video_url, poster: gb.video_poster } : null} alt={`${gb.host_nickname}의 ${gb.product_name} 공구`} closeHref="/community"
-        header={
-          <div className="flex items-center gap-2.5 min-w-0">
-            <Avatar name={gb.host_nickname} size="sm" />
-            <div className="min-w-0 flex flex-col gap-0.5">
-              <p className="text-label font-bold truncate">{gb.host_nickname} <span className="font-regular">· 공구 진행 · {timeAgo(gb.created_at)}</span></p>
-              {gb.host_records > 0 && (
-                <p className="text-caption flex items-center gap-1"><Icon name="check" size={14} />최근 30일 이 제품을 <span className="num font-bold">{gb.host_records}</span>번 기록했어요</p>
-              )}
-            </div>
-          </div>
-        } />
+      <div className="flex items-center justify-between gap-2 -ml-2 mb-3">
+        <Button variant="ghost" size="sm" icon="chevron-left" onClick={() => (window.history.length > 1 ? router.back() : router.push("/group-buy"))}>뒤로</Button>
+        {gb.is_host && <Button size="sm" variant="secondary" icon="share" onClick={() => setCard(true)}>인증 카드 만들기</Button>}
+      </div>
+
+      <div className="flex items-center gap-2.5 min-w-0 mb-3">
+        <Avatar name={gb.host_nickname} size="md" />
+        <div className="min-w-0 flex flex-col gap-0.5">
+          <p className="text-label text-ink truncate"><span className="font-bold">{gb.host_nickname}</span> <span className="text-ink-2">· 공구 진행 · {timeAgo(gb.created_at)}</span></p>
+          {gb.host_records > 0 && (
+            <p className="text-caption text-ink-2 flex items-center gap-1"><Icon name="check" size={14} className="text-positive" />최근 30일 이 제품을 <span className="num font-bold text-ink">{gb.host_records}</span>번 기록했어요</p>
+          )}
+        </div>
+      </div>
+
+      <ReelMedia urls={gb.image_urls} fallback={gb.image_url} video={gb.video_url && gb.video_poster ? { url: gb.video_url, poster: gb.video_poster } : null}
+        alt={`${gb.host_nickname}의 ${gb.product_name} 공구`} />
 
       <div className="flex flex-col gap-5 pt-5">
         {gb.description && <p className="text-body text-ink">{gb.description}</p>}
@@ -270,6 +280,7 @@ export default function GroupBuyView() {
           </div>
         </Sheet>
       )}
+      <ShareCardSheet target={gbTarget} open={card} onClose={() => setCard(false)} />
     </Page>
   );
 }

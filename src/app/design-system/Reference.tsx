@@ -8,6 +8,7 @@ import {
   Avatar, useToast, cn, type BadgeTone,
   BottomNavItems, SkeletonList, FoodEntryForm, DragArea, DragGhost, DragHandle, useDragItem, useDropTarget, type DragData, ChoiceCard, ChoiceList, LinkTabs, RatingStars, RatingInput, ScaleInput, QuickRating, PostAuthor, PostAction, PostActions, PostTags, ThreadItem, MealAttach, PlanAttach, ProductTagLinks, PhotoGrid, PollAttach, DayDots, Switch,
   ReelRow, ReelTile, ReelAddTile, ReelSkeleton, ReelMedia, CommentItem, VideoAttach, OfferOptionList, QtyStepper, UnitInput, RangeInput,
+  StoryFrame, StoryProgress, StoryHeader, StoryMedia, StorySticker, StoryCaption, StoryAction, StoryReply, ShareCardPreview, ShareSteps,
 } from "@/components/ui";
 
 // 서버(UTC)와 브라우저 시간대가 달라도 같은 글자가 나오도록 한국 시간으로 고정
@@ -814,6 +815,18 @@ export default function Reference({ status }: { status: DsStatus }) {
               <CommentItem nested nickname="민지" badge="진행자" timeLabel="1시간 전" content="300g이에요. 한 끼로 딱 맞아요" onReply={() => {}} onDelete={() => {}} />
             </div>
           </Demo>
+          <Demo label="스토리 보기 — 칸을 누르면 화면을 꽉 채워 한 장씩. 위: 진행 막대 · 올린 사람 · 게시물 ↗ · 닫기 / 가운데: 사진·영상 + 스티커 하나 / 아래: 답글 칸 · 좋아요 · 보내기. 바탕은 두 테마에 같은 media 색" code="<StoryFrame top sticker footer onPrev onNext onHold><StoryMedia /></StoryFrame>">
+            <StoryDemo />
+          </Demo>
+          <Demo label="인증 카드 — 내 식단·챌린지·공구를 9:16 카드로(사진 · 스티커만 · 기록). 미리 보기 틀과 공유 순서 안내" code="<ShareCardPreview src sticker /> · <ShareSteps steps />">
+            <div className="flex flex-col sm:flex-row gap-4 items-start">
+              <ShareCardPreview src={null} alt="" className="sm:mx-0 max-w-40" />
+              <ShareSteps steps={["인스타에 공유하기 → 인스타그램 → 스토리를 골라요", "링크는 미리 복사돼요. 스티커 버튼 → 링크에 붙여 넣어요", "친구가 링크를 누르면 이 게시물이 바로 열려요"]} />
+            </div>
+          </Demo>
+          <Demo label="게시물 사진 칸 — 띠 없이 둥근 칸, 여러 장이면 아래 점 (공구 게시물)" code="<ReelMedia urls fallback alt />">
+            <div className="max-w-xs"><ReelMedia urls={[]} alt="예시 공구" /></div>
+          </Demo>
           <Demo label="숏폼 보기 위쪽 — 사진을 옆으로 넘기고, 위 띠에 몇 번째 · 올린 사람 · 닫기" code="<ReelMedia urls header closeHref />">
             <div className="overflow-hidden px-4 pt-5 max-w-sm">
               <ReelMedia urls={[]} alt="예시 공구" closeHref="#"
@@ -1179,6 +1192,40 @@ function OfferDemo() {
           <RangeInput min={10} max={100} step={5} value={target} onChange={(e) => setTarget(Number(e.target.value))} aria-label="목표 인원" />
         </Field>
       </div>
+    </div>
+  );
+}
+
+/** 스토리 보기 — 줄여 그린 모습 + 눌러서 실제 화면 열기 */
+function StoryDemo() {
+  const [open, setOpen] = useState(false);
+  const [i, setI] = useState(0);
+  const [reply, setReply] = useState("");
+  const [liked, setLiked] = useState(false);
+  return (
+    <div className="flex flex-col gap-3 items-start">
+      <div className="w-full max-w-xs rounded-lg bg-media p-3 flex flex-col gap-3">
+        <StoryProgress count={3} index={1} value={0.4} />
+        <StoryHeader author="민지" meta="식단 · 2시간 전" postHref="#" onClose={() => {}} />
+        <div className="h-32 flex flex-col items-center justify-end gap-2">
+          <StoryCaption>오늘 점심 도시락. 현미밥 반 공기에 닭가슴살</StoryCaption>
+          <StorySticker href="#" label="게시물에서 식단 보기">점심 · 단백질 <span className="num font-bold">35</span>g</StorySticker>
+        </div>
+        <div className="flex items-center gap-1">
+          <StoryReply value={reply} onChange={setReply} onSubmit={() => setReply("")} placeholder="민지 님에게 답글" />
+          <StoryAction icon="heart" label="좋아요" active={liked} onClick={() => setLiked((v) => !v)} />
+          <StoryAction icon="send" label="링크 보내기" onClick={() => {}} />
+        </div>
+      </div>
+      <Button size="sm" variant="secondary" onClick={() => { setI(0); setOpen(true); }}>화면 꽉 채워 열어 보기</Button>
+      {open && (
+        <StoryFrame label="예시 스토리" onPrev={() => setI((n) => Math.max(0, n - 1))} onNext={() => (i >= 2 ? setOpen(false) : setI(i + 1))} onHold={() => {}}
+          top={<><StoryProgress count={3} index={i} value={0.5} /><StoryHeader author="민지" meta={`예시 ${i + 1}/3`} postHref="#" onClose={() => setOpen(false)} /></>}
+          sticker={<StorySticker href="#" label="게시물 보기">스티커 {i + 1}</StorySticker>}
+          footer={<div className="flex items-center gap-1"><StoryReply value={reply} onChange={setReply} onSubmit={() => setReply("")} placeholder="민지 님에게 답글" /><StoryAction icon="heart" label="좋아요" onClick={() => {}} /></div>}>
+          <StoryMedia image={null} alt="예시" paused muted />
+        </StoryFrame>
+      )}
     </div>
   );
 }

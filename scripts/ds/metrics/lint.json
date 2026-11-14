@@ -1,9 +1,9 @@
 {
-  "checkedAt": "2026-11-14T04:07:20.044Z",
-  "files": 154,
+  "checkedAt": "2026-11-14T05:11:02.715Z",
+  "files": 161,
   "total": 0,
   "warnTotal": 0,
-  "allowedCount": 66,
+  "allowedCount": 67,
   "rules": [
     {
       "id": "hex-color",
@@ -165,7 +165,7 @@
     },
     {
       "file": "src/app/community/[id]/PostDetail.tsx",
-      "line": 75,
+      "line": 77,
       "rule": "silent-catch",
       "level": "warn",
       "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
@@ -732,7 +732,7 @@
     },
     {
       "file": "src/components/ui/ReelMedia.tsx",
-      "line": 84,
+      "line": 91,
       "rule": "silent-catch",
       "level": "warn",
       "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
@@ -741,12 +741,21 @@
     },
     {
       "file": "src/components/ui/ReelMedia.tsx",
-      "line": 94,
+      "line": 101,
       "rule": "silent-catch",
       "level": "warn",
       "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
       "match": ".catch(() => {})",
       "snippet": "if (v.paused) v.play().catch(() => {}); // ds-allow: 재생이 막히면 그대로 둔다 (버튼이 '재생'으로 남음)"
+    },
+    {
+      "file": "src/components/ui/Story.tsx",
+      "line": 125,
+      "rule": "silent-catch",
+      "level": "warn",
+      "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
+      "match": ".catch(() => {})",
+      "snippet": "else v.play().catch(() => {}); // ds-allow: 자동 재생이 막히면 표지가 남고, 막대는 멈춘 채 — 누르면 다음으로"
     }
   ]
 }

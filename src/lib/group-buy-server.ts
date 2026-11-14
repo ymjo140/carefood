@@ -13,7 +13,7 @@ export type GroupBuyRow = {
   id: string; creator_id: string; product_id: string | null; product_name: string; title: string | null;
   description: string | null; image_urls?: string[] | null; pack_size?: number | null; wishes?: string[] | null;
   video_url?: string | null; video_poster?: string | null; video_seconds?: number | null;
-  offer?: unknown; days?: number | null;
+  offer?: unknown; days?: number | null; like_count?: number | null; comment_count?: number | null;
   target_count: number; current_count: number | null; target_price: number | null;
   status: string; expires_at: string | null; created_at: string;
 };
