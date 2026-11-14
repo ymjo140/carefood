@@ -23,7 +23,7 @@ export function clock(seconds: number) {
 /** 칸 하나 — 누르면 그 글(식단) 또는 공구 보기로 */
 export function ReelTile({ href, image, tag, author, line, label, seconds }: {
   href: string; image?: string | null; tag: string; author: string; line: ReactNode;
-  /** 영상이면 길이(초) — 오른쪽 위에 재생 표시 */
+  /** 영상이면 길이(초) — 오른쪽 위에 재생 표시(길이는 읽어 주는 이름과 보기 화면에) */
   seconds?: number | null;
   /** 읽어 주는 이름 — "민지의 공구: 닭가슴살 현미 볶음밥, 관심 23명" */
   label: string;
@@ -34,8 +34,9 @@ export function ReelTile({ href, image, tag, author, line, label, seconds }: {
         <ProductImage src={image} iconSize={32} />
         <span className="absolute top-2 left-2 h-6 px-2 rounded-sm bg-surface text-ink text-caption font-bold flex items-center">{tag}</span>
         {seconds != null && (
-          <span className="absolute top-2 right-2 h-6 px-1.5 rounded-sm bg-media-scrim text-on-media text-caption flex items-center gap-0.5">
-            <Icon name="play" size={12} filled /><span className="num">{clock(seconds)}</span>
+          // 칸이 좁아 종류 표(공구 D-14)와 겹치지 않게 재생 표시만 — 길이는 보기 화면에서
+          <span className="absolute top-2 right-2 size-6 rounded-sm bg-media-scrim text-on-media flex items-center justify-center" title={clock(seconds)}>
+            <Icon name="play" size={12} filled />
           </span>
         )}
         <span className="absolute inset-x-0 bottom-0 p-2 bg-media-scrim text-on-media flex flex-col gap-0.5">

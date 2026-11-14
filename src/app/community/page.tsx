@@ -174,14 +174,14 @@ export default function CommunityPage() {
           {reels.status === "loading" && <ReelSkeleton count={3} />}
           {reels.status === "done" && reels.items.map((r) => r.kind === "group_buy" ? (
             <ReelTile key={`g-${r.id}`} href={`/group-buy/${r.id}`} image={r.image} author={r.author} seconds={r.seconds}
-              tag={r.days_left != null ? (r.days_left === 0 ? "공구 오늘 마감" : `공구 D-${r.days_left}`) : "공구"}
-              label={`${r.author}의 공구: ${r.product_name}${r.pct ? `, ${r.pct}% 할인 희망` : ""}, ${r.current_count}명 모임`}
+              tag={r.days_left != null ? (r.days_left === 0 ? "공구 D-day" : `공구 D-${r.days_left}`) : "공구"}
+              label={`${r.author}의 공구${r.seconds != null ? ` 영상 ${r.seconds}초` : ""}: ${r.product_name}${r.pct ? `, ${r.pct}% 할인 희망` : ""}, ${r.current_count}명 모임`}
               line={r.pct
                 ? <><span className="num font-bold">{r.pct}%</span> · <span className="num">{r.current_count}/{r.target_count}</span>명</>
                 : <>알림 <span className="num font-bold">{r.current_count}</span>/{r.target_count}명</>} />
           ) : (
             <ReelTile key={`m-${r.id}`} href={`/community/${r.id}`} image={r.image} tag="식단" author={r.author} seconds={r.seconds}
-              label={`${r.author}의 식단${r.text ? `: ${r.text}` : ""}`}
+              label={`${r.author}의 식단${r.seconds != null ? ` 영상 ${r.seconds}초` : ""}${r.text ? `: ${r.text}` : ""}`}
               line={r.protein_g != null
                 ? <>단백질 <span className="num font-bold">{Math.round(r.protein_g)}</span>g {r.meal_type ? mealMeta(r.meal_type).label : ""}</>
                 : r.kcal != null
