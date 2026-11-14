@@ -21,6 +21,8 @@ export type OfferDraft = {
 
 const digits = (v: string) => v.replace(/[^0-9]/g, "").slice(0, 9);
 const won = (n: number) => n.toLocaleString("ko-KR");
+/** 입력 칸에 보일 때는 쉼표를 넣는다 (값은 숫자 글자로 둔다) */
+const comma = (v: string) => (v === "" ? "" : Number(v).toLocaleString("ko-KR"));
 
 export function newOption(packs: number, lowestUnit: number | null, pct = 15): DraftOption {
   return lowestUnit
@@ -79,24 +81,27 @@ export function OfferEditor({ draft, onChange, lowestUnit, lowestChecked, error 
           const fee = price ? shippingFee(ship, price) : 0;
           return (
             <div key={i} className="flex flex-col gap-2 rounded-md border border-line p-3">
+              {draft.options.length > 1 && (
+                <div className="flex items-center justify-between -mt-1 -mr-1">
+                  <span className="text-caption text-ink-2"><span className="num">{i + 1}</span>번째 구성</span>
+                  <IconButton icon="close" size="sm" label={`${i + 1}번째 구성 빼기`}
+                    onClick={() => set({ options: draft.options.filter((_, j) => j !== i) })} />
+                </div>
+              )}
               <div className="flex items-end gap-2">
-                <Field label="묶음" className="w-24 shrink-0">
+                <Field label="묶음" className="w-20 shrink-0">
                   <UnitInput unit="개" value={o.packs} aria-label={`${i + 1}번째 구성 묶음 수량`} name={`offer_packs_${i}`}
                     onChange={(e) => setOption(i, { packs: digits(e.target.value) }, "packs")} />
                 </Field>
                 <Field label="공구가" className="flex-1 min-w-0">
-                  <UnitInput unit="원" value={o.price} aria-label={`${i + 1}번째 구성 공구가`} name={`offer_price_${i}`}
+                  <UnitInput unit="원" value={comma(o.price)} aria-label={`${i + 1}번째 구성 공구가`} name={`offer_price_${i}`}
                     onChange={(e) => setOption(i, { price: digits(e.target.value) }, "price")} />
                 </Field>
                 {lowestUnit && (
-                  <Field label="할인" className="w-20 shrink-0">
+                  <Field label="할인" className="w-18 shrink-0">
                     <UnitInput unit="%" value={o.pct} aria-label={`${i + 1}번째 구성 할인율`} name={`offer_pct_${i}`}
                       onChange={(e) => setOption(i, { pct: digits(e.target.value).slice(0, 2) }, "pct")} />
                   </Field>
-                )}
-                {draft.options.length > 1 && (
-                  <IconButton icon="close" size="sm" label={`${i + 1}번째 구성 빼기`} className="mb-1"
-                    onClick={() => set({ options: draft.options.filter((_, j) => j !== i) })} />
                 )}
               </div>
               {unit != null && (
@@ -132,11 +137,11 @@ export function OfferEditor({ draft, onChange, lowestUnit, lowestChecked, error 
           <div className="flex gap-2">
             {draft.ship === "free_over" && (
               <Field label="무료 기준" className="flex-1">
-                <UnitInput unit="원" value={draft.over} name="offer_ship_over" onChange={(e) => set({ over: digits(e.target.value) })} />
+                <UnitInput unit="원" value={comma(draft.over)} name="offer_ship_over" onChange={(e) => set({ over: digits(e.target.value) })} />
               </Field>
             )}
             <Field label={draft.ship === "free_over" ? "아니면 배송비" : "배송비"} className="flex-1">
-              <UnitInput unit="원" value={draft.fee} name="offer_ship_fee" onChange={(e) => set({ fee: digits(e.target.value) })} />
+              <UnitInput unit="원" value={comma(draft.fee)} name="offer_ship_fee" onChange={(e) => set({ fee: digits(e.target.value) })} />
             </Field>
           </div>
         )}
@@ -147,7 +152,8 @@ export function OfferEditor({ draft, onChange, lowestUnit, lowestChecked, error 
         <span className="text-label font-medium text-ink">증정 <span className="font-regular text-ink-2">· 선택</span></span>
         <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="증정">
           {([["none", "없음"], ["plus", "몇 개 사면 1개 더"], ["first", "선착순 증정"]] as const).map(([k, l]) => (
-            <Chip key={k} role="radio" aria-checked={draft.gift === k} selected={draft.gift === k} onClick={() => set({ gift: k })}>{l}</Chip>
+            <Chip key={k} role="radio" aria-checked={draft.gift === k} selected={draft.gift === k}
+              onClick={() => set({ gift: k, giftN: draft.gift === k ? draft.giftN : k === "plus" ? "10" : k === "first" ? "30" : "" })}>{l}</Chip>
           ))}
         </div>
         {draft.gift === "plus" && (
