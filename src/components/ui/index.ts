@@ -9,7 +9,8 @@ export { Button, LinkButton, IconButton, IconLink, TextLink, TextButton, buttonC
 export { Badge, type BadgeTone } from "./Badge";
 export { Chip, ChipRow } from "./Chip";
 export { Card, CardActions, CardButton } from "./Card";
-export { Input, Textarea, Select, Field, SearchField, UnitInput, RangeInput } from "./Field";
+export { Input, Textarea, Select, Field, SearchField, UnitInput, RangeInput, Checkbox } from "./Field";
+export { FilePick } from "./FilePick";
 export { Tabs, type TabItem } from "./Tabs";
 export { Sheet, ConfirmSheet } from "./Sheet";
 export { ToastProvider, useToast } from "./Toast";

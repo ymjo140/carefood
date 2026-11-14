@@ -74,20 +74,22 @@ const PAGE = 50;
  * 주문 목록 — 상태로 서버에서 거른 뒤 묶는다(최근 몇 건만 불러와 화면에서 거르면 오래된 새 주문이 빠진다).
  * 끝난 주문은 page 로 50묶음씩. 줄은 묶음 단위로 함께 움직이므로 상태로 걸러도 묶음이 쪼개지지 않는다.
  */
-export async function listPartnerOrders(sb: Sb, partnerId: string, opt: { status?: string | null; since?: string | null; limit?: number; page?: number } = {}): Promise<PartnerOrder[]> {
+export async function listPartnerOrders(sb: Sb, partnerId: string, opt: { status?: string | null; since?: string | null; limit?: number; page?: number; open?: boolean; cap?: number } = {}): Promise<PartnerOrder[]> {
   const status = opt.status === "done" ? "done" : opt.status && (FULFIL as readonly string[]).includes(opt.status) ? (opt.status as Fulfil) : null;
-  const size = Math.min(Math.max(opt.limit || (status === "done" ? PAGE : 200), 1), 200);
+  const cap = opt.cap || 200;
+  const size = Math.min(Math.max(opt.limit || (status === "done" ? PAGE : cap), 1), cap);
   const page = Math.max(0, Math.floor(opt.page || 0));
   // 묶음 수로 자르려면 줄을 넉넉히 — 한 묶음이 줄 여러 개
-  let q = sb.from("order_items").select(COLS).eq("partner_id", partnerId).not("orders.paid_at", "is", null).order("created_at", { ascending: status === "new" || status === "accepted" }).limit(5000);
+  let q = sb.from("order_items").select(COLS).eq("partner_id", partnerId).not("orders.paid_at", "is", null).order("created_at", { ascending: status === "new" || status === "accepted" || !!opt.open }).limit(5000);
   if (status === "done") q = q.in("fulfil_status", ["delivered", "canceled"]);
   else if (status) q = q.eq("fulfil_status", status);
+  else if (opt.open) q = q.in("fulfil_status", ["new", "accepted"]);
   if (opt.since) q = q.gte("created_at", opt.since);
   const { data, error } = await q;
   if (error) throw new Error(error.message);
   let all = group((data || []) as Row[]);
   // 처리할 주문은 오래된 것부터(먼저 들어온 주문을 먼저), 끝난 주문은 최근 것부터
-  if (status === "new" || status === "accepted") all = all.reverse();
+  if (status === "new" || status === "accepted" || opt.open) all = all.reverse();
   const list = all.slice(page * size, page * size + size);
   // 첫 주문 표시 — 고객마다 처음 산 주문 (lib/partner/customers.ts 와 같은 셈)
   const firsts = new Set((await loadBuyers(sb, partnerId)).map((b) => b.live[0]?.id).filter(Boolean));

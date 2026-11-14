@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Badge, Button, Card, EmptyState, Field, Input, ListRow, SectionHeader, Select, SkeletonList, TextButton, Textarea, buttonClass, timeAgo, useToast } from "@/components/ui";
+import { Badge, Button, Card, EmptyState, Field, ListRow, SectionHeader, Select, SkeletonList, TextButton, Textarea, FilePick, buttonClass, timeAgo, useToast } from "@/components/ui";
 
 type Upload = {
   id: string; file_name: string | null; row_count: number; note: string | null; status: "waiting" | "confirmed" | "returned" | "canceled";
@@ -21,7 +21,6 @@ export function AdminAgency({ partners }: { partners: { slug: string; name: stri
   const [note, setNote] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
   const seq = useRef(0); // 올리기·거둬들이기 뒤 다시 불러오기가 겹치면 마지막 응답만 쓴다
 
   const load = useCallback(async () => {
@@ -47,7 +46,6 @@ export function AdminAgency({ partners }: { partners: { slug: string; name: stri
       if (!r.ok) throw new Error(d.error);
       toast.show(`대신 올렸어요. ${d.rows}줄 — 업체가 반영하기를 누르면 들어가요`);
       setFile(null); setNote("");
-      if (fileRef.current) fileRef.current.value = "";
       load();
     } catch (e2) {
       toast.show(`올리지 못했어요. ${(e2 as Error).message || "다시 시도해 주세요"}`, { tone: "danger" });
@@ -83,11 +81,7 @@ export function AdminAgency({ partners }: { partners: { slug: string; name: stri
             <Textarea value={note} maxLength={500} rows={2} onChange={(e) => setNote(e.target.value)} />
           </Field>
           <div className="flex flex-wrap items-center gap-2">
-            <label className={buttonClass({ variant: "secondary" })}>
-              파일 고르기
-              <Input ref={fileRef} type="file" accept=".xlsx" className="sr-only" onChange={(e) => setFile(e.target.files?.[0] || null)} />
-            </label>
-            <span className="text-label text-ink-2 min-w-0 truncate">{file ? file.name : "고른 파일이 없어요"}</span>
+            <FilePick accept=".xlsx" file={file} onChange={setFile} />
             <Button type="submit" className="ml-auto" disabled={!file || !slug} loading={busy === "upload"}>대신 올리기</Button>
           </div>
         </form>
