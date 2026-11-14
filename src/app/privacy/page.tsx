@@ -10,7 +10,7 @@ export default function PrivacyPage() {
   return (
     <Page width="default">
       <h1 className="text-title font-bold text-ink mb-1">개인정보처리방침</h1>
-      <p className="text-label text-ink-2 mb-8">시행일: 2026년 11월 21일</p>
+      <p className="text-label text-ink-2 mb-8">시행일: 2026년 11월 14일</p>
 
       <div className="flex flex-col gap-8 text-label text-ink-2">
         {/* 1조 */}
