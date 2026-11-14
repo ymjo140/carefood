@@ -42,7 +42,8 @@ function LoginContent() {
 
         {/* 카카오 — 인스타·카톡 안 브라우저에서도 되는 첫 입구. 동의항목 없이 회원번호만 쓴다 */}
         <div className="flex flex-col gap-3 mb-6">
-          <KakaoButton href={`/auth/kakao${returnTo ? `?next=${encodeURIComponent(returnTo)}` : ""}`} loading={kakaoBusy} onClick={() => setKakaoBusy(true)} />
+          <KakaoButton href={`/auth/kakao${returnTo ? `?next=${encodeURIComponent(returnTo)}` : ""}`} label={mode === "login" ? "카카오로 로그인하기" : "카카오로 가입하기"} loading={kakaoBusy} onClick={() => setKakaoBusy(true)} />
+          <p className="text-caption text-ink-2 text-center">{mode === "login" ? "처음이면 이 버튼으로 바로 가입돼요" : "이미 가입했으면 같은 버튼으로 로그인돼요"}</p>
           {callbackError && <Notice tone="danger">{callbackError}</Notice>}
         </div>
 

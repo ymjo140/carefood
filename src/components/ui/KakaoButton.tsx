@@ -6,7 +6,7 @@ import { Spinner } from "./Layout";
  * 색은 kakao / on-kakao 토큰, 이 버튼에만 쓴다. 높이 44px(md 버튼과 같음), 둥글기 md.
  * 서버 경로(/auth/kakao)로 가는 링크라 a 로 그린다. 누르면 다시 누를 수 없게 loading 을 켠다.
  */
-export function KakaoButton({ href, label = "카카오로 시작하기", loading, onClick, className }: {
+export function KakaoButton({ href, label = "카카오로 로그인하기", loading, onClick, className }: {
   href: string; label?: string; loading?: boolean; onClick?: () => void; className?: string;
 }) {
   return (
