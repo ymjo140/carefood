@@ -6,6 +6,7 @@
  *   · API : 그중 2개 가격·판매 상태만 바꿈 → ingestRows("api")
  *   · 대행: 예시 제품 3개를 케어푸드가 대신 올린 것으로 → 업체가 '반영하기'를 눌러야 들어간다
  *   · 주문: 예시 고객 18명 · 지난 170일 주문 (orders.is_demo) — 고객·주문·정산 화면을 채운다
+ *   · 협업: 예시 크리에이터 3명(테스트 업체에만 보임) · 받은 협업 하나(코드) · 답 기다리는 제안 하나
  *   · 혜택: 예시 쿠폰 2개(이름이 "예시 "로 시작) · 첫 주문 고객에게 준 쿠폰 · 한 주문에서 쓴 쿠폰 · 첫 주문 감사 자동 알림
  * 예시 제품은 검수 대기로만 둔다. 승인하면 실제 제품 목록(products)에 들어가 다른 사용자에게 보이기 때문이다.
  * 제품 코드는 EX- 로 시작하고, 예시 고객은 demo- 로 시작한다. "예시 지우기"가 이것만 지운다.
@@ -15,8 +16,8 @@ import { parseRow } from "./schema";
 
 type Sb = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
-export const DEMO_SKU_PREFIX = "EX-";
-export const DEMO_USER_PREFIX = "demo-";
+import { DEMO_SKU_PREFIX, DEMO_USER_PREFIX } from "./demo-ids";
+export { DEMO_SKU_PREFIX, DEMO_USER_PREFIX };
 
 const DAY = 86400e3;
 const kstDay = (t: number) => new Date(t + 9 * 3600e3).toISOString().slice(0, 10);
@@ -240,7 +241,36 @@ export async function seedDemo(sb: Sb, partner: Partner, userId: string | null):
   }).select("id").single();
   if (aErr) throw new Error(aErr.message);
   const o = await seedDemoOrders(sb, partner);
+  await seedDemoCreators(sb, partner);
   return { excel, api, agency_id: up.id, ...o };
+}
+
+/** 예시 크리에이터 3명(협업 제안 받기 켬, 테스트 업체에만 보임) + 협업 하나(받음·코드) + 제안 하나(답 기다림) + 코드로 받은 쿠폰 하나 */
+async function seedDemoCreators(sb: Sb, partner: Partner) {
+  const people = [
+    { n: 1, nick: "예시 고단백러", intro: "운동하면서 먹는 도시락을 기록해요", topics: ["고단백", "도시락"] },
+    { n: 2, nick: "예시 저염일기", intro: "싱겁게 먹는 한 끼를 나눠요", topics: ["저염 식단"] },
+    { n: 3, nick: "예시 간단식단", intro: "바쁜 날의 가벼운 한 끼", topics: ["다이어트", "도시락"] },
+  ].map((p) => ({ ...p, id: `${DEMO_USER_PREFIX}creator-${partner.slug}-${p.n}` }));
+  const { error: pErr } = await sb.from("community_profiles").upsert(people.map((p) => ({ actor_id: p.id, nickname: p.nick, nickname_key: `${p.nick}-${partner.slug}`.replace(/\s/g, "").toLowerCase() })), { onConflict: "actor_id" });
+  if (pErr) throw new Error(pErr.message);
+  const { error: cErr } = await sb.from("creator_profiles").upsert(people.map((p) => ({ user_id: p.id, is_open: true, intro: p.intro, topics: p.topics, opened_at: new Date().toISOString(), updated_at: new Date().toISOString() })), { onConflict: "user_id" });
+  if (cErr) throw new Error(cErr.message);
+  const { error: dErr } = await sb.from("partner_collabs").delete().eq("partner_id", partner.id).like("user_id", `${DEMO_USER_PREFIX}%`);
+  if (dErr) throw new Error(dErr.message);
+  const { data: coupon, error: qErr } = await sb.from("partner_coupons").select("id, valid_days").eq("partner_id", partner.id).eq("name", `${DEMO_COUPON}다시 찾아 주세요`).maybeSingle();
+  if (qErr) throw new Error(qErr.message);
+  const code = `CF${partner.id.replace(/-/g, "").slice(0, 6).toUpperCase()}`;
+  const { data: cs, error: iErr } = await sb.from("partner_collabs").insert([
+    { partner_id: partner.id, user_id: people[0].id, title: "고단백 도시락 써 보실래요?", offer: "신제품 5식을 보내 드려요. 드셔 보고 솔직한 후기를 커뮤니티에 남겨 주세요", product_name: "닭가슴살 현미 볶음밥 도시락", coupon_id: coupon?.id || null, code, status: "accepted", decided_at: new Date(Date.now() - 5 * DAY).toISOString(), created_at: new Date(Date.now() - 7 * DAY).toISOString() },
+    { partner_id: partner.id, user_id: people[1].id, title: "저염 한 끼 같이 알려요", offer: "나트륨 600mg 이하 도시락 3식을 보내 드려요. 마음에 들면 글 하나 부탁드려요", product_name: "두부 버섯 덮밥", status: "proposed" },
+  ]).select("id, status");
+  if (iErr) throw new Error(iErr.message);
+  const accepted = cs.find((c: { status: string }) => c.status === "accepted");
+  if (coupon && accepted) {
+    const { error: gErr } = await sb.from("coupon_grants").insert({ coupon_id: coupon.id, partner_id: partner.id, user_id: `${DEMO_USER_PREFIX}${partner.slug}-03`, source: "influencer", collab_id: accepted.id, expires_at: new Date(Date.now() + coupon.valid_days * DAY).toISOString() });
+    if (gErr && gErr.code !== "23505") throw new Error(gErr.message);
+  }
 }
 
 /** 예시 지우기 — 예시 주문·예시 제품(승인 안 된 EX- 만)·기다리는 예시 대행 */
@@ -255,6 +285,8 @@ export async function clearDemo(sb: Sb, partnerId: string) {
   }
   const { error: uErr } = await sb.from("partner_agency_uploads").delete().eq("partner_id", partnerId).eq("file_name", "예시_대행_목록.xlsx");
   if (uErr) throw new Error(uErr.message);
+  const { error: kErr } = await sb.from("partner_collabs").delete().eq("partner_id", partnerId).like("user_id", `${DEMO_USER_PREFIX}%`);
+  if (kErr) throw new Error(kErr.message);
   const { error: cErr } = await sb.from("partner_coupons").delete().eq("partner_id", partnerId).like("name", `${DEMO_COUPON}%`); // 준 쿠폰도 같이 지워진다
   if (cErr) throw new Error(cErr.message);
   return { orders, items: ids.length };
