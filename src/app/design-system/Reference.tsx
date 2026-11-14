@@ -801,8 +801,8 @@ export default function Reference({ status }: { status: DsStatus }) {
           </Demo>
           <Demo label="댓글 한 줄 — 공구 질문·진행자 답. 한 단계 답은 nested, 이어지면 세로선" code="<CommentItem nickname badge createdAt content onReply onDelete />">
             <div className="flex flex-col">
-              <CommentItem nickname="서연" createdAt="2026-11-13T09:00:00+09:00" content="한 팩 양이 얼마나 돼요?" line onReply={() => {}} />
-              <CommentItem nested nickname="민지" badge="진행자" createdAt="2026-11-13T10:00:00+09:00" content="300g이에요. 한 끼로 딱 맞아요" onReply={() => {}} onDelete={() => {}} />
+              <CommentItem nickname="서연" timeLabel="2시간 전" content="한 팩 양이 얼마나 돼요?" line onReply={() => {}} />
+              <CommentItem nested nickname="민지" badge="진행자" timeLabel="1시간 전" content="300g이에요. 한 끼로 딱 맞아요" onReply={() => {}} onDelete={() => {}} />
             </div>
           </Demo>
           <Demo label="숏폼 보기 위쪽 — 사진을 옆으로 넘기고, 위 띠에 몇 번째 · 올린 사람 · 닫기" code="<ReelMedia urls header closeHref />">
