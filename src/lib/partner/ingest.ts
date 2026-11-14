@@ -40,8 +40,8 @@ export async function applyOffers(sb: Sb, partnerId: string, itemId: string, pro
   const { error: dErr } = await sb.from("partner_offers").delete().eq("item_id", itemId).not("channel", "in", `(${keep.join(",")})`);
   if (dErr) throw new Error(`없어진 판매처를 지우지 못했어요: ${dErr.message}`);
   // 살 수 있는지는 제품에도 (추천·식단 채우기가 is_purchasable 로 거른다) — 운영 중인 업체만
-  const { data: pa } = await sb.from("partners").select("status").eq("id", partnerId).single();
-  const { error: pErr } = await sb.from("products").update({ is_purchasable: onSale(item) && pa?.status === "active", updated_at: now }).eq("id", productId);
+  const { data: pa } = await sb.from("partners").select("status, is_demo").eq("id", partnerId).single();
+  const { error: pErr } = await sb.from("products").update({ is_purchasable: onSale(item) && pa?.status === "active" && !pa?.is_demo, updated_at: now }).eq("id", productId);
   if (pErr) throw new Error(`판매 상태를 반영하지 못했어요: ${pErr.message}`);
   // 재고가 0 인 제품은 판매 중이어도 살 수 없다 — 판매 기간·재고를 함께 보는 DB 함수로 한 번 더 맞춘다 (lib/partner/stock.ts)
   const { error: rErr } = await sb.rpc("partner_refresh_availability", { p_item: itemId });
@@ -146,7 +146,8 @@ export async function ingestRows(sb: Sb, partner: Partner, rows: { row: number; 
 }
 
 /** 제품 표에 들어갈 값 (100g 기준) */
-export function productValues(item: PartnerItem, partnerActive: boolean) {
+/** demo: 테스트 업체(is_demo) 제품 — 업체 화면에서만 쓰고 앱에는 숨긴다(검색·추천·주문에 안 나옴) */
+export function productValues(item: PartnerItem, partnerActive: boolean, demo = false) {
   const p = item.per100;
   const cat = CATEGORIES[item.category];
   const values = {
@@ -170,8 +171,8 @@ export function productValues(item: PartnerItem, partnerActive: boolean) {
     allergens: item.allergens,
     nutrition_source: item.nutrition_source,
     image_url: item.images[0] || null,
-    is_active: true,
-    is_purchasable: onSale(item) && partnerActive,
+    is_active: !demo,
+    is_purchasable: onSale(item) && partnerActive && !demo,
     data_source: "partner",
     updated_at: new Date().toISOString(),
   };
@@ -184,10 +185,12 @@ export function productValues(item: PartnerItem, partnerActive: boolean) {
 
 /** 검수 통과 → 제품·가격 반영. link: 붙일 기존 제품 id (없으면 새 제품, 이미 연결돼 있으면 그 제품) */
 export async function approveItem(sb: Sb, itemId: string, link: string | null) {
-  const { data: it, error } = await sb.from("partner_items").select("id, partner_id, data, product_id, partners(status)").eq("id", itemId).single();
+  const { data: it, error } = await sb.from("partner_items").select("id, partner_id, data, product_id, partners(status, is_demo)").eq("id", itemId).single();
   if (error || !it) throw new Error("제품을 찾지 못했어요");
   const item = it.data as PartnerItem;
-  const values = productValues(item, it.partners?.status === "active");
+  const demo = it.partners?.is_demo === true;
+  if (demo && link) throw new Error("테스트 업체 제품은 식약처 제품에 붙이지 않아요. 새 제품으로 반영해 주세요");
+  const values = productValues(item, it.partners?.status === "active", demo);
   let productId: string | null = it.product_id || link;
 
   if (productId) {
@@ -225,12 +228,12 @@ export async function rejectItem(sb: Sb, itemId: string, note: string) {
 
 /** 업체 상태가 바뀌면 그 업체 제품의 '살 수 있음'도 맞춘다 (운영 중일 때만 추천·식단 채우기에 나온다) */
 export async function syncPartnerProducts(sb: Sb, partnerId: string) {
-  const { data: pa } = await sb.from("partners").select("status").eq("id", partnerId).single();
+  const { data: pa } = await sb.from("partners").select("status, is_demo").eq("id", partnerId).single();
   const { data: items, error } = await sb.from("partner_items").select("product_id, approved_data, stock").eq("partner_id", partnerId).not("product_id", "is", null);
   if (error) throw new Error(error.message);
   for (const it of items || []) {
     if (!it.approved_data) continue;
-    const { error: uErr } = await sb.from("products").update({ is_purchasable: pa?.status === "active" && onSale(it.approved_data) && (it.stock ?? 1) > 0, updated_at: new Date().toISOString() }).eq("id", it.product_id);
+    const { error: uErr } = await sb.from("products").update({ is_purchasable: pa?.status === "active" && !pa?.is_demo && onSale(it.approved_data) && (it.stock ?? 1) > 0, updated_at: new Date().toISOString() }).eq("id", it.product_id);
     if (uErr) throw new Error(uErr.message);
   }
 }
