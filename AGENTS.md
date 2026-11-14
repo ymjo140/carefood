@@ -18,7 +18,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - 데이터 영역은 불러오는 중·비어 있음·실패·채워짐 네 상태. 오류를 삼키지 않는다.
 - 버튼은 동작("저장하기"), 완료 알림은 과거형("저장했어요"), 해요체 하나.
 - 끝나면 `npm run ds:lint` 오류 0, `npm run ds:wiring -- --base=<고치기 전 커밋>` 실패 0.
-- **배포는 몰아서** — main 에 합쳐도 바로 배포되지 않는다(vercel.json `git.deploymentEnabled.main=false`, Vercel Hobby 하루 배포 한도 때문). 2시간마다(Supabase 예약 `batched-deploy`) 운영 커밋과 main 끝이 다르면 배포 훅으로 배포한다(`src/lib/deploy-batch.ts`, `/api/deploy/run`). 급하면 관리자가 `POST /api/deploy/run?now=1`. PR 미리보기도 한도를 쓰니 작은 수정은 PR 하나로 묶는다.
+- **배포는 사용자가 "배포해"라고 할 때만** — main 에 합쳐도 자동 배포되지 않는다(vercel.json `git.deploymentEnabled.main=false`, Vercel Hobby 하루 배포 한도 때문). 배포하라고 하면 Vercel 에서 main 끝 커밋을 production 으로 만든다(Vercel MCP `create_deployment`, gitSource github ymjo140/carefood ref main). PR 미리보기도 한도를 쓰니 작은 수정은 PR 하나로 묶는다.
 - 돈·상태 계산(정산·구매확정·환불·반품·쿠폰·마감·주문 상태)을 고치면 `npm test` 통과 — 규칙이 바뀌면 `tests/` 의 시험도 같이 고친다. 시험은 가짜 DB(`tests/fake-sb.ts`, 1,000줄 한도까지 흉내)로 돈다.
 
 ## 코드 리뷰 (쓰고 나서 스스로, 올리기 전에)
