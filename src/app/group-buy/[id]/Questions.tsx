@@ -13,8 +13,8 @@ import {
 type Q = { id: string; parent_id: string | null; author_nickname: string; content: string; created_at: string; is_mine: boolean; is_host: boolean };
 export type QuestionsHandle = { focus: () => void };
 
-export const Questions = forwardRef<QuestionsHandle, { groupBuyId: string; hostName: string; onCount: (n: number) => void }>(
-  function Questions({ groupBuyId, hostName, onCount }, ref) {
+export const Questions = forwardRef<QuestionsHandle, { groupBuyId: string; hostName: string; closed?: boolean; onCount: (n: number) => void }>(
+  function Questions({ groupBuyId, hostName, closed = false, onCount }, ref) {
     const toast = useToast();
     const [state, setState] = useState<{ status: "loading" | "error" | "done"; items: Q[]; canModerate: boolean }>({ status: "loading", items: [], canModerate: false });
     const [attempt, setAttempt] = useState(0);
@@ -89,9 +89,9 @@ export const Questions = forwardRef<QuestionsHandle, { groupBuyId: string; hostN
     return (
       <section aria-label="질문" className="flex flex-col gap-3">
         <SectionHeader title={<>질문 {state.status === "done" && state.items.length > 0 && <span className="num text-ink-2">{state.items.length}</span>}</>}
-          description={`양·보관·맛처럼 궁금한 걸 ${hostName} 님에게 물어보세요`} />
+          description={closed ? "마감된 공구라 새 질문은 받지 않아요" : `양·보관·맛처럼 궁금한 걸 ${hostName} 님에게 물어보세요`} />
 
-        <form className="flex flex-col gap-2" onSubmit={(e) => { e.preventDefault(); send(); }}>
+        {!closed && <form className="flex flex-col gap-2" onSubmit={(e) => { e.preventDefault(); send(); }}>
           {replyTo && (
             <Chip size="sm" selected className="self-start" aria-label={`${replyTo.nick} 님에게 답하기 그만두기`} onClick={() => setReplyTo(null)}>
               {replyTo.nick} 님에게 답하기 <Icon name="close" size={14} />
@@ -102,7 +102,7 @@ export const Questions = forwardRef<QuestionsHandle, { groupBuyId: string; hostN
               placeholder={replyTo ? `${replyTo.nick} 님에게 답하기` : "예: 한 팩 양이 얼마나 돼요?"} onChange={(e) => setText(e.target.value)} />
             <Button type="submit" variant="secondary" className="shrink-0" disabled={!text.trim()} loading={sending}>{replyTo ? "답하기" : "질문하기"}</Button>
           </div>
-        </form>
+        </form>}
 
         {state.status === "loading" && <SkeletonList rows={2} thumb={false} />}
         {state.status === "error" && (
@@ -112,7 +112,7 @@ export const Questions = forwardRef<QuestionsHandle, { groupBuyId: string; hostN
           </div>
         )}
         {state.status === "done" && tops.length === 0 && (
-          <p className="text-label text-ink-2 py-4">아직 질문이 없어요. 궁금한 게 있으면 첫 질문을 남겨 보세요</p>
+          <p className="text-label text-ink-2 py-4">{closed ? "남은 질문이 없어요" : "아직 질문이 없어요. 궁금한 게 있으면 첫 질문을 남겨 보세요"}</p>
         )}
         {state.status === "done" && tops.length > 0 && (
           <ul className="flex flex-col">
@@ -121,10 +121,10 @@ export const Questions = forwardRef<QuestionsHandle, { groupBuyId: string; hostN
               return (
                 <li key={q.id} className="flex flex-col">
                   <CommentItem nickname={q.author_nickname} badge={q.is_host ? "진행자" : undefined} createdAt={q.created_at} content={q.content}
-                    line={answers.length > 0} onReply={() => reply(q, q.author_nickname)} onDelete={canDelete(q) ? () => setRemoving(q) : undefined} />
+                    line={answers.length > 0} onReply={closed ? undefined : () => reply(q, q.author_nickname)} onDelete={canDelete(q) ? () => setRemoving(q) : undefined} />
                   {answers.map((a) => (
                     <CommentItem key={a.id} nested nickname={a.author_nickname} badge={a.is_host ? "진행자" : undefined} createdAt={a.created_at} content={a.content}
-                      onReply={() => reply(q, a.author_nickname)} onDelete={canDelete(a) ? () => setRemoving(a) : undefined} />
+                      onReply={closed ? undefined : () => reply(q, a.author_nickname)} onDelete={canDelete(a) ? () => setRemoving(a) : undefined} />
                   ))}
                 </li>
               );

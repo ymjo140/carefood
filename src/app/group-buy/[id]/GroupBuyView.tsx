@@ -201,7 +201,7 @@ export default function GroupBuyView() {
           <Notice icon="lock">판매는 준비가 끝나면 열려요. 알림을 받으면 열릴 때 가장 먼저 알려 드려요</Notice>
         )}
 
-        <Questions ref={questions} groupBuyId={gb.id} hostName={gb.host_nickname}
+        <Questions ref={questions} groupBuyId={gb.id} hostName={gb.host_nickname} closed={closed}
           onCount={(n) => setState((s) => (s.gb ? { ...s, gb: { ...s.gb, comment_count: n } } : s))} />
       </div>
 
