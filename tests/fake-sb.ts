@@ -51,6 +51,7 @@ class Builder {
   is(c: string, v: null) { this.desc.push(`is ${c}`); this.filters.push((r) => (get(r, c) ?? null) === v); return this; }
   not(c: string, op: string, v: unknown) {
     if (op === "is") this.filters.push((r) => (get(r, c) ?? null) !== v);
+    else if (op === "in") { const vs = String(v).replace(/^\(|\)$/g, "").split(","); this.filters.push((r) => !vs.includes(String(get(r, c)))); }
     else throw new Error(`not ${op} 은 흉내 내지 않아요`);
     return this;
   }

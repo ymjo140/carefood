@@ -305,8 +305,8 @@ export async function partnerOffersFor(sb: Sb, productIds: string[]): Promise<Ma
   const out = new Map<string, Offer>();
   if (productIds.length === 0) return out;
   const { data, error } = await sb.from("partner_offers")
-    .select("product_id, price, partner_id, partners!inner(slug, name, status), partner_items!inner(partner_sku, status, approved_data)")
-    .in("product_id", productIds.slice(0, 100)).eq("is_available", true).eq("partners.status", "active").eq("partner_items.status", "approved");
+    .select("product_id, price, partner_id, partners!inner(slug, name, status, is_demo), partner_items!inner(partner_sku, status, approved_data)")
+    .in("product_id", productIds.slice(0, 100)).eq("is_available", true).eq("partners.status", "active").eq("partners.is_demo", false).eq("partner_items.status", "approved");
   if (error) throw new Error(error.message);
   for (const o of data || []) {
     const cur = out.get(o.product_id);
