@@ -5,13 +5,13 @@
  *  · 받는 분 정보는 주문자가 제3자 제공에 동의했고, 배송이 끝나기 전일 때만 준다.
  */
 import type { Partner } from "./ingest";
-import { CARRIERS, FULFIL, FULFIL_LABEL, type Fulfil, type Shipping } from "@/lib/order-status";
+import { CARRIERS, FULFIL, FULFIL_LABEL, deliverableAt, type Fulfil, type Shipping } from "@/lib/order-status";
 import { recomputeRefund, syncOrderStatus } from "@/lib/orders";
 import { loadBuyers } from "./customers";
 import { putBackRows } from "./stock";
 import { pushReady, sendToUser, type PushSub } from "@/lib/push";
 
-export { CARRIERS, FULFIL, FULFIL_LABEL, parseShipping, type Fulfil, type Shipping } from "@/lib/order-status";
+export { CARRIERS, FULFIL, FULFIL_LABEL, deliverableAt, parseShipping, type Fulfil, type Shipping } from "@/lib/order-status";
 
 type Sb = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -66,17 +66,59 @@ function group(rows: Row[]): PartnerOrder[] {
   return [...by.values()].sort((a, b) => b.ordered_at.localeCompare(a.ordered_at));
 }
 
-export async function listPartnerOrders(sb: Sb, partnerId: string, opt: { status?: string | null; since?: string | null; limit?: number } = {}): Promise<PartnerOrder[]> {
-  let q = sb.from("order_items").select(COLS).eq("partner_id", partnerId).not("orders.paid_at", "is", null).order("created_at", { ascending: false }).limit(2000);
-  if (opt.status && (FULFIL as readonly string[]).includes(opt.status)) q = q.eq("fulfil_status", opt.status);
+/** 업체 화면·API 의 상태 거르기 — FULFIL 하나, 또는 done(배송 완료·취소) */
+export type OrderFilter = Fulfil | "done";
+const PAGE = 50;
+
+/**
+ * 주문 목록 — 상태로 서버에서 거른 뒤 묶는다(최근 몇 건만 불러와 화면에서 거르면 오래된 새 주문이 빠진다).
+ * 끝난 주문은 page 로 50묶음씩. 줄은 묶음 단위로 함께 움직이므로 상태로 걸러도 묶음이 쪼개지지 않는다.
+ */
+export async function listPartnerOrders(sb: Sb, partnerId: string, opt: { status?: string | null; since?: string | null; limit?: number; page?: number } = {}): Promise<PartnerOrder[]> {
+  const status = opt.status === "done" ? "done" : opt.status && (FULFIL as readonly string[]).includes(opt.status) ? (opt.status as Fulfil) : null;
+  const size = Math.min(Math.max(opt.limit || (status === "done" ? PAGE : 200), 1), 200);
+  const page = Math.max(0, Math.floor(opt.page || 0));
+  // 묶음 수로 자르려면 줄을 넉넉히 — 한 묶음이 줄 여러 개
+  let q = sb.from("order_items").select(COLS).eq("partner_id", partnerId).not("orders.paid_at", "is", null).order("created_at", { ascending: status === "new" || status === "accepted" }).limit(5000);
+  if (status === "done") q = q.in("fulfil_status", ["delivered", "canceled"]);
+  else if (status) q = q.eq("fulfil_status", status);
   if (opt.since) q = q.gte("created_at", opt.since);
   const { data, error } = await q;
   if (error) throw new Error(error.message);
-  const list = group((data || []) as Row[]).slice(0, Math.min(Math.max(opt.limit || 100, 1), 200));
+  let all = group((data || []) as Row[]);
+  // 처리할 주문은 오래된 것부터(먼저 들어온 주문을 먼저), 끝난 주문은 최근 것부터
+  if (status === "new" || status === "accepted") all = all.reverse();
+  const list = all.slice(page * size, page * size + size);
   // 첫 주문 표시 — 고객마다 처음 산 주문 (lib/partner/customers.ts 와 같은 셈)
   const firsts = new Set((await loadBuyers(sb, partnerId)).map((b) => b.live[0]?.id).filter(Boolean));
   for (const o of list) o.first_order = firsts.has(o.order_id);
   return list;
+}
+
+export type OrderCounts = { new: number; accepted: number; shipped: number; cancel_requests: number; late: number; deliver_pending: number };
+const HOUR = 3600e3;
+export const LATE_HOURS = 24;
+export const DELIVER_PENDING_DAYS = 5;
+
+/** 처리할 주문 건수 — 상태별 묶음 수, 취소 요청, 24시간 넘게 못 보낸 주문, 5일 넘게 배송 완료를 안 누른 발송 */
+export async function countPartnerOrders(sb: Sb, partnerId: string, now = Date.now()): Promise<OrderCounts> {
+  const { data, error } = await sb.from("order_items").select("order_id, fulfil_status, cancel_requested_at, shipped_at, orders!inner(paid_at, status)")
+    .eq("partner_id", partnerId).in("fulfil_status", ["new", "accepted", "shipped"]).not("orders.paid_at", "is", null).limit(20000);
+  if (error) throw new Error(error.message);
+  const by = new Map<string, { s: string; req: boolean; paid: number; shipped: number | null }>();
+  for (const r of (data || []) as { order_id: string; fulfil_status: string; cancel_requested_at: string | null; shipped_at: string | null; orders: { paid_at: string; status: string } }[]) {
+    if (r.orders.status === "cancelled") continue;
+    if (!by.has(r.order_id)) by.set(r.order_id, { s: r.fulfil_status, req: false, paid: Date.parse(r.orders.paid_at), shipped: r.shipped_at ? Date.parse(r.shipped_at) : null });
+    if (r.cancel_requested_at && r.fulfil_status === "accepted") by.get(r.order_id)!.req = true;
+  }
+  const c: OrderCounts = { new: 0, accepted: 0, shipped: 0, cancel_requests: 0, late: 0, deliver_pending: 0 };
+  for (const o of by.values()) {
+    if (o.s === "new") c.new++; else if (o.s === "accepted") c.accepted++; else c.shipped++;
+    if (o.req) c.cancel_requests++;
+    if ((o.s === "new" || o.s === "accepted") && !o.req && o.paid < now - LATE_HOURS * HOUR) c.late++;
+    if (o.s === "shipped" && o.shipped !== null && o.shipped < now - DELIVER_PENDING_DAYS * 24 * HOUR) c.deliver_pending++;
+  }
+  return c;
 }
 
 export type FulfilInput = { status: unknown; carrier?: unknown; tracking_number?: unknown; reason?: unknown };
@@ -113,6 +155,11 @@ export async function updateFulfilment(sb: Sb, partner: Pick<Partner, "id">, ord
   } else if (to === "delivered") {
     if (from === "delivered") return { ok: true, order: current, changed: false };
     if (from !== "shipped") return { ok: false, code: "conflict", message: "발송한 주문만 배송 완료로 바꿀 수 있어요" };
+    const at = deliverableAt(current);
+    if (at !== null && at > Date.now()) {
+      const h = Math.ceil((at - Date.now()) / HOUR);
+      return { ok: false, code: "conflict", message: `발송하고 ${current.carrier === "direct" ? 1 : 12}시간이 지나야 배송 완료로 바꿀 수 있어요 (${h}시간 남음). 구매확정 8일이 이때부터 세져요` };
+    }
     patch.delivered_at = now;
   } else {
     if (from === "canceled") return { ok: true, order: current, changed: false };

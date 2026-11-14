@@ -1,36 +1,47 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Badge, Button, Card, CardActions, EmptyState, Field, Input, Select, SectionHeader, Sheet, SkeletonList, Tabs, timeAgo, useToast } from "@/components/ui";
-import { CARRIERS, FULFIL_LABEL, formatPhone, type Fulfil } from "@/lib/order-status";
+import { CARRIERS, FULFIL_LABEL, deliverableAt, formatPhone, type Fulfil } from "@/lib/order-status";
 import type { PartnerOrder } from "@/lib/partner/orders";
 
-type Filter = "new" | "accepted" | "shipped" | "done";
+export type OrderFilter = "new" | "accepted" | "shipped" | "done";
+type Filter = OrderFilter;
+type Counts = { new: number; accepted: number; shipped: number; cancel_requests: number; late: number; deliver_pending: number };
 const DAY: Record<string, string> = { mon: "월", tue: "화", wed: "수", thu: "목", fri: "금", sat: "토", sun: "일" };
 const won = (n: number) => `${n.toLocaleString("ko-KR")}원`;
 const TONE: Record<Fulfil, "neutral" | "positive" | "danger" | "brand"> = { new: "brand", accepted: "neutral", shipped: "neutral", delivered: "positive", canceled: "danger" };
 
-/** 주문 — 앱에서 들어온 주문을 접수하고 발송 처리한다 (결제가 끝난 주문만 온다) */
-export function Orders({ qs }: { qs: string }) {
+/**
+ * 주문 — 앱에서 들어온 주문을 접수하고 발송 처리한다 (결제가 끝난 주문만 온다).
+ * 상태는 서버에서 거르고 건수도 서버가 센다. 처리할 주문은 오래된 것부터, 끝난 주문은 50건씩 더 보기. 관리자 보기는 읽기 전용
+ */
+export function Orders({ qs, initialFilter }: { qs: string; initialFilter?: OrderFilter }) {
   const toast = useToast();
-  const [filter, setFilter] = useState<Filter>("new");
-  const [state, setState] = useState<{ status: "loading" | "error" | "done"; data: PartnerOrder[]; error?: string }>({ status: "loading", data: [] });
+  const [filter, setFilter] = useState<Filter>(initialFilter || "new");
+  const [state, setState] = useState<{ status: "loading" | "error" | "done"; data: PartnerOrder[]; counts?: Counts; readOnly?: boolean; hasMore?: boolean; page?: number; error?: string }>({ status: "loading", data: [] });
+  const [more, setMore] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [shipping, setShipping] = useState<PartnerOrder | null>(null);
   const [canceling, setCanceling] = useState<PartnerOrder | null>(null);
   const [carrier, setCarrier] = useState("cj");
   const [tracking, setTracking] = useState("");
   const [reason, setReason] = useState("");
+  const seq = useRef(0);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (f: Filter, page = 0) => {
+    const my = ++seq.current; // 상태를 빨리 바꾸면 마지막 응답만
     try {
-      const r = await fetch(`/api/partner/orders?${qs}`);
+      const r = await fetch(`/api/partner/orders?${qs}&status=${f}&page=${page}`);
       const d = await r.json();
       if (!r.ok) throw new Error(d.error);
-      setState({ status: "done", data: d.orders });
-    } catch (e) { setState({ status: "error", data: [], error: (e as Error).message || "불러오지 못했어요" }); }
-  }, [qs]);
-  useEffect(() => { load(); }, [load]); // eslint-disable-line react-hooks/set-state-in-effect -- 불러온 뒤에 상태를 바꾼다
+      if (my !== seq.current) return;
+      setState((s) => ({ status: "done", data: page > 0 ? [...s.data, ...d.orders] : d.orders, counts: d.counts, readOnly: d.read_only, hasMore: d.has_more, page }));
+    } catch (e) { if (my === seq.current) setState((s) => page > 0 ? s : { status: "error", data: [], error: (e as Error).message || "불러오지 못했어요" }); if (page > 0) toast.show("더 불러오지 못했어요. 다시 시도해 주세요", { tone: "danger" }); }
+    finally { if (my === seq.current) setMore(false); }
+  }, [qs, toast]);
+  useEffect(() => { load(filter); }, [load, filter]);
+  const pick = (f: Filter) => { setState((s) => ({ ...s, status: "loading", data: [] })); setFilter(f); }; // 건수는 그대로 두고 목록만 다시
 
   const send = async (o: PartnerOrder, body: Record<string, unknown>, doneMsg: string, failWhat: string) => {
     setBusy(o.order_id);
@@ -40,15 +51,16 @@ export function Orders({ qs }: { qs: string }) {
       if (!r.ok) throw new Error(d.error);
       toast.show(doneMsg);
       setShipping(null); setCanceling(null); setTracking(""); setReason("");
-      await load();
+      await load(filter);
     } catch (e) {
       toast.show(`${failWhat}하지 못했어요. ${(e as Error).message || "다시 시도해 주세요"}`, { tone: "danger" });
     } finally { setBusy(null); }
   };
 
-  const requests = state.data.filter((o) => o.status === "accepted" && o.cancel_requested_at).length;
-  const count = (f: Filter) => state.data.filter((o) => (f === "done" ? o.status === "delivered" || o.status === "canceled" : o.status === f)).length;
-  const shown = state.data.filter((o) => (filter === "done" ? o.status === "delivered" || o.status === "canceled" : o.status === filter));
+  const c = state.counts;
+  const requests = c?.cancel_requests || 0;
+  const shown = state.data;
+  const ro = !!state.readOnly;
 
   return (
     <section>
@@ -56,15 +68,21 @@ export function Orders({ qs }: { qs: string }) {
       {requests > 0 && filter !== "accepted" && (
         <p className="text-label text-ink mb-3">주문자가 취소를 요청한 주문이 <span className="num font-bold">{requests}</span>건 있어요. &lsquo;접수&rsquo;에서 확인해 주세요</p>
       )}
-      <Tabs variant="line" value={filter} onChange={setFilter} label="주문 상태" className="mb-3"
+      {c && (c.late > 0 || c.deliver_pending > 0) && (
+        <p className="text-label text-ink mb-3">
+          {c.late > 0 && <>결제하고 하루가 지나도록 보내지 않은 주문 <span className="num font-bold">{c.late}</span>건{c.deliver_pending > 0 && " · "}</>}
+          {c.deliver_pending > 0 && <>보낸 지 5일이 넘었는데 배송 완료를 누르지 않은 주문 <span className="num font-bold">{c.deliver_pending}</span>건</>}
+        </p>
+      )}
+      <Tabs variant="line" value={filter} onChange={pick} label="주문 상태" className="mb-3"
         items={[
-          { value: "new", label: "새 주문", count: count("new") }, { value: "accepted", label: "접수", count: count("accepted") },
-          { value: "shipped", label: "발송", count: count("shipped") }, { value: "done", label: "끝난 주문" },
+          { value: "new", label: "새 주문", count: c?.new }, { value: "accepted", label: "접수", count: c?.accepted },
+          { value: "shipped", label: "발송", count: c?.shipped }, { value: "done", label: "끝난 주문" },
         ]} />
       {state.status === "loading" ? <SkeletonList rows={3} thumb={false} />
         : state.status === "error" ? (
           <EmptyState title="주문을 불러오지 못했어요" description={state.error}
-            action={<Button size="sm" variant="secondary" icon="refresh" onClick={() => { setState({ status: "loading", data: [] }); load(); }}>다시 불러오기</Button>} />
+            action={<Button size="sm" variant="secondary" icon="refresh" onClick={() => { setState({ status: "loading", data: [] }); load(filter); }}>다시 불러오기</Button>} />
         ) : shown.length === 0 ? (
           <EmptyState title={filter === "new" ? "새 주문이 없어요" : filter === "done" ? "끝난 주문이 없어요" : `${FULFIL_LABEL[filter]} 상태의 주문이 없어요`}
             description={filter === "new" ? "앱에서 결제가 끝난 주문이 여기로 들어와요" : undefined} />
@@ -126,17 +144,25 @@ export function Orders({ qs }: { qs: string }) {
                 )}
                 {o.cancel_reason && <p className="text-label text-ink mt-2"><span className="text-ink-2">{o.canceled_by === "buyer" ? "주문자가 취소" : o.canceled_by === "admin" ? "케어푸드가 취소" : "취소 이유"} </span>{o.cancel_reason}</p>}
 
-                {(o.status === "new" || o.status === "accepted" || o.status === "shipped") && (
+                {!ro && (o.status === "new" || o.status === "accepted" || o.status === "shipped") && (
                   <CardActions className="mt-3">
                     {o.status === "new" && <Button variant="secondary" loading={busy === o.order_id} onClick={() => send(o, { status: "accepted" }, "주문을 접수했어요", "접수")}>접수하기</Button>}
                     {o.status === "accepted" && <Button variant="secondary" onClick={() => { setCarrier(o.carrier || "cj"); setTracking(""); setShipping(o); }}>발송 처리하기</Button>}
-                    {o.status === "shipped" && <Button variant="secondary" loading={busy === o.order_id} onClick={() => send(o, { status: "delivered" }, "배송 완료로 바꿨어요", "배송 완료로 바꾸")}>배송 완료로 바꾸기</Button>}
+                    {o.status === "shipped" && (() => {
+                      const at = deliverableAt(o);
+                      const wait = at !== null && at > Date.now();
+                      return wait ? <span className="text-caption text-ink-2 self-center">{new Date(at!).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "numeric", timeZone: "Asia/Seoul" })}부터 배송 완료로 바꿀 수 있어요</span>
+                        : <Button variant="secondary" loading={busy === o.order_id} onClick={() => send(o, { status: "delivered" }, "배송 완료로 바꿨어요. 8일 뒤 저절로 구매확정돼요", "배송 완료로 바꾸")}>배송 완료로 바꾸기</Button>;
+                    })()}
                     {o.status === "shipped" && <Button variant="ghost" onClick={() => { setCarrier(o.carrier || "cj"); setTracking(o.tracking_number || ""); setShipping(o); }}>송장 고치기</Button>}
                     {o.status !== "shipped" && <Button variant="ghost" onClick={() => { setReason(o.cancel_requested_at ? "주문자 요청" : ""); setCanceling(o); }}>취소하기</Button>}
                   </CardActions>
                 )}
               </Card>
             ))}
+            {filter === "done" && state.hasMore && (
+              <Button variant="secondary" loading={more} onClick={() => { setMore(true); load(filter, (state.page || 0) + 1); }}>더 보기</Button>
+            )}
           </div>
         )}
 

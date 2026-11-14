@@ -9,6 +9,7 @@ import { isWeekPlan, plannedMeal, type PlanGrid } from "@/lib/weekly-plan";
 import { runDueCampaigns } from "@/lib/partner/crm";
 import { runConsentNotices } from "@/lib/consent-notice";
 import { runFlows } from "@/lib/partner/flows";
+import { notifyPartners } from "@/lib/partner/notify";
 import { AUTO_CONFIRM_DAYS, expireUnpaidOrders } from "@/lib/orders";
 
 /**
@@ -85,6 +86,9 @@ export async function POST(req: NextRequest) {
       const { error } = await sbAds.rpc("order_auto_confirm", { p_days: AUTO_CONFIRM_DAYS });
       if (error) throw new Error(error.message);
     } catch (e) { console.error("구매확정을 돌리지 못했어요:", (e as Error).message); }
+    // 업체 담당자에게 새 주문·취소 요청 알림 (lib/partner/notify.ts)
+    try { await notifyPartners(sbAds, pushReady()); }
+    catch (e) { console.error("업체 주문 알림을 보내지 못했어요:", (e as Error).message); }
     // 업체 자동 알림 — 밤에는 야간 동의자만 고른다(lib/partner/flows.ts)
     try { flows = await runFlows(sbAds, userPusher(sbAds)); }
     catch (e) { console.error("업체 자동 알림을 돌리지 못했어요:", (e as Error).message); }

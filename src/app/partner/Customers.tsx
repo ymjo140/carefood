@@ -32,7 +32,7 @@ const SOURCE: Record<string, string> = { manual: "직접 줌", flow: "자동 알
  * 고객 탭 — 내 고객(앱에서 우리 제품을 결제한 사람) · 혜택(쿠폰) · 자동 알림 · 새 고객 찾기(고객층) (v3 10.2)
  * 사람은 업체마다 다른 가명 번호로만 보인다. 연락처·이름·건강 목표는 없고, 알림은 앱 알림으로만 간다.
  */
-export function CustomersTab({ qs, go, prefill }: { qs: string; go: (tab: Tab, opts?: { filter?: string; need?: string; goal?: string }) => void; prefill: { need?: string; goal?: string } | null }) {
+export function CustomersTab({ qs, go, prefill, initialStage }: { qs: string; go: (tab: Tab, opts?: { filter?: string; need?: string; goal?: string }) => void; prefill: { need?: string; goal?: string } | null; initialStage?: Stage | null }) {
   const [view, setView] = useState<View>(prefill ? "find" : "customers");
   const [coupons, setCoupons] = useState<{ status: "loading" | "error" | "done"; list: CouponRow[]; readOnly: boolean }>({ status: "loading", list: [], readOnly: true });
   const cSeq = useRef(0);
@@ -52,7 +52,7 @@ export function CustomersTab({ qs, go, prefill }: { qs: string; go: (tab: Tab, o
     <div className="flex flex-col gap-6">
       <Tabs<View> value={view} onChange={setView} label="고객 보기"
         items={[{ value: "customers", label: "내 고객" }, { value: "coupons", label: "혜택" }, { value: "flows", label: "자동 알림" }, { value: "find", label: "새 고객 찾기" }]} />
-      {view === "customers" && <MyCustomers qs={qs} coupons={coupons} onCoupons={loadCoupons} toCoupons={() => setView("coupons")} />}
+      {view === "customers" && <MyCustomers qs={qs} coupons={coupons} onCoupons={loadCoupons} toCoupons={() => setView("coupons")} initialStage={initialStage || null} />}
       {view === "coupons" && <Coupons qs={qs} state={coupons} reload={loadCoupons} />}
       {view === "flows" && <Flows qs={qs} coupons={coupons} toCoupons={() => setView("coupons")} />}
       {view === "find" && <Segments qs={qs} go={go} prefill={prefill} />}
@@ -60,12 +60,12 @@ export function CustomersTab({ qs, go, prefill }: { qs: string; go: (tab: Tab, o
   );
 }
 
-function MyCustomers({ qs, coupons, onCoupons, toCoupons }: {
-  qs: string; coupons: { status: string; list: CouponRow[]; readOnly: boolean }; onCoupons: () => void; toCoupons: () => void;
+function MyCustomers({ qs, coupons, onCoupons, toCoupons, initialStage }: {
+  qs: string; coupons: { status: string; list: CouponRow[]; readOnly: boolean }; onCoupons: () => void; toCoupons: () => void; initialStage: Stage | null;
 }) {
   const toast = useToast();
   const [state, setState] = useState<{ status: "loading" | "error" | "done"; data?: List; error?: string }>({ status: "loading" });
-  const [stage, setStage] = useState<Stage | null>(null);
+  const [stage, setStage] = useState<Stage | null>(initialStage);
   const [open, setOpen] = useState<string | null>(null);
   const [detail, setDetail] = useState<{ status: "loading" | "error" | "done"; data?: Detail; error?: string }>({ status: "loading" });
   const [give, setGive] = useState<{ stage?: Stage; code?: string } | null>(null);

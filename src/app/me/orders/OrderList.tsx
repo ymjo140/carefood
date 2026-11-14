@@ -125,6 +125,12 @@ export function OrderList() {
                     {(g.status === "shipped" || g.status === "delivered") && g.cancel_requested_at && (
                       <p className="text-label text-ink-2 mt-1.5">취소를 요청했지만 판매 업체가 이미 보냈어요. 반품은 케어푸드에 문의해 주세요</p>
                     )}
+                    {!unpaid && g.status === "shipped" && g.partner_id && (
+                      <>
+                        <p className="text-caption text-ink-2 mt-1.5">상품을 받았으면 구매확정해 주세요. 판매 업체에 대금이 정산돼요</p>
+                        <Button size="sm" variant="ghost" className="mt-1 -ml-3" onClick={() => setConfirm({ order: o, group: g })}>받았어요 · 구매확정하기</Button>
+                      </>
+                    )}
                     {!unpaid && g.status === "delivered" && g.partner_id && (g.confirmed_at ? (
                       <p className="text-label text-ink-2 mt-1.5">{md(g.confirmed_at)}에 구매확정했어요</p>
                     ) : (
