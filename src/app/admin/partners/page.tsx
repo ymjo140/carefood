@@ -10,6 +10,7 @@ import { ALLERGENS, CATEGORIES, REVIEW_LABELS, stable, type PartnerItem } from "
 import { AdminCrm } from "./Crm";
 import { ClaimTerms } from "./ClaimTerms";
 import { AdminDisputes } from "./Disputes";
+import { AdminAgency } from "./Agency";
 
 type Partner = {
   id: string; slug: string; name: string; kind: string; status: "onboarding" | "active" | "paused"; contact_email: string | null;
@@ -83,6 +84,7 @@ export default function AdminPartnersPage() {
       <AdminCrm />
       <AdminDisputes />
       <ClaimTerms />
+      <AdminAgency partners={partners.data || []} />
 
       <SectionHeader title="업체" className="mt-10" />
       <NewPartner onDone={(m) => { toast.show(m); loadPartners(); }} onFail={fail} />

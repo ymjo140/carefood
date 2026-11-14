@@ -18,14 +18,14 @@ import { Segments } from "./Segments";
 import { Connect, type Batch } from "./Connect";
 import { ProductSheet } from "./ProductSheet";
 
-type Partner = { id: string; slug: string; name: string; kind: string; status: string };
+type Partner = { id: string; slug: string; name: string; kind: string; status: string; is_demo?: boolean };
 type Claim = { phrase: string; why: string; suggest?: string };
 type Item = {
   id: string; partner_sku: string; status: "pending" | "approved" | "rejected" | "discontinued"; review_reasons: string[];
   warnings: string[]; reject_note: string | null; product_id: string | null; updated_at: string; name: string;
   claims: Claim[]; dropped: string | null; price_age: number | null;
 };
-type Me = { partner: Partner; role: string; counts: Record<string, number>; batches: Batch[] };
+type Me = { partner: Partner; role: string; read_only?: boolean; counts: Record<string, number>; batches: Batch[] };
 type Load<T> = { status: "loading" | "error" | "done" | "login" | "not_member"; data?: T; error?: string };
 
 const STATUS_LABEL: Record<Item["status"], string> = { pending: "검수 중", approved: "반영", rejected: "반려", discontinued: "판매 종료" };
@@ -114,7 +114,8 @@ function PartnerHome() {
   }
 
   const { partner, counts, batches } = me.data;
-  const tabs = tabsFor(partner.kind, ORDERING_ENABLED);
+  // 테스트 업체는 예시 주문을 볼 수 있게 주문 탭을 연다 (앱 주문이 아직 닫혀 있어도)
+  const tabs = tabsFor(partner.kind, ORDERING_ENABLED || !!partner.is_demo);
   const current = tabs.includes(view) ? view : "today";
 
   return (
@@ -134,7 +135,7 @@ function PartnerHome() {
       {current === "segments" && <Segments qs={qs} go={go} prefill={prefill} />}
       {current === "demand" && <Demand qs={qs} onMakeSegment={(need) => go("segments", { need })} />}
       {current === "commission" && <Commission qs={qs} readOnly={!!as} />}
-      {current === "connect" && <Connect qs={qs} batches={batches} onChanged={() => { loadMe(); setItems({ status: "loading" }); }} onReport={() => go("commission")} />}
+      {current === "connect" && <Connect qs={qs} batches={batches} isDemo={!!partner.is_demo} readOnly={!!me.data.read_only} onChanged={() => { loadMe(); setItems({ status: "loading" }); }} onReport={() => go("commission")} />}
 
       {current === "products" && (
         <section>

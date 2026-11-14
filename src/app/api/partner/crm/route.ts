@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connection } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
-import { getPartnerContext } from "@/lib/partner/auth";
+import { canAct, getPartnerContext } from "@/lib/partner/auth";
 import {
   BEHAVIORS, BEHAVIOR_DAYS, CRM_GOALS, MIN_PEOPLE, PER_PARTNER_WEEK, SEGMENTS, TEMPLATES,
   adText, buildAudience, campaignResult, checkMessage, cleanConditions, creditBalance, describeConditions, isNight, notReady,
@@ -42,7 +42,7 @@ export async function GET(req: NextRequest) {
     for (const r of [pa, led]) if (r.error) return notReady(r.error) ? notReadyRes() : bad(r.error.message, 500);
     try {
       const credit = await creditBalance(sb, pid);
-      return NextResponse.json({ ready: true, unit_price: pa.data?.crm_unit_price ?? null, ...credit, ledger: led.data || [], read_only: ctx.role === "admin" });
+      return NextResponse.json({ ready: true, unit_price: pa.data?.crm_unit_price ?? null, ...credit, ledger: led.data || [], read_only: !canAct(ctx) });
     } catch (e) { return bad((e as Error).message, 500); }
   }
   const [pa, seg, camp, items] = await Promise.all([
@@ -73,7 +73,7 @@ export async function GET(req: NextRequest) {
       products: ((items.data || []) as { product_id: string; name: string }[]).map((i) => ({ id: i.product_id, name: i.name })),
       options: { goals: CRM_GOALS, needs: SEGMENTS.map((s) => ({ key: s.key, label: s.label })), behaviors: BEHAVIORS, days: BEHAVIOR_DAYS, templates: TEMPLATES },
       partner_name: ctx.partner.name,
-      read_only: ctx.role === "admin",
+      read_only: !canAct(ctx),
       claim_terms: terms, // 화면에서 쓰는 동안 바로 점검하려고 (요청할 때 서버가 다시 점검한다)
     });
   } catch (e) {
@@ -88,7 +88,7 @@ export async function POST(req: NextRequest) {
   const sb = createServiceRoleClient() as Sb;
   const pid = ctx.partner.id;
   const action = String(b?.action || "");
-  if (action !== "preview" && ctx.role === "admin") return bad("관리자 보기에서는 바꿀 수 없어요. 업체 계정으로 해 주세요", 403);
+  if (action !== "preview" && !canAct(ctx)) return bad("관리자 보기에서는 바꿀 수 없어요. 업체 계정으로 해 주세요", 403);
 
   try {
     if (action === "preview") {

@@ -7,7 +7,7 @@ import { anyChanged, CATEGORIES, contentChanged, parseRow, type PartnerItem } fr
 import { healthScore } from "./health-score";
 
 type Sb = any; // eslint-disable-line @typescript-eslint/no-explicit-any
-export type Partner = { id: string; slug: string; name: string; kind: "meal_service" | "brand" | "mall"; status: string };
+export type Partner = { id: string; slug: string; name: string; kind: "meal_service" | "brand" | "mall"; status: string; is_demo?: boolean };
 export type RowError = { row: number; sku?: string; field?: string; message: string };
 export type IngestResult = {
   batch_id: string; rows: number; ok: number; review: number; error: number; unchanged: number; errors: RowError[];
@@ -46,7 +46,7 @@ export async function applyOffers(sb: Sb, partnerId: string, itemId: string, pro
 
 /** 엑셀·피드·API 에서 읽은 줄을 받는다 */
 export async function ingestRows(sb: Sb, partner: Partner, rows: { row: number; values: Record<string, unknown> }[],
-  channel: "excel" | "feed" | "api", fileName: string | null, userId: string | null): Promise<IngestResult> {
+  channel: "excel" | "feed" | "api" | "agency", fileName: string | null, userId: string | null): Promise<IngestResult> {
   const { data: batch, error: bErr } = await sb.from("ingest_batches")
     .insert({ partner_id: partner.id, channel, file_name: fileName, row_count: rows.length, status: "processing", created_by: userId })
     .select("id").single();

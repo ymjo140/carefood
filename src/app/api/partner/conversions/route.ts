@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connection } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
-import { getPartnerContext } from "@/lib/partner/auth";
+import { canAct, getPartnerContext, readOnly } from "@/lib/partner/auth";
 import { readWorkbook } from "@/lib/partner/excel";
 import { DEFAULT_ATTRIBUTION_DAYS, ingestConversions } from "@/lib/partner/conversions";
 import { settlementMonths } from "@/lib/partner/settlement";
@@ -33,6 +33,7 @@ export async function POST(req: NextRequest) {
   if (limited) return limited;
   const ctx = await getPartnerContext(req.nextUrl.searchParams.get("as"));
   if ("error" in ctx) return ctx.error;
+  if (!canAct(ctx)) return readOnly();
   let form: FormData;
   try { form = await req.formData(); } catch { return NextResponse.json({ error: "파일을 받지 못했어요" }, { status: 400 }); }
   const file = form.get("file");

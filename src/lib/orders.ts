@@ -68,7 +68,8 @@ export async function listMyOrders(sb: Sb, userId: string): Promise<BuyerOrder[]
 
 /** 관리자 — filter: all · refund(환불할 것 남음) · cancel_request(업체가 아직 답하지 않은 취소 요청) */
 export async function listAdminOrders(sb: Sb, filter: string): Promise<AdminOrder[]> {
-  let q = sb.from("orders").select(`${ORDER_COLS}, user_id, shipping, refund_note`).order("created_at", { ascending: false }).limit(100);
+  // 테스트 업체의 예시 주문(is_demo)은 실제 환불·취소 처리 대상이 아니다
+  let q = sb.from("orders").select(`${ORDER_COLS}, user_id, shipping, refund_note`).eq("is_demo", false).order("created_at", { ascending: false }).limit(100);
   if (filter === "refund") q = q.gt("refund_amount", 0);
   if (filter === "cancel_request") {
     const { data: req, error: rErr } = await sb.from("order_items").select("order_id").not("cancel_requested_at", "is", null).eq("fulfil_status", "accepted").limit(500);

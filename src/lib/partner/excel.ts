@@ -12,7 +12,8 @@ const MAX_ROWS = 2000;
 
 const needMark = (f: Field) => (f.need === "필수" ? " *" : f.need === "식단 서비스 필수" ? " (식단 서비스 *)" : "");
 
-export async function buildTemplate(): Promise<Buffer> {
+/** samples: '제품' 시트 3행부터 채울 예시 줄 (예시 양식 내려받기 — 그대로 올리면 예시 제품이 들어간다) */
+export async function buildTemplate(samples?: Record<string, string>[]): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
   wb.creator = "케어푸드";
 
@@ -24,6 +25,7 @@ export async function buildTemplate(): Promise<Buffer> {
   ws.getRow(1).height = 32;
   ws.getRow(1).alignment = { wrapText: true, vertical: "middle" };
   ws.getRow(2).font = { color: { argb: "FF8A8A8A" }, size: 9 };
+  for (const s of samples || []) ws.addRow(FIELDS.map((f) => s[f.key] ?? ""));
   FIELDS.forEach((f, i) => {
     const col = ws.getColumn(i + 1);
     col.width = Math.min(40, Math.max(12, f.label.length * 2 + 4));

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connection } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
-import { getPartnerContext } from "@/lib/partner/auth";
+import { canAct, getPartnerContext } from "@/lib/partner/auth";
 import { notReady } from "@/lib/partner/crm";
 
 /**
@@ -21,14 +21,14 @@ export async function GET(req: NextRequest) {
   const { data, error } = await sb.from("partner_disputes").select("id, target, month, ledger_id, reason, status, reply, created_at, resolved_at")
     .eq("partner_id", ctx.partner.id).order("created_at", { ascending: false }).limit(50);
   if (error) return notReady(error) ? NextResponse.json({ ready: false, disputes: [] }) : bad(error.message, 500);
-  return NextResponse.json({ ready: true, disputes: data || [], read_only: ctx.role === "admin" });
+  return NextResponse.json({ ready: true, disputes: data || [], read_only: !canAct(ctx) });
 }
 
 export async function POST(req: NextRequest) {
   await connection();
   const ctx = await getPartnerContext(req.nextUrl.searchParams.get("as"));
   if ("error" in ctx) return ctx.error;
-  if (ctx.role === "admin") return bad("관리자 보기에서는 남길 수 없어요", 403);
+  if (!canAct(ctx)) return bad("관리자 보기에서는 남길 수 없어요", 403);
   const b = await req.json().catch(() => ({}));
   const reason = String(b.reason || "").trim();
   if (reason.length < 5) return bad("무엇이 다른지 5자 이상 적어 주세요");

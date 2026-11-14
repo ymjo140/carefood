@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connection } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
-import { getPartnerContext } from "@/lib/partner/auth";
+import { canAct, getPartnerContext, readOnly } from "@/lib/partner/auth";
 import { MAX_KEYS, newKey } from "@/lib/partner/api-auth";
 import { limitRequest } from "@/lib/rate-limit";
 
@@ -25,6 +25,7 @@ export async function POST(req: NextRequest) {
   if (limited) return limited;
   const ctx = await getPartnerContext(req.nextUrl.searchParams.get("as"));
   if ("error" in ctx) return ctx.error;
+  if (!canAct(ctx)) return readOnly();
   if (ctx.role === "editor") return NextResponse.json({ error: "업체 관리자 계정만 키를 만들 수 있어요" }, { status: 403 });
   const b = await req.json().catch(() => null);
   const name = String(b?.name || "").trim().slice(0, 40);
@@ -44,6 +45,7 @@ export async function DELETE(req: NextRequest) {
   const sp = req.nextUrl.searchParams;
   const ctx = await getPartnerContext(sp.get("as"));
   if ("error" in ctx) return ctx.error;
+  if (!canAct(ctx)) return readOnly();
   if (ctx.role === "editor") return NextResponse.json({ error: "업체 관리자 계정만 키를 폐기할 수 있어요" }, { status: 403 });
   const sb: Sb = createServiceRoleClient();
   const { error } = await sb.from("partner_api_keys").update({ revoked_at: new Date().toISOString() }).eq("id", sp.get("id")).eq("partner_id", ctx.partner.id);

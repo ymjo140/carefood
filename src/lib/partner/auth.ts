@@ -9,11 +9,18 @@ import type { Partner } from "./ingest";
 
 export type PartnerContext = { userId: string; email: string | null; partner: Partner; role: "owner" | "editor" | "admin" };
 
+/**
+ * 바꾸는 일을 해도 되는가 — 관리자 보기(?as=)는 읽기 전용이다.
+ * 테스트 업체(is_demo)만 예외: 관리자가 업체 자리에서 흐름을 확인할 수 있게 한다.
+ */
+export const canAct = (ctx: PartnerContext) => ctx.role !== "admin" || ctx.partner.is_demo === true;
+export const readOnly = () => NextResponse.json({ error: "관리자 보기에서는 바꿀 수 없어요. 업체 계정으로 해 주세요" }, { status: 403 });
+
 export async function getPartnerContext(asSlug?: string | null): Promise<PartnerContext | { error: NextResponse; reason?: "login" | "not_member" }> {
   const user = await getAuthUser();
   if (!user) return { error: NextResponse.json({ error: "로그인이 필요해요", reason: "login" }, { status: 401 }), reason: "login" };
   const sb = createServiceRoleClient() as any; // eslint-disable-line @typescript-eslint/no-explicit-any
-  const cols = "id, slug, name, kind, status";
+  const cols = "id, slug, name, kind, status, is_demo";
   if (asSlug) {
     if (!(await getAdminUser())) return { error: NextResponse.json({ error: "관리자만 다른 업체 화면을 볼 수 있어요" }, { status: 403 }) };
     const { data, error } = await sb.from("partners").select(cols).eq("slug", asSlug).maybeSingle();
