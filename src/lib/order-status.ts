@@ -13,6 +13,12 @@ export const CARRIERS: Record<string, string> = {
   cj: "CJ대한통운", hanjin: "한진택배", lotte: "롯데택배", epost: "우체국택배", logen: "로젠택배", direct: "직접 배송", other: "그 밖의 택배",
 };
 
+/** 택배 조회 상태 이름 (lib/partner/tracking.ts 가 tracker.delivery 에서 받아 order_items.tracking_status 에 적는다) */
+export const TRACK_LABEL: Record<string, string> = {
+  INFORMATION_RECEIVED: "접수됨", AT_PICKUP: "집하", IN_TRANSIT: "이동 중", OUT_FOR_DELIVERY: "배송 출발",
+  ATTEMPT_FAIL: "배달 못 함", DELIVERED: "배송 완료", AVAILABLE_FOR_PICKUP: "찾아가기 기다림", EXCEPTION: "문제 있음", UNKNOWN: "아직 조회되지 않음",
+};
+
 /** 구매확정 — 배송 완료 뒤 이 날수가 지나면 저절로 (lib/partner/payout.ts 와 같은 값) */
 export const AUTO_CONFIRM_DAYS = 8;
 

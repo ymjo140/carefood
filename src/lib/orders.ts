@@ -20,13 +20,14 @@ type ItemRow = {
   day_of_week: string | null; meal_type: string | null; fulfil_status: Fulfil; tracking_carrier: string | null; tracking_number: string | null;
   shipped_at: string | null; delivered_at: string | null; cancel_reason: string | null; cancel_requested_at: string | null;
   cancel_request_reason: string | null; canceled_by: string | null; confirmed_at: string | null; partners: { name: string } | null;
+  tracking_status: string | null;
 } & ReturnCols;
 type ReturnCols = {
   return_status: ReturnStatus | null; return_type: ReturnType | null; return_reason: ReturnReason | null; return_note: string | null;
   return_requested_at: string | null; return_resolved_at: string | null; return_reply: string | null; return_fee: number | null;
 };
 const RETURN_COLS = "return_status, return_type, return_reason, return_note, return_requested_at, return_resolved_at, return_reply, return_fee";
-const ITEM_COLS = `order_id, partner_id, product_id, product_name, quantity, unit_price, day_of_week, meal_type, fulfil_status, tracking_carrier, tracking_number, shipped_at, delivered_at, cancel_reason, cancel_requested_at, cancel_request_reason, canceled_by, confirmed_at, ${RETURN_COLS}, partners(name)`;
+const ITEM_COLS = `order_id, partner_id, product_id, product_name, quantity, unit_price, day_of_week, meal_type, fulfil_status, tracking_carrier, tracking_number, shipped_at, delivered_at, cancel_reason, cancel_requested_at, cancel_request_reason, canceled_by, confirmed_at, tracking_status, ${RETURN_COLS}, partners(name)`;
 /** 묶음의 반품·교환 (요청한 적이 없으면 null) — 화면·업체 쪽이 같이 쓴다 */
 export type ReturnInfo = {
   status: ReturnStatus; type: ReturnType; reason: ReturnReason; note: string | null; requested_at: string; resolved_at: string | null; reply: string | null; fee: number | null;
@@ -44,6 +45,8 @@ export type OrderGroup = {
   confirmed_at: string | null;
   /** 반품·교환 요청 — 없으면 null */
   return: ReturnInfo | null;
+  /** 택배 조회로 마지막에 본 상태 (발송 중일 때 "배송 출발" 같은 글자로) */
+  tracking_status: string | null;
   lines: { product_id: string | null; product_name: string; quantity: number; unit_price: number; day_of_week: string | null; meal_type: string | null }[];
 };
 export type BuyerOrder = {
@@ -72,7 +75,7 @@ function groupItems(rows: ItemRow[], fees: Record<string, number>): OrderGroup[]
         partner_id: r.partner_id, seller: r.partners?.name || "판매 업체", status: r.fulfil_status, subtotal: 0, shipping_fee: r.partner_id ? fees[r.partner_id] || 0 : 0,
         carrier: r.tracking_carrier, tracking_number: r.tracking_number, shipped_at: r.shipped_at, delivered_at: r.delivered_at,
         cancel_reason: r.cancel_reason, canceled_by: r.canceled_by, cancel_requested_at: r.cancel_requested_at, cancel_request_reason: r.cancel_request_reason,
-        confirmed_at: null, return: returnInfo(r), lines: [],
+        confirmed_at: null, return: returnInfo(r), tracking_status: r.tracking_status, lines: [],
       };
       by.set(key, g);
     }
@@ -294,7 +297,7 @@ export async function buyerConfirm(sb: Sb, userId: string, orderId: string, part
   // 요청만 해 둔 반품·교환은 구매확정하면 거둬들인다 (업체가 받아들이기 전)
   const withdraw = live.some((i) => i.return_status === "requested");
   const [a, b] = await Promise.all([
-    sb.from("order_items").update({ fulfil_status: "delivered", delivered_at: now, confirmed_at: now, confirm_by: "buyer" })
+    sb.from("order_items").update({ fulfil_status: "delivered", delivered_at: now, delivered_by: "buyer", confirmed_at: now, confirm_by: "buyer" })
       .eq("order_id", orderId).eq("partner_id", partnerId).eq("fulfil_status", "shipped"),
     sb.from("order_items").update({ confirmed_at: now, confirm_by: "buyer" })
       .eq("order_id", orderId).eq("partner_id", partnerId).eq("fulfil_status", "delivered").is("confirmed_at", null)

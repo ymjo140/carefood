@@ -48,10 +48,15 @@ class Builder {
     else throw new Error(`not ${op} 은 흉내 내지 않아요`);
     return this;
   }
-  /** "a.is.null,a.eq.x" 꼴만 */
+  /** "a.is.null,a.eq.x,a.lt.2026-…" 꼴 — 값에 점이 있어도 앞 두 점으로만 나눈다 */
   or(expr: string) {
-    const parts = expr.split(",").map((p) => p.split("."));
-    this.filters.push((r) => parts.some(([c, o, v]) => (o === "is" && v === "null" ? (r[c] ?? null) === null : o === "eq" ? String(r[c]) === v : false)));
+    const parts = expr.split(",").map((p) => { const i = p.indexOf("."), j = p.indexOf(".", i + 1); return [p.slice(0, i), p.slice(i + 1, j), p.slice(j + 1)]; });
+    this.filters.push((r) => parts.some(([c, o, v]) => {
+      const x = r[c] ?? null;
+      if (o === "is" && v === "null") return x === null;
+      if (x === null) return false;
+      return o === "eq" ? String(x) === v : o === "lt" ? x < v : o === "gt" ? x > v : o === "lte" ? x <= v : o === "gte" ? x >= v : false;
+    }));
     return this;
   }
   order(col: string, opt?: { ascending?: boolean }) { this.orders.push({ col, asc: opt?.ascending !== false }); return this; }

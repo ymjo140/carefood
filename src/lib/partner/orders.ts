@@ -35,6 +35,8 @@ export type PartnerOrder = {
   discount: number;
   /** 반품·교환 요청 (없으면 null) */
   return: ReturnInfo | null;
+  /** 택배 조회로 마지막에 본 상태(DELIVERED 등)와 그 시각, 배송 완료를 누가 찍었나 (lib/partner/tracking.ts) */
+  tracking_status: string | null; tracking_checked_at: string | null; delivered_by: "partner" | "tracking" | "buyer" | null;
 };
 
 type Row = {
@@ -44,9 +46,10 @@ type Row = {
   canceled_by: PartnerOrder["canceled_by"]; cancel_requested_at: string | null; cancel_request_reason: string | null; partner_id: string;
   return_status: ReturnStatus | null; return_type: ReturnType | null; return_reason: ReturnReason | null; return_note: string | null;
   return_requested_at: string | null; return_resolved_at: string | null; return_reply: string | null; return_fee: number | null;
+  tracking_status: string | null; tracking_checked_at: string | null; delivered_by: PartnerOrder["delivered_by"];
   orders: { created_at: string; delivery_week_start: string | null; shipping: Shipping | null; third_party_consent_at: string | null; status: string; shipping_fees: Record<string, number> | null; discount_fees: Record<string, number> | null };
 };
-const COLS = "order_id, partner_id, partner_sku, product_name, quantity, unit_price, day_of_week, meal_type, fulfil_status, tracking_carrier, tracking_number, accepted_at, shipped_at, delivered_at, cancel_reason, canceled_by, cancel_requested_at, cancel_request_reason, return_status, return_type, return_reason, return_note, return_requested_at, return_resolved_at, return_reply, return_fee, orders!inner(created_at, delivery_week_start, shipping, third_party_consent_at, status, shipping_fees, discount_fees)";
+const COLS = "order_id, partner_id, partner_sku, product_name, quantity, unit_price, day_of_week, meal_type, fulfil_status, tracking_carrier, tracking_number, accepted_at, shipped_at, delivered_at, cancel_reason, canceled_by, cancel_requested_at, cancel_request_reason, return_status, return_type, return_reason, return_note, return_requested_at, return_resolved_at, return_reply, return_fee, tracking_status, tracking_checked_at, delivered_by, orders!inner(created_at, delivery_week_start, shipping, third_party_consent_at, status, shipping_fees, discount_fees)";
 
 function group(rows: Row[]): PartnerOrder[] {
   const by = new Map<string, PartnerOrder>();
@@ -64,6 +67,7 @@ function group(rows: Row[]): PartnerOrder[] {
         cancel_requested_at: status === "accepted" ? r.cancel_requested_at : null, cancel_request_reason: status === "accepted" ? r.cancel_request_reason : null,
         shipping: open && r.orders.third_party_consent_at && r.orders.shipping ? r.orders.shipping : null,
         first_order: false, discount: Number(r.orders.discount_fees?.[r.partner_id] || 0), return: returnInfo(r),
+        tracking_status: r.tracking_status, tracking_checked_at: r.tracking_checked_at, delivered_by: r.delivered_by,
       };
       by.set(r.order_id, o);
     }
@@ -184,6 +188,7 @@ export async function updateFulfilment(sb: Sb, partner: Pick<Partner, "id">, ord
       return { ok: false, code: "conflict", message: `발송하고 ${current.carrier === "direct" ? 1 : 12}시간이 지나야 배송 완료로 바꿀 수 있어요 (${h}시간 남음). 구매확정 8일이 이때부터 세져요` };
     }
     patch.delivered_at = now;
+    patch.delivered_by = "partner";
   } else {
     if (from === "canceled") return { ok: true, order: current, changed: false };
     if (from !== "new" && from !== "accepted") return { ok: false, code: "conflict", message: "발송한 뒤에는 취소할 수 없어요. 오늘끼록에 문의해 주세요" };
