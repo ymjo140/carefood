@@ -10,7 +10,7 @@ import { Spinner } from "./Layout";
  * 스토리 보기 — 인스타 스토리처럼 화면을 꽉 채운 한 장씩 넘기기.
  * 위: 진행 막대 · 올린 사람 · 게시물로(↗) · 닫기 / 가운데: 사진·영상 + 스티커 하나 / 아래: 답글 칸 · 좋아요 · 보내기
  * 화면 왼쪽 1/3 을 누르면 이전, 나머지는 다음. 꾹 누르면 멈춤. 바탕은 두 테마에 같은 media 색.
- * 떠 있는 동안 <html data-bottom-bar> 를 달아 하단 탭 바를 숨긴다.
+ * 떠 있는 동안 <html data-bottom-bar> 를 달아 하단 탭 바를 숨긴다. 머리 줄(z-50)보다 뒤에 그려져 그 위를 덮고, 시트는 다시 그 위.
  */
 export function StoryFrame({ label, top, children, sticker, footer, onPrev, onNext, onHold }: {
   label: string;
@@ -51,7 +51,7 @@ export function StoryFrame({ label, top, children, sticker, footer, onPrev, onNe
   };
 
   return (
-    <div role="dialog" aria-modal="true" aria-label={label} className="fixed inset-0 z-40 bg-media flex justify-center animate-fade-in">
+    <div role="dialog" aria-modal="true" aria-label={label} className="fixed inset-0 z-50 bg-media flex justify-center animate-fade-in">
       <div className="relative w-full max-w-md h-dvh flex flex-col">
         <div className="relative z-10 px-3 pt-[max(0.5rem,env(safe-area-inset-top))] flex flex-col gap-2">{top}</div>
         <div className="relative flex-1 min-h-0">

@@ -300,7 +300,9 @@ export async function renderCard(d: CardData, o: CardOptions): Promise<Blob> {
   await document.fonts.ready;
   const { p, f } = readTheme();
   // 숫자 글꼴·한글 글꼴을 미리 불러 둔다 (처음 그릴 때 기본 글꼴로 그려지지 않게)
-  await Promise.all([document.fonts.load(`700 48px ${f.sans}`, "가"), document.fonts.load(`700 48px ${f.num}`, "0"), document.fonts.load(`500 48px ${f.sans}`, "가")]);
+  // 못 불러와도(글꼴 파일이 막힘 등) 카드는 기본 글꼴로 그린다
+  await Promise.all([[`700 48px ${f.sans}`, "가"], [`500 48px ${f.sans}`, "가"], [`700 48px ${f.num}`, "0"]]
+    .map(([spec, text]) => document.fonts.load(spec, text).catch((e) => console.warn("카드 글꼴을 불러오지 못했어요", e)))); // ds-allow: 글꼴은 보조 — 기본 글꼴로 그린다
 
   const canvas = document.createElement("canvas");
   const style = o.style === "photo" && !("photo" in d && d.photo) ? "record" : o.style;
