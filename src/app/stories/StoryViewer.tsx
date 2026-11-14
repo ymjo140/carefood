@@ -207,12 +207,13 @@ export default function StoryViewer() {
   const isPost = story.kind !== "group_buy";
   const what = cert ? CERT_LABEL[cert.kind] : isMeal ? "식단" : "공구";
   const meal = isMeal && story.meal_type ? mealMeta(story.meal_type).label : null;
+  // 챌린지 인증은 제목을 위 글자 띠에, 스티커에는 숫자만 (좁은 스티커에서 잘리지 않게)
   const stickerText = cert
-    ? certLine(cert)
+    ? cert.kind === "challenge" ? <><span className="num font-bold">{cert.done}</span>/<span className="num">{cert.total_days}</span>일 해냈어요</> : certLine(cert)
     : isMeal
       ? <>{meal ? `${meal} · ` : ""}{story.protein_g != null ? <>단백질 <span className="num font-bold">{Math.round(story.protein_g)}</span>g</> : "식단 기록 보기"}</>
       : <>공구{story.days_left != null ? ` D-${story.days_left}` : ""}{story.pct ? <> · <span className="num font-bold">{story.pct}</span>%</> : ""} · <span className="num">{story.current_count}/{story.target_count}</span>명</>;
-  const caption = isPost ? story.text : story.product_name;
+  const caption = cert?.kind === "challenge" ? (story.text ? `${cert.title} · ${story.text}` : cert.title) : isPost ? story.text : story.product_name;
   // 인증 스티커는 같이 하기(초대 링크)로 — 링크가 없으면 게시물로
   const join = cert && cert.url && cert.url !== "/" ? cert.url : null;
   const stickerHref = join || postHref(story);
