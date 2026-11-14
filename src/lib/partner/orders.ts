@@ -10,6 +10,7 @@ import { notifyReturn, recomputeRefund, returnInfo, syncOrderStatus, type Return
 import { RETURN_REASON_LABEL, returnOpen, type ReturnReason, type ReturnStatus, type ReturnType } from "@/lib/order-status";
 import { loadBuyers } from "./customers";
 import { putBackRows } from "./stock";
+import { countInquiries } from "./inquiries";
 import { pushReady, sendToUser, type PushSub } from "@/lib/push";
 import { asResult, selectAll, selectUpTo } from "@/lib/supabase/all";
 
@@ -120,6 +121,8 @@ export type OrderCounts = {
   new: number; accepted: number; shipped: number; cancel_requests: number; deliver_pending: number; returns: number; return_requests: number;
   /** 결제하고 하루가 지나도록 보내지 않은 주문 — 합계와, 그중 아직 접수 전(late_new)·접수했지만 못 보낸(late_accepted) */
   late: number; late_new: number; late_accepted: number;
+  /** 답하지 않은 주문 문의와, 그중 하루가 지난 것 */
+  inquiries: number; inquiries_late: number;
 };
 const HOUR = 3600e3;
 export const LATE_HOURS = 24;
@@ -127,10 +130,11 @@ export const DELIVER_PENDING_DAYS = 5;
 
 /** 처리할 주문 건수 — 상태별 묶음 수, 취소 요청, 24시간 넘게 못 보낸 주문, 5일 넘게 배송 완료를 안 누른 발송 */
 export async function countPartnerOrders(sb: Sb, partnerId: string, now = Date.now()): Promise<OrderCounts> {
-  const [{ data, error }, ret] = await Promise.all([
+  const [{ data, error }, ret, asked] = await Promise.all([
     asResult(selectAll(() => sb.from("order_items").select("order_id, fulfil_status, cancel_requested_at, shipped_at, orders!inner(paid_at, status)")
       .eq("partner_id", partnerId).in("fulfil_status", ["new", "accepted", "shipped"]).not("orders.paid_at", "is", null), "id", 1_000_000)),
     asResult(selectAll(() => sb.from("order_items").select("order_id, return_status").eq("partner_id", partnerId).eq("fulfil_status", "delivered").in("return_status", ["requested", "approved"]), "id")),
+    countInquiries(sb, partnerId, now),
   ]);
   if (error) throw new Error(error.message);
   if (ret.error) throw new Error(ret.error.message);
@@ -142,7 +146,7 @@ export async function countPartnerOrders(sb: Sb, partnerId: string, now = Date.n
   }
   const retBy = new Map<string, string>();
   for (const r of (ret.data || []) as { order_id: string; return_status: string }[]) retBy.set(r.order_id, r.return_status);
-  const c: OrderCounts = { new: 0, accepted: 0, shipped: 0, cancel_requests: 0, late: 0, deliver_pending: 0, returns: retBy.size, return_requests: [...retBy.values()].filter((v) => v === "requested").length, late_new: 0, late_accepted: 0 };
+  const c: OrderCounts = { new: 0, accepted: 0, shipped: 0, cancel_requests: 0, late: 0, deliver_pending: 0, returns: retBy.size, return_requests: [...retBy.values()].filter((v) => v === "requested").length, late_new: 0, late_accepted: 0, inquiries: asked.open, inquiries_late: asked.late };
   for (const o of by.values()) {
     if (o.s === "new") c.new++; else if (o.s === "accepted") c.accepted++; else c.shipped++;
     if (o.req) c.cancel_requests++;

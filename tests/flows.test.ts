@@ -217,3 +217,16 @@ describe("입력 해석", () => {
     expect(parseSettings({ tax_email: "" })).toEqual({ patch: { tax_email: null } });
   });
 });
+
+describe("내 주문 목록 — 1,000줄 넘는 식단 줄", () => {
+  it("주문 30개 × 40줄(1,200줄)도 잘리지 않는다", async () => {
+    const { listMyOrders } = await import("@/lib/orders");
+    const orders = Array.from({ length: 30 }, (_, i) => ({ id: `00000000-0000-4000-8000-${String(i).padStart(12, "0")}`, user_id: U, created_at: ago(i), status: "paid", paid_at: ago(i),
+      total_price: 0, shipping_fee: 0, shipping_fees: {}, final_price: 0, refund_amount: 0, refunded_amount: 0, refunded_at: null }));
+    const items = orders.flatMap((o) => Array.from({ length: 40 }, (_, j) => ({ id: `${o.id}-${String(j).padStart(2, "0")}`, created_at: o.created_at, order_id: o.id, partner_id: P,
+      product_id: null, product_name: `제품${j}`, quantity: 1, unit_price: 1000, fulfil_status: "new", partners: { name: "핏밀" } })));
+    const sb = fakeSb({ orders, order_items: items, order_inquiries: [] });
+    const mine = await listMyOrders(sb, U);
+    expect(mine.reduce((s, o) => s + o.groups.reduce((t, g) => t + g.lines.length, 0), 0)).toBe(1200);
+  });
+});

@@ -76,9 +76,9 @@ export async function buildDemandMore(sb: Sb, pid: string): Promise<{ meals: Mea
   for (const r of myPrices) { const u = unit(r); if (u > 0 && (!myMin.has(r.product_id) || u < myMin.get(r.product_id)!)) myMin.set(r.product_id, u); }
   const ranges = new Map<string, number[]>();
   for (const c of cats) {
-    const { data: peers, error: pErr } = await sb.from("products").select("id").eq("is_purchasable", true).eq("dish_category", c).limit(1500);
-    if (pErr) throw new Error(pErr.message);
-    const peerPrices = await chunks<Price>(((peers || []) as { id: string }[]).map((p) => p.id), 150,
+    // 같은 카테고리 판매 중 제품 1,500개까지 표본 (1,000줄 한도에 잘리지 않게 나눠 받는다)
+    const peers = await selectUpTo<{ id: string }>(() => sb.from("products").select("id").eq("is_purchasable", true).eq("dish_category", c), "id", 1500);
+    const peerPrices = await chunks<Price>(peers.map((p) => p.id), 150,
       (p) => sb.from("v_all_prices").select("product_id, price, unit_price").in("product_id", p).eq("is_available", true));
     const min = new Map<string, number>();
     for (const r of peerPrices) { const u = unit(r); if (u > 0 && (!min.has(r.product_id) || u < min.get(r.product_id)!)) min.set(r.product_id, u); }
