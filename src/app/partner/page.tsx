@@ -104,7 +104,7 @@ function PartnerHome() {
     <Page width="wide">
       <PageHeader
         title={partner.name}
-        description={`${KIND_LABEL[partner.kind] || "입점 업체"} · ${partner.status === "active" ? "반영된 제품이 앱에 보이고 있어요" : "입점 준비 중 · 반영된 제품은 운영을 시작하면 앱에 보여요"}`}
+        description={`${KIND_LABEL[partner.kind] || "입점 업체"} · ${partner.is_demo ? "테스트 업체 · 제품은 앱에 보이지 않고 주문도 받지 않아요" : partner.status === "active" ? "반영된 제품이 앱에 보이고 있어요" : "입점 준비 중 · 반영된 제품은 운영을 시작하면 앱에 보여요"}`}
         actions={as ? <Badge tone="brand">관리자 보기</Badge> : undefined}
       />
 
@@ -120,7 +120,7 @@ function PartnerHome() {
       {current === "orders" && <Orders key={f || "new"} qs={qs} initialFilter={f && ["new", "accepted", "shipped", "returns", "done"].includes(f) ? f as OrderFilter : undefined} />}
       {current === "products" && view === "stock" && <ProductBoard qs={qs} toOrders={() => go("orders")} />}
       {current === "products" && view === "info" && (
-        <ProductInfo key={f || "all"} qs={qs} counts={counts} initialFilter={isProductFilter(f) ? f as ProductFilter : undefined}
+        <ProductInfo key={f || "all"} qs={qs} isDemo={!!partner.is_demo} counts={counts} initialFilter={isProductFilter(f) ? f as ProductFilter : undefined}
           onChanged={loadMe} toUpload={() => go("products", { view: "upload" })} />
       )}
       {current === "products" && view === "upload" && <ProductUpload qs={qs} batches={batches} isDemo={!!partner.is_demo} readOnly={readOnly} onChanged={loadMe} />}

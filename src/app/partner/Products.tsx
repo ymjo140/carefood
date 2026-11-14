@@ -20,8 +20,8 @@ export const isProductFilter = (v: unknown): v is ProductFilter => typeof v === 
  * 제품 > 제품 정보 — 올린 제품의 검수 상태·반려 이유·표현 점검·가격 확인일. 누르면 제품 시트에서 바로 고친다.
  * 상태는 칩으로 거른다(보기 줄 아래 세 번째 탭 줄을 두지 않으려고). 상태를 빨리 바꾸면 마지막 요청만 목록을 바꾼다.
  */
-export function ProductInfo({ qs, counts, initialFilter, onChanged, toUpload }: {
-  qs: string; counts: Record<string, number>; initialFilter?: ProductFilter; onChanged: () => void; toUpload: () => void;
+export function ProductInfo({ qs, isDemo = false, counts, initialFilter, onChanged, toUpload }: {
+  qs: string; isDemo?: boolean; counts: Record<string, number>; initialFilter?: ProductFilter; onChanged: () => void; toUpload: () => void;
 }) {
   const [filter, setFilter] = useState<ProductFilter>(initialFilter || "all");
   const [items, setItems] = useState<{ status: "loading" | "error" | "done"; data?: Item[]; error?: string }>({ status: "loading" });
@@ -87,7 +87,7 @@ export function ProductInfo({ qs, counts, initialFilter, onChanged, toUpload }: 
             ))}
           </Card>
         )}
-      <ProductSheet qs={qs} id={open} onClose={() => setOpen(null)} onSaved={() => { onChanged(); load(filter); }} />
+      <ProductSheet qs={qs} isDemo={isDemo} id={open} onClose={() => setOpen(null)} onSaved={() => { onChanged(); load(filter); }} />
       <p className="text-caption text-ink-2 mt-3">
         제품을 누르면 상태·이유·판매처별 가격을 보고 바로 고칠 수 있어요. 표현 점검은 상품명·소개·강조 문구에서 질병·효능으로 읽힐 수 있는 말을 먼저 알려 드리는 안내예요. 법적 판단은 아니고, 근거를 달면 검수에서 통과될 수 있어요
       </p>

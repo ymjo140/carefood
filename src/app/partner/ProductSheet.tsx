@@ -50,7 +50,7 @@ const show = (f: FieldDef, v: string | undefined) => !v ? "—" : f.enumOf ? f.e
  * 제품 상세 (v3 7.2) — 상태와 이유, 추천에서 빠진 이유, 표현 점검, 판매처별 가격·확인일, 양식 칸 전체.
  * "고치기"로 칸을 고쳐 저장하면 엑셀·피드와 같은 검사를 거친다: 가격·재고·링크만 바뀌면 바로 반영, 영양·원재료·문구가 바뀌면 다시 검수.
  */
-export function ProductSheet({ qs, id, onClose, onSaved }: { qs: string; id: string | null; onClose: () => void; onSaved: () => void }) {
+export function ProductSheet({ qs, isDemo = false, id, onClose, onSaved }: { qs: string; isDemo?: boolean; id: string | null; onClose: () => void; onSaved: () => void }) {
   const toast = useToast();
   const [state, setState] = useState<{ status: "loading" | "error" | "done"; data?: Detail; error?: string }>({ status: "loading" });
   const [editing, setEditing] = useState(false);
@@ -123,7 +123,7 @@ export function ProductSheet({ qs, id, onClose, onSaved }: { qs: string; id: str
       ) : (
         <div className="flex flex-col gap-6">
           <section className="flex flex-col gap-2">
-            <p className="text-label text-ink">{STATUS_LINE[d.item.status]}</p>
+            <p className="text-label text-ink">{isDemo && d.item.status === "approved" ? "반영됐어요 — 테스트 업체라 앱에는 보이지 않아요" : STATUS_LINE[d.item.status]}</p>
             {d.item.status === "pending" && d.item.review_reasons.length > 0 && (
               <p className="text-label text-ink-2">확인할 것: {d.item.review_reasons.map((r) => REVIEW_LABELS[r] || r).join(" · ")}</p>
             )}
