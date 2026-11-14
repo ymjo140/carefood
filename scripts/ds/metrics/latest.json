@@ -1,6 +1,6 @@
 {
-  "measuredAt": "2026-11-14T12:19:05.348Z",
-  "files": 154,
+  "measuredAt": "2026-11-14T12:58:29.808Z",
+  "files": 155,
   "distinctColors": 2,
   "gradients": 2,
   "shadows": 1,
@@ -21,15 +21,15 @@
   "fontSizes": [
     [
       "ds:label",
-      461
+      466
     ],
     [
       "ds:caption",
-      380
+      386
     ],
     [
       "ds:body",
-      132
+      133
     ],
     [
       "ds:title",
@@ -43,7 +43,7 @@
   "radii": [
     [
       "md",
-      49
+      48
     ],
     [
       "lg",
@@ -51,7 +51,7 @@
     ],
     [
       "full",
-      20
+      21
     ],
     [
       "sm",
@@ -151,14 +151,14 @@
       }
     ],
     [
-      "src/app/admin/partners/ClaimTerms.tsx",
+      "src/app/admin/partners/Applications.tsx",
       {
         "colors": 0,
         "inline": 0
       }
     ],
     [
-      "src/app/admin/partners/Crm.tsx",
+      "src/app/admin/partners/ClaimTerms.tsx",
       {
         "colors": 0,
         "inline": 0

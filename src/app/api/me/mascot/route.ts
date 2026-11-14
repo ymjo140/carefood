@@ -8,11 +8,14 @@ import { MEMBER_COLS, memberTarget, type ChallengeRow, type MemberRow } from "@/
 import { planGroupAlerts } from "@/lib/challenge-alerts";
 import { DEFAULT_PREFS, cleanPrefs, lineOf, moodOf, type MascotFacts, type MascotPrefs } from "@/lib/mascot";
 import { selectAll } from "@/lib/supabase/all";
+import { loadAccess } from "@/lib/subscription";
+import { PLANS, cheapestPlanFor, effectiveKind } from "@/lib/plans";
 
 /**
  * GET  /api/me/mascot — 내 캐릭터 설정 + 지금 표정·한 줄 (내 기록으로만 정한다, 다른 사람에게 보이지 않는다)
- * PATCH { kind } — 캐릭터 고르기 (끼록이·람이·끼냥이·캐릭터 없이)
- * 규칙은 lib/mascot.ts
+ *      + 구독(access: 쓸 수 있는 캐릭터) · 요금제 목록. 고른 캐릭터를 쓸 수 없게 됐으면(구독 끝) kind 는 '캐릭터 없이'로 보인다.
+ * PATCH { kind } — 캐릭터 고르기 (끼록이·람이·끼냥이·캐릭터 없이). 구독에 없는 캐릭터는 403.
+ * 규칙은 lib/mascot.ts · lib/plans.ts
  */
 type Sb = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 type PrefRow = { mascot: string; mascot_sulk: boolean; mascot_moods: boolean; simple_mode: boolean };
@@ -66,8 +69,9 @@ export async function GET() {
   const sb = createServiceRoleClient() as Sb;
   const today = todayKst();
   try {
-    const [prefs, diary, goal, everRes] = await Promise.all([
+    const [prefs, access, diary, goal, everRes] = await Promise.all([
       prefsOf(sb, actor),
+      loadAccess(sb, actor),
       selectAll<DiaryRow>(() => sb.from("meal_diary").select(DIARY_COLS).eq("user_id", actor).gte("date", addDays(today, -60)).lte("date", today), "id"),
       sb.from("daily_nutrition_goals").select("daily_calories").eq("user_id", actor).maybeSingle(),
       sb.from("meal_diary").select("id").eq("user_id", actor).limit(1),
@@ -89,9 +93,15 @@ export async function GET() {
     };
     // 캐릭터를 고르면 표정·삐지기는 늘 켜짐 (끄려면 '캐릭터 없이')
     const state = moodOf(facts, { sulk: true, moods: true });
-    const kind = prefs.kind === "none" ? null : prefs.kind;
+    const eff = effectiveKind(prefs.kind, access);
+    const kind = eff === "none" ? null : eff;
+    // 7일 안 해지 환불 판단 — 이번 기간에 유료 캐릭터를 처음 본 시각 (조건부 update 라 여러 번 불러도 처음 한 번만)
+    if (kind && access.mode === "store") {
+      const { error: uErr } = await sb.from("plan_subscriptions").update({ first_used_at: new Date().toISOString() }).eq("user_id", actor).neq("status", "expired").is("first_used_at", null);
+      if (uErr) console.error("구독 사용 시각을 남기지 못했어요:", uErr.message); // ds-allow: 환불 판단 보조 — 화면은 그대로
+    }
     return NextResponse.json({
-      prefs, mood: state.mood, welcome_back: state.welcomeBack, streak, meals: facts.todayMeals,
+      prefs: { ...prefs, kind: eff }, chosen: prefs.kind, access, plans: PLANS, mood: state.mood, welcome_back: state.welcomeBack, streak, meals: facts.todayMeals,
       line: kind ? lineOf(kind, state, { streak, meals: facts.todayMeals }) : null,
     });
   } catch (e) {
@@ -105,12 +115,17 @@ export async function PATCH(request: NextRequest) {
   const body = await request.json().catch(() => ({}));
   const sb = createServiceRoleClient() as Sb;
   try {
-    const next = cleanPrefs(body || {}, await prefsOf(sb, actor));
+    const [cur, access] = await Promise.all([prefsOf(sb, actor), loadAccess(sb, actor)]);
+    const next = cleanPrefs(body || {}, cur);
+    if (next.kind !== "none" && !access.characters.includes(next.kind)) {
+      const plan = cheapestPlanFor(next.kind);
+      return NextResponse.json({ error: `${plan.name}을 구독하면 고를 수 있어요`, plan: plan.code }, { status: 403 });
+    }
     const { error } = await sb.from("notification_prefs").upsert({
       user_id: actor, mascot: next.kind, mascot_sulk: next.sulk, mascot_moods: next.moods, simple_mode: next.simple, updated_at: new Date().toISOString(),
     }, { onConflict: "user_id" });
     if (error) throw new Error(error.message);
-    return NextResponse.json({ prefs: next });
+    return NextResponse.json({ prefs: next, access });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });
   }

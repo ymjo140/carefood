@@ -18,6 +18,8 @@ import { BRAND } from "@/lib/brand";
 import { loadGroupAlerts } from "@/lib/challenge-alerts";
 import { loadFamilyAlerts } from "@/lib/family-alerts";
 import { MASCOT_PUSH_HOUR, planMascotPush } from "@/lib/mascot-push";
+import { loadAccessMany } from "@/lib/subscription";
+import { effectiveKind } from "@/lib/plans";
 import type { MascotKind } from "@/components/ui/Mascot";
 
 /**
@@ -232,11 +234,15 @@ export async function POST(req: NextRequest) {
   // ── 캐릭터 삐짐 (광고 — 광고 동의자에게만, 낮 12시대) (lib/mascot-push.ts) ──
   if (hour === MASCOT_PUSH_HOUR) {
     try {
-      const want = users.filter((u) => { const p = prefsBy.get(u); return p?.mascot !== "none"; });
+      // 구독이 끝나 쓸 수 없는 캐릭터면 '캐릭터 없이'로 보고 보내지 않는다
+      const picked = users.filter((u) => prefsBy.get(u)?.mascot !== "none");
+      const access = await loadAccessMany(sb, picked);
+      const kindOf = (u: string) => effectiveKind((prefsBy.get(u)?.mascot || "kkirok") as MascotKind, access.get(u)!);
+      const want = picked.filter((u) => kindOf(u) !== "none");
       const ads = await selectAllIn<{ user_id: string }>(want, 200, (p) => sb.from("marketing_consents").select("user_id").in("user_id", p).eq("ads", true), "user_id");
       for (const { user_id: u } of ads) {
         const rows = diaryBy.get(u) || [];
-        const kind = (prefsBy.get(u)?.mascot || "kkirok") as MascotKind;
+        const kind = kindOf(u) as MascotKind;
         const plan = planMascotPush({ kind, days: new Set(rows.map((r) => r.date)), today, ever: rows.length > 0 });
         if (plan) await send(u, "mascot", plan.key, plan.payload);
       }

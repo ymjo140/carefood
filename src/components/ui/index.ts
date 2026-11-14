@@ -39,4 +39,4 @@ export { OfferOptionList, QtyStepper, type OfferRow } from "./Offer";
 export { TrendChart, BarList, GapChart } from "./Chart";
 export { StoryFrame, StoryProgress, StoryHeader, StoryMedia, StorySticker, StoryCaption, StoryAction, StoryReply } from "./Story";
 export { ShareCardPreview, ShareSteps } from "./ShareCard";
-export { Mascot, MASCOTS, type MascotKind, type MascotMood } from "./Mascot";
+export { Mascot, MASCOTS, MOOD_NAMES, type MascotKind, type MascotMood } from "./Mascot";

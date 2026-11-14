@@ -15,6 +15,11 @@ export const MASCOTS: { kind: MascotKind; name: string; about: string }[] = [
   { kind: "kkinyang", name: "끼냥이", about: "고양이 · 살짝 새침" },
 ];
 
+/** 표정 이름 — 미리 보기·설명에 쓴다 */
+export const MOOD_NAMES: Record<MascotMood, string> = {
+  wait: "기다려요", logged: "기록했어요", done: "해냈어요", full: "배불러요", worried: "걱정돼요", sulk: "삐졌어요", away: "등 돌렸어요", together: "다 같이 해냈어요",
+};
+
 const MOOD_ALT: Record<MascotMood, string> = {
   wait: "기다리는", logged: "손을 흔드는", done: "두 팔을 들고 기뻐하는", full: "배를 감싸고 졸린 눈을 한", worried: "배를 잡고 걱정하는",
   sulk: "팔짱 끼고 고개를 돌린", away: "등을 돌리고 앉은", together: "손을 잡고 웃는",
