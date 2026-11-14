@@ -286,7 +286,8 @@ export async function POST(request: NextRequest) {
     const meal_data = cleanMealData(body.meal_data);
     // 사진은 우리 저장소(/api/community/upload 가 올린 것)만 받는다
     const imgPrefix = imagePrefix();
-    const okImg = (u: unknown): u is string => typeof u === "string" && u.startsWith(imgPrefix) && !u.includes("..") && u.length <= 400;
+    // 내가 올린 사진만 (내 폴더) — 남의 사진 주소를 붙였다가 글을 지워 그 사진이 지워지는 일을 막는다
+    const okImg = (u: unknown): u is string => typeof u === "string" && u.startsWith(`${imgPrefix}${user_id}/`) && !u.includes("..") && u.length <= 400;
     const image_urls = [...new Set((Array.isArray(body.image_urls) ? body.image_urls : [body.image_url]).filter(okImg))].slice(0, 4) as string[];
     const image_url = image_urls[0] ?? null; // 한 장 칸은 첫 장 (예전 화면 호환)
     // 영상은 /api/community/video 가 다시 만든 이 사람의 것만 (표지 사진도 우리 저장소)
@@ -357,7 +358,7 @@ export async function DELETE(request: NextRequest) {
     .eq("id", id).eq("user_id", actor);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   // 사진 파일도 지운다 (남겨 두지 않음)
-  const [imgErr, vidErr] = await Promise.all([removeImages(sb, [before.image_url, ...(before.image_urls || []), before.video_poster]), removeVideos(sb, [before.video_url])]);
+  const [imgErr, vidErr] = await Promise.all([removeImages(sb, [before.image_url, ...(before.image_urls || []), before.video_poster], actor), removeVideos(sb, [before.video_url])]);
   if (imgErr) console.error("사진 파일을 지우지 못했어요:", imgErr);
   if (vidErr) console.error("영상 파일을 지우지 못했어요:", vidErr);
   return NextResponse.json({ ok: true });

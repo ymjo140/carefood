@@ -15,10 +15,13 @@ export function imagePaths(urls: (string | null | undefined)[]) {
     .map((u) => decodeURIComponent(u.slice(prefix.length)));
 }
 
-/** 사진 파일 지우기 — 실패해도 글 지우기는 막지 않고 오류를 돌려준다 */
+/**
+ * 사진 파일 지우기 — 실패해도 글 지우기는 막지 않고 오류를 돌려준다.
+ * owner 를 주면 그 사람 폴더(<owner>/…)의 파일만 지운다 — 남의 사진 주소를 붙인 글을 지워도 원래 사진은 남는다.
+ */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function removeImages(sb: any, urls: (string | null | undefined)[]): Promise<string | null> {
-  const paths = imagePaths(urls);
+export async function removeImages(sb: any, urls: (string | null | undefined)[], owner?: string | null): Promise<string | null> {
+  const paths = imagePaths(urls).filter((path) => owner === undefined || (!!owner && path.startsWith(`${owner}/`)));
   if (!paths.length) return null;
   const { error } = await sb.storage.from(IMAGE_BUCKET).remove(paths);
   return error ? error.message : null;

@@ -63,8 +63,8 @@ export async function POST(request: NextRequest) {
 
   // 글을 내리면 사진 파일도 지운다
   if (action === "remove" && kind === "post") {
-    const { data: p } = await sb.from("community_feed").select("image_url, image_urls, video_url, video_poster").eq("id", id).maybeSingle();
-    const [imgErr, vidErr] = await Promise.all([removeImages(sb, [p?.image_url, ...(p?.image_urls || []), p?.video_poster]), removeVideos(sb, [p?.video_url])]);
+    const { data: p } = await sb.from("community_feed").select("user_id, image_url, image_urls, video_url, video_poster").eq("id", id).maybeSingle();
+    const [imgErr, vidErr] = await Promise.all([removeImages(sb, [p?.image_url, ...(p?.image_urls || []), p?.video_poster], p?.user_id ?? null), removeVideos(sb, [p?.video_url])]);
     if (imgErr) console.error("사진 파일을 지우지 못했어요:", imgErr);
     if (vidErr) console.error("영상 파일을 지우지 못했어요:", vidErr);
   }
