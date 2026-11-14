@@ -21,6 +21,7 @@ export function Connect({ qs, batches, onChanged, onReport }: { qs: string; batc
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [result, setResult] = useState<Batch | null>(null);
+  const [tick, setTick] = useState(0); // 올리기·피드 가져오기 뒤에 연동 상태를 다시 불러온다
   const fileRef = useRef<HTMLInputElement>(null);
   const last = result || batches[0] || null;
 
@@ -41,6 +42,7 @@ export function Connect({ qs, batches, onChanged, onReport }: { qs: string; batc
       if (fileRef.current) fileRef.current.value = "";
       toast.show(`${d.rows}줄을 올렸어요`);
       onChanged();
+      setTick((t) => t + 1);
     } catch (e) {
       toast.show(`올리지 못했어요. ${(e as Error).message || "다시 시도해 주세요"}`, { tone: "danger" });
     } finally { setUploading(false); }
@@ -48,7 +50,7 @@ export function Connect({ qs, batches, onChanged, onReport }: { qs: string; batc
 
   return (
     <div className="flex flex-col gap-10">
-      <Status qs={qs} onReport={onReport} />
+      <Status qs={qs} refresh={tick} onReport={onReport} />
 
       <section>
         <SectionHeader title="연동 방식" />
@@ -68,7 +70,7 @@ export function Connect({ qs, batches, onChanged, onReport }: { qs: string; batc
         </div>
       </section>
 
-      <Feed qs={qs} onFetched={onChanged} />
+      <Feed qs={qs} onFetched={() => { onChanged(); setTick((t) => t + 1); }} />
       <ApiKeys qs={qs} />
 
       <section>
@@ -133,7 +135,7 @@ const VIA: Record<string, string> = { excel: "엑셀", feed: "피드", api: "API
 const n = (v: number) => v.toLocaleString("ko-KR");
 
 /** 연동 상태 — 마지막 수신 · 오래된 가격 · 구매 확정 보고. 문제가 있는 줄에는 경고 아이콘과 할 일 */
-function Status({ qs, onReport }: { qs: string; onReport?: () => void }) {
+function Status({ qs, refresh, onReport }: { qs: string; refresh: number; onReport?: () => void }) {
   const [state, setState] = useState<{ status: "loading" | "error" | "done"; data?: ConnectStatus; error?: string }>({ status: "loading" });
   const load = useCallback(async () => {
     try {
@@ -143,7 +145,7 @@ function Status({ qs, onReport }: { qs: string; onReport?: () => void }) {
       setState({ status: "done", data: j });
     } catch (e) { setState({ status: "error", error: (e as Error).message || "불러오지 못했어요" }); }
   }, [qs]);
-  useEffect(() => { load(); }, [load]); // eslint-disable-line react-hooks/set-state-in-effect -- 불러온 뒤에 상태를 바꾼다
+  useEffect(() => { load(); }, [load, refresh]); // eslint-disable-line react-hooks/set-state-in-effect -- 불러온 뒤에 상태를 바꾼다
 
   const d = state.data;
   return (

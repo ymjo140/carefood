@@ -83,7 +83,8 @@ export async function buildReport(sb: Sb, items: ReportItem[], days: number) {
       impressions: b.impressions, views: b.views, clicks: b.clicks, diary: b.diary, favorites: b.favorites, plans: b.plans,
       rating: b.rating_n ? Math.round((b.rating_sum / b.rating_n) * 10) / 10 : null, rating_n: b.rating_n,
     };
-  }).sort((a, b) => (b.views + b.clicks * 3 + b.diary * 2) - (a.views + a.clicks * 3 + a.diary * 2)).slice(0, 100);
+  }).sort((a, b) => (b.views + b.clicks * 3 + b.diary * 2) - (a.views + a.clicks * 3 + a.diary * 2));
+  // 합계는 모든 제품으로 — 표에는 앞의 100개만 보낸다
   const totals = products.reduce((t, p) => ({
     impressions: t.impressions + p.impressions, views: t.views + p.views, clicks: t.clicks + p.clicks, diary: t.diary + p.diary, favorites: t.favorites + p.favorites, plans: t.plans + p.plans,
   }), { impressions: 0, views: 0, clicks: 0, diary: 0, favorites: 0, plans: 0 });
@@ -126,5 +127,5 @@ export async function buildReport(sb: Sb, items: ReportItem[], days: number) {
       };
     }
   }
-  return { days, products, totals, placements, audience };
+  return { days, products: products.slice(0, 100), totals, placements, audience };
 }

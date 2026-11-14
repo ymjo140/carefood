@@ -90,7 +90,7 @@ export function Report({ qs, onMakeSegment }: { qs: string; onMakeSegment?: (goa
                     <li key={pl.key} className="flex items-center justify-between gap-3 px-4 py-3">
                       <span className="text-label text-ink">{pl.label}</span>
                       <span className="text-label text-ink-2 whitespace-nowrap">
-                        <span className="num font-bold text-ink">{n(pl.count)}</span>회 · <span className="num">{pct(pl.count, d.totals!.impressions)}</span>
+                        <span className="num font-bold text-ink">{n(pl.count)}</span>회 · <span className="num">{pct(pl.count, d.placements!.reduce((t, x) => t + x.count, 0))}</span>
                       </span>
                     </li>
                   ))}

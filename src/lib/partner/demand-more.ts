@@ -99,7 +99,9 @@ export async function buildDemandMore(sb: Sb, pid: string): Promise<{ meals: Mea
   // ── 공구 ──
   const gb = await chunks<{ id: string; title: string; current_count: number; target_count: number; original_price: number | null; target_price: number | null; discount_rate: number | null; concern: string | null; status: string; expires_at: string | null }>(
     ids, 150, (p) => sb.from("group_buys").select("id, title, current_count, target_count, original_price, target_price, discount_rate, concern, status, expires_at").in("product_id", p).in("status", ["recruiting", "achieved"]).limit(100));
-  const group_buys: GroupBuyRow[] = gb.map((g) => ({
+  // 마감이 지났는데 아직 recruiting 인 공구는 끝난 것으로 보고 뺀다 (공구 목록 API 와 같은 기준)
+  const now = Date.now();
+  const group_buys: GroupBuyRow[] = gb.filter((g) => g.status !== "recruiting" || !g.expires_at || Date.parse(g.expires_at) > now).map((g) => ({
     id: g.id, title: g.title, current: g.current_count, target: g.target_count, original_price: g.original_price, target_price: g.target_price,
     discount: g.discount_rate !== null ? Math.round(g.discount_rate <= 1 ? g.discount_rate * 100 : g.discount_rate) : null,
     goal: (g.concern && GB_GOAL[g.concern]) || null, status: g.status, expires_at: g.expires_at,
