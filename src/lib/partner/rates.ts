@@ -6,3 +6,8 @@
  * 업체마다 관리자 화면에서 바꿀 수 있지만, 기본은 이 값이다. 화면·서버가 같이 쓴다(서버 전용 import 없음).
  */
 export const STANDARD_RATES = { order: 5, link: 2 } as const;
+
+/** 고객층 메시지(광고) 기본 발송비 — 보낸 사람 수 × 이 값(원). 보낼 때만 낸다 (11/14 결정: 처음에는 모든 업체 100원, 최소 충전 1만 원) */
+export const STANDARD_MESSAGE_PRICE = 100;
+/** 정산 지급일 — 구매확정한 달의 다음 달 이날 (lib/partner/payout.ts PAY_DAY 와 같은 값) */
+export const PAY_DAY_OF_MONTH = 10;
