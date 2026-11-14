@@ -6,6 +6,7 @@
  *       refund_amount(돌려줘야 할 누적) 과 refunded_amount(돌려준 누적) 를 둔다. PG 를 붙이기 전에는 관리자가 직접 환불하고 표시한다.
  */
 import { type Fulfil, type Shipping } from "./order-status";
+import { restoreCoupons } from "./partner/coupons";
 
 type Sb = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -101,9 +102,12 @@ export async function syncOrderStatus(sb: Sb, orderId: string) {
   if (uErr) throw new Error(uErr.message);
 }
 
-/** 돌려줘야 할 금액을 다시 센다 — 결제한 주문에서 취소된 업체 묶음의 상품 금액 + 그 업체 배송비. 줄지 않는다(취소는 되돌리지 않는다) */
+/**
+ * 돌려줘야 할 금액을 다시 센다 — 결제한 주문에서 취소된 업체 묶음의 상품 금액 + 그 업체 배송비 − 그 묶음 쿠폰 할인.
+ * 줄지 않는다(취소는 되돌리지 않는다). 통째로 취소된 묶음에 쓴 쿠폰은 기간이 남았으면 돌려준다.
+ */
 export async function recomputeRefund(sb: Sb, orderId: string) {
-  const { data: o, error } = await sb.from("orders").select("paid_at, shipping_fees, refund_amount").eq("id", orderId).single();
+  const { data: o, error } = await sb.from("orders").select("paid_at, shipping_fees, discount_fees, refund_amount").eq("id", orderId).single();
   if (error) throw new Error(error.message);
   if (!o.paid_at) return;
   const { data: items, error: iErr } = await sb.from("order_items").select("partner_id, unit_price, quantity, fulfil_status").eq("order_id", orderId);
@@ -116,12 +120,25 @@ export async function recomputeRefund(sb: Sb, orderId: string) {
     if (it.fulfil_status !== "canceled") g.canceled = false;
   }
   const fees = (o.shipping_fees || {}) as Record<string, number>;
+  const discounts = (o.discount_fees || {}) as Record<string, number>;
   let due = 0;
-  for (const [k, g] of groups) if (g.canceled) due += g.sum + (fees[k] || 0);
+  const canceledPartners: string[] = [];
+  for (const [k, g] of groups) if (g.canceled) { due += Math.max(0, g.sum + (fees[k] || 0) - (discounts[k] || 0)); if (k !== "none") canceledPartners.push(k); }
+  await restoreCoupons(sb, orderId, canceledPartners);
   if (due > (o.refund_amount || 0)) {
     const { error: uErr } = await sb.from("orders").update({ refund_amount: due, updated_at: new Date().toISOString() }).eq("id", orderId);
     if (uErr) throw new Error(uErr.message);
   }
+}
+
+/** 결제 전 주문에 묶어 둔 쿠폰을 모두 돌려준다 (결제 전 취소 · 결제하지 않고 30분이 지난 주문) */
+export async function releaseOrderCoupons(sb: Sb, orderId: string) {
+  const { data, error } = await sb.from("coupon_grants").select("partner_id").eq("used_order_id", orderId).eq("status", "used");
+  if (error) {
+    if (error.code === "42P01" || error.code === "PGRST205") return;
+    throw new Error(error.message);
+  }
+  await restoreCoupons(sb, orderId, [...new Set(((data || []) as { partner_id: string }[]).map((r) => r.partner_id))]);
 }
 
 export type CancelResult = { ok: true; result: "canceled" | "requested" } | { ok: false; code: "not_found" | "conflict" | "invalid"; message: string };
@@ -147,6 +164,7 @@ export async function buyerCancel(sb: Sb, userId: string, orderId: string, partn
     if (iErr) throw new Error(iErr.message);
     const { error: oErr } = await sb.from("orders").update({ status: "cancelled", updated_at: now }).eq("id", orderId);
     if (oErr) throw new Error(oErr.message);
+    await releaseOrderCoupons(sb, orderId);
     return { ok: true, result: "canceled" };
   }
 

@@ -6,6 +6,7 @@
  *   · API : 그중 2개 가격·판매 상태만 바꿈 → ingestRows("api")
  *   · 대행: 예시 제품 3개를 케어푸드가 대신 올린 것으로 → 업체가 '반영하기'를 눌러야 들어간다
  *   · 주문: 예시 고객 18명 · 지난 170일 주문 (orders.is_demo) — 고객·주문·정산 화면을 채운다
+ *   · 혜택: 예시 쿠폰 2개(이름이 "예시 "로 시작) · 첫 주문 고객에게 준 쿠폰 · 한 주문에서 쓴 쿠폰 · 첫 주문 감사 자동 알림
  * 예시 제품은 검수 대기로만 둔다. 승인하면 실제 제품 목록(products)에 들어가 다른 사용자에게 보이기 때문이다.
  * 제품 코드는 EX- 로 시작하고, 예시 고객은 demo- 로 시작한다. "예시 지우기"가 이것만 지운다.
  */
@@ -114,6 +115,7 @@ export async function seedDemoOrders(sb: Sb, partner: Partner) {
   const orders: Record<string, unknown>[] = [];
   const items: Record<string, unknown>[] = [];
   let n = 0;
+  let couponOrder: { id: string; user: string } | null = null; // 예시 쿠폰을 쓴 주문 하나
   CUSTOMERS.forEach(([count, lastAgo, gap], ci) => {
     const user = `${DEMO_USER_PREFIX}${partner.slug}-${String(ci + 1).padStart(2, "0")}`;
     // 이 고객이 주로 사는 제품 1~2개 + 가끔 다른 것
@@ -133,10 +135,13 @@ export async function seedDemoOrders(sb: Sb, partner: Partner) {
       const fulfil = canceled ? "canceled" : ago <= 1 ? "new" : ago <= 3 ? "accepted" : ago <= 6 ? "shipped" : "delivered";
       // 구매자 취소 요청은 업체가 확인한 뒤(accepted)에 생긴다 — 그 전에는 구매자가 바로 취소한다
       const cancelAsk = fulfil === "accepted" && ci % 2 === 0;
+      // 다시 산 고객 하나는 마지막 주문에 예시 쿠폰(3,000원)을 썼다
+      const discount = ci === 4 && k === 0 && !canceled && subtotal >= 15000 ? 3000 : 0;
+      if (discount) couponOrder = { id, user };
       orders.push({
         id, user_id: user, status: fulfil === "delivered" ? "delivered" : fulfil === "canceled" ? "cancelled" : "paid",
         total_items: rows.length, total_price: subtotal, shipping_fee: fee, shipping_fees: { [partner.id]: fee },
-        final_price: subtotal + fee, payment_method: "demo", paid_at: new Date(at).toISOString(),
+        final_price: subtotal + fee - discount, discount_amount: discount, discount_fees: discount ? { [partner.id]: discount } : {}, payment_method: "demo", paid_at: new Date(at).toISOString(),
         created_at: new Date(at - 60e3).toISOString(), updated_at: new Date(at).toISOString(),
         third_party_consent_at: new Date(at - 60e3).toISOString(), is_demo: true,
         shipping: { name: `예시 고객 ${ci + 1}`, phone: "01000000000", postal_code: null, address1: "서울특별시 예시구 예시로 1", address2: null, note: null },
@@ -169,7 +174,36 @@ export async function seedDemoOrders(sb: Sb, partner: Partner) {
     const { error } = await sb.from("order_items").insert(items.slice(i, i + 300));
     if (error) throw new Error(`예시 주문 제품을 만들지 못했어요: ${error.message}`);
   }
+  await seedDemoCoupons(sb, partner, couponOrder);
   return { customers: CUSTOMERS.length, orders: orders.length };
+}
+
+const DEMO_COUPON = "예시 ";
+
+/** 예시 쿠폰 두 개 — 첫 주문 고객에게 준 것, 한 주문에서 쓴 것. 자동 알림 '첫 주문 감사'를 켜 둔다 (예시 고객은 광고 동의가 없어 실제로 가지 않는다) */
+async function seedDemoCoupons(sb: Sb, partner: Partner, used: { id: string; user: string } | null) {
+  const { error: dErr } = await sb.from("partner_coupons").delete().eq("partner_id", partner.id).like("name", `${DEMO_COUPON}%`);
+  if (dErr) throw new Error(dErr.message);
+  const { data: cs, error } = await sb.from("partner_coupons").insert([
+    { partner_id: partner.id, name: `${DEMO_COUPON}두 번째 주문 감사`, kind: "amount", value: 3000, min_order: 15000, valid_days: 14 },
+    { partner_id: partner.id, name: `${DEMO_COUPON}다시 찾아 주세요`, kind: "percent", value: 10, max_discount: 5000, min_order: 0, valid_days: 30 },
+  ]).select("id, name");
+  if (error) throw new Error(error.message);
+  const thanks = cs.find((c: { name: string }) => c.name.endsWith("감사")).id;
+  const now = Date.now();
+  const firsts = CUSTOMERS.map((c, i) => ({ c, user: `${DEMO_USER_PREFIX}${partner.slug}-${String(i + 1).padStart(2, "0")}` })).filter(({ c }) => c[0] === 1 && c[1] <= 30);
+  const grants: Record<string, unknown>[] = firsts.map(({ user }) => ({ coupon_id: thanks, partner_id: partner.id, user_id: user, source: "flow", expires_at: new Date(now + 14 * DAY).toISOString() }));
+  if (used) grants.push({ coupon_id: thanks, partner_id: partner.id, user_id: used.user, source: "manual", expires_at: new Date(now + 7 * DAY).toISOString(),
+    status: "used", used_order_id: used.id, used_at: new Date(now - 6 * DAY).toISOString(), discount_amount: 3000 });
+  if (grants.length) {
+    const { error: gErr } = await sb.from("coupon_grants").insert(grants);
+    if (gErr) throw new Error(gErr.message);
+  }
+  const { error: fErr } = await sb.from("partner_flows").upsert({
+    partner_id: partner.id, kind: "first_thanks", is_on: true, coupon_id: thanks, title: "첫 주문 고마워요",
+    body: "드셔 보니 어떠셨어요? 두 번째 주문에 쓸 수 있는 3,000원 쿠폰을 드려요", delay_days: 2, updated_at: new Date().toISOString(),
+  }, { onConflict: "partner_id,kind" });
+  if (fErr) throw new Error(fErr.message);
 }
 
 /** 이 업체의 예시 주문만 지운다 (주문 제품은 같이 지워진다) */
@@ -216,5 +250,7 @@ export async function clearDemo(sb: Sb, partnerId: string) {
   }
   const { error: uErr } = await sb.from("partner_agency_uploads").delete().eq("partner_id", partnerId).eq("file_name", "예시_대행_목록.xlsx");
   if (uErr) throw new Error(uErr.message);
+  const { error: cErr } = await sb.from("partner_coupons").delete().eq("partner_id", partnerId).like("name", `${DEMO_COUPON}%`); // 준 쿠폰도 같이 지워진다
+  if (cErr) throw new Error(cErr.message);
   return { orders, items: ids.length };
 }

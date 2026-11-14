@@ -9,13 +9,13 @@ function DisputeButton({ onClick }: { onClick: () => void }) {
   return <TextButton onClick={onClick}>다르게 보여요</TextButton>;
 }
 
-type Settlement = { commission: number; order_sales: number; order_shipping: number; order_fee: number; status: "closed" | "paid"; closed_at: string; paid_at: string | null };
+type Settlement = { commission: number; order_sales: number; order_shipping: number; order_discount?: number; order_fee: number; status: "closed" | "paid"; closed_at: string; paid_at: string | null };
 type Month = {
   month: string; clicks: number; orders: number; confirmed: number; confirmed_amount: number; commission: number; canceled: number;
-  order_sales: number; order_shipping: number; order_fee: number; open: boolean; settlement: Settlement | null;
+  order_sales: number; order_shipping: number; order_discount?: number; order_fee: number; open: boolean; settlement: Settlement | null;
 };
 type Data = { commission_rate: number | null; order_commission_rate: number | null; attribution_days: number; months: Month[] };
-const payout = (m: { order_sales: number; order_shipping: number; order_fee: number }) => m.order_sales + m.order_shipping - m.order_fee;
+const payout = (m: { order_sales: number; order_shipping: number; order_discount?: number; order_fee: number }) => m.order_sales - (m.order_discount || 0) + m.order_shipping - m.order_fee;
 type RowError = { row: number; sku?: string; message: string };
 type Result = { rows: number; saved: number; error: number; errors: RowError[] };
 
@@ -120,7 +120,7 @@ export function Commission({ qs, readOnly = false }: { qs: string; readOnly?: bo
                         {appOrders && (
                           <td className="px-4 py-2.5 num text-right font-bold text-ink whitespace-nowrap">
                             {won(payout(s || m))}
-                            <span className="block text-caption font-regular text-ink-2">배송비 +{won((s || m).order_shipping)} · 수수료 −{won((s || m).order_fee)}</span>
+                            <span className="block text-caption font-regular text-ink-2">{((s || m).order_discount || 0) > 0 && <>쿠폰 −{won((s || m).order_discount || 0)} · </>}배송비 +{won((s || m).order_shipping)} · 수수료 −{won((s || m).order_fee)}</span>
                           </td>
                         )}
                       </tr>

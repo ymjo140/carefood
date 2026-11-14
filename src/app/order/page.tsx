@@ -17,7 +17,7 @@ import { Button, Card, EmptyState, Field, Icon, Input, LinkButton, Page, PageHea
 type BoxItem = { day: string; slot: string; product_id?: string; product_name: string };
 type Seller = { seller: string; slug: string; price: number };
 type Line = BoxItem & Seller;
-type Quote = { status: "loading" | "error" | "done"; groups: { slug: string; seller: string; lines: Line[]; total: number; shipping: number; free_over: number | null }[]; others: BoxItem[] };
+type Quote = { status: "loading" | "error" | "done"; groups: { slug: string; seller: string; lines: Line[]; total: number; shipping: number; free_over: number | null; coupon: { name: string; discount: number } | null }[]; others: BoxItem[] };
 
 const DAY_LABELS: Record<string, string> = {
   mon: "월", tue: "화", wed: "수", thu: "목", fri: "금", sat: "토", sun: "일",
@@ -77,12 +77,13 @@ function OrderFlow() {
       if (!res.ok) throw new Error(data.error || "");
       const sellers = (data.sellers || {}) as Record<string, Seller>;
       const ship = (data.shipping || {}) as Record<string, { fee: number; free_over: number | null }>;
+      const coupons = (data.coupons || {}) as Record<string, { name: string; discount: number }>;
       const by = new Map<string, Quote["groups"][number]>();
       const others: BoxItem[] = [];
       for (const it of list) {
         const s = it.product_id ? sellers[it.product_id] : undefined;
         if (!s) { others.push(it); continue; }
-        const g = by.get(s.slug) || by.set(s.slug, { slug: s.slug, seller: s.seller, lines: [], total: 0, shipping: ship[s.slug]?.fee || 0, free_over: ship[s.slug]?.free_over ?? null }).get(s.slug)!;
+        const g = by.get(s.slug) || by.set(s.slug, { slug: s.slug, seller: s.seller, lines: [], total: 0, shipping: ship[s.slug]?.fee || 0, free_over: ship[s.slug]?.free_over ?? null, coupon: coupons[s.slug] || null }).get(s.slug)!;
         g.lines.push({ ...it, ...s });
         g.total += s.price;
       }
@@ -99,7 +100,8 @@ function OrderFlow() {
   const lines = quote.groups.flatMap((g) => g.lines);
   const itemsPrice = quote.groups.reduce((s, g) => s + g.total, 0);
   const shippingPrice = quote.groups.reduce((s, g) => s + g.shipping, 0);
-  const totalPrice = itemsPrice + shippingPrice;
+  const couponPrice = quote.groups.reduce((s, g) => s + (g.coupon?.discount || 0), 0);
+  const totalPrice = itemsPrice + shippingPrice - couponPrice;
 
   const handleOrder = async () => {
     if (ordering || lines.length === 0 || !canOrder) return;
@@ -229,9 +231,15 @@ function OrderFlow() {
               {g.shipping > 0 && g.free_over !== null && (
                 <p className="text-caption text-ink-2"><span className="num">{g.free_over.toLocaleString()}</span>원 이상이면 무료예요</p>
               )}
+              {g.coupon && (
+                <div className="flex justify-between gap-3">
+                  <span className="text-ink-2 min-w-0 truncate">쿠폰 · {g.coupon.name}</span>
+                  <span className="num text-ink whitespace-nowrap">−{g.coupon.discount.toLocaleString()}원</span>
+                </div>
+              )}
               <div className="flex justify-between">
                 <span className="text-ink-2">소계</span>
-                <Price value={g.total + g.shipping} />
+                <Price value={g.total + g.shipping - (g.coupon?.discount || 0)} />
               </div>
             </div>
           </Card>
@@ -277,6 +285,12 @@ function OrderFlow() {
           <span className="text-ink-2">배송비</span>
           {shippingPrice > 0 ? <Price value={shippingPrice} className="font-medium" /> : <span className="text-ink">무료</span>}
         </div>
+        {couponPrice > 0 && (
+          <div className="flex justify-between text-label mb-2">
+            <span className="text-ink-2">쿠폰 할인 (업체마다 가장 큰 것 하나)</span>
+            <span className="num font-medium text-ink whitespace-nowrap">−{couponPrice.toLocaleString()}원</span>
+          </div>
+        )}
         <div className="border-t border-line pt-2 flex justify-between items-baseline">
           <span className="text-body font-bold text-ink">결제 금액</span>
           <span className="num text-title font-bold text-ink highlight">{totalPrice.toLocaleString()}<span className="text-label font-medium text-ink-2 ml-0.5">원</span></span>

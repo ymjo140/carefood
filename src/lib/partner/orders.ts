@@ -7,6 +7,7 @@
 import type { Partner } from "./ingest";
 import { CARRIERS, FULFIL, FULFIL_LABEL, type Fulfil, type Shipping } from "@/lib/order-status";
 import { recomputeRefund, syncOrderStatus } from "@/lib/orders";
+import { loadBuyers } from "./customers";
 import { pushReady, sendToUser, type PushSub } from "@/lib/push";
 
 export { CARRIERS, FULFIL, FULFIL_LABEL, parseShipping, type Fulfil, type Shipping } from "@/lib/order-status";
@@ -25,6 +26,10 @@ export type PartnerOrder = {
   cancel_requested_at: string | null; cancel_request_reason: string | null;
   /** 받는 분 — 동의가 없거나 배송이 끝났으면 null */
   shipping: Shipping | null;
+  /** 이 고객이 우리 업체에서 처음 산 주문 (통째로 취소된 주문은 세지 않는다) */
+  first_order: boolean;
+  /** 이 묶음에 쓴 우리 쿠폰 할인 (업체 부담) */
+  discount: number;
 };
 
 type Row = {
@@ -32,9 +37,9 @@ type Row = {
   day_of_week: string | null; meal_type: string | null; fulfil_status: Fulfil; tracking_carrier: string | null; tracking_number: string | null;
   accepted_at: string | null; shipped_at: string | null; delivered_at: string | null; cancel_reason: string | null;
   canceled_by: PartnerOrder["canceled_by"]; cancel_requested_at: string | null; cancel_request_reason: string | null; partner_id: string;
-  orders: { created_at: string; delivery_week_start: string | null; shipping: Shipping | null; third_party_consent_at: string | null; status: string; shipping_fees: Record<string, number> | null };
+  orders: { created_at: string; delivery_week_start: string | null; shipping: Shipping | null; third_party_consent_at: string | null; status: string; shipping_fees: Record<string, number> | null; discount_fees: Record<string, number> | null };
 };
-const COLS = "order_id, partner_id, partner_sku, product_name, quantity, unit_price, day_of_week, meal_type, fulfil_status, tracking_carrier, tracking_number, accepted_at, shipped_at, delivered_at, cancel_reason, canceled_by, cancel_requested_at, cancel_request_reason, orders!inner(created_at, delivery_week_start, shipping, third_party_consent_at, status, shipping_fees)";
+const COLS = "order_id, partner_id, partner_sku, product_name, quantity, unit_price, day_of_week, meal_type, fulfil_status, tracking_carrier, tracking_number, accepted_at, shipped_at, delivered_at, cancel_reason, canceled_by, cancel_requested_at, cancel_request_reason, orders!inner(created_at, delivery_week_start, shipping, third_party_consent_at, status, shipping_fees, discount_fees)";
 
 function group(rows: Row[]): PartnerOrder[] {
   const by = new Map<string, PartnerOrder>();
@@ -50,6 +55,7 @@ function group(rows: Row[]): PartnerOrder[] {
         cancel_reason: r.cancel_reason, canceled_by: r.canceled_by,
         cancel_requested_at: status === "accepted" ? r.cancel_requested_at : null, cancel_request_reason: status === "accepted" ? r.cancel_request_reason : null,
         shipping: open && r.orders.third_party_consent_at && r.orders.shipping ? r.orders.shipping : null,
+        first_order: false, discount: Number(r.orders.discount_fees?.[r.partner_id] || 0),
       };
       by.set(r.order_id, o);
     }
@@ -65,7 +71,11 @@ export async function listPartnerOrders(sb: Sb, partnerId: string, opt: { status
   if (opt.since) q = q.gte("created_at", opt.since);
   const { data, error } = await q;
   if (error) throw new Error(error.message);
-  return group((data || []) as Row[]).slice(0, Math.min(Math.max(opt.limit || 100, 1), 200));
+  const list = group((data || []) as Row[]).slice(0, Math.min(Math.max(opt.limit || 100, 1), 200));
+  // 첫 주문 표시 — 고객마다 처음 산 주문 (lib/partner/customers.ts 와 같은 셈)
+  const firsts = new Set((await loadBuyers(sb, partnerId)).map((b) => b.live[0]?.id).filter(Boolean));
+  for (const o of list) o.first_order = firsts.has(o.order_id);
+  return list;
 }
 
 export type FulfilInput = { status: unknown; carrier?: unknown; tracking_number?: unknown; reason?: unknown };
