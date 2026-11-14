@@ -3,13 +3,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { addDays, monthDay, todayKst } from "@/lib/day";
 import {
-  Button, Chip, ChipRow, IconButton, Field, Icon, Input, Kcal, Select, Sheet, SkeletonList, Textarea, cn, useToast,
+  Button, Chip, ChipRow, IconButton, Field, Icon, Input, Kcal, Select, Sheet, SkeletonList, Textarea, VideoAttach, cn, useToast,
 } from "@/components/ui";
+import { useVideoUpload } from "./useVideoUpload";
 import { COMMUNITY_TOPICS } from "@/lib/community-topics";
 import { POLL_DAYS, POLL_MAX_OPTIONS, POLL_OPTION_MAX } from "@/lib/community-poll";
 
 /**
- * 글쓰기 시트 — 글 + 붙이기(사진 4장 · 기록한 끼니 · 저장한 식단 · 제품 태그 · 투표) + 모임.
+ * 글쓰기 시트 — 글 + 붙이기(사진 4장 · 영상 1개 · 기록한 끼니 · 저장한 식단 · 제품 태그 · 투표) + 모임.
  * 사진은 /api/community/upload 가 위치 정보 같은 메타데이터를 지우고 줄여서 올린다.
  * 작성자 건강 관심사는 붙이지 않는다 (서버도 받지 않음).
  */
@@ -73,6 +74,8 @@ export default function PostComposer({ isOpen, initialAttach, preset, nickname, 
   const MAX_PHOTOS = 4;
   const [photos, setPhotos] = useState<Photo[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
+  // 짧은 영상 한 개 (서버가 위치 같은 촬영 정보를 빼고 다시 만든다)
+  const { video, status: vStatus, busy: vBusy, fileRef: vRef, pick: vPick, drop: vDrop, clear: vClear } = useVideoUpload();
   // 투표 — 내용이 질문, 선택지 2~4개
   const [pollOn, setPollOn] = useState(false);
   const [pollOpts, setPollOpts] = useState<string[]>(["", ""]);
@@ -200,7 +203,7 @@ export default function PostComposer({ isOpen, initialAttach, preset, nickname, 
   }, []);
 
   const reset = (posted = false) => {
-    setContent(""); setAttach(null); setTopic(""); setPicked([]); setPlan(null); setProducts([]); setQ(""); dropAllPhotos(!posted);
+    setContent(""); setAttach(null); setTopic(""); setPicked([]); setPlan(null); setProducts([]); setQ(""); dropAllPhotos(!posted); vClear(posted);
     setPollOn(false); setPollOpts(["", ""]); setPollDays(3);
     setHits({ status: "idle", items: [] }); if (days[0]) setDay(days[0].iso);
   };
@@ -217,7 +220,7 @@ export default function PostComposer({ isOpen, initialAttach, preset, nickname, 
   const photoUrls = photos.filter((p) => p.url).map((p) => p.url!);
   const pollFilled = [...new Set(pollOpts.map((o) => o.trim()).filter(Boolean))];
   const pollReady = !pollOn || (pollFilled.length >= 2 && content.trim().length > 0);
-  const canPost = !posting && !uploading && pollReady && (content.trim().length > 0 || hasMeal || !!plan || photoUrls.length > 0);
+  const canPost = !posting && !uploading && !vBusy && pollReady && (content.trim().length > 0 || hasMeal || !!plan || photoUrls.length > 0 || !!video);
 
   const submit = async () => {
     setPosting(true);
@@ -246,6 +249,7 @@ export default function PostComposer({ isOpen, initialAttach, preset, nickname, 
           meal_data,
           product_ids: products.map((p) => p.id),
           image_urls: photoUrls,
+          video,
           poll: pollOn ? { options: pollFilled, days: pollDays } : null,
           topic: topic || null,
           author_nickname: nickname,
@@ -307,8 +311,9 @@ export default function PostComposer({ isOpen, initialAttach, preset, nickname, 
         )}
 
         {/* 붙인 것 */}
-        {(hasMeal || plan || products.length > 0 || photos.length > 0) && (
+        {(hasMeal || plan || products.length > 0 || photos.length > 0 || vStatus !== "idle") && (
           <div className="flex flex-col gap-2">
+            <VideoAttach status={vStatus} video={video} onRemove={vDrop} />
             {photos.length > 0 && (
               <div className="flex flex-col gap-1.5">
                 <div className="grid grid-cols-4 gap-2">
@@ -361,6 +366,11 @@ export default function PostComposer({ isOpen, initialAttach, preset, nickname, 
             </Chip>
             <input ref={fileRef} type="file" multiple accept="image/jpeg,image/png,image/webp,image/heic,image/heif" className="sr-only" tabIndex={-1} aria-hidden="true"
               name="photo" onChange={(e) => pickPhotos(e.target.files)} />
+            <Chip disabled={vBusy} onClick={() => vRef.current?.click()}>
+              <Icon name="video" size={16} />{video ? "영상 바꾸기" : "영상"}
+            </Chip>
+            <input ref={vRef} type="file" accept="video/mp4,video/quicktime,video/webm" className="sr-only" tabIndex={-1} aria-hidden="true"
+              name="video" onChange={(e) => vPick(e.target.files)} />
             {([["meal", "notebook", "기록한 끼니"], ["plan", "calendar", "저장한 식단"], ["product", "tag", "제품 태그"]] as const).map(([k, icon, label]) => (
               <Chip key={k} selected={attach === k} onClick={() => setAttach(attach === k ? null : k)}>
                 <Icon name={icon} size={16} />{label}

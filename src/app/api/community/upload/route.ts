@@ -80,7 +80,13 @@ export async function DELETE(request: NextRequest) {
     sb.from("group_buys").select("id").contains("image_urls", [url]).limit(1),
   ]);
   if (post.error || gb.error) return NextResponse.json({ error: (post.error || gb.error).message }, { status: 500 });
-  if (post.data?.length || gb.data?.length) return NextResponse.json({ error: "글에 쓰고 있는 사진이에요" }, { status: 409 });
+  // 영상 표지 사진으로 쓰고 있는지도
+  const [pp, gp] = await Promise.all([
+    sb.from("community_feed").select("id").eq("video_poster", url).eq("is_active", true).limit(1),
+    sb.from("group_buys").select("id").eq("video_poster", url).limit(1),
+  ]);
+  if (pp.error || gp.error) return NextResponse.json({ error: (pp.error || gp.error).message }, { status: 500 });
+  if (post.data?.length || gb.data?.length || pp.data?.length || gp.data?.length) return NextResponse.json({ error: "글에 쓰고 있는 사진이에요" }, { status: 409 });
   const err = await removeImages(sb, [url]);
   if (err) return NextResponse.json({ error: err }, { status: 500 });
   return NextResponse.json({ ok: true });

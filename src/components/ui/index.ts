@@ -29,6 +29,6 @@ export { DragArea, DragHandle, DragGhost, useDragItem, useDropTarget, dropClass,
 export { FoodEntryForm, type FoodBase, type FoodEntry } from "./FoodEntry";
 export { DayDots, type DayDot } from "./Challenge";
 export { Switch } from "./Switch";
-export { ReelRow, ReelTile, ReelAddTile, ReelSkeleton } from "./Reel";
-export { ReelMedia } from "./ReelMedia";
+export { ReelRow, ReelTile, ReelAddTile, ReelSkeleton, clock } from "./Reel";
+export { ReelMedia, VideoClip, VideoAttach } from "./ReelMedia";
 export { CommentItem } from "./Comment";

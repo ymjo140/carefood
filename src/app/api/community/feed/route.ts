@@ -6,6 +6,7 @@ import { getActorId, noActor } from "@/lib/actor-server";
 import { isTopic } from "@/lib/community-topics";
 import { viewerFilters } from "@/lib/community-safety";
 import { imagePrefix, removeImages } from "@/lib/community-images";
+import { ownVideo, removeVideos } from "@/lib/community-video";
 import { cleanPoll, withPolls } from "@/lib/community-poll";
 import { rateLimit } from "@/lib/rate-limit";
 import { ensureNickname } from "@/lib/community-profile";
@@ -288,7 +289,11 @@ export async function POST(request: NextRequest) {
     const okImg = (u: unknown): u is string => typeof u === "string" && u.startsWith(imgPrefix) && !u.includes("..") && u.length <= 400;
     const image_urls = [...new Set((Array.isArray(body.image_urls) ? body.image_urls : [body.image_url]).filter(okImg))].slice(0, 4) as string[];
     const image_url = image_urls[0] ?? null; // 한 장 칸은 첫 장 (예전 화면 호환)
-    if (!content && !meal_data && !image_url) return NextResponse.json({ error: "내용이나 식단·사진을 넣어 주세요" }, { status: 400 });
+    // 영상은 /api/community/video 가 다시 만든 이 사람의 것만 (표지 사진도 우리 저장소)
+    const video = ownVideo(body.video?.url, user_id) && okImg(body.video?.poster)
+      ? { video_url: body.video.url as string, video_poster: body.video.poster as string, video_seconds: Math.min(30, Math.max(0, Number(body.video.seconds) || 0)) }
+      : null;
+    if (!content && !meal_data && !image_url && !video) return NextResponse.json({ error: "내용이나 식단·사진·영상을 넣어 주세요" }, { status: 400 });
     // 투표 — 질문(내용)이 있어야 하고 선택지는 2~4개
     const poll = body.poll ? cleanPoll(body.poll) : null;
     if (body.poll && !poll) return NextResponse.json({ error: "선택지를 서로 다르게 2개 이상 적어 주세요" }, { status: 400 });
@@ -316,6 +321,7 @@ export async function POST(request: NextRequest) {
         product_ids: product_ids.length ? product_ids : null,
         image_url,
         image_urls,
+        ...(video || {}),
         poll,
         tags,
         author_nickname,
@@ -344,14 +350,15 @@ export async function DELETE(request: NextRequest) {
   if (!id || !UUID.test(id)) return NextResponse.json({ error: "id 필수" }, { status: 400 });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sb = createServiceRoleClient() as any;
-  const { data: before, error: bErr } = await sb.from("community_feed").select("image_url, image_urls").eq("id", id).eq("user_id", actor).maybeSingle();
+  const { data: before, error: bErr } = await sb.from("community_feed").select("image_url, image_urls, video_url, video_poster").eq("id", id).eq("user_id", actor).maybeSingle();
   if (bErr) return NextResponse.json({ error: bErr.message }, { status: 500 });
   if (!before) return NextResponse.json({ error: "내 글만 지울 수 있어요" }, { status: 403 });
-  const { error } = await sb.from("community_feed").update({ is_active: false, image_url: null, image_urls: [], updated_at: new Date().toISOString() })
+  const { error } = await sb.from("community_feed").update({ is_active: false, image_url: null, image_urls: [], video_url: null, video_poster: null, updated_at: new Date().toISOString() })
     .eq("id", id).eq("user_id", actor);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   // 사진 파일도 지운다 (남겨 두지 않음)
-  const imgErr = await removeImages(sb, [before.image_url, ...(before.image_urls || [])]);
+  const [imgErr, vidErr] = await Promise.all([removeImages(sb, [before.image_url, ...(before.image_urls || []), before.video_poster]), removeVideos(sb, [before.video_url])]);
   if (imgErr) console.error("사진 파일을 지우지 못했어요:", imgErr);
+  if (vidErr) console.error("영상 파일을 지우지 못했어요:", vidErr);
   return NextResponse.json({ ok: true });
 }

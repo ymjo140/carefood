@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { IconButton, MealAttach, PhotoGrid, PlanAttach, PollAttach, PostAction, PostActions, ProductTagLinks, Sheet, ThreadItem, useToast } from "@/components/ui";
+import { IconButton, MealAttach, PhotoGrid, VideoClip, PlanAttach, PollAttach, PostAction, PostActions, ProductTagLinks, Sheet, ThreadItem, useToast } from "@/components/ui";
 import { isTopic } from "@/lib/community-topics";
 import { pollRemaining, type PollView } from "@/lib/community-poll";
 import PostMenu, { type MenuDone } from "./PostMenu";
@@ -22,6 +22,7 @@ export type FeedPostData = {
   tags?: string[] | null;
   image_url?: string | null;
   image_urls?: string[] | null;
+  video_url?: string | null; video_poster?: string | null; video_seconds?: number | null;
   products?: { id: string; name: string }[];
   poll?: PollView | null;
   like_count: number;
@@ -108,6 +109,7 @@ export default function ThreadCard({ post, onLike, onCopy, onReply, onMenuDone, 
         <PollAttach options={poll.options} counts={poll.counts} myChoice={poll.my_choice} closed={poll.closed}
           note={pollRemaining(poll.closes_at, poll.closed)} reveal={!!post.is_mine} busy={voting} onVote={vote} />
       )}
+      {post.video_url && post.video_poster && <VideoClip url={post.video_url} poster={post.video_poster} label={`${alt} 영상`} autoplay={detail} />}
       <PhotoGrid urls={photos} alt={alt} onOpen={detail ? setViewing : undefined} />
       {detail && photos.length > 0 && (
         <Sheet open={viewing != null} onClose={() => setViewing(null)} size="lg"

@@ -4,6 +4,7 @@ import { connection } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { adminOnly } from "@/lib/actor-server";
 import { removeImages } from "@/lib/community-images";
+import { removeVideos } from "@/lib/community-video";
 
 /**
  * GET  /api/admin/reports — 검토할 신고 (글·답글마다 묶음)
@@ -62,12 +63,13 @@ export async function POST(request: NextRequest) {
 
   // 글을 내리면 사진 파일도 지운다
   if (action === "remove" && kind === "post") {
-    const { data: p } = await sb.from("community_feed").select("image_url, image_urls").eq("id", id).maybeSingle();
-    const imgErr = await removeImages(sb, [p?.image_url, ...(p?.image_urls || [])]);
+    const { data: p } = await sb.from("community_feed").select("image_url, image_urls, video_url, video_poster").eq("id", id).maybeSingle();
+    const [imgErr, vidErr] = await Promise.all([removeImages(sb, [p?.image_url, ...(p?.image_urls || []), p?.video_poster]), removeVideos(sb, [p?.video_url])]);
     if (imgErr) console.error("사진 파일을 지우지 못했어요:", imgErr);
+    if (vidErr) console.error("영상 파일을 지우지 못했어요:", vidErr);
   }
   const update = action === "keep" ? { hidden_by_reports: false, report_count: 0 }
-    : kind === "post" ? { is_active: false, hidden_by_reports: true, image_url: null, image_urls: [] } : { is_active: false, hidden_by_reports: true };
+    : kind === "post" ? { is_active: false, hidden_by_reports: true, image_url: null, image_urls: [], video_url: null, video_poster: null } : { is_active: false, hidden_by_reports: true };
   const { data: target, error: tErr } = await sb.from(table).update(update).eq("id", id).select(kind === "post" ? "id" : "id, post_id, is_active").single();
   if (tErr) return NextResponse.json({ error: tErr.message }, { status: 500 });
   if (action === "remove" && kind === "comment" && target?.post_id) {

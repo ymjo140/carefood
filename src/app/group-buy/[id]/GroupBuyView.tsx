@@ -16,7 +16,7 @@ import { groupBuyWords, wishLabel } from "@/lib/group-buy";
  */
 type GroupBuy = {
   id: string; product_id: string | null; product_name: string; description: string | null;
-  image_urls: string[]; image_url: string | null; pack_size: number | null; wishes: string[];
+  image_urls: string[]; image_url: string | null; video_url: string | null; video_poster: string | null; pack_size: number | null; wishes: string[];
   target_count: number; current_count: number | null; status: string; expires_at: string | null; created_at: string;
   lowest_price: number | null; product_image: string | null; host_nickname: string; host_records: number; protein_g: number | null; calories: number | null;
   like_count: number; comment_count: number; reached_at: string | null; requested_at: string | null; is_host: boolean;
@@ -140,7 +140,7 @@ export default function GroupBuyView() {
 
   return (
     <Page width="narrow">
-      <ReelMedia urls={gb.image_urls} fallback={gb.image_url} alt={`${gb.host_nickname}의 ${gb.product_name} 공구`} closeHref="/community"
+      <ReelMedia urls={gb.image_urls} fallback={gb.image_url} video={gb.video_url && gb.video_poster ? { url: gb.video_url, poster: gb.video_poster } : null} alt={`${gb.host_nickname}의 ${gb.product_name} 공구`} closeHref="/community"
         header={
           <div className="flex items-center gap-2.5 min-w-0">
             <Avatar name={gb.host_nickname} size="sm" />

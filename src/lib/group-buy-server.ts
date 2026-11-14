@@ -1,7 +1,7 @@
 /**
  * 공구 목록·상세·숏폼 줄이 같이 쓰는 덧붙이기 — 서버 전용.
  * - 지금 최저가 (가격 비교와 같은 뷰)
- * - 대표 사진: 진행자 사진 첫 장 → 없으면 제품 사진
+ * - 대표 사진: 영상 표지 → 진행자 사진 첫 장 → 없으면 제품 사진
  * - 진행자 이름, 진행자가 최근 30일 이 제품을 기록한 횟수 ("써 본 사람" 표시 — 지어낼 수 없는 숫자)
  * - 제품 영양 한 줄 (단백질·열량)
  */
@@ -12,6 +12,7 @@ type Sb = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 export type GroupBuyRow = {
   id: string; creator_id: string; product_id: string | null; product_name: string; title: string | null;
   description: string | null; image_urls?: string[] | null; pack_size?: number | null; wishes?: string[] | null;
+  video_url?: string | null; video_poster?: string | null; video_seconds?: number | null;
   target_count: number; current_count: number | null; target_price: number | null;
   status: string; expires_at: string | null; created_at: string;
 };
@@ -55,7 +56,7 @@ export async function enrichGroupBuys(sb: Sb, list: GroupBuyRow[]) {
       wishes: g.wishes || [],
       lowest_price: low?.price ?? null,
       lowest_checked_at: low?.checked ?? null,
-      image_url: g.image_urls?.[0] || low?.image || p?.image_url || null,
+      image_url: g.video_poster || g.image_urls?.[0] || low?.image || p?.image_url || null,
       product_image: low?.image || p?.image_url || null,
       host_nickname: nick.get(g.creator_id) || "익명",
       host_records: g.product_id ? records.get(`${g.creator_id}:${g.product_id}`) || 0 : 0,

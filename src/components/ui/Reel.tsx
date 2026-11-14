@@ -14,9 +14,17 @@ export function ReelRow({ label, children, className }: { label: string; childre
   return <ul aria-label={label} className={cn("flex gap-2 scroll-row -mx-4 px-4", className)}>{children}</ul>;
 }
 
+/** 0:24 */
+export function clock(seconds: number) {
+  const s = Math.max(0, Math.round(seconds));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
+
 /** 칸 하나 — 누르면 그 글(식단) 또는 공구 보기로 */
-export function ReelTile({ href, image, tag, author, line, label }: {
+export function ReelTile({ href, image, tag, author, line, label, seconds }: {
   href: string; image?: string | null; tag: string; author: string; line: ReactNode;
+  /** 영상이면 길이(초) — 오른쪽 위에 재생 표시 */
+  seconds?: number | null;
   /** 읽어 주는 이름 — "민지의 공구: 닭가슴살 현미 볶음밥, 관심 23명" */
   label: string;
 }) {
@@ -25,6 +33,11 @@ export function ReelTile({ href, image, tag, author, line, label }: {
       <Link href={href} aria-label={label} className="press relative block w-28 h-50 rounded-lg overflow-hidden bg-sunken">
         <ProductImage src={image} iconSize={32} />
         <span className="absolute top-2 left-2 h-6 px-2 rounded-sm bg-surface text-ink text-caption font-bold flex items-center">{tag}</span>
+        {seconds != null && (
+          <span className="absolute top-2 right-2 h-6 px-1.5 rounded-sm bg-media-scrim text-on-media text-caption flex items-center gap-0.5">
+            <Icon name="play" size={12} filled /><span className="num">{clock(seconds)}</span>
+          </span>
+        )}
         <span className="absolute inset-x-0 bottom-0 p-2 bg-media-scrim text-on-media flex flex-col gap-0.5">
           <span className="flex items-center gap-1.5 min-w-0 text-caption font-bold">
             <Avatar name={author} size="xs" />

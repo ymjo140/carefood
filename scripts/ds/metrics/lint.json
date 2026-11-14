@@ -1,9 +1,9 @@
 {
-  "checkedAt": "2026-11-14T03:17:11.324Z",
-  "files": 142,
+  "checkedAt": "2026-11-14T03:39:45.531Z",
+  "files": 152,
   "total": 0,
   "warnTotal": 0,
-  "allowedCount": 63,
+  "allowedCount": 66,
   "rules": [
     {
       "id": "hex-color",
@@ -498,7 +498,7 @@
     },
     {
       "file": "src/app/order/page.tsx",
-      "line": 124,
+      "line": 126,
       "rule": "silent-catch",
       "level": "warn",
       "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
@@ -705,7 +705,7 @@
     },
     {
       "file": "src/components/community/PostComposer.tsx",
-      "line": 129,
+      "line": 132,
       "rule": "silent-catch",
       "level": "warn",
       "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
@@ -720,6 +720,33 @@
       "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
       "match": ".catch(() => {})",
       "snippet": ".catch(() => {}); // ds-allow: 정리는 보조 — 남아도 글에는 안 나온다"
+    },
+    {
+      "file": "src/components/community/useVideoUpload.ts",
+      "line": 37,
+      "rule": "silent-catch",
+      "level": "warn",
+      "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
+      "match": ".catch(() => {})",
+      "snippet": ".catch(() => {}); // ds-allow: 정리는 보조 — 남아도 글에는 안 나온다"
+    },
+    {
+      "file": "src/components/ui/ReelMedia.tsx",
+      "line": 84,
+      "rule": "silent-catch",
+      "level": "warn",
+      "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
+      "match": ".catch(() => {})",
+      "snippet": "if (e.isIntersecting) v.play().catch(() => {}); // ds-allow: 브라우저가 자동 재생을 막으면 표지와 재생 버튼이 남는다"
+    },
+    {
+      "file": "src/components/ui/ReelMedia.tsx",
+      "line": 94,
+      "rule": "silent-catch",
+      "level": "warn",
+      "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
+      "match": ".catch(() => {})",
+      "snippet": "if (v.paused) v.play().catch(() => {}); // ds-allow: 재생이 막히면 그대로 둔다 (버튼이 '재생'으로 남음)"
     }
   ]
 }

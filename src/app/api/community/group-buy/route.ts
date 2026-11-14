@@ -7,6 +7,7 @@ import { enrichGroupBuys, type GroupBuyRow } from "@/lib/group-buy-server";
 import { checkClaimsWith } from "@/lib/partner/claims";
 import { loadClaimTerms } from "@/lib/partner/claims-server";
 import { imagePrefix } from "@/lib/community-images";
+import { ownVideo } from "@/lib/community-video";
 import { rateLimit } from "@/lib/rate-limit";
 
 /**
@@ -15,7 +16,7 @@ import { rateLimit } from "@/lib/rate-limit";
  *   응답: group_buys(+ 지금 최저가·대표 사진·진행자 이름·진행자 기록 횟수 — lib/group-buy-server), mine_ids(그중 내가 표시한 것), total
  *   모집 중은 마감(expires_at)이 지난 것을 뺀다.
  * POST /api/community/group-buy — 공구 만들기 (만든 사람은 자동으로 관심 표시)
- *   { product_id, story, image_urls[≤4], pack_size, wishes[] } — 같은 제품 공구가 모집 중이면 409 + existing_id
+ *   { product_id, story, image_urls[≤4], video?{url,poster,seconds}, pack_size, wishes[] } — 같은 제품 공구가 모집 중이면 409 + existing_id
  *   목표 인원은 GROUP_TARGET 으로 정해져 있다 (진행자가 고르지 않음)
  */
 
@@ -91,6 +92,11 @@ export async function POST(request: NextRequest) {
   const rawImages: unknown[] = Array.isArray(body.image_urls) ? body.image_urls : [];
   const image_urls = [...new Set(rawImages.filter((u): u is string => typeof u === "string" && u.startsWith(prefix) && !u.includes("..")))].slice(0, GROUP_MAX_PHOTOS);
 
+  const okPoster = typeof body.video?.poster === "string" && body.video.poster.startsWith(prefix) && !body.video.poster.includes("..");
+  const video = ownVideo(body.video?.url, creator_id) && okPoster
+    ? { video_url: body.video.url as string, video_poster: body.video.poster as string, video_seconds: Math.min(30, Math.max(0, Number(body.video.seconds) || 0)) }
+    : {};
+
   const pack = Math.round(Number(body.pack_size));
   const pack_size = Number.isFinite(pack) && pack >= 1 && pack <= 100 ? pack : null;
   const rawWishes: unknown[] = Array.isArray(body.wishes) ? body.wishes : [];
@@ -125,6 +131,7 @@ export async function POST(request: NextRequest) {
       product_id,
       product_name: product.name,
       image_urls,
+      ...video,
       pack_size,
       wishes,
       target_count: GROUP_TARGET,

@@ -3,11 +3,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Button, Chip, Field, Icon, IconButton, Input, LinkButton, ListRow, Notice, Sheet, SkeletonList, Textarea, Thumb, cn, useToast,
+  Button, Chip, Field, Icon, IconButton, Input, LinkButton, ListRow, Notice, Sheet, VideoAttach, SkeletonList, Textarea, Thumb, cn, useToast,
 } from "@/components/ui";
 import { GROUP_DAYS, GROUP_MAX_PHOTOS, GROUP_STORY_MAX, GROUP_TARGET, PACK_OPTIONS, WISHES, type Wish } from "@/lib/group-buy";
 import { checkClaims } from "@/lib/partner/claims";
 import { usePhotoUploads } from "./usePhotoUploads";
+import { useVideoUpload } from "./useVideoUpload";
 
 /**
  * 공구 만들기 — 인플루언서 공구처럼 써 본 사람이 사진·이야기와 함께 연다.
@@ -26,6 +27,7 @@ export default function GroupBuyComposer({ open, onClose, initialProduct }: {
   const toast = useToast();
   const router = useRouter();
   const { photos, fileRef, pick, drop, clear, uploading, urls } = usePhotoUploads(GROUP_MAX_PHOTOS);
+  const { video, status: vStatus, busy: vBusy, fileRef: vRef, pick: vPick, drop: vDrop, clear: vClear } = useVideoUpload();
 
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<{ status: "idle" | "loading" | "error" | "done"; items: Hit[] }>({ status: "idle", items: [] });
@@ -84,11 +86,12 @@ export default function GroupBuyComposer({ open, onClose, initialProduct }: {
     setQuery(""); setHits({ status: "idle", items: [] }); setPicked(null); setCheck({ status: "idle", records: 0, existing: null });
     setStory(""); setPack(10); setWishes([]);
     clear(posted);
+    vClear(posted);
   };
   const close = () => { reset(false); onClose(); };
 
   const [claim] = checkClaims(story);
-  const canPost = !!picked && check.status === "done" && !check.existing && !claim && !uploading && !sending;
+  const canPost = !!picked && check.status === "done" && !check.existing && !claim && !uploading && !vBusy && !sending;
 
   const submit = async () => {
     if (!picked || !canPost) return;
@@ -96,7 +99,7 @@ export default function GroupBuyComposer({ open, onClose, initialProduct }: {
     try {
       const res = await fetch("/api/community/group-buy", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ product_id: picked.id, story: story.trim(), image_urls: urls, pack_size: pack, wishes }),
+        body: JSON.stringify({ product_id: picked.id, story: story.trim(), image_urls: urls, video: video, pack_size: pack, wishes }),
       });
       const d = await res.json().catch(() => ({}));
       if (res.status === 409 && d.existing_id) {
@@ -129,7 +132,8 @@ export default function GroupBuyComposer({ open, onClose, initialProduct }: {
 
         {/* ── 사진 ── */}
         <div className="flex flex-col gap-2">
-          <span className="text-label font-medium text-ink">사진</span>
+          <span className="text-label font-medium text-ink">사진 · 영상</span>
+          <VideoAttach status={vStatus} video={video} onRemove={vDrop} />
           {photos.length > 0 && <div className="grid grid-cols-4 gap-2">
             {photos.map((p, i) => (
               <div key={p.key} className="relative">
@@ -141,14 +145,19 @@ export default function GroupBuyComposer({ open, onClose, initialProduct }: {
               </div>
             ))}
           </div>}
-          <div>
+          <div className="flex flex-wrap gap-2">
             <Chip disabled={photos.length >= GROUP_MAX_PHOTOS || uploading} onClick={() => fileRef.current?.click()}>
               <Icon name="camera" size={16} />사진 추가 <span className="num">{photos.length}/{GROUP_MAX_PHOTOS}</span>
             </Chip>
+            <Chip disabled={vBusy} onClick={() => vRef.current?.click()}>
+              <Icon name="video" size={16} />{video ? "영상 바꾸기" : "영상 추가"}
+            </Chip>
           </div>
+          <input ref={vRef} type="file" accept="video/mp4,video/quicktime,video/webm" className="sr-only" tabIndex={-1} aria-hidden="true"
+            name="group_buy_video" onChange={(e) => vPick(e.target.files)} />
           <input ref={fileRef} type="file" multiple accept="image/jpeg,image/png,image/webp,image/heic,image/heif" className="sr-only" tabIndex={-1} aria-hidden="true"
             name="group_buy_photo" onChange={(e) => pick(e.target.files)} />
-          <p className="text-caption text-ink-2">{uploading ? "사진을 올리고 있어요" : "먹는 모습이 보이는 사진이 좋아요 · 위치 같은 촬영 정보는 지우고 올려요"}</p>
+          <p className="text-caption text-ink-2">{uploading ? "사진을 올리고 있어요" : "먹는 모습이 보이는 사진이 좋아요 · 영상은 30초까지 한 개 · 위치 같은 촬영 정보는 지우고 올려요"}</p>
         </div>
 
         {/* ── 제품 ── */}

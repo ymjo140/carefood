@@ -7,7 +7,7 @@ import {
   ProgressBar, SearchField, SectionHeader, Select, Sheet, Spinner, Stat, Steps, Tabs, Textarea, TextLink, TextButton, Thumb, ProductImage,
   Avatar, useToast, cn, type BadgeTone,
   BottomNavItems, SkeletonList, FoodEntryForm, DragArea, DragGhost, DragHandle, useDragItem, useDropTarget, type DragData, ChoiceCard, ChoiceList, LinkTabs, RatingStars, RatingInput, ScaleInput, QuickRating, PostAuthor, PostAction, PostActions, PostTags, ThreadItem, MealAttach, PlanAttach, ProductTagLinks, PhotoGrid, PollAttach, DayDots, Switch,
-  ReelRow, ReelTile, ReelAddTile, ReelSkeleton, ReelMedia, CommentItem,
+  ReelRow, ReelTile, ReelAddTile, ReelSkeleton, ReelMedia, CommentItem, VideoAttach,
 } from "@/components/ui";
 
 // 서버(UTC)와 브라우저 시간대가 달라도 같은 글자가 나오도록 한국 시간으로 고정
@@ -793,10 +793,16 @@ export default function Reference({ status }: { status: DsStatus }) {
                 <ReelAddTile onClick={() => {}} sub="식단 · 공구" />
                 <ReelTile href="#" tag="공구" author="민지" label="민지의 공구: 닭가슴살 현미 볶음밥, 23명 모임"
                   line={<>알림 <span className="num font-bold">23</span>/30명</>} />
-                <ReelTile href="#" tag="식단" author="준호" label="준호의 식단"
+                <ReelTile href="#" tag="식단" author="준호" label="준호의 식단 영상" seconds={24}
                   line={<>단백질 <span className="num font-bold">38</span>g 점심</>} />
                 <ReelSkeleton count={1} />
               </ReelRow>
+            </div>
+          </Demo>
+          <Demo label="붙인 영상 — 올리는 중 · 다듬는 중(위치 같은 촬영 정보 빼기) · 붙음(미리 보기 VideoClip + 빼기). 30초까지 한 개" code="<VideoAttach status video onRemove /> · <VideoClip url poster autoplay />">
+            <div className="flex flex-col gap-2">
+              <VideoAttach status="uploading" video={null} onRemove={() => {}} />
+              <VideoAttach status="processing" video={null} onRemove={() => {}} />
             </div>
           </Demo>
           <Demo label="댓글 한 줄 — 공구 질문·진행자 답. 한 단계 답은 nested, 이어지면 세로선" code="<CommentItem nickname badge createdAt content onReply onDelete />">

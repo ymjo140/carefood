@@ -22,8 +22,8 @@ import { getOrCreateNickname, setNickname } from "@/lib/nickname";
 type Tab = "recommend" | "following" | "topic" | "mine";
 
 type Reel =
-  | { kind: "meal"; id: string; image: string | null; author: string; meal_type: string | null; kcal: number | null; protein_g: number | null; text: string }
-  | { kind: "group_buy"; id: string; image: string | null; author: string; product_name: string; current_count: number; target_count: number };
+  | { kind: "meal"; id: string; image: string | null; author: string; seconds: number | null; meal_type: string | null; kcal: number | null; protein_g: number | null; text: string }
+  | { kind: "group_buy"; id: string; image: string | null; author: string; seconds: number | null; product_name: string; current_count: number; target_count: number };
 
 const TABS: { value: Tab; label: string }[] = [
   { value: "recommend", label: "추천" },
@@ -173,11 +173,11 @@ export default function CommunityPage() {
           <ReelAddTile onClick={() => setPicker(true)} sub="식단 · 공구" />
           {reels.status === "loading" && <ReelSkeleton count={3} />}
           {reels.status === "done" && reels.items.map((r) => r.kind === "group_buy" ? (
-            <ReelTile key={`g-${r.id}`} href={`/group-buy/${r.id}`} image={r.image} tag="공구" author={r.author}
+            <ReelTile key={`g-${r.id}`} href={`/group-buy/${r.id}`} image={r.image} tag="공구" author={r.author} seconds={r.seconds}
               label={`${r.author}의 공구: ${r.product_name}, ${r.current_count}명 모임`}
               line={<>알림 <span className="num font-bold">{r.current_count}</span>/{r.target_count}명</>} />
           ) : (
-            <ReelTile key={`m-${r.id}`} href={`/community/${r.id}`} image={r.image} tag="식단" author={r.author}
+            <ReelTile key={`m-${r.id}`} href={`/community/${r.id}`} image={r.image} tag="식단" author={r.author} seconds={r.seconds}
               label={`${r.author}의 식단${r.text ? `: ${r.text}` : ""}`}
               line={r.protein_g != null
                 ? <>단백질 <span className="num font-bold">{Math.round(r.protein_g)}</span>g {r.meal_type ? mealMeta(r.meal_type).label : ""}</>
@@ -193,7 +193,7 @@ export default function CommunityPage() {
           </div>
         )}
         {reels.status === "done" && reels.items.length === 0 && (
-          <p className="mt-2 text-caption text-ink-2">아직 올라온 사진이 없어요. 오늘 먹은 걸 사진과 함께 올려 보세요</p>
+          <p className="mt-2 text-caption text-ink-2">아직 올라온 사진·영상이 없어요. 오늘 먹은 걸 사진이나 짧은 영상으로 올려 보세요</p>
         )}
       </section>
 
@@ -248,10 +248,10 @@ export default function CommunityPage() {
       {/* ── 올리기: 무엇을 올릴지 ── */}
       <Sheet open={picker} onClose={() => setPicker(false)} title="올리기" size="sm">
         <div className="flex flex-col gap-1">
-          <ListRow onClick={() => pick("meal")} leading={<Icon name="notebook" size={20} className="text-ink-2" />} title="오늘 먹은 끼니" meta="기록한 끼니에 사진·한 줄을 붙여요" />
+          <ListRow onClick={() => pick("meal")} leading={<Icon name="notebook" size={20} className="text-ink-2" />} title="오늘 먹은 끼니" meta="기록한 끼니에 사진·영상·한 줄을 붙여요" />
           <ListRow onClick={() => pick("plan")} leading={<Icon name="calendar" size={20} className="text-ink-2" />} title="저장한 식단" meta="며칠 치 식단을 나눠요" />
           <ListRow onClick={() => pick(null)} leading={<Icon name="edit" size={20} className="text-ink-2" />} title="글 · 투표" meta="사진·제품 태그·투표를 붙일 수 있어요" />
-          <ListRow onClick={() => pick("group")} leading={<Icon name="users" size={20} className="text-ink-2" />} title="공구 만들기" meta="자주 먹는 제품을 사진과 함께 올려 함께 살 사람을 모아요" />
+          <ListRow onClick={() => pick("group")} leading={<Icon name="users" size={20} className="text-ink-2" />} title="공구 만들기" meta="자주 먹는 제품을 사진·영상과 함께 올려 함께 살 사람을 모아요" />
         </div>
       </Sheet>
       <GroupBuyComposer open={groupOpen} onClose={() => setGroupOpen(false)} />
