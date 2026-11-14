@@ -299,6 +299,7 @@ export default function DiaryPage() {
     hasAI: boolean;
     configured?: boolean; // false = 서버에 사진 인식 키가 없음
     error?: string;
+    photo_token?: string; // 이 사진에서 고른 음식을 '사진으로 기록'으로 세는 표
   } | null>(null);
   const [userId, setUserId] = useState("");
   const toast = useToast();
@@ -520,7 +521,7 @@ export default function DiaryPage() {
     toast.show("맛 평가를 남겼어요");
   };
 
-  const addFromProduct = async (product: SearchResult) => {
+  const addFromProduct = async (product: SearchResult, photoToken?: string) => {
     if (!addingMeal) return;
     const res = await fetch("/api/diary", {
       method: "POST",
@@ -529,6 +530,7 @@ export default function DiaryPage() {
         date, meal_type: addingMeal,
         product_id: product.id, food_name: product.name,
         serving_multiplier: servingMultiplier, // 양(g)·영양값은 서버가 제품 값으로 계산한다
+        ...(typeof photoToken === "string" ? { photo_token: photoToken } : {}),
       }),
     }).catch(() => null); // ds-allow: 네트워크 실패는 바로 아래 !res?.ok 에서 알림
     if (!res?.ok) { toast.show("기록하지 못했어요. 다시 시도해 주세요", { tone: "danger" }); return; }
@@ -543,7 +545,7 @@ export default function DiaryPage() {
   };
 
   // 일반 음식(외식)으로 기록 추가
-  const addFromCommonFood = async (food: CommonFood) => {
+  const addFromCommonFood = async (food: CommonFood, photoToken?: string) => {
     if (!addingMeal) return;
     const res = await fetch("/api/diary", {
       method: "POST",
@@ -559,6 +561,7 @@ export default function DiaryPage() {
         fat_g: food.fat_g,
         sodium_mg: food.sodium_mg,
         sugar_g: food.sugar_g,
+        ...(typeof photoToken === "string" ? { photo_token: photoToken } : {}),
       }),
     }).catch(() => null); // ds-allow: 네트워크 실패는 바로 아래 !res?.ok 에서 알림
     if (!res?.ok) { toast.show("기록하지 못했어요. 다시 시도해 주세요", { tone: "danger" }); return; }
@@ -951,14 +954,14 @@ export default function DiaryPage() {
                     {photoResults.matched.commonFoods.length > 0 && (
                       <div>
                         <GroupLabel>찾은 음식</GroupLabel>
-                        <CommonFoodList items={photoResults.matched.commonFoods} onSelect={(food) => { addFromCommonFood(food); resetPhoto(); }} />
+                        <CommonFoodList items={photoResults.matched.commonFoods} onSelect={(food) => { addFromCommonFood(food, photoResults.photo_token); resetPhoto(); }} />
                       </div>
                     )}
 
                     {photoResults.matched.products.length > 0 && (
                       <div>
                         <GroupLabel>찾은 제품</GroupLabel>
-                        <ProductList items={photoResults.matched.products} onSelect={(p) => { addFromProduct(p); resetPhoto(); }} />
+                        <ProductList items={photoResults.matched.products} onSelect={(p) => { addFromProduct(p, photoResults.photo_token); resetPhoto(); }} />
                       </div>
                     )}
 

@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Button, Card, Chip, ConfirmSheet, DayDots, EmptyState, Sheet, SkeletonList, TextButton, TextLink, useToast } from "@/components/ui";
+import { Button, Card, Chip, ConfirmSheet, DayDots, EmptyState, Notice, Sheet, SkeletonList, TextButton, TextLink, useToast } from "@/components/ui";
 import ShareCardSheet from "@/components/community/ShareCardSheet";
 import ChallengeCreateSheet from "@/components/community/ChallengeCreateSheet";
 import { getOrCreateNickname } from "@/lib/nickname";
 import { todayKst } from "@/lib/day";
-import { METRIC_META, metricValue, type ChallengeMetric, type DayState } from "@/lib/challenges";
+import { kcalRange, todayLine, type ChallengeMetric, type DayState } from "@/lib/challenges";
+import { KCAL_TIERS } from "@/lib/challenge-rules";
 
 /**
  * 챌린지 목록 — 규칙 · 지금 하는 사람 수 · (참여했으면) 날짜 줄과 해낸 날 수.
@@ -17,13 +18,13 @@ import { METRIC_META, metricValue, type ChallengeMetric, type DayState } from "@
  */
 type Run = {
   started_on: string; ends_on: string; finished: boolean; done_count: number; finished_runs: number; goal: number; reached: boolean;
-  days: { date: string; state: DayState; value: number | null }[]; today_value: number | null;
+  days: { date: string; state: DayState; value: number | null }[]; today_value: number | null; low_streak?: boolean;
   group: { id: string; code: string; start_on: string; member_count: number; is_host: boolean } | null;
 };
 type Start = "today" | "tomorrow" | "monday";
 const START_LABEL: Record<Start, string> = { today: "오늘", tomorrow: "내일", monday: "다음 월요일" };
 type Item = {
-  id: string; title: string; rule: string; metric: ChallengeMetric; target: number; days: number; active_count: number; finished_count: number; me: Run | null;
+  id: string; title: string; rule: string; metric: ChallengeMetric; target: number | null; days: number; active_count: number; finished_count: number; me: Run | null;
   /** user: 사람이 만든 챌린지(링크로만 들어옴) */
   kind?: "official" | "user"; mine_created?: boolean; note?: string | null;
 };
@@ -38,6 +39,9 @@ export function ChallengeList() {
   const [creating, setCreating] = useState(false);
   const [planning, setPlanning] = useState<Item | null>(null);
   const [start, setStart] = useState<Start>("tomorrow");
+  /** 열량 구간 챌린지의 내 구간 바꾸기 */
+  const [tiering, setTiering] = useState<Item | null>(null);
+  const [tier, setTier] = useState<number>(1900);
 
   useEffect(() => {
     let alive = true;
@@ -64,6 +68,20 @@ export function ChallengeList() {
       }
     } catch (e) {
       toast.show((e as Error).message || "참여하지 못했어요. 다시 시도해 주세요", { tone: "danger" });
+    } finally { setBusy(null); }
+  };
+
+  const saveTier = async (c: Item, v: number) => {
+    setBusy(c.id);
+    try {
+      const r = await fetch("/api/community/challenges", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ challenge_id: c.id, target: v }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || "");
+      setTiering(null);
+      toast.show(`내 구간을 ${v.toLocaleString("ko-KR")}kcal로 바꿨어요`);
+      setAttempt((n) => n + 1); // 날짜 줄을 새 구간으로 다시 판정
+    } catch (e) {
+      toast.show((e as Error).message || "구간을 바꾸지 못했어요. 다시 시도해 주세요", { tone: "danger" });
     } finally { setBusy(null); }
   };
 
@@ -109,8 +127,8 @@ export function ChallengeList() {
       <Button block icon="plus" className="mb-4" onClick={() => setCreating(true)}>내 챌린지 만들기</Button>
       <ul className="flex flex-col gap-3">
         {items.map((c) => {
-          const m = METRIC_META[c.metric];
           const run = c.me;
+          const personal = c.metric === "kcal_band" && c.target != null;
           return (
             <li key={c.id}>
               <Card className="flex flex-col gap-3">
@@ -149,9 +167,17 @@ export function ChallengeList() {
                           ? <><span className="num">{Number(run.group.start_on.slice(5, 7))}</span>월 <span className="num">{Number(run.group.start_on.slice(8, 10))}</span>일에 시작해요 · 그 전에 친구를 불러 보세요</>
                           : run.today_value == null
                           ? <>오늘 아직 기록이 없어요 · <TextLink href="/diary">기록하기</TextLink></>
-                          : <>오늘 지금까지 {m.label} <span className="num font-bold text-ink">{metricValue(c.metric, run.today_value)}</span>
-                              {" "}· 기준 <span className="num">{metricValue(c.metric, c.target)}</span> {m.max ? "이하" : "이상"}</>}
+                          : <span className="num">오늘 지금까지 {todayLine(c.metric, c.target ?? 0, run.today_value)}</span>}
                       </p>
+                    )}
+                    {personal && !run.finished && (
+                      <p className="text-label text-ink-2">
+                        내 구간 <span className="num text-ink">{kcalRange(c.target!)[0].toLocaleString("ko-KR")}~{kcalRange(c.target!)[1].toLocaleString("ko-KR")}kcal</span> · 나만 봐요
+                        {" "}<TextButton onClick={() => { setTier(c.target!); setTiering(c); }}>바꾸기</TextButton>
+                      </p>
+                    )}
+                    {run.low_streak && !run.finished && (
+                      <Notice tone="caution">요즘 기록이 구간보다 많이 적어요. 구간을 바꾸거나 쉬어 가도 괜찮아요</Notice>
                     )}
                     <div className="flex gap-2">
                       {(run.done_count > 0 || !run.finished) && (
@@ -179,6 +205,17 @@ export function ChallengeList() {
         title={leaving ? `${leaving.title} 챌린지를 그만둘까요?` : ""}
         description="지금까지 채운 날은 사라져요. 식단 기록은 그대로 남아요"
         confirmLabel="그만두기" onConfirm={() => leaving && leave(leaving)} />
+      {/* 열량 구간 — 6구간 중에서 (숫자는 나만 본다) */}
+      <Sheet open={!!tiering} onClose={() => setTiering(null)} title="내 열량 구간" size="sm"
+        description="하루 열량이 고른 구간의 ±10% 안이면 해낸 날이에요. 친구에게는 보이지 않아요"
+        footer={<Button block loading={!!tiering && busy === tiering.id} onClick={() => tiering && saveTier(tiering, tier)}>바꾸기</Button>}>
+        <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="열량 구간">
+          {KCAL_TIERS.map((k) => (
+            <Chip key={k} role="radio" aria-checked={tier === k} selected={tier === k} onClick={() => setTier(k)}><span className="num">{k.toLocaleString("ko-KR")}kcal</span></Chip>
+          ))}
+        </div>
+        <p className="text-caption text-ink-2 mt-3 num">해낸 날 {kcalRange(tier)[0].toLocaleString("ko-KR")}~{kcalRange(tier)[1].toLocaleString("ko-KR")}kcal · 바꾸면 지난 날도 새 구간으로 다시 세요</p>
+      </Sheet>
       <ShareCardSheet target={card ? { kind: "challenge", id: card } : null} open={!!card} onClose={() => setCard(null)} />
       {create}
 

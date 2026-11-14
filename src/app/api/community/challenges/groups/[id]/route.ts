@@ -30,7 +30,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     const group = g as GroupRow;
     const [{ data: c, error: cErr }, { data: ms, error: mErr }] = await Promise.all([
       sb.from("community_challenges").select("id, slug, title, rule, metric, target, days, goal_days, is_active").eq("id", group.challenge_id).maybeSingle(),
-      sb.from("community_challenge_members").select("challenge_id, user_id, started_on, joined_on, goal_days_eff, group_id, finished_runs, show_values").eq("group_id", id).limit(200),
+      sb.from("community_challenge_members").select("challenge_id, user_id, started_on, joined_on, goal_days_eff, group_id, finished_runs, show_values, target_eff").eq("group_id", id).limit(200),
     ]);
     if (cErr || mErr) throw new Error((cErr || mErr).message);
     const members = (ms || []) as MemberRow[];

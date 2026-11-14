@@ -6,13 +6,15 @@ import { getActorId, noActor } from "@/lib/actor-server";
 import { rateLimit } from "@/lib/rate-limit";
 import { ensureNickname } from "@/lib/community-profile";
 import { DIARY_COLS, type DiaryRow } from "@/lib/challenges";
-import { JOIN_MESSAGES, memberRun, openGroup, startDate, type ChallengeRow, type GroupRow, type MemberRow, type StartChoice } from "@/lib/challenge-groups";
+import { JOIN_MESSAGES, ensurePersonalTarget, memberRun, memberTarget, openGroup, startDate, type ChallengeRow, type GroupRow, type MemberRow, type StartChoice } from "@/lib/challenge-groups";
 import { asResult, selectAll } from "@/lib/supabase/all";
+import { checkPersonalKcal } from "@/lib/challenge-rules";
 
 /**
  * GET /api/community/challenges — 공식 챌린지 + 내가 하는 사람이 만든 챌린지(kind user, 위에) + 지금 하는 사람 수 + (참여했으면) 내 진행과 내 묶음(초대 코드·인원)
  * POST { challenge_id, start?: "today"|"tomorrow"|"monday" } — 참여하기 = 내 묶음을 연다 (끝난 뒤 다시 누르면 새 묶음)
  *   start 를 주면 그날 시작하는 묶음 (친구와 같이 시작하려고 날짜를 정할 때). 응답에 초대 코드
+ * PATCH { challenge_id, target } — 열량 구간 챌린지의 내 구간 바꾸기 (1,200~3,000kcal, 본인만 본다)
  * DELETE { challenge_id } — 그만두기 (묶음에서 빠진다)
  * 다른 사람의 기록은 보여 주지 않는다 — 사람 수만. 같은 묶음 사람끼리는 진행표(/api/community/challenges/groups/[id])에서 해낸 날만.
  */
@@ -27,7 +29,7 @@ async function load(sb: any, actor: string | null) {
   if (error) throw new Error(error.message);
   const challenges = (rows || []) as (Row & { kind?: string; creator_id?: string | null; note?: string | null })[];
   const members = await selectAll<Member>(() => sb.from("community_challenge_members")
-    .select("challenge_id, user_id, started_on, joined_on, goal_days_eff, group_id, finished_runs, show_values, challenge_groups(start_on)"), ["challenge_id", "user_id"], 1_000_000);
+    .select("challenge_id, user_id, started_on, joined_on, goal_days_eff, group_id, finished_runs, show_values, target_eff, challenge_groups(start_on)"), ["challenge_id", "user_id"], 1_000_000);
   // 내가 하는 '사람이 만든' 챌린지도 목록 위에 (링크로만 들어가는 것이라 공식 목록에는 없다)
   const myUserIds = actor ? [...new Set(members.filter((m) => m.user_id === actor).map((m) => m.challenge_id))].filter((id) => !challenges.some((c) => c.id === id)) : [];
   if (myUserIds.length) {
@@ -60,7 +62,9 @@ async function load(sb: any, actor: string | null) {
     const me = mine.find((m) => m.challenge_id === c.id);
     const g = me?.group_id ? groups.get(me.group_id) ?? null : null;
     return {
-      id: c.id, slug: c.slug, title: c.title, rule: c.rule, metric: c.metric, target: Number(c.target), days: c.days,
+      // 열량 구간은 사람마다 — 만든 사람의 구간을 다른 사람에게 보내지 않는다 (내 구간만)
+      id: c.id, slug: c.slug, title: c.title, rule: c.rule, metric: c.metric,
+      target: c.metric === "kcal_band" ? (me ? memberTarget(c, me) : null) : Number(c.target), days: c.days,
       kind: c.kind === "user" ? "user" : "official", mine_created: !!actor && c.creator_id === actor, note: c.note ?? null,
       active_count: active.length,
       finished_count: finishedPeople,
@@ -109,6 +113,7 @@ export async function POST(request: NextRequest) {
     await ensureNickname(sb, actor, nickname); // 진행표·초대에 보일 이름
     const r = await openGroup(sb, challenge_id, actor, startDate(choice, today));
     if (r.status !== "opened") return NextResponse.json({ error: JOIN_MESSAGES[r.status] || "참여하지 못했어요" }, { status: r.status === "missing" ? 404 : 409 });
+    await ensurePersonalTarget(sb, challenge_id, actor);
     const list = await load(sb, actor);
     return NextResponse.json({ challenge: list.find((x) => x.id === challenge_id) ?? null, code: r.code, group_id: r.group_id });
   } catch (e) {
@@ -126,4 +131,23 @@ export async function DELETE(request: NextRequest) {
   const { error } = await sb.rpc("challenge_group_leave", { p_challenge: challenge_id, p_user: actor });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });
+}
+
+export async function PATCH(request: NextRequest) {
+  const actor = await getActorId();
+  if (!actor) return noActor();
+  const { challenge_id, target } = await request.json().catch(() => ({}));
+  if (typeof challenge_id !== "string" || !UUID.test(challenge_id)) return NextResponse.json({ error: "챌린지를 골라 주세요" }, { status: 400 });
+  const v = checkPersonalKcal(target);
+  if (v == null) return NextResponse.json({ error: "구간은 1,200~3,000kcal 사이로 정해 주세요" }, { status: 400 });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sb = createServiceRoleClient() as any;
+  const { data: c, error: cErr } = await sb.from("community_challenges").select("metric").eq("id", challenge_id).maybeSingle();
+  if (cErr) return NextResponse.json({ error: cErr.message }, { status: 500 });
+  if (c?.metric !== "kcal_band") return NextResponse.json({ error: "열량 구간 챌린지만 구간을 바꿀 수 있어요" }, { status: 400 });
+  const { data, error } = await sb.from("community_challenge_members").update({ target_eff: v })
+    .eq("challenge_id", challenge_id).eq("user_id", actor).select("user_id");
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (!data?.length) return NextResponse.json({ error: "하고 있는 챌린지가 아니에요" }, { status: 404 });
+  return NextResponse.json({ ok: true, target: v });
 }

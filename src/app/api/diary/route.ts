@@ -4,6 +4,7 @@ import { isDay, todayKst } from "@/lib/day";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { getActorId, noActor } from "@/lib/actor-server";
 import { defaultServingG, scaleNutrient } from "@/lib/serving";
+import { photoTokenOk } from "@/lib/photo-token";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -205,6 +206,8 @@ export async function POST(req: NextRequest) {
       serving_multiplier: multiplier,
       ...nutrition,
       memo: typeof body.memo === "string" && body.memo.trim() ? body.memo.trim().slice(0, 200) : null,
+      // 사진으로 찾은 음식 — 사진 분석 때 받은 표가 맞을 때만 ('사진과 함께 기록' 챌린지가 센다)
+      ...(photoTokenOk(user_id, body.photo_token) ? { source: "photo" } : {}),
     })
     .select("id")
     .single();

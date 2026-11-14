@@ -15,6 +15,7 @@ import { autoCloseLastMonth } from "@/lib/partner/settlement";
 import { AUTO_CONFIRM_DAYS, expireUnpaidOrders } from "@/lib/orders";
 import { asResult, selectAll, selectAllIn } from "@/lib/supabase/all";
 import { BRAND } from "@/lib/brand";
+import { loadGroupAlerts } from "@/lib/challenge-alerts";
 
 /**
  * POST /api/push/run — 보낼 때가 된 알림을 보낸다. Supabase 예약 작업(pg_cron + pg_net, 30분마다)이 부른다.
@@ -29,6 +30,7 @@ import { BRAND } from "@/lib/brand";
  *     (최근 14일 기록이 없으면 7일 안에 저장한 식단일 때만)
  *     최근 14일 기록이 없는 사람은 저녁 알림만, 일주일에 한 번
  *   - 챌린지 20~22시: 하고 있는 챌린지가 있는데 오늘 기록이 하나도 없으면 (그날 저녁 알림 대신)
+ *   - 같이 하기: 묶음 전원이 해낸 날 '다 같이 해냈어요' · 저녁 7시대 '오늘 나만 남았어요' (lib/challenge-alerts.ts)
  *   - 주간 요약 월요일 9~12시: 지난주(월~일)에 하루라도 기록했으면 기록한 날 수 · 하루 평균
  *   - 커뮤니티 8~22시: 내 글 답글 · 내 답글의 답글 · 새 팔로워 (좋아요는 보내지 않음), 여러 개면 묶어서
  *   - 업체 광고(고객층 발송): 검수를 통과해 보낼 시각이 된 것 (lib/partner/crm.ts runDueCampaigns, 21~8시는 야간 동의자만)
@@ -188,13 +190,23 @@ export async function POST(req: NextRequest) {
   const slot = slotOf(hour);
   const isWeekly = weekday(today) === 1 && hour >= 9 && hour < 12;
 
+  // ── 챌린지 같이 하기: 다 같이 해냈어요 · 오늘 나만 남았어요 (lib/challenge-alerts.ts) ──
+  try {
+    for (const a of await loadGroupAlerts(sb, today, hour)) {
+      const prefs = prefsBy.get(a.user);
+      if (!subsBy.has(a.user) || (prefs && !prefs.challenge)) continue;
+      await send(a.user, "challenge", a.key, a.payload);
+    }
+  } catch (e) { console.error("같이 하기 알림을 만들지 못했어요:", (e as Error).message); }
+
   for (const user of users) {
     const prefs = prefsBy.get(user) || { user_id: user, meals: true, weekly: true, community: true, challenge: true, community_pushed_at: null };
     const rows = diaryBy.get(user) || [];
     const todayRows = rows.filter((r) => r.date === today);
 
     // ── 챌린지 · 끼니 ──
-    if (slot === "dinner" && prefs.challenge && todayRows.length === 0 && runsBy.get(user)?.length) {
+    // 저녁 7시에 '오늘 나만 기록이 없어요'를 받았으면 같은 날 챌린지 알림을 또 보내지 않는다
+    if (slot === "dinner" && prefs.challenge && todayRows.length === 0 && runsBy.get(user)?.length && !logged.has(`${user}|challenge|alone:${today}`)) {
       const run = runsBy.get(user)![0];
       if (await send(user, "challenge", today, { title: run.title, body: `${run.day}일째예요. 오늘 기록이 아직 없어요. 한 끼만 적어도 오늘을 채울 수 있어요`, url: "/community/challenges", tag: "challenge" })) {
         logged.add(`${user}|meal|${today}:dinner`); // 같은 저녁에 끼니 알림까지 보내지 않는다

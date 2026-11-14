@@ -5,7 +5,7 @@ import { getActorId, noActor } from "@/lib/actor-server";
 import { rateLimit } from "@/lib/rate-limit";
 import { addDays, daysBetween, todayKst } from "@/lib/day";
 import { viewerFilters } from "@/lib/community-safety";
-import { CODE_RE, JOIN_MESSAGES, groupPeriod, nicknames, type ChallengeRow, type GroupRow } from "@/lib/challenge-groups";
+import { CODE_RE, JOIN_MESSAGES, ensurePersonalTarget, groupPeriod, nicknames, type ChallengeRow, type GroupRow } from "@/lib/challenge-groups";
 import { refCode, shareEvent } from "@/lib/share-links";
 import { ensureNickname } from "@/lib/community-profile";
 
@@ -93,6 +93,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (status !== "joined" && status !== "moved" && status !== "already") {
       return NextResponse.json({ error: JOIN_MESSAGES[status] || "같이 하지 못했어요", status }, { status: status === "missing" ? 404 : 409 });
     }
+    // 열량 구간 챌린지면 내 목표에 맞는 구간을 내 구간으로 (만든 사람의 숫자를 따르지 않는다)
+    await ensurePersonalTarget(sb, found.c.id, actor);
     if (via && status !== "already") {
       try { await shareEvent(sb, via, actor, "join"); }
       catch (e) { console.error("공유 링크 전환을 적지 못했어요:", (e as Error).message); } // ds-allow: 세기는 보조 — 같이 하기는 이미 됐다

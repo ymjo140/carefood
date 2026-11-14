@@ -3,6 +3,7 @@ import { limitRequest } from "@/lib/rate-limit";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { searchDishes } from "@/lib/dishes";
 import { getActorId, noActor } from "@/lib/actor-server";
+import { photoToken } from "@/lib/photo-token";
 
 /**
  * POST /api/diary/photo — 사진으로 음식 후보 찾기 (식단 기록)
@@ -18,7 +19,8 @@ export async function POST(req: NextRequest) {
   if (limited) return limited;
   try {
     // 외부 AI 호출 비용이 드는 API — 사이트에서 발급한 쿠키가 있는 요청만
-    if (!(await getActorId())) return noActor();
+    const actor = await getActorId();
+    if (!actor) return noActor();
     const { image } = await req.json();
 
     if (!image || typeof image !== "string" || !image.startsWith("data:image/") || image.length > 3_000_000) {
@@ -53,6 +55,8 @@ export async function POST(req: NextRequest) {
       matched,
       hasAI: true,
       configured: true,
+      // 이 사진에서 고른 음식을 기록하면 '사진으로 기록'으로 센다 (lib/photo-token.ts)
+      photo_token: photoToken(actor),
     });
   } catch (e) {
     console.error("Photo API error:", e);

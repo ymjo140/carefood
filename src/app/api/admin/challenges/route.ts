@@ -57,7 +57,7 @@ export async function GET() {
     });
     const comp = { solo: { people: 0, reached: 0 }, together: { people: 0, reached: 0 } };
     if (ended.length) {
-      const members = await selectAllIn<MemberRow>(ended.map((g) => g.id), 200, (p) => sb.from("community_challenge_members").select("challenge_id, user_id, started_on, joined_on, goal_days_eff, group_id, finished_runs, show_values")
+      const members = await selectAllIn<MemberRow>(ended.map((g) => g.id), 200, (p) => sb.from("community_challenge_members").select("challenge_id, user_id, started_on, joined_on, goal_days_eff, group_id, finished_runs, show_values, target_eff")
         .in("group_id", p), ["challenge_id", "user_id"], 1_000_000);
       const users = [...new Set(members.map((m) => m.user_id))];
       const from = ended.map((g) => g.start_on).sort()[0];

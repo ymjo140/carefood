@@ -6,6 +6,7 @@
 import { addDays, todayKst, weekday } from "@/lib/day";
 import { DIARY_COLS, runProgress, type ChallengeMetric, type DiaryRow, type RunProgress } from "@/lib/challenges";
 import { selectAllIn } from "@/lib/supabase/all";
+import { nearestTier } from "@/lib/challenge-rules";
 
 type Sb = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
@@ -50,7 +51,9 @@ export async function openGroup(sb: Sb, challengeId: string, actor: string, star
 
 export type GroupRow = { id: string; challenge_id: string; host_id: string; code: string; start_on: string; max_members: number; member_count: number; created_at: string };
 export type ChallengeRow = { id: string; slug: string; title: string; rule: string; metric: ChallengeMetric; target: number; days: number; goal_days: number | null; is_active: boolean };
-export type MemberRow = { challenge_id: string; user_id: string; started_on: string; joined_on: string | null; goal_days_eff: number | null; group_id: string | null; finished_runs: number; show_values: boolean };
+export type MemberRow = { challenge_id: string; user_id: string; started_on: string; joined_on: string | null; goal_days_eff: number | null; group_id: string | null; finished_runs: number; show_values: boolean; target_eff?: number | null };
+/** 참여한 사람의 열을 고를 때 쓰는 칸 */
+export const MEMBER_COLS = "challenge_id, user_id, started_on, joined_on, goal_days_eff, group_id, finished_runs, show_values, target_eff";
 
 /** 묶음의 기간 */
 export function groupPeriod(g: Pick<GroupRow, "start_on">, c: Pick<ChallengeRow, "days">) {
@@ -58,8 +61,13 @@ export function groupPeriod(g: Pick<GroupRow, "start_on">, c: Pick<ChallengeRow,
 }
 
 /** 한 사람의 진행 — 묶음 시작일부터, 늦게 들어왔으면 앞 날은 'before' */
+/** 이 사람의 목표 — 열량 구간은 사람마다 (없으면 챌린지 값) */
+export function memberTarget(c: Pick<ChallengeRow, "metric" | "target">, m: Pick<MemberRow, "target_eff"> | null | undefined) {
+  return c.metric === "kcal_band" && m?.target_eff ? Number(m.target_eff) : Number(c.target);
+}
+
 export function memberRun(c: ChallengeRow, g: Pick<GroupRow, "start_on"> | null, m: MemberRow, diary: DiaryRow[], today = todayKst()): RunProgress {
-  return runProgress(c.metric, Number(c.target), c.days, m.started_on, diary.filter((d) => d.date >= m.started_on), today,
+  return runProgress(c.metric, memberTarget(c, m), c.days, m.started_on, diary.filter((d) => d.date >= m.started_on), today,
     { from: g?.start_on, goal: m.goal_days_eff });
 }
 
@@ -78,4 +86,23 @@ export async function nicknames(sb: Sb, users: string[]) {
   const { data, error } = await sb.from("community_profiles").select("actor_id, nickname").in("actor_id", users);
   if (error) throw new Error(error.message);
   return new Map<string, string>(((data || []) as { actor_id: string; nickname: string }[]).map((r) => [r.actor_id, r.nickname]));
+}
+
+/**
+ * 열량 구간 챌린지에 들어온 사람의 내 구간 — 정해 둔 값이 없을 때만 채운다.
+ * value 를 주면 그 값(만든 사람이 고른 구간), 없으면 식단 기록 화면 목표(daily_nutrition_goals)에 가장 가까운 구간.
+ */
+export async function ensurePersonalTarget(sb: Sb, challengeId: string, user: string, value?: number) {
+  const { data: c, error } = await sb.from("community_challenges").select("metric").eq("id", challengeId).maybeSingle();
+  if (error) throw new Error(error.message);
+  if (c?.metric !== "kcal_band") return;
+  let v = value;
+  if (!v) {
+    const { data: g, error: gErr } = await sb.from("daily_nutrition_goals").select("daily_calories").eq("user_id", user).maybeSingle();
+    if (gErr) throw new Error(gErr.message);
+    v = nearestTier(g?.daily_calories);
+  }
+  const { error: uErr } = await sb.from("community_challenge_members").update({ target_eff: v })
+    .eq("challenge_id", challengeId).eq("user_id", user).is("target_eff", null);
+  if (uErr) throw new Error(uErr.message);
 }

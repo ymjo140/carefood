@@ -104,7 +104,7 @@ export async function cardFor(sb: Sb, actor: string, kind: string | null, id: st
     if (kind === "challenge") {
       const [{ data: c, error: cErr }, { data: m, error: mErr }, { data: prof, error: pErr }] = await Promise.all([
         sb.from("community_challenges").select("id, slug, title, rule, metric, target, days, goal_days, is_active").eq("id", id).maybeSingle(),
-        sb.from("community_challenge_members").select("challenge_id, user_id, started_on, joined_on, goal_days_eff, group_id, finished_runs, show_values, challenge_groups(id, code, start_on, member_count)")
+        sb.from("community_challenge_members").select("challenge_id, user_id, started_on, joined_on, goal_days_eff, group_id, finished_runs, show_values, target_eff, challenge_groups(id, code, start_on, member_count)")
           .eq("challenge_id", id).eq("user_id", actor).maybeSingle(),
         sb.from("community_profiles").select("nickname").eq("actor_id", actor).maybeSingle(),
       ]);

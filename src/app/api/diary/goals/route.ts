@@ -28,3 +28,13 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({ success: true });
 }
+
+/** GET — 내 목표 (챌린지 만들기에서 열량 구간을 고를 때) · 없으면 goals: null */
+export async function GET() {
+  const user_id = await getActorId();
+  if (!user_id) return noActor();
+  const { data, error } = await (createServiceRoleClient() as any) // eslint-disable-line @typescript-eslint/no-explicit-any
+    .from("daily_nutrition_goals").select("daily_calories, daily_protein_g").eq("user_id", user_id).maybeSingle();
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ goals: data || null });
+}

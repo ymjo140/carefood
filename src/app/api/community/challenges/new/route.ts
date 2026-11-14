@@ -6,7 +6,7 @@ import { todayKst } from "@/lib/day";
 import { ensureNickname } from "@/lib/community-profile";
 import { checkClaimsWith } from "@/lib/partner/claims";
 import { loadClaimTerms } from "@/lib/partner/claims-server";
-import { JOIN_MESSAGES, newCode, startDate, type StartChoice } from "@/lib/challenge-groups";
+import { JOIN_MESSAGES, ensurePersonalTarget, newCode, startDate, type StartChoice } from "@/lib/challenge-groups";
 import { NOTE_MAX, checkSpec } from "@/lib/challenge-rules";
 
 /**
@@ -56,6 +56,8 @@ export async function POST(request: NextRequest) {
       if (data.status !== "created") {
         return NextResponse.json({ error: LIMIT_MESSAGES[data.status] || JOIN_MESSAGES[data.status] || "만들지 못했어요" }, { status: 409 });
       }
+      // 열량 구간: 만든 사람이 고른 구간이 그 사람의 내 구간 (다른 사람은 들어올 때 자기 목표로)
+      if (checked.spec.personal) await ensurePersonalTarget(sb, data.challenge_id, actor, checked.target);
       return NextResponse.json({ challenge_id: data.challenge_id, group_id: data.group_id, code: data.code, title: checked.title });
     }
     throw new Error("초대 코드를 만들지 못했어요. 다시 시도해 주세요");
