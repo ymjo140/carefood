@@ -17,6 +17,7 @@ import { Connect, ProductUpload, type Batch } from "./Connect";
 import { PartnerInfo, PartnerTeam } from "./Settings";
 import { ProductBoard } from "./ProductBoard";
 import { ProductInfo, isProductFilter, type ProductFilter } from "./Products";
+import { Reviews } from "./Reviews";
 
 type Partner = { id: string; slug: string; name: string; kind: string; status: string; is_demo?: boolean };
 type Me = { partner: Partner; role: string; read_only?: boolean; counts: Record<string, number>; batches: Batch[] };
@@ -117,12 +118,13 @@ function PartnerHome() {
       {views.length <= 1 && <div className="mb-2" />}
 
       {current === "home" && <Today qs={qs} go={go} />}
-      {current === "orders" && <Orders key={f || "new"} qs={qs} initialFilter={f && ["new", "accepted", "shipped", "returns", "done"].includes(f) ? f as OrderFilter : undefined} />}
+      {current === "orders" && <Orders key={f || "new"} qs={qs} initialFilter={f && ["new", "accepted", "shipped", "returns", "inquiries", "done"].includes(f) ? f as OrderFilter : undefined} />}
       {current === "products" && view === "stock" && <ProductBoard qs={qs} toOrders={() => go("orders")} />}
       {current === "products" && view === "info" && (
         <ProductInfo key={f || "all"} qs={qs} isDemo={!!partner.is_demo} counts={counts} initialFilter={isProductFilter(f) ? f as ProductFilter : undefined}
           onChanged={loadMe} toUpload={() => go("products", { view: "upload" })} />
       )}
+      {current === "products" && view === "reviews" && <Reviews qs={qs} />}
       {current === "products" && view === "upload" && <ProductUpload qs={qs} batches={batches} isDemo={!!partner.is_demo} readOnly={readOnly} onChanged={loadMe} />}
       {current === "customers" && <CustomersTab key={f || "all"} qs={qs} go={go} initialStage={isStage(f) ? f as Stage : null} />}
       {current === "marketing" && <Marketing qs={qs} view={view} go={go} prefill={prefill} readOnly={readOnly} />}

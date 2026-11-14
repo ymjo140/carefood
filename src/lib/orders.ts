@@ -5,12 +5,13 @@
  * 환불: 결제가 끝난 주문에서 한 판매 업체 묶음이 취소되면 그 묶음의 상품 금액 + 그 업체 배송비를 돌려줘야 한다.
  *       refund_amount(돌려줘야 할 누적) 과 refunded_amount(돌려준 누적) 를 둔다. PG 를 붙이기 전에는 관리자가 직접 환불하고 표시한다.
  */
-import { AUTO_CONFIRM_DAYS, RETURN_REASONS, RETURN_TYPE_LABEL, returnOpen, type Fulfil, type ReturnReason, type ReturnStatus, type ReturnType, type Shipping } from "./order-status";
+import { AUTO_CONFIRM_DAYS, RETURN_REASONS, RETURN_TYPE_LABEL, returnOpen, type Fulfil, type InquiryInfo, type ReturnReason, type ReturnStatus, type ReturnType, type Shipping } from "./order-status";
 import { pushReady, sendToUser, type PushSub } from "./push";
 
 export { AUTO_CONFIRM_DAYS };
 import { restoreCoupons } from "./partner/coupons";
 import { putBackRows } from "./partner/stock";
+import { inquiriesByBundle } from "./partner/inquiries";
 
 type Sb = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -47,6 +48,8 @@ export type OrderGroup = {
   return: ReturnInfo | null;
   /** 택배 조회로 마지막에 본 상태 (발송 중일 때 "배송 출발" 같은 글자로) */
   tracking_status: string | null;
+  /** 이 판매 업체에 남긴 문의 — 오래된 것부터 */
+  inquiries: InquiryInfo[];
   lines: { product_id: string | null; product_name: string; quantity: number; unit_price: number; day_of_week: string | null; meal_type: string | null }[];
 };
 export type BuyerOrder = {
@@ -75,7 +78,7 @@ function groupItems(rows: ItemRow[], fees: Record<string, number>): OrderGroup[]
         partner_id: r.partner_id, seller: r.partners?.name || "판매 업체", status: r.fulfil_status, subtotal: 0, shipping_fee: r.partner_id ? fees[r.partner_id] || 0 : 0,
         carrier: r.tracking_carrier, tracking_number: r.tracking_number, shipped_at: r.shipped_at, delivered_at: r.delivered_at,
         cancel_reason: r.cancel_reason, canceled_by: r.canceled_by, cancel_requested_at: r.cancel_requested_at, cancel_request_reason: r.cancel_request_reason,
-        confirmed_at: null, return: returnInfo(r), tracking_status: r.tracking_status, lines: [],
+        confirmed_at: null, return: returnInfo(r), tracking_status: r.tracking_status, inquiries: [], lines: [],
       };
       by.set(key, g);
     }
@@ -97,7 +100,12 @@ async function withGroups<T extends { id: string; shipping_fees: Record<string, 
   const { data, error } = await sb.from("order_items").select(ITEM_COLS).in("order_id", orders.map((o) => o.id)).order("created_at");
   if (error) throw new Error(error.message);
   const rows = (data || []) as ItemRow[];
-  return orders.map(({ shipping_fees, ...o }) => ({ ...o, groups: groupItems(rows.filter((r) => r.order_id === o.id), shipping_fees || {}) }));
+  const asked = await inquiriesByBundle(sb, orders.map((o) => o.id));
+  return orders.map(({ shipping_fees, ...o }) => {
+    const groups = groupItems(rows.filter((r) => r.order_id === o.id), shipping_fees || {});
+    for (const g of groups) g.inquiries = g.partner_id ? asked.get(`${o.id}|${g.partner_id}`) || [] : [];
+    return { ...o, groups };
+  });
 }
 
 /** 내 주문 — 최근 30건 */

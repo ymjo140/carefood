@@ -217,8 +217,28 @@ export async function seedDemoOrders(sb: Sb, partner: Partner) {
     const { error } = await sb.from("order_items").insert(items.slice(i, i + 300));
     if (error) throw new Error(`예시 주문 제품을 만들지 못했어요: ${error.message}`);
   }
+  await seedDemoInquiries(sb, partner, now, meta, orders as { id: string; user_id: string }[]);
   await seedDemoCoupons(sb, partner, couponOrder);
   return { customers: CUSTOMERS.length, orders: orders.length };
+}
+
+/** 예시 주문 문의 — 답할 것 둘(하나는 하루 지남)·답한 것 하나. 주문이 지워지면 같이 지워진다(order_id cascade) */
+async function seedDemoInquiries(sb: Sb, partner: Partner, now: number, meta: { id: string; ago: number; fulfil: string }[], orders: { id: string; user_id: string }[]) {
+  const userOf = new Map(orders.map((o) => [o.id, o.user_id]));
+  const pick = (ok: (m: { id: string; ago: number; fulfil: string }) => boolean) => meta.find(ok);
+  const shipping = pick((m) => m.fulfil === "accepted" || m.fulfil === "shipped");
+  const fresh = pick((m) => m.fulfil === "new" && m.id !== shipping?.id) || pick((m) => m.fulfil === "delivered" && m.ago <= 3);
+  const done = pick((m) => m.fulfil === "delivered" && m.ago >= 10 && m.ago <= 30);
+  const at = (h: number) => new Date(now - h * 3600e3).toISOString();
+  const rows = [
+    shipping && { order_id: shipping.id, kind: "shipping", body: "이번 주 금요일까지 받을 수 있을까요? 주말에는 집을 비워요", created_at: at(30), answer: null, answered_at: null },
+    fresh && { order_id: fresh.id, kind: "product", body: "전자레인지에 몇 분 데우면 될까요? 포장째 넣어도 되나요?", created_at: at(2), answer: null, answered_at: null },
+    done && { order_id: done.id, kind: "product", body: "냉동실에 두면 언제까지 먹을 수 있나요?", created_at: at(24 * 9),
+      answer: "냉동 보관하면 제조일부터 90일까지 드실 수 있어요. 녹인 뒤에는 다시 얼리지 말아 주세요", answered_at: at(24 * 9 - 3) },
+  ].filter(Boolean).map((r) => ({ ...r!, partner_id: partner.id, user_id: userOf.get(r!.order_id)!, partner_notified_at: r!.created_at }));
+  if (rows.length === 0) return;
+  const { error } = await sb.from("order_inquiries").insert(rows);
+  if (error) throw new Error(`예시 문의를 만들지 못했어요: ${error.message}`);
 }
 
 const DEMO_COUPON = "예시 ";

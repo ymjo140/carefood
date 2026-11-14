@@ -5,11 +5,12 @@ import { Badge, Button, Card, CardActions, Checkbox, EmptyState, Field, Input, N
 import { CARRIERS, FULFIL_LABEL, RETURN_REASON_LABEL, RETURN_TYPE_LABEL, TRACK_LABEL, deliverableAt, formatPhone, returnOpen, type Fulfil } from "@/lib/order-status";
 import type { PartnerOrder } from "@/lib/partner/orders";
 import { downloadFile } from "@/lib/download";
+import { Inquiries } from "./Inquiries";
 
-export type OrderFilter = "new" | "accepted" | "shipped" | "returns" | "done";
+export type OrderFilter = "new" | "accepted" | "shipped" | "returns" | "inquiries" | "done";
 type Filter = OrderFilter;
 type TrackingResult = { rows: number; shipped: number; unchanged: number; skipped: number; errors: { row: number; order: string | null; message: string }[]; blocked: boolean };
-type Counts = { new: number; accepted: number; shipped: number; cancel_requests: number; late: number; deliver_pending: number; returns?: number; return_requests?: number };
+type Counts = { new: number; accepted: number; shipped: number; cancel_requests: number; late: number; deliver_pending: number; returns?: number; return_requests?: number; inquiries?: number };
 type RetAction = "reject" | "returned" | "exchanged";
 const DAY: Record<string, string> = { mon: "월", tue: "화", wed: "수", thu: "목", fri: "금", sat: "토", sun: "일" };
 const won = (n: number) => `${n.toLocaleString("ko-KR")}원`;
@@ -44,7 +45,7 @@ export function Orders({ qs, initialFilter }: { qs: string; initialFilter?: Orde
   const load = useCallback(async (f: Filter, page = 0) => {
     const my = ++seq.current; // 상태를 빨리 바꾸면 마지막 응답만
     try {
-      const r = await fetch(`/api/partner/orders?${qs}&status=${f}&page=${page}`);
+      const r = await fetch(`/api/partner/orders?${qs}&status=${f === "inquiries" ? "new" : f}&page=${page}`); // 문의 보기는 건수만 쓴다
       const d = await r.json();
       if (!r.ok) throw new Error(d.error);
       if (my !== seq.current) return;
@@ -149,6 +150,9 @@ export function Orders({ qs, initialFilter }: { qs: string; initialFilter?: Orde
       {requests > 0 && filter !== "accepted" && (
         <p className="text-label text-ink mb-3">주문자가 취소를 요청한 주문이 <span className="num font-bold">{requests}</span>건 있어요. &lsquo;접수&rsquo;에서 확인해 주세요</p>
       )}
+      {(c?.inquiries || 0) > 0 && filter !== "inquiries" && (
+        <p className="text-label text-ink mb-3">답하지 않은 문의가 <span className="num font-bold">{c!.inquiries}</span>건 있어요. &lsquo;문의&rsquo;에서 답해 주세요</p>
+      )}
       {(c?.return_requests || 0) > 0 && filter !== "returns" && (
         <p className="text-label text-ink mb-3">답하지 않은 반품·교환 요청이 <span className="num font-bold">{c!.return_requests}</span>건 있어요. &lsquo;반품·교환&rsquo;에서 확인해 주세요</p>
       )}
@@ -167,9 +171,11 @@ export function Orders({ qs, initialFilter }: { qs: string; initialFilter?: Orde
       <Tabs variant="line" value={filter} onChange={pick} label="주문 상태" className="mb-3"
         items={[
           { value: "new", label: "새 주문", count: c?.new }, { value: "accepted", label: "접수", count: c?.accepted },
-          { value: "shipped", label: "발송", count: c?.shipped }, { value: "returns", label: "반품·교환", count: c?.returns || undefined }, { value: "done", label: "끝난 주문" },
+          { value: "shipped", label: "발송", count: c?.shipped }, { value: "returns", label: "반품·교환", count: c?.returns || undefined },
+          { value: "inquiries", label: "문의", count: c?.inquiries || undefined }, { value: "done", label: "끝난 주문" },
         ]} />
-      {state.status === "loading" ? <SkeletonList rows={3} thumb={false} />
+      {filter === "inquiries" ? <Inquiries qs={qs} onChanged={() => load(filter)} />
+        : state.status === "loading" ? <SkeletonList rows={3} thumb={false} />
         : state.status === "error" ? (
           <EmptyState title="주문을 불러오지 못했어요" description={state.error}
             action={<Button size="sm" variant="secondary" icon="refresh" onClick={() => { setState({ status: "loading", data: [] }); load(filter); }}>다시 불러오기</Button>} />

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Badge, Button, Card, CardActions, ChoiceList, ConfirmSheet, EmptyState, Field, Input, LinkButton, Price, Sheet, SkeletonList, Tabs, Textarea, timeAgo, useToast } from "@/components/ui";
-import { AUTO_CONFIRM_DAYS, BUYER_LABEL, CARRIERS, TRACK_LABEL, RETURN_REASONS, RETURN_REASON_LABEL, RETURN_TYPE_LABEL, returnOpen, type ReturnReason, type ReturnType } from "@/lib/order-status";
+import { AUTO_CONFIRM_DAYS, BUYER_LABEL, CARRIERS, INQUIRY_KINDS, INQUIRY_KIND_LABEL, INQUIRY_OPEN_MAX, TRACK_LABEL, RETURN_REASONS, RETURN_REASON_LABEL, RETURN_TYPE_LABEL, returnOpen, type InquiryKind, type ReturnReason, type ReturnType } from "@/lib/order-status";
 import type { BuyerOrder, OrderGroup } from "@/lib/orders";
 
 const DAY: Record<string, string> = { mon: "월", tue: "화", wed: "수", thu: "목", fri: "금", sat: "토", sun: "일" };
@@ -23,6 +23,9 @@ export function OrderList() {
   const [rType, setRType] = useState<ReturnType>("return");
   const [rReason, setRReason] = useState<ReturnReason | null>(null);
   const [rNote, setRNote] = useState("");
+  const [asking, setAsking] = useState<{ order: BuyerOrder; group: OrderGroup } | null>(null);
+  const [qKind, setQKind] = useState<InquiryKind | null>(null);
+  const [qBody, setQBody] = useState("");
 
   const load = useCallback(async () => {
     try {
@@ -65,6 +68,22 @@ export function OrderList() {
       await load();
     } catch (e) {
       toast.show(`요청하지 못했어요. ${(e as Error).message || "다시 시도해 주세요"}`, { tone: "danger" });
+    } finally { setBusy(false); }
+  };
+
+  const ask = async () => {
+    if (!asking || !qKind) return;
+    setBusy(true);
+    try {
+      const r = await fetch(`/api/orders/${asking.order.id}/inquiry`, { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ partner_id: asking.group.partner_id, kind: qKind, body: qBody }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error);
+      toast.show("문의를 남겼어요. 판매 업체가 답하면 알려 드려요");
+      setAsking(null);
+      await load();
+    } catch (e) {
+      toast.show(`문의를 남기지 못했어요. ${(e as Error).message || "다시 시도해 주세요"}`, { tone: "danger" });
     } finally { setBusy(false); }
   };
 
@@ -182,6 +201,25 @@ export function OrderList() {
                         </span>
                       </>
                     ))}
+                    {g.inquiries.length > 0 && (
+                      <ul className="mt-3 flex flex-col gap-2">
+                        {g.inquiries.map((q) => (
+                          <li key={q.id} className="rounded-md bg-sunken px-3 py-2.5">
+                            <p className="text-caption text-ink-2">내 문의 · {INQUIRY_KIND_LABEL[q.kind]} · {timeAgo(q.created_at)}</p>
+                            <p className="text-label text-ink mt-0.5 whitespace-pre-line">{q.body}</p>
+                            {q.answer ? (
+                              <>
+                                <p className="text-caption text-ink-2 mt-2">{g.seller} 답{q.answered_at && <> · {timeAgo(q.answered_at)}</>}</p>
+                                <p className="text-label text-ink mt-0.5 whitespace-pre-line">{q.answer}</p>
+                              </>
+                            ) : <p className="text-caption text-ink-2 mt-1">판매 업체가 확인하고 있어요. 답하면 알려 드려요</p>}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {!unpaid && g.partner_id && g.inquiries.filter((q) => !q.answer).length < INQUIRY_OPEN_MAX && (
+                      <Button size="sm" variant="ghost" className="mt-1 -ml-3" onClick={() => { setQKind(null); setQBody(""); setAsking({ order: o, group: g }); }}>판매 업체에 문의하기</Button>
+                    )}
                     {!unpaid && (g.status === "new" || (g.status === "accepted" && !g.cancel_requested_at)) && (
                       <Button size="sm" variant="ghost" className="mt-1 -ml-3" onClick={() => { setReason(""); setTarget({ order: o, group: g }); }}>
                         {g.status === "new" ? "이 업체 주문 취소하기" : "취소 요청하기"}
@@ -231,6 +269,20 @@ export function OrderList() {
           <Field label={rReason === "change_mind" ? "남길 말 (선택)" : "어떤 문제인지"}
             hint={rReason === "change_mind" ? "마음이 바뀐 반품은 반품 배송비를 빼고 돌려받아요. 먹을거리는 열었거나 시간이 지나면 받아 주지 않을 수 있어요" : "사진은 판매 업체가 회수할 때 보여 주세요"}>
             <Textarea value={rNote} onChange={(e) => setRNote(e.target.value)} maxLength={300} rows={3} placeholder="예: 포장이 터져서 왔어요" />
+          </Field>
+        </div>
+      </Sheet>
+
+      <Sheet open={!!asking} onClose={() => setAsking(null)} title="판매 업체에 문의하기"
+        description={asking ? `${asking.group.seller} · 판매 업체가 답하면 알려 드려요. 문의에는 이름·연락처가 붙지 않아요` : undefined}
+        footer={<div className="flex gap-2">
+          <Button variant="ghost" onClick={() => setAsking(null)}>닫기</Button>
+          <Button block loading={busy} disabled={!qKind || qBody.trim().length < 2} onClick={ask}>문의 남기기</Button>
+        </div>}>
+        <div className="flex flex-col gap-4">
+          <ChoiceList label="무엇에 대한 문의인가요" value={qKind} onChange={setQKind} options={INQUIRY_KINDS.map((k) => ({ value: k, label: INQUIRY_KIND_LABEL[k] }))} />
+          <Field label="물어볼 내용" hint="반품·교환은 받은 뒤 '반품·교환 요청하기'로 남기면 더 빨리 처리돼요">
+            <Textarea value={qBody} onChange={(e) => setQBody(e.target.value)} maxLength={500} rows={4} placeholder="예: 이번 주 금요일까지 받을 수 있을까요?" />
           </Field>
         </div>
       </Sheet>

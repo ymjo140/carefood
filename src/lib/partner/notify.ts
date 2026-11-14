@@ -7,6 +7,7 @@
  */
 import { sendToUser, type PushSub } from "@/lib/push";
 import { asResult, selectUpTo } from "@/lib/supabase/all";
+import { pendingInquiryNotices } from "./inquiries";
 
 type Sb = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 type Line = { id: string; partner_id: string; order_id: string; orders: { is_demo: boolean | null } };
@@ -40,7 +41,7 @@ function byPartner(lines: Line[]) {
   return m;
 }
 
-export async function notifyPartners(sb: Sb, send: boolean): Promise<{ new_orders: number; cancel_requests: number; return_requests: number; pushed: number }> {
+export async function notifyPartners(sb: Sb, send: boolean): Promise<{ new_orders: number; cancel_requests: number; return_requests: number; inquiries: number; pushed: number }> {
   // 한 번에 10,000줄까지(1,000줄씩) — 남은 줄은 30분 뒤 다음 차례에 (알린 줄만 적는다)
   const take = (make: () => any) => asResult(selectUpTo<Line>(make, "id", 10000)); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [nw, cr, rr] = await Promise.all([
@@ -54,16 +55,18 @@ export async function notifyPartners(sb: Sb, send: boolean): Promise<{ new_order
   for (const r of [nw, cr, rr]) if (r.error) throw new Error(r.error.message);
   const newLines = (nw.data || []) as Line[], cancelLines = (cr.data || []) as Line[], returnLines = (rr.data || []) as Line[];
   const newBy = byPartner(newLines), cancelBy = byPartner(cancelLines), returnBy = byPartner(returnLines);
+  const asked = await pendingInquiryNotices(sb);
   let pushed = 0;
   if (send) {
-    const subs = await memberSubs(sb, [...new Set([...newBy.keys(), ...cancelBy.keys(), ...returnBy.keys()])]);
+    const subs = await memberSubs(sb, [...new Set([...newBy.keys(), ...cancelBy.keys(), ...returnBy.keys(), ...asked.byPartner.keys()])]);
     for (const [pid, list] of subs) {
-      const n = newBy.get(pid)?.size || 0, c = cancelBy.get(pid)?.size || 0, rq = returnBy.get(pid)?.size || 0;
-      if (!n && !c && !rq) continue;
-      const parts = [n && `새 주문 ${n}건`, c && `취소 요청 ${c}건`, rq && `반품·교환 요청 ${rq}건`].filter(Boolean) as string[];
-      const title = parts.length > 1 ? parts.join(" · ") : n ? `새 주문 ${n}건이 들어왔어요` : c ? `취소 요청 ${c}건이 왔어요` : `반품·교환 요청 ${rq}건이 왔어요`;
+      const n = newBy.get(pid)?.size || 0, c = cancelBy.get(pid)?.size || 0, rq = returnBy.get(pid)?.size || 0, q = asked.byPartner.get(pid) || 0;
+      if (!n && !c && !rq && !q) continue;
+      const parts = [n && `새 주문 ${n}건`, c && `취소 요청 ${c}건`, rq && `반품·교환 요청 ${rq}건`, q && `문의 ${q}건`].filter(Boolean) as string[];
+      const title = parts.length > 1 ? parts.join(" · ") : n ? `새 주문 ${n}건이 들어왔어요` : c ? `취소 요청 ${c}건이 왔어요` : rq ? `반품·교환 요청 ${rq}건이 왔어요` : `주문 문의 ${q}건이 왔어요`;
       const body = c ? "보내기 전이면 취소해 주세요. 업체 화면 주문에서 확인할 수 있어요"
         : rq && !n ? "업체 화면 주문 > 반품·교환에서 받아들이거나 거절해 주세요. 답할 때까지 구매확정이 멈춰요"
+        : q && !n ? "업체 화면 주문 > 문의에서 답해 주세요. 답하면 주문자에게 바로 알려요"
         : "업체 화면 주문에서 먼저 들어온 주문부터 접수해 주세요";
       if (await sendToUser(sb, list, { title, body, url: `/partner?tab=orders`, tag: `partner-orders-${pid}` })) pushed++;
     }
@@ -76,7 +79,13 @@ export async function notifyPartners(sb: Sb, send: boolean): Promise<{ new_order
     }
   };
   // 푸시 키가 없을 때는 적지 않는다 — 키가 생기면 그때 알린다
-  if (send) await Promise.all([mark(newLines.map((l) => l.id), "partner_notified_at"), mark(cancelLines.map((l) => l.id), "cancel_notified_at"), mark(returnLines.map((l) => l.id), "return_notified_at")]);
+  if (send) {
+    await Promise.all([mark(newLines.map((l) => l.id), "partner_notified_at"), mark(cancelLines.map((l) => l.id), "cancel_notified_at"), mark(returnLines.map((l) => l.id), "return_notified_at")]);
+    for (let i = 0; i < asked.ids.length; i += 300) {
+      const { error } = await sb.from("order_inquiries").update({ partner_notified_at: now }).in("id", asked.ids.slice(i, i + 300)).is("partner_notified_at", null);
+      if (error) throw new Error(error.message);
+    }
+  }
   const total = (m: Map<string, Set<string>>) => [...m.values()].reduce((s, v) => s + v.size, 0);
-  return { new_orders: total(newBy), cancel_requests: total(cancelBy), return_requests: total(returnBy), pushed };
+  return { new_orders: total(newBy), cancel_requests: total(cancelBy), return_requests: total(returnBy), inquiries: [...asked.byPartner.values()].reduce((s, v) => s + v, 0), pushed };
 }

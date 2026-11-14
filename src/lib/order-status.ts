@@ -69,3 +69,14 @@ export function deliverableAt(o: { shipped_at: string | null; carrier: string | 
   if (!o.shipped_at) return null;
   return Date.parse(o.shipped_at) + (o.carrier === "direct" ? 1 : 12) * 3600e3;
 }
+
+/** 주문 문의 종류 (order_inquiries.kind) — 주문자가 고르고 업체 화면에 보인다 */
+export const INQUIRY_KINDS = ["shipping", "product", "return", "other"] as const;
+export type InquiryKind = (typeof INQUIRY_KINDS)[number];
+export const INQUIRY_KIND_LABEL: Record<InquiryKind, string> = { shipping: "배송", product: "상품", return: "반품·교환", other: "그 밖의 것" };
+/** 한 묶음에 답을 기다리는 문의는 이만큼까지 */
+export const INQUIRY_OPEN_MAX = 3;
+/** 이 시간이 지나도록 답하지 않으면 늦은 문의 (업체 홈 할 일) */
+export const INQUIRY_LATE_HOURS = 24;
+/** 주문자에게 보이는 문의 한 줄 */
+export type InquiryInfo = { id: string; kind: InquiryKind; body: string; created_at: string; answer: string | null; answered_at: string | null };
