@@ -41,7 +41,7 @@ describe("테스트 매장 예시 데이터", () => {
     expect(st("returned")).toBe(1);
     expect(sb.tables.order_items.find((l) => l.return_status === "returned")).toMatchObject({ fulfil_status: "canceled", return_fee: 4000 });
   });
-  it("지난 석 달 정산 — 두 달은 정산 끝, 지난 달은 마감만, 숫자는 실제 계산과 같다", async () => {
+  it("돈이 오간 지난 달은 모두 마감 — 지난 달만 마감, 그 앞은 정산 끝(한 달은 입금 차이), 숫자는 실제 계산과 같다", async () => {
     const { sb } = store();
     await seedDemoOrders(sb, partner);
     // 진짜 DB 는 orders!inner(...) 로 묶어 읽는다 — 가짜 DB 에는 미리 넣어 둔다
@@ -49,8 +49,11 @@ describe("테스트 매장 예시 데이터", () => {
     for (const l of sb.tables.order_items) l.orders = byId.get(l.order_id);
     await seedDemoStore(sb, partner);
     const rows = [...sb.tables.partner_settlements].sort((a, b) => String(a.month).localeCompare(String(b.month)));
-    expect(rows.map((r) => r.status)).toEqual(["paid", "paid", "closed"]);
-    const bundles = await loadBundles(sb, partner.id, 10, { deliveredFrom: Date.now() - 140 * 86400e3 });
+    expect(rows.length).toBeGreaterThanOrEqual(3);
+    expect(rows.slice(0, -1).every((r) => r.status === "paid")).toBe(true);
+    expect(rows[rows.length - 1].status).toBe("closed");
+    expect(rows.filter((r) => r.paid_amount !== null && r.paid_amount !== r.order_sales - r.order_discount + r.order_shipping - r.order_fee - r.commission)).toHaveLength(1);
+    const bundles = await loadBundles(sb, partner.id, 10, { deliveredFrom: Date.now() - 260 * 86400e3 });
     const m = monthlyOf(bundles);
     for (const r of rows) expect(r.order_sales).toBe(m.get(r.month as string)?.sales ?? 0);
     expect(sb.tables.partners[0]).toMatchObject({ business_number: "123-45-67890", bank_name: "예시은행" });

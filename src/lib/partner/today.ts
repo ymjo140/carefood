@@ -152,11 +152,12 @@ export async function buildToday(sb: Sb, partner: { id: string; kind: string; na
   });
   if (oc?.new) tasks.push({
     kind: "NEW_ORDERS", blocking: true, weight: 130 + oc.new, tab: "orders", filter: "new",
-    title: `새 주문 ${n(oc.new)}건을 접수해 주세요`, reason: oc.late ? `결제하고 하루가 지나도록 보내지 않은 주문이 ${n(oc.late)}건 있어요` : "먼저 들어온 주문부터 보여 드려요", action: "새 주문 보기",
+    title: `새 주문 ${n(oc.new)}건을 접수해 주세요`, reason: oc.late_new ? `그중 ${n(oc.late_new)}건은 결제하고 하루가 지났어요` : "먼저 들어온 주문부터 보여 드려요", action: "새 주문 보기",
   });
   if (oc && oc.accepted - oc.cancel_requests > 0) tasks.push({
     kind: "TO_SHIP", blocking: true, weight: 120 + oc.accepted, tab: "orders", filter: "accepted",
-    title: `보낼 주문 ${n(oc.accepted - oc.cancel_requests)}건`, reason: "송장 번호를 넣으면 주문자에게 보냈다고 알려요", action: "발송 처리하기",
+    title: `보낼 주문 ${n(oc.accepted - oc.cancel_requests)}건`,
+    reason: oc.late_accepted ? `그중 ${n(oc.late_accepted)}건은 결제하고 하루가 지났어요. 송장 엑셀로 한꺼번에 처리할 수 있어요` : "송장 번호를 넣으면 주문자에게 보냈다고 알려요", action: "발송 처리하기",
   });
   if (outOfStock) tasks.push({
     kind: "OUT_OF_STOCK", blocking: true, weight: 85 + outOfStock, tab: "products", view: "stock",
