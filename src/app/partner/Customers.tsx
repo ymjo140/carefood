@@ -3,13 +3,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Badge, Button, Card, CardButton, EmptyState, Field, HowCounted, AsOf, ListRow, SectionHeader, Select, Sheet, SkeletonList, Skeleton,
-  Tabs, timeAgo, useToast,
+  timeAgo, useToast,
 } from "@/components/ui";
 import { STAGES, type Stage } from "@/lib/partner/customer-stages";
-import { Segments } from "./Segments";
-import { Coupons, type CouponRow } from "./Coupons";
-import { Flows } from "./Flows";
-import type { Tab } from "@/lib/partner/tabs";
+import { useCoupons, type CouponRow } from "./Coupons";
+import type { Go } from "@/lib/partner/tabs";
 
 type Customer = {
   code: string; stage: Stage; orders: number; canceled: number; first_at: string; last_at: string; spend: number;
@@ -20,7 +18,6 @@ type Detail = Customer & {
   history: { order_id: string; at: string; amount: number; discount: number; status: string; first: boolean; lines: { name: string; quantity: number }[] }[];
   grants: { id: string; name: string; source: string; granted_at: string; expires_at: string; used_at: string | null; discount: number; status: string }[];
 };
-type View = "customers" | "coupons" | "flows" | "find";
 
 const won = (n: number) => `${n.toLocaleString("ko-KR")}원`;
 const STAGE_KEYS = Object.keys(STAGES) as Stage[];
@@ -29,35 +26,12 @@ const GRANT_STATUS: Record<string, string> = { active: "쓸 수 있음", used: "
 const SOURCE: Record<string, string> = { manual: "직접 줌", flow: "자동 알림", influencer: "협업" };
 
 /**
- * 고객 탭 — 내 고객(앱에서 우리 제품을 결제한 사람) · 혜택(쿠폰) · 자동 알림 · 새 고객 찾기(고객층) (v3 10.2)
- * 사람은 업체마다 다른 가명 번호로만 보인다. 연락처·이름·건강 목표는 없고, 알림은 앱 알림으로만 간다.
+ * 고객 — 내 고객(앱에서 우리 제품을 결제한 사람), 단계 6개와 한 사람 보기 (v3 10.2).
+ * 쿠폰·자동 알림·광고(새 고객 찾기)는 마케팅 메뉴로 옮겼다 (11/14 구조 진단). 사람은 업체마다 다른 가명 번호로만 보인다.
  */
-export function CustomersTab({ qs, go, prefill, initialStage }: { qs: string; go: (tab: Tab, opts?: { filter?: string; need?: string; goal?: string }) => void; prefill: { need?: string; goal?: string } | null; initialStage?: Stage | null }) {
-  const [view, setView] = useState<View>(prefill ? "find" : "customers");
-  const [coupons, setCoupons] = useState<{ status: "loading" | "error" | "done"; list: CouponRow[]; readOnly: boolean }>({ status: "loading", list: [], readOnly: true });
-  const cSeq = useRef(0);
-  // 쿠폰 목록은 고객 화면(혜택 주기)·혜택·자동 알림이 같이 쓴다 — 만들기·주기·멈추기 뒤에 다시 불러온다
-  const loadCoupons = useCallback(async () => {
-    const my = ++cSeq.current;
-    try {
-      const r = await fetch(`/api/partner/coupons?${qs}`);
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error);
-      if (my === cSeq.current) setCoupons({ status: "done", list: d.coupons, readOnly: d.read_only });
-    } catch { if (my === cSeq.current) setCoupons((c) => ({ ...c, status: "error" })); } // 화면마다 쿠폰 실패 상태를 그린다
-  }, [qs]);
-  useEffect(() => { loadCoupons(); }, [loadCoupons]); // eslint-disable-line react-hooks/set-state-in-effect -- 불러온 뒤에 상태를 바꾼다
-
-  return (
-    <div className="flex flex-col gap-6">
-      <Tabs<View> value={view} onChange={setView} label="고객 보기"
-        items={[{ value: "customers", label: "내 고객" }, { value: "coupons", label: "혜택" }, { value: "flows", label: "자동 알림" }, { value: "find", label: "새 고객 찾기" }]} />
-      {view === "customers" && <MyCustomers qs={qs} coupons={coupons} onCoupons={loadCoupons} toCoupons={() => setView("coupons")} initialStage={initialStage || null} />}
-      {view === "coupons" && <Coupons qs={qs} state={coupons} reload={loadCoupons} />}
-      {view === "flows" && <Flows qs={qs} coupons={coupons} toCoupons={() => setView("coupons")} />}
-      {view === "find" && <Segments qs={qs} go={go} prefill={prefill} />}
-    </div>
-  );
+export function CustomersTab({ qs, go, initialStage }: { qs: string; go: Go; initialStage?: Stage | null }) {
+  const { state: coupons, reload } = useCoupons(qs);
+  return <MyCustomers qs={qs} coupons={coupons} onCoupons={reload} toCoupons={() => go("marketing", { view: "coupons" })} initialStage={initialStage || null} />;
 }
 
 function MyCustomers({ qs, coupons, onCoupons, toCoupons, initialStage }: {

@@ -3,12 +3,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Badge, Button, Card, Chip, ChipRow, ConfirmSheet, EmptyState, Estimate, Field, GapChart, HowCounted, Input, ListRow, Notice, SectionHeader, Select, Sheet,
-  SkeletonList, Stat, Steps, Tabs, TextButton, Textarea, UnitInput, timeAgo, useToast,
+  SkeletonList, Stat, Steps, TextButton, Textarea, UnitInput, timeAgo, useToast,
 } from "@/components/ui";
 import { DemandDetail, type DemandData, type DemandSeg } from "./Demand";
 import type { CouponRow } from "./Coupons";
 
-type View = "flow" | "manage";
 type Plan = { id: string; segment: string; segment_label: string; rule: string; name: string; note: string | null; target_price: number | null; status: string; created_at: string };
 type Cand = {
   code: string; nickname: string; intro: string | null; topics: string[]; posts: number; likes: number; comments: number; followers: number;
@@ -22,21 +21,10 @@ const COLLAB_STATUS: Record<string, string> = { proposed: "답 기다림", accep
 const STEP_TITLE = ["빈틈 보기", "만들 제품 정하기", "어울리는 사람 찾기"];
 
 /**
- * 수요 탭 (v3 10.5 고도화) — 두 보기
- *  · 수요 → 기획 → 추천: ① 빈틈 그림에서 조건 고르기 → ② 만들 제품 기획 저장 → ③ 그 기획에 어울리는 사람(점수·이유)에게 제안
- *  · 협업 관리: 보낸 제안·협업 판매를 기획별로, 기획 상태(기획 중·만드는 중·출시·접음)
+ * 분석 > 수요 → 기획 (DemandFlow): ① 빈틈 그림에서 조건 고르기 → ② 만들 제품 기획 저장 → ③ 그 기획에 어울리는 사람(점수·이유)에게 제안
+ * 마케팅 > 협업 (CollabManage): 보낸 제안·협업 판매를 기획별로, 기획 상태(기획 중·만드는 중·출시·접음)
+ * 추천(사람 찾기)은 기획 흐름의 끝에, 관리는 마케팅에 — 11/14 구조 진단으로 한 탭에서 나눠 옮겼다.
  */
-export function DemandTab({ qs, onMakeSegment }: { qs: string; onMakeSegment?: (need: string) => void }) {
-  const [view, setView] = useState<View>("flow");
-  return (
-    <div className="flex flex-col gap-6">
-      <Tabs<View> value={view} onChange={setView} label="수요 보기"
-        items={[{ value: "flow", label: "수요 → 기획 → 추천" }, { value: "manage", label: "협업 관리" }]} />
-      {view === "flow" ? <Flow qs={qs} onMakeSegment={onMakeSegment} onSent={() => setView("manage")} /> : <Manage qs={qs} />}
-    </div>
-  );
-}
-
 function usePlans(qs: string) {
   const [state, setState] = useState<{ status: "loading" | "error" | "done"; plans: Plan[]; readOnly: boolean; ready: boolean; error?: string }>({ status: "loading", plans: [], readOnly: true, ready: true });
   const seq = useRef(0);
@@ -54,7 +42,7 @@ function usePlans(qs: string) {
 }
 
 /** 수요 → 기획 → 추천 — 세 단계를 한 줄로 */
-function Flow({ qs, onMakeSegment, onSent }: { qs: string; onMakeSegment?: (need: string) => void; onSent: () => void }) {
+export function DemandFlow({ qs, onMakeSegment, onSent }: { qs: string; onMakeSegment?: (need: string) => void; onSent: () => void }) {
   const [demand, setDemand] = useState<{ status: "loading" | "error" | "done"; data?: DemandData; error?: string }>({ status: "loading" });
   const [step, setStep] = useState(0);
   const [sel, setSel] = useState<string | null>(null);
@@ -155,7 +143,7 @@ function OpenPlans({ plans, onPick }: { plans: ReturnType<typeof usePlans>; onPi
   if (open.length === 0) return null; // 저장한 기획이 없으면 이 구역은 없다 — 위의 "이 조건으로 기획하기"가 시작점
   return (
     <section>
-      <SectionHeader title="진행 중인 기획" description="이어서 어울리는 사람을 찾을 수 있어요. 상태는 협업 관리에서 바꿔요" />
+      <SectionHeader title="진행 중인 기획" description="이어서 어울리는 사람을 찾을 수 있어요. 상태는 마케팅 > 협업에서 바꿔요" />
       <Card padding="none">
         <ul className="divide-y divide-line">
           {open.map((p) => (
@@ -286,7 +274,7 @@ function PeopleStep({ qs, seg, plan, onBack, onSent }: { qs: string; seg: Demand
         body: JSON.stringify({ code: form.cand.code, title: form.title, offer: form.offer, product_name: form.product_name || null, coupon_id: form.coupon_id || null, plan_id: plan?.id || null }) });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error);
-      toast.show(`${form.cand.nickname} 님에게 제안을 보냈어요. 답은 협업 관리에서 볼 수 있어요`);
+      toast.show(`${form.cand.nickname} 님에게 제안을 보냈어요. 답은 마케팅 > 협업에서 볼 수 있어요`);
       setForm(null);
       load();
     } catch (e) {
@@ -359,7 +347,7 @@ function PeopleStep({ qs, seg, plan, onBack, onSent }: { qs: string; seg: Demand
 }
 
 /** 협업 관리 — 보낸 제안·협업 판매를 기획별로. 기획 상태 바꾸기 · 제안 거둬들이기 · 협업 끝내기 */
-function Manage({ qs }: { qs: string }) {
+export function CollabManage({ qs, toFlow }: { qs: string; toFlow: () => void }) {
   const toast = useToast();
   const plans = usePlans(qs);
   const [state, setState] = useState<{ status: "loading" | "error" | "done"; collabs?: Collab[]; readOnly?: boolean; ready?: boolean; error?: string }>({ status: "loading" });
@@ -414,7 +402,8 @@ function Manage({ qs }: { qs: string }) {
     redeemed: live.reduce((s, c) => s + c.redeemed, 0), sales: live.reduce((s, c) => s + c.sales, 0),
   };
   if (collabs.length === 0 && plans.plans.length === 0) return (
-    <EmptyState title="아직 기획도 보낸 제안도 없어요" description="수요 → 기획 → 추천에서 빈틈을 골라 기획을 저장하고 어울리는 사람에게 제안해 보세요" />
+    <EmptyState title="아직 기획도 보낸 제안도 없어요" description="분석 > 수요 → 기획에서 빈틈을 골라 기획을 저장하고 어울리는 사람에게 제안해 보세요"
+      action={<Button size="sm" variant="secondary" onClick={toFlow}>수요 → 기획 열기</Button>} />
   );
   // 기획별로 묶고, 기획 없이 보낸 제안은 맨 뒤 한 묶음
   const groups: { plan: Plan | null; items: Collab[] }[] = [
@@ -432,7 +421,10 @@ function Manage({ qs }: { qs: string }) {
           <Card><Stat label="답 기다림" value={n(total.waiting)} unit="건" /></Card>
           <Card><Stat label="보낸 제안" value={n(total.sent)} unit="건" /></Card>
         </div>
-        <HowCounted className="mt-3">협업 판매는 협업 코드로 받은 쿠폰을 쓴 주문의 상품 금액이에요(취소 뺌). 받기 전·거절한 제안은 세지 않아요</HowCounted>
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+          <HowCounted>협업 판매는 협업 코드로 받은 쿠폰을 쓴 주문의 상품 금액이에요(취소 뺌). 받기 전·거절한 제안은 세지 않아요</HowCounted>
+          <TextButton onClick={toFlow}>기획하고 어울리는 사람 찾기</TextButton>
+        </div>
       </section>
 
       {groups.map((g) => {
@@ -447,7 +439,7 @@ function Manage({ qs }: { qs: string }) {
                 </Select>
               )) : undefined} />
             {g.plan?.note && <p className="text-label text-ink-2 mb-2">{g.plan.note}</p>}
-            {g.items.length === 0 ? <p className="text-label text-ink-2">아직 이 기획으로 보낸 제안이 없어요. 수요 → 기획 → 추천의 진행 중인 기획에서 이어서 찾을 수 있어요</p> : (
+            {g.items.length === 0 ? <p className="text-label text-ink-2">아직 이 기획으로 보낸 제안이 없어요. 분석 &gt; 수요 → 기획의 진행 중인 기획에서 이어서 찾을 수 있어요</p> : (
               <Card padding="none">
                 <ul className="divide-y divide-line">
                   {g.items.map((c) => (

@@ -7,7 +7,6 @@ import {
 } from "@/components/ui";
 import { checkClaimsWith, type ClaimTerm } from "@/lib/partner/claims";
 import { fitsWeekly } from "@/lib/partner/quota";
-import type { Tab } from "@/lib/partner/tabs";
 
 type Behavior = "viewed" | "saved" | "clicked" | "never_seen";
 type Conditions = { behavior: { action: Behavior; days: number } | null; goals: string[]; needs: string[] };
@@ -53,7 +52,7 @@ const fmtWhen = (iso: string) => new Date(iso).toLocaleString("ko-KR", { month: 
  * 고객층 — 조건 고르기 → 메시지 → 확인·예약. 업체는 조건·인원·합계만 본다. 사람을 고르고 보내는 일은 케어푸드가 한다.
  * 발송비는 검수 요청 때 충전금에서 잡아 두고, 보낸 수만큼 확정한다. (v3 7.5·8장)
  */
-export function Segments({ qs, go, prefill }: { qs: string; go: (tab: Tab) => void; prefill?: { need?: string; goal?: string } | null }) {
+export function Segments({ qs, onTopup, prefill }: { qs: string; onTopup: () => void; prefill?: { need?: string; goal?: string } | null }) {
   const toast = useToast();
   const [now] = useState(() => Date.now());
   const [state, setState] = useState<{ status: "loading" | "error" | "done"; data?: Data; error?: string }>({ status: "loading" });
@@ -115,7 +114,7 @@ export function Segments({ qs, go, prefill }: { qs: string; go: (tab: Tab) => vo
             {d.pending_topup > 0 && <> · 확인 중 <span className="num">{won(d.pending_topup)}</span></>}</span>
           <span className="text-label text-ink-2">건당 발송비 {d.unit_price === null ? <span className="text-ink">정해지지 않았어요</span> : <span className="num font-bold text-ink">{won(d.unit_price)}</span>}</span>
           <span className="text-label text-ink-2">발송 7일에 {d.weekly_limit}번까지 · 예약 <span className="num text-ink">{upcoming}</span>건</span>
-          <Button size="sm" variant="ghost" className="ml-auto" onClick={() => go("commission")}>충전하기</Button>
+          <Button size="sm" variant="ghost" className="ml-auto" onClick={onTopup}>충전하기</Button>
         </Card>
       </div>
 
@@ -201,7 +200,7 @@ function CampaignCard({ c, readOnly, onCancel }: { c: Campaign; readOnly: boolea
           <Metric label="연 사람" value={r?.opened !== null && r?.opened !== undefined ? `${n(r.opened)}명` : "—"} />
           <Metric label="구매 링크 클릭률" value={r?.click_rate !== null && r?.click_rate !== undefined ? `${r.click_rate}%` : "—"}
             sub={r?.holdout_click_rate !== null && r?.holdout_click_rate !== undefined ? `안 받은 사람 ${r.holdout_click_rate}%` : "비교 묶음이 10명 미만"} />
-          <Metric label="확정 구매" value={r?.purchases !== null && r?.purchases !== undefined ? `${n(r.purchases)}건` : "—"}
+          <Metric label="링크 판매(보고)" value={r?.purchases !== null && r?.purchases !== undefined ? `${n(r.purchases)}건` : "—"}
             sub={r?.purchase_amount ? won(r.purchase_amount) : undefined} />
           <p className="col-span-2 sm:col-span-4 text-caption text-ink-2">
             발송비 <span className="num">{won(c.charged_amount || 0)}</span> ({n(c.sent_count || 0)}명 × {won(c.unit_price)}) · {r?.final ? "7일 셈이 끝났어요" : "보낸 뒤 7일까지 숫자가 늘어요"}
@@ -436,7 +435,7 @@ function Composer({ qs, data, initial, segmentId, post, onClose, onDone }: {
           {data.unit_price === null && <Notice tone="caution">건당 발송비가 정해지면 예약할 수 있어요. 케어푸드에 문의해 주세요</Notice>}
           {(lacking || short) && (
             <Notice tone="caution" title="충전금이 모자라요">
-              <span className="num">{won(short ?? (cost! - data.balance))}</span> 더 있어야 해요. 정산 탭에서 충전을 신청하면 입금을 확인한 뒤 반영해요
+              <span className="num">{won(short ?? (cost! - data.balance))}</span> 더 있어야 해요. 아래 광고 충전금에서 충전을 신청하면 입금을 확인한 뒤 반영해요
             </Notice>
           )}
           {full && <Notice tone="caution">고른 날 앞뒤 7일 안에 이미 {data.weekly_limit}번 보내요. 발송은 7일에 {data.weekly_limit}번까지라 다른 날을 골라 주세요</Notice>}
