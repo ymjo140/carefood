@@ -10,6 +10,7 @@ import { runDueCampaigns } from "@/lib/partner/crm";
 import { runConsentNotices } from "@/lib/consent-notice";
 import { runFlows } from "@/lib/partner/flows";
 import { notifyPartners } from "@/lib/partner/notify";
+import { autoDeliver } from "@/lib/partner/tracking";
 import { autoCloseLastMonth } from "@/lib/partner/settlement";
 import { AUTO_CONFIRM_DAYS, expireUnpaidOrders } from "@/lib/orders";
 import { asResult, selectAll, selectAllIn } from "@/lib/supabase/all";
@@ -84,6 +85,11 @@ export async function POST(req: NextRequest) {
     // 결제하지 않고 60분이 지난 주문 닫기 — 재고·쿠폰을 돌려준다
     try { await expireUnpaidOrders(sbAds); }
     catch (e) { console.error("결제하지 않은 주문을 닫지 못했어요:", (e as Error).message); }
+    // 택배 조회로 배송 완료 찍기 — 업체가 누르지 않아도 구매확정 8일이 시작되게 (lib/partner/tracking.ts, 키가 없으면 건너뜀)
+    try {
+      const t = await autoDeliver(sbAds);
+      if (t.failed) console.error(`택배 조회 ${t.failed}건 실패 (${t.checked}건 조회, ${t.delivered}건 배송 완료)`);
+    } catch (e) { console.error("택배 조회를 돌리지 못했어요:", (e as Error).message); }
     // 배송 완료 8일이 지난 앱 주문 구매확정 — 정산 계산은 돌기 전에도 같은 규칙으로 본다(lib/partner/payout.ts)
     try {
       const { error } = await sbAds.rpc("order_auto_confirm", { p_days: AUTO_CONFIRM_DAYS });

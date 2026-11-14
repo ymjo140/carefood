@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Badge, Button, Card, CardActions, ChoiceList, ConfirmSheet, EmptyState, Field, Input, LinkButton, Price, Sheet, SkeletonList, Tabs, Textarea, timeAgo, useToast } from "@/components/ui";
-import { AUTO_CONFIRM_DAYS, BUYER_LABEL, CARRIERS, RETURN_REASONS, RETURN_REASON_LABEL, RETURN_TYPE_LABEL, returnOpen, type ReturnReason, type ReturnType } from "@/lib/order-status";
+import { AUTO_CONFIRM_DAYS, BUYER_LABEL, CARRIERS, TRACK_LABEL, RETURN_REASONS, RETURN_REASON_LABEL, RETURN_TYPE_LABEL, returnOpen, type ReturnReason, type ReturnType } from "@/lib/order-status";
 import type { BuyerOrder, OrderGroup } from "@/lib/orders";
 
 const DAY: Record<string, string> = { mon: "월", tue: "화", wed: "수", thu: "목", fri: "금", sat: "토", sun: "일" };
@@ -132,6 +132,7 @@ export function OrderList() {
                     {g.carrier && (g.status === "shipped" || g.status === "delivered") && (
                       <p className="text-label text-ink mt-1.5">
                         {CARRIERS[g.carrier] || g.carrier}{g.tracking_number && <> · 송장 <span className="num select-all">{g.tracking_number}</span></>}
+                        {g.status === "shipped" && g.tracking_status && g.tracking_status !== "UNKNOWN" && <span className="text-ink-2"> · {TRACK_LABEL[g.tracking_status] || g.tracking_status}</span>}
                       </p>
                     )}
                     {g.status === "canceled" && g.return?.status === "returned" ? (

@@ -3,6 +3,7 @@ import { connection } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { canAct, getPartnerContext, readOnly } from "@/lib/partner/auth";
 import { countPartnerOrders, listPartnerOrders, updateFulfilment } from "@/lib/partner/orders";
+import { trackingReady } from "@/lib/partner/tracking";
 
 /**
  * GET /api/partner/orders?status=new|accepted|shipped|done[&page=0][&as=slug] — 앱에서 들어온 주문 (결제가 끝난 것만)
@@ -21,7 +22,7 @@ export async function GET(req: NextRequest) {
       listPartnerOrders(sb, ctx.partner.id, { status, page }),
       countPartnerOrders(sb, ctx.partner.id),
     ]);
-    return NextResponse.json({ orders, counts, page, has_more: status === "done" && orders.length === 50, read_only: !canAct(ctx) });
+    return NextResponse.json({ orders, counts, page, has_more: status === "done" && orders.length === 50, read_only: !canAct(ctx), tracking_auto: trackingReady() });
   }
   catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: 500 }); }
 }

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Badge, Button, Card, CardActions, Checkbox, EmptyState, Field, Input, Notice, Select, SectionHeader, Sheet, SkeletonList, Tabs, Textarea, UnitInput, FilePick, timeAgo, useToast } from "@/components/ui";
-import { CARRIERS, FULFIL_LABEL, RETURN_REASON_LABEL, RETURN_TYPE_LABEL, deliverableAt, formatPhone, returnOpen, type Fulfil } from "@/lib/order-status";
+import { CARRIERS, FULFIL_LABEL, RETURN_REASON_LABEL, RETURN_TYPE_LABEL, TRACK_LABEL, deliverableAt, formatPhone, returnOpen, type Fulfil } from "@/lib/order-status";
 import type { PartnerOrder } from "@/lib/partner/orders";
 import { downloadFile } from "@/lib/download";
 
@@ -22,7 +22,7 @@ const TONE: Record<Fulfil, "neutral" | "positive" | "danger" | "brand"> = { new:
 export function Orders({ qs, initialFilter }: { qs: string; initialFilter?: OrderFilter }) {
   const toast = useToast();
   const [filter, setFilter] = useState<Filter>(initialFilter || "new");
-  const [state, setState] = useState<{ status: "loading" | "error" | "done"; data: PartnerOrder[]; counts?: Counts; readOnly?: boolean; hasMore?: boolean; page?: number; error?: string }>({ status: "loading", data: [] });
+  const [state, setState] = useState<{ status: "loading" | "error" | "done"; data: PartnerOrder[]; counts?: Counts; readOnly?: boolean; trackingAuto?: boolean; hasMore?: boolean; page?: number; error?: string }>({ status: "loading", data: [] });
   const [more, setMore] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [shipping, setShipping] = useState<PartnerOrder | null>(null);
@@ -48,7 +48,7 @@ export function Orders({ qs, initialFilter }: { qs: string; initialFilter?: Orde
       const d = await r.json();
       if (!r.ok) throw new Error(d.error);
       if (my !== seq.current) return;
-      setState((s) => ({ status: "done", data: page > 0 ? [...s.data, ...d.orders] : d.orders, counts: d.counts, readOnly: d.read_only, hasMore: d.has_more, page }));
+      setState((s) => ({ status: "done", data: page > 0 ? [...s.data, ...d.orders] : d.orders, counts: d.counts, readOnly: d.read_only, trackingAuto: !!d.tracking_auto, hasMore: d.has_more, page }));
       if (page === 0) setSel((cur) => { const ids = new Set((d.orders as PartnerOrder[]).map((o) => o.order_id)); return new Set([...cur].filter((id) => ids.has(id))); }); // 사라진 주문은 고른 것에서 뺀다
     } catch (e) { if (my === seq.current) setState((s) => page > 0 ? s : { status: "error", data: [], error: (e as Error).message || "불러오지 못했어요" }); if (page > 0) toast.show("더 불러오지 못했어요. 다시 시도해 주세요", { tone: "danger" }); }
     finally { if (my === seq.current) setMore(false); }
@@ -152,6 +152,12 @@ export function Orders({ qs, initialFilter }: { qs: string; initialFilter?: Orde
       {(c?.return_requests || 0) > 0 && filter !== "returns" && (
         <p className="text-label text-ink mb-3">답하지 않은 반품·교환 요청이 <span className="num font-bold">{c!.return_requests}</span>건 있어요. &lsquo;반품·교환&rsquo;에서 확인해 주세요</p>
       )}
+      {filter === "shipped" && state.status === "done" && (
+        <p className="text-caption text-ink-2 mb-3">
+          {state.trackingAuto ? "택배 조회로 배송 완료가 확인되면 저절로 바뀌어요(3시간마다). 직접 배송은 배송 완료를 눌러 주세요"
+            : "배송이 끝나면 배송 완료를 눌러 주세요. 그날부터 8일 뒤 구매확정돼 정산돼요"}
+        </p>
+      )}
       {c && (c.late > 0 || c.deliver_pending > 0) && (
         <p className="text-label text-ink mb-3">
           {c.late > 0 && <>결제하고 하루가 지나도록 보내지 않은 주문 <span className="num font-bold">{c.late}</span>건{c.deliver_pending > 0 && " · "}</>}
@@ -251,7 +257,11 @@ export function Orders({ qs, initialFilter }: { qs: string; initialFilter?: Orde
                 {o.carrier && (
                   <p className="text-label text-ink mt-2">
                     <span className="text-ink-2">발송 </span>{CARRIERS[o.carrier] || o.carrier}{o.tracking_number && <> · <span className="num">{o.tracking_number}</span></>}
+                    {o.status === "shipped" && o.tracking_status && <span className="text-ink-2"> · 택배 조회 {TRACK_LABEL[o.tracking_status] || o.tracking_status}{o.tracking_checked_at && <> ({timeAgo(o.tracking_checked_at)})</>}</span>}
                   </p>
+                )}
+                {o.status === "delivered" && o.delivered_by && o.delivered_by !== "partner" && (
+                  <p className="text-caption text-ink-2 mt-1">{o.delivered_by === "tracking" ? "택배 조회로 배송 완료를 찍었어요" : "주문자가 받았다고 확정했어요"}</p>
                 )}
                 {o.cancel_reason && <p className="text-label text-ink mt-2"><span className="text-ink-2">{o.canceled_by === "buyer" ? "주문자가 취소" : o.canceled_by === "admin" ? "오늘끼록이 취소" : "취소 이유"} </span>{o.cancel_reason}</p>}
 
