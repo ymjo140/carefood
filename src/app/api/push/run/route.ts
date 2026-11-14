@@ -17,6 +17,8 @@ import { asResult, selectAll, selectAllIn } from "@/lib/supabase/all";
 import { BRAND } from "@/lib/brand";
 import { loadGroupAlerts } from "@/lib/challenge-alerts";
 import { loadFamilyAlerts } from "@/lib/family-alerts";
+import { MASCOT_PUSH_HOUR, planMascotPush } from "@/lib/mascot-push";
+import type { MascotKind } from "@/components/ui/Mascot";
 
 /**
  * POST /api/push/run — 보낼 때가 된 알림을 보낸다. Supabase 예약 작업(pg_cron + pg_net, 30분마다)이 부른다.
@@ -31,6 +33,7 @@ import { loadFamilyAlerts } from "@/lib/family-alerts";
  *     (최근 14일 기록이 없으면 7일 안에 저장한 식단일 때만)
  *     최근 14일 기록이 없는 사람은 저녁 알림만, 일주일에 한 번
  *   - 챌린지 20~22시: 하고 있는 챌린지가 있는데 오늘 기록이 하나도 없으면 (그날 저녁 알림 대신)
+ *   - 캐릭터 삐짐(광고): 낮 12시대, 광고 동의자에게만 '(광고)'를 붙여 — 어제 처음 빠졌을 때 · 사흘째 (lib/mascot-push.ts)
  *   - 가족: 약 먹을 시간(정한 시각부터 1시간 안, 체크 전) · 저녁 8시대 가족의 오늘 기록이 없으면 보는 사람에게만 (lib/family-alerts.ts)
  *   - 같이 하기: 묶음 전원이 해낸 날 '다 같이 해냈어요' · 저녁 7시대 '오늘 나만 남았어요' (lib/challenge-alerts.ts)
  *   - 주간 요약 월요일 9~12시: 지난주(월~일)에 하루라도 기록했으면 기록한 날 수 · 하루 평균
@@ -60,7 +63,7 @@ async function authorized(req: NextRequest): Promise<boolean> {
   return !!(await getAdminUser());
 }
 
-type Prefs = { user_id: string; meals: boolean; weekly: boolean; community: boolean; challenge: boolean; community_pushed_at: string | null };
+type Prefs = { user_id: string; meals: boolean; weekly: boolean; community: boolean; challenge: boolean; community_pushed_at: string | null; mascot?: string; mascot_sulk?: boolean; simple_mode?: boolean };
 type Diary = { user_id: string; date: string; meal_type: string | null; calories: number | null; protein_g: number | null; sodium_mg: number | null };
 
 /** 끼니 알림 시간대 (한국 시간) */
@@ -143,7 +146,7 @@ export async function POST(req: NextRequest) {
   const lastMonday = addDays(mondayOf(today), -7);
   const [pRes, dRes, lRes, mRes, planRes] = await Promise.all([
     // 사람이 많으면 주소가 길어지고 1,000줄에서 잘린다 — 200명씩 나눠 끝까지 받는다 (lib/supabase/all.ts)
-    asResult(selectAllIn(users, 200, (p) => sb.from("notification_prefs").select("user_id, meals, weekly, community, challenge, community_pushed_at").in("user_id", p), "user_id")),
+    asResult(selectAllIn(users, 200, (p) => sb.from("notification_prefs").select("user_id, meals, weekly, community, challenge, community_pushed_at, mascot, mascot_sulk, simple_mode").in("user_id", p), "user_id")),
     asResult(selectAllIn(users, 200, (p) => sb.from("meal_diary").select("user_id, date, meal_type, calories, protein_g, sodium_mg").in("user_id", p).gte("date", addDays(today, -14)).lte("date", today), "id", 1_000_000)),
     asResult(selectAllIn(users, 200, (p) => sb.from("push_log").select("user_id, kind, key").in("user_id", p).gte("sent_at", new Date(Date.now() - 8 * 86400e3).toISOString()), ["user_id", "sent_at", "kind", "key"], 1_000_000)),
     asResult(selectAllIn(users, 200, (p) => sb.from("community_challenge_members").select("user_id, started_on, challenge_groups(start_on), community_challenges(title, days, is_active)").in("user_id", p), ["challenge_id", "user_id"])),
@@ -176,7 +179,7 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const counts: Record<string, number> = { meal: 0, challenge: 0, weekly: 0, community: 0, family: 0 };
+  const counts: Record<string, number> = { meal: 0, challenge: 0, weekly: 0, community: 0, family: 0, mascot: 0 };
   const send = async (user: string, kind: string, key: string, payload: PushPayload) => {
     if (logged.has(`${user}|${kind}|${key}`)) return false;
     if (dry) { counts[kind] += 1; return true; }
@@ -208,6 +211,20 @@ export async function POST(req: NextRequest) {
       await send(a.user, "family", a.key, a.payload);
     }
   } catch (e) { console.error("가족 알림을 만들지 못했어요:", (e as Error).message); }
+
+  // ── 캐릭터 삐짐 (광고 — 광고 동의자에게만, 낮 12시대) (lib/mascot-push.ts) ──
+  if (hour === MASCOT_PUSH_HOUR) {
+    try {
+      const want = users.filter((u) => { const p = prefsBy.get(u); return p?.mascot_sulk !== false && p?.simple_mode !== true && p?.mascot !== "none"; });
+      const ads = await selectAllIn<{ user_id: string }>(want, 200, (p) => sb.from("marketing_consents").select("user_id").in("user_id", p).eq("ads", true), "user_id");
+      for (const { user_id: u } of ads) {
+        const rows = diaryBy.get(u) || [];
+        const kind = (prefsBy.get(u)?.mascot || "kkirok") as MascotKind;
+        const plan = planMascotPush({ kind, days: new Set(rows.map((r) => r.date)), today, ever: rows.length > 0 });
+        if (plan) await send(u, "mascot", plan.key, plan.payload);
+      }
+    } catch (e) { console.error("캐릭터 알림을 만들지 못했어요:", (e as Error).message); }
+  }
 
   for (const user of users) {
     const prefs = prefsBy.get(user) || { user_id: user, meals: true, weekly: true, community: true, challenge: true, community_pushed_at: null };

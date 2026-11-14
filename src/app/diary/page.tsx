@@ -12,6 +12,7 @@ import { PLAN_DAYS, cellFoods, planMealKey, readDraftGrid, weekdayKey, type Plan
 import { NextMeal, pickNextMeal, type NextCandidate } from "./NextMeal";
 import DayCardPrompt from "@/components/community/DayCardPrompt";
 import PushPrompt from "@/components/PushPrompt";
+import { MascotBanner } from "@/components/community/MascotBanner";
 
 /* ── 타입 ── */
 type DiaryEntry = {
@@ -1029,6 +1030,9 @@ export default function DiaryPage() {
         <EmptyState className="mb-5" title="식단 기록을 불러오지 못했어요" description="아래 숫자는 비어 있는 상태예요"
           action={<Button size="sm" variant="secondary" icon="refresh" onClick={fetchDiary}>다시 불러오기</Button>} />
       )}
+
+      {/* 내 캐릭터 — 오늘 기록이 바뀌면 표정도 다시 (캐릭터 없이를 골랐으면 그리지 않는다) */}
+      {isToday && <MascotBanner reloadKey={data?.mealCount ?? -1} />}
 
       {/* ━━ 주간 캘린더 스트립 ━━ */}
       <div className="flex items-center gap-1 mb-5">

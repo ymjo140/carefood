@@ -78,7 +78,7 @@ export function CharacterSettings() {
       <section className="flex flex-col" aria-labelledby="talk-h">
         <h2 id="talk-h" className="text-body font-bold text-ink mb-1">캐릭터가 말 거는 방식</h2>
         <Switch checked={draft.sulk} onChange={(v) => setDraft({ ...draft, sulk: v })} label="기록 안 한 날 삐지기"
-          description="어제 기록이 없으면 삐지고, 한 끼 적으면 바로 풀려요 · 앱 안에서만" />
+          description="어제 기록이 없으면 삐지고, 한 끼 적으면 바로 풀려요 · 광고 알림에 동의했으면 낮 12시에 한 번 알려요" />
         <Switch checked={draft.moods} onChange={(v) => setDraft({ ...draft, moods: v })} label="배불러요·걱정돼요 표정"
           description="끄면 기록했어요·기다려요 표정만 나와요 · 몸 크기는 바뀌지 않아요" />
         <Switch checked={draft.simple} onChange={(v) => setDraft({ ...draft, simple: v, kind: v ? "none" : draft.kind === "none" ? "kkirok" : draft.kind })} label="간단 모드"

@@ -1,6 +1,7 @@
 /** 캐릭터 표정 (lib/mascot.ts) — 몸은 그대로 · 적게 먹어도 칭찬 안 함 · 삐짐은 기록 안 한 날만 · 돌아오면 반가워함 */
 import { describe, expect, it } from "vitest";
 import { cleanPrefs, lineOf, moodOf, type MascotFacts } from "@/lib/mascot";
+import { planMascotPush } from "@/lib/mascot-push";
 
 const base: MascotFacts = { todayRecords: 0, todayMeals: 0, todayKcal: 0, goalKcal: 2000, past: [{ records: 2, kcal: 1800 }, { records: 3, kcal: 1900 }, { records: 3, kcal: 2000 }], ever: true, doneToday: false, togetherToday: false, streak: 3 };
 const on = { sulk: true, moods: true };
@@ -42,5 +43,25 @@ describe("표정 고르기", () => {
   it("설정 정리 — 모르는 값은 그대로 둔다", () => {
     expect(cleanPrefs({ kind: "dog", sulk: "yes" })).toEqual({ kind: "kkirok", sulk: true, moods: true, simple: false });
     expect(cleanPrefs({ kind: "kkinyang", simple: true }).kind).toBe("kkinyang");
+  });
+});
+
+
+describe("캐릭터 삐짐 알림 (광고)", () => {
+  const T = "2026-11-20";
+  const set = (...d: string[]) => new Set(d);
+  it("어제 처음 빠졌을 때 한 번, (광고)를 붙여", () => {
+    const p = planMascotPush({ kind: "rami", days: set("2026-11-18"), today: T, ever: true });
+    expect(p?.key).toBe("sulk:2026-11-19");
+    expect(p?.payload.title.startsWith("(광고)")).toBe(true);
+    expect(p?.payload.body).toContain("알림 설정");
+  });
+  it("사흘째에 한 번 더, 그 사이에는 없음", () => {
+    expect(planMascotPush({ kind: "kkirok", days: set("2026-11-17"), today: T, ever: true })).toBeNull(); // 이틀째
+    expect(planMascotPush({ kind: "kkirok", days: set("2026-11-16"), today: T, ever: true })?.key).toBe("away:2026-11-17");
+  });
+  it("오늘 기록했거나 처음 온 사람은 보내지 않음", () => {
+    expect(planMascotPush({ kind: "kkinyang", days: set(T, "2026-11-18"), today: T, ever: true })).toBeNull();
+    expect(planMascotPush({ kind: "kkinyang", days: set(), today: T, ever: false })).toBeNull();
   });
 });

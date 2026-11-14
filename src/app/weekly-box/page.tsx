@@ -1129,8 +1129,8 @@ export default function WeeklyBoxPage() {
                         <h3 className="text-body font-bold text-ink flex-1 min-w-0 line-clamp-1">{p.title}</h3>
                       )}
                       {!isEditing && (
-                        <Badge tone={p.source === "community_copy" ? "brand" : "neutral"}>
-                          {p.source === "community_copy" ? "따라하기" : single ? "하루" : `${p.filled_days?.length || 0}일`}
+                        <Badge tone={p.source === "community_copy" || p.source === "family" ? "brand" : "neutral"}>
+                          {p.source === "community_copy" ? "따라하기" : p.source === "family" ? "가족이 보냄" : single ? "하루" : `${p.filled_days?.length || 0}일`}
                         </Badge>
                       )}
                     </div>
@@ -1148,7 +1148,7 @@ export default function WeeklyBoxPage() {
                     {single
                       ? <Button size="sm" variant="ghost" icon="calendar" onClick={() => setPlaceTarget(p)}>요일에 넣기</Button>
                       : <Button size="sm" variant="ghost" icon="refresh" onClick={() => loadPlan(p.id)}>불러오기</Button>}
-                    {p.source !== "community_copy" && (
+                    {p.source !== "community_copy" && p.source !== "family" && (
                       <LinkButton size="sm" variant="ghost" icon="share" href={`/community?compose=plan&plan=${p.id}`}>나누기</LinkButton>
                     )}
                     <Button size="sm" variant="ghost" icon="trash" className="ml-auto" onClick={() => setDeleteTarget(p)}>삭제하기</Button>

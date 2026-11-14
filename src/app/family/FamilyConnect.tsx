@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
-  Button, Card, Checkbox, Chip, ChipRow, ConfirmSheet, EmptyState, Field, IconButton, Input, ListRow, SectionHeader, Sheet, Skeleton,
+  Button, Card, Checkbox, Chip, ChipRow, ChoiceList, ConfirmSheet, EmptyState, Field, IconButton, Input, LinkButton, ListRow, SectionHeader, Sheet, Skeleton,
   SkeletonList, Stat, Switch, TextButton, useToast,
 } from "@/components/ui";
 
@@ -198,6 +198,7 @@ function FamilyToday({ link, onEnd }: { link: Links["watching"][number]; onEnd: 
   const [state, setState] = useState<{ status: "loading" | "error" | "done"; today: Today | null }>({ status: "loading", today: null });
   const [attempt, setAttempt] = useState(0);
   const [alert, setAlert] = useState(link.alert_evening);
+  const [sending, setSending] = useState(false);
   const seq = useRef(0);
 
   useEffect(() => {
@@ -271,6 +272,12 @@ function FamilyToday({ link, onEnd }: { link: Links["watching"][number]; onEnd: 
           <p className="text-label text-ink num">열량 {won(t.numbers.kcal)}kcal · 단백질 {won(t.numbers.protein_g)}g · 나트륨 {won(t.numbers.sodium_mg)}mg</p>
         </section>
       )}
+
+      <div className="flex flex-col gap-1">
+        <Button variant="secondary" icon="send" onClick={() => setSending(true)}>식단 보내기</Button>
+        <p className="text-caption text-ink-2">내 식단 리스트의 식단을 {link.label} 식단 리스트에 담아 드려요</p>
+      </div>
+      <SendPlanSheet open={sending} onClose={() => setSending(false)} linkId={link.id} label={link.label} />
 
       {t.meals && (
         <Switch checked={alert} onChange={toggleAlert} label="저녁 8시까지 기록이 없으면 알려 주기" description={`나에게만 와요 · ${link.label} 쪽에는 재촉 알림이 가지 않아요`} />
@@ -351,5 +358,55 @@ function MedChecks() {
         </div>
       </Sheet>
     </section>
+  );
+}
+
+/** 식단 보내기 — 내 식단 리스트에서 하나 골라 가족의 식단 리스트에 담는다 */
+function SendPlanSheet({ open, onClose, linkId, label }: { open: boolean; onClose: () => void; linkId: string; label: string }) {
+  const toast = useToast();
+  const [state, setState] = useState<{ status: "loading" | "error" | "done"; plans: { id: string; title: string; filled_days?: string[] }[] }>({ status: "loading", plans: [] });
+  const [attempt, setAttempt] = useState(0);
+  const [pick, setPick] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    let alive = true;
+    fetch("/api/meal-plans")
+      .then(async (r) => { const d = await r.json(); if (!r.ok) throw new Error(d.error); if (alive) setState({ status: "done", plans: d.plans || [] }); })
+      .catch(() => { if (alive) setState({ status: "error", plans: [] }); });
+    return () => { alive = false; };
+  }, [open, attempt]);
+
+  const send = async () => {
+    if (!pick) return;
+    setBusy(true);
+    try {
+      const r = await fetch(`/api/family/links/${linkId}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ plan_id: pick }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || "");
+      toast.show(`${label} 식단 리스트에 담았어요`);
+      setPick(null);
+      onClose();
+    } catch (e) {
+      toast.show((e as Error).message || "보내지 못했어요. 다시 시도해 주세요", { tone: "danger" });
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <Sheet open={open} onClose={onClose} title="식단 보내기" size="sm" description={`고른 식단이 ${label} 식단 리스트에 '가족이 보냄'으로 담겨요`}
+      footer={state.status === "done" && state.plans.length > 0 ? <Button block loading={busy} disabled={!pick} onClick={send}>보내기</Button> : undefined}>
+      {state.status === "loading" ? <SkeletonList rows={3} thumb={false} />
+        : state.status === "error" ? (
+          <EmptyState title="식단 리스트를 불러오지 못했어요" description="연결이 잠깐 끊겼을 수 있어요"
+            action={<Button size="sm" variant="secondary" icon="refresh" onClick={() => { setState({ status: "loading", plans: [] }); setAttempt((n) => n + 1); }}>다시 불러오기</Button>} />
+        ) : state.plans.length === 0 ? (
+          <EmptyState title="보낼 식단이 없어요" description="식단 리스트에서 식단을 먼저 짜 주세요"
+            action={<LinkButton size="sm" variant="secondary" href="/weekly-box">식단 짜기</LinkButton>} />
+        ) : (
+          <ChoiceList label="보낼 식단" value={pick} onChange={setPick}
+            options={state.plans.map((p) => ({ value: p.id, label: <span className="flex flex-col"><span className="text-body text-ink">{p.title}</span><span className="text-caption text-ink-2">{p.filled_days?.length ? `${p.filled_days.length}일 식단` : "식단"}</span></span> }))} />
+        )}
+    </Sheet>
   );
 }
