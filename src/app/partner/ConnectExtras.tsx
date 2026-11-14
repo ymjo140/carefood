@@ -36,7 +36,7 @@ const API_RESPONSE = `{
 
 const PRICE_EXAMPLE = `curl -X PATCH "${BASE}/products/EX-001/offer" \\
   -H "Authorization: Bearer cf_live_…" -H "Content-Type: application/json" \\
-  -d '{"price": 5600, "status": "on_sale"}'`;
+  -d '{"price": 5600, "status": "on_sale", "stock": 120}'`;
 
 /**
  * 예시로 확인하기 — 예시 엑셀·API 요청 예시, 테스트 업체는 예시로 채워 보기·지우기 (v3 10.6)

@@ -17,8 +17,11 @@ type Data = {
   /** 업체가 보고한 구매확정 수 — 보고가 한 번도 없으면 null */
   purchases?: number | null;
   period?: Period; from?: string; to?: string; as_of?: string;
-  prev?: { from: string; to: string; totals: Totals | null; purchases: number | null };
+  prev?: { from: string; to: string; totals: Totals | null; purchases: number | null; sales?: SalesTotals };
+  sales?: { rows: SalesRow[]; totals: SalesTotals };
 };
+type SalesRow = { sku: string; name: string; quantity: number; revenue: number; buyers: number; repeat_buyers: number; repeat_rate: number | null; avg_gap: number | null; canceled: number; cancel_rate: number | null };
+type SalesTotals = { quantity: number; revenue: number; buyers: number; repeat_buyers: number };
 type Share = { key: string; label: string; share: number };
 type SortKey = "impressions" | "views" | "saves" | "clicks";
 /** 제품 표 정렬 — 위 퍼널의 단계와 같은 이름 (담기 = 식단 기록 + 식단 리스트 + 즐겨찾기) */
@@ -69,10 +72,14 @@ export function Report({ qs, onMakeSegment }: { qs: string; onMakeSegment?: (goa
         : state.status === "error" || !d ? (
           <EmptyState title="성과를 불러오지 못했어요" description={state.error}
             action={<Button size="sm" variant="secondary" icon="refresh" onClick={() => { setState({ status: "loading" }); load(period); }}>다시 불러오기</Button>} />
-        ) : !d.totals ? (
-          <EmptyState title="아직 반영된 제품이 없어요" description="제품이 반영되고 업체가 운영 중이 되면 여기 성과가 모여요" />
         ) : (
           <>
+          {d.sales && d.sales.rows.length > 0 && <AppSales sales={d.sales} prev={d.prev?.sales ?? null} />}
+          {!d.totals ? (
+          <EmptyState title="아직 반영된 제품이 없어요" description="제품이 반영되고 업체가 운영 중이 되면 여기 노출·조회·클릭 성과가 모여요" />
+        ) : (
+          <>
+            {d.sales && d.sales.rows.length > 0 && <h3 className="text-label font-bold text-ink mb-2">앱에서 본·누른 것</h3>}
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {([
                 ["impressions", "노출"], ["views", "상세 조회"], ["clicks", "구매 링크 클릭"], ["diary", "식단 기록"], ["plans", "식단 리스트 담기"], ["favorites", "즐겨찾기"],
@@ -195,6 +202,8 @@ export function Report({ qs, onMakeSegment }: { qs: string; onMakeSegment?: (goa
             )}
           </>
         )}
+          </>
+        )}
     </section>
   );
 }
@@ -226,6 +235,55 @@ function ShareList({ title, rows, hidden, note, compare, compareLabel }: {
         </ul>
       )}
       {hidden > 0 && <p className="text-caption text-ink-2 mt-2">10명 미만인 칸 <span className="num">{hidden}</span>개는 가렸어요</p>}
+    </div>
+  );
+}
+
+/** 앱 주문 판매 — 제품별 판매 수량·판매액·구매자·재주문율·재주문 간격·취소율 (같은 기간, 결제 시각 기준) */
+function AppSales({ sales, prev }: { sales: { rows: SalesRow[]; totals: SalesTotals }; prev: SalesTotals | null }) {
+  const t = sales.totals;
+  return (
+    <div className="mb-10">
+      <h3 className="text-label font-bold text-ink mb-2">앱 주문 판매</h3>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <Card><Stat label="판매액" value={`${n(t.revenue)}원`} /><Delta cur={t.revenue} prev={prev?.revenue} /></Card>
+        <Card><Stat label="판매 수량" value={n(t.quantity)} unit="개" /><Delta cur={t.quantity} prev={prev?.quantity} /></Card>
+        <Card><Stat label="구매자" value={n(t.buyers)} unit="명" /><Delta cur={t.buyers} prev={prev?.buyers} /></Card>
+        <Card><Stat label="다시 산 사람" value={t.buyers ? `${Math.round((t.repeat_buyers / t.buyers) * 100)}%` : "—"} /><span className="block text-caption text-ink-2 mt-1 num">{n(t.repeat_buyers)}명</span></Card>
+      </div>
+      <Card padding="none" className="mt-3 overflow-x-auto">
+        <table className="w-full text-label">
+          <thead>
+            <tr className="text-left text-ink-2 border-b border-line">
+              <th className="px-4 py-2 font-medium min-w-40">제품</th>
+              <th className="px-3 py-2 font-medium text-right whitespace-nowrap">수량</th>
+              <th className="px-3 py-2 font-medium text-right whitespace-nowrap">판매액</th>
+              <th className="px-3 py-2 font-medium text-right whitespace-nowrap">구매자</th>
+              <th className="px-3 py-2 font-medium text-right whitespace-nowrap">재주문율</th>
+              <th className="px-3 py-2 font-medium text-right whitespace-nowrap">재주문 간격</th>
+              <th className="px-4 py-2 font-medium text-right whitespace-nowrap">취소율</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-line">
+            {sales.rows.map((r) => (
+              <tr key={r.sku}>
+                <td className="px-4 py-2.5 min-w-40"><span className="text-ink">{r.name}</span><span className="block text-caption text-ink-2 num">{r.sku}</span></td>
+                <td className="px-3 py-2.5 num text-right whitespace-nowrap">{n(r.quantity)}</td>
+                <td className="px-3 py-2.5 num text-right whitespace-nowrap">{n(r.revenue)}원</td>
+                <td className="px-3 py-2.5 num text-right whitespace-nowrap">{n(r.buyers)}명</td>
+                <td className="px-3 py-2.5 num text-right whitespace-nowrap">{r.repeat_rate === null ? "—" : `${r.repeat_rate}%`}<span className="block text-caption text-ink-2">{n(r.repeat_buyers)}명</span></td>
+                <td className="px-3 py-2.5 num text-right whitespace-nowrap">{r.avg_gap === null ? "—" : `${r.avg_gap}일`}</td>
+                <td className="px-4 py-2.5 num text-right whitespace-nowrap">{r.cancel_rate === null ? "—" : `${r.cancel_rate}%`}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Card>
+      <HowCounted className="mt-3">
+        <p>앱에서 결제한 주문만 세요 (자사몰 주문은 들어가지 않아요). 결제한 때가 이 기간 안인 것, 취소된 줄은 판매에서 빼고 취소율에 넣어요.</p>
+        <p>재주문율은 이 기간에 그 제품을 산 사람 중, 기간 끝까지 그 제품을 서로 다른 주문으로 두 번 이상 산 사람의 비율이에요. 재주문 간격은 그 사람들의 주문 사이 날 수 평균이에요.</p>
+        <p>판매액은 쿠폰 할인 전 상품 금액이에요. 쿠폰 할인과 배송비는 정산에서 셈해요.</p>
+      </HowCounted>
     </div>
   );
 }

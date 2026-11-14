@@ -8,6 +8,7 @@ import type { Partner } from "./ingest";
 import { CARRIERS, FULFIL, FULFIL_LABEL, type Fulfil, type Shipping } from "@/lib/order-status";
 import { recomputeRefund, syncOrderStatus } from "@/lib/orders";
 import { loadBuyers } from "./customers";
+import { putBackRows } from "./stock";
 import { pushReady, sendToUser, type PushSub } from "@/lib/push";
 
 export { CARRIERS, FULFIL, FULFIL_LABEL, parseShipping, type Fulfil, type Shipping } from "@/lib/order-status";
@@ -124,8 +125,12 @@ export async function updateFulfilment(sb: Sb, partner: Pick<Partner, "id">, ord
     patch.canceled_at = now;
   }
 
-  const { error: uErr } = await sb.from("order_items").update(patch).eq("partner_id", partner.id).eq("order_id", orderId);
+  // 읽은 상태 그대로일 때만 바꾼다 — 그새 주문자가 취소했거나 다른 창에서 처리했으면 바꾸지 않는다
+  const { data: moved, error: uErr } = await sb.from("order_items").update(patch).eq("partner_id", partner.id).eq("order_id", orderId)
+    .eq("fulfil_status", from).select("partner_id, partner_sku, quantity");
   if (uErr) throw new Error(uErr.message);
+  if (!moved?.length) return { ok: false, code: "conflict", message: "그새 주문 상태가 바뀌었어요. 새로 불러와 주세요" };
+  if (to === "canceled") await putBackRows(sb, moved);
   await syncOrderStatus(sb, orderId);
   if (to === "canceled") await recomputeRefund(sb, orderId);
   if ((to === "shipped" && from !== "shipped") || to === "canceled") await notifyBuyer(sb, orderId, partner.id, to, current);
