@@ -13,6 +13,19 @@ export const CARRIERS: Record<string, string> = {
   cj: "CJ대한통운", hanjin: "한진택배", lotte: "롯데택배", epost: "우체국택배", logen: "로젠택배", direct: "직접 배송", other: "그 밖의 택배",
 };
 
+/** 구매확정 — 배송 완료 뒤 이 날수가 지나면 저절로 (lib/partner/payout.ts 와 같은 값) */
+export const AUTO_CONFIRM_DAYS = 8;
+
+/** 반품·교환 — 배송 완료 뒤 구매확정 전에 주문자가 업체 묶음 단위로 요청한다 (supabase/migrations/20261117d_order_returns.sql) */
+export type ReturnStatus = "requested" | "approved" | "rejected" | "returned" | "exchanged";
+export type ReturnType = "return" | "exchange";
+export const RETURN_REASONS = ["defect", "damaged", "wrong", "change_mind"] as const;
+export type ReturnReason = (typeof RETURN_REASONS)[number];
+export const RETURN_REASON_LABEL: Record<ReturnReason, string> = { defect: "상품에 문제가 있어요", damaged: "배송 중 망가졌어요", wrong: "다른 상품이 왔어요", change_mind: "마음이 바뀌었어요" };
+export const RETURN_TYPE_LABEL: Record<ReturnType, string> = { return: "반품", exchange: "교환" };
+/** 요청·회수 중 — 이 동안은 구매확정하지 않는다 */
+export const returnOpen = (s: string | null | undefined) => s === "requested" || s === "approved";
+
 export type Shipping = { name: string; phone: string; postal_code: string | null; address1: string; address2: string | null; note: string | null };
 
 /** 주문 화면·API 가 받는 배송 정보 검증 → 저장할 모양 */

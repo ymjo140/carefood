@@ -21,15 +21,16 @@ export function payDate(month: string) {
 }
 
 type Line = {
-  order_id: string; partner_sku: string | null; product_name: string; unit_price: number | null; quantity: number | null; fulfil_status: string;
+  order_id: string; partner_sku: string | null; return_status: string | null; product_name: string; unit_price: number | null; quantity: number | null; fulfil_status: string;
   delivered_at: string | null; confirmed_at: string | null; confirm_by: string | null;
   orders: { paid_at: string; shipping_fees: Record<string, number> | null; discount_fees: Record<string, number> | null };
 };
-const COLS = "order_id, partner_sku, product_name, unit_price, quantity, fulfil_status, delivered_at, confirmed_at, confirm_by, orders!inner(paid_at, shipping_fees, discount_fees)";
+const COLS = "order_id, partner_sku, return_status, product_name, unit_price, quantity, fulfil_status, delivered_at, confirmed_at, confirm_by, orders!inner(paid_at, shipping_fees, discount_fees)";
 
-/** 한 줄이 구매확정된 때 (아직이면 null) */
-export function effConfirm(l: Pick<Line, "fulfil_status" | "delivered_at" | "confirmed_at">, now = Date.now()): number | null {
+/** 한 줄이 구매확정된 때 (아직이면 null). 반품·교환 요청·회수 중이면 확정하지 않는다 */
+export function effConfirm(l: Pick<Line, "fulfil_status" | "delivered_at" | "confirmed_at"> & { return_status?: string | null }, now = Date.now()): number | null {
   if (l.fulfil_status !== "delivered") return null;
+  if (!l.confirmed_at && (l.return_status === "requested" || l.return_status === "approved")) return null;
   if (l.confirmed_at) return Date.parse(l.confirmed_at);
   if (!l.delivered_at) return null;
   const auto = Date.parse(l.delivered_at) + CONFIRM_DAYS * DAY;

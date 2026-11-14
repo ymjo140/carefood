@@ -117,7 +117,7 @@ function PartnerHome() {
       {views.length <= 1 && <div className="mb-2" />}
 
       {current === "home" && <Today qs={qs} go={go} />}
-      {current === "orders" && <Orders key={f || "new"} qs={qs} initialFilter={f && ["new", "accepted", "shipped", "done"].includes(f) ? f as OrderFilter : undefined} />}
+      {current === "orders" && <Orders key={f || "new"} qs={qs} initialFilter={f && ["new", "accepted", "shipped", "returns", "done"].includes(f) ? f as OrderFilter : undefined} />}
       {current === "products" && view === "stock" && <ProductBoard qs={qs} toOrders={() => go("orders")} />}
       {current === "products" && view === "info" && (
         <ProductInfo key={f || "all"} qs={qs} counts={counts} initialFilter={isProductFilter(f) ? f as ProductFilter : undefined}

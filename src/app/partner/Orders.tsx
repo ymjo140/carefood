@@ -1,15 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Badge, Button, Card, CardActions, Checkbox, EmptyState, Field, Input, Notice, Select, SectionHeader, Sheet, SkeletonList, Tabs, FilePick, timeAgo, useToast } from "@/components/ui";
-import { CARRIERS, FULFIL_LABEL, deliverableAt, formatPhone, type Fulfil } from "@/lib/order-status";
+import { Badge, Button, Card, CardActions, Checkbox, EmptyState, Field, Input, Notice, Select, SectionHeader, Sheet, SkeletonList, Tabs, Textarea, UnitInput, FilePick, timeAgo, useToast } from "@/components/ui";
+import { CARRIERS, FULFIL_LABEL, RETURN_REASON_LABEL, RETURN_TYPE_LABEL, deliverableAt, formatPhone, returnOpen, type Fulfil } from "@/lib/order-status";
 import type { PartnerOrder } from "@/lib/partner/orders";
 import { downloadFile } from "@/lib/download";
 
-export type OrderFilter = "new" | "accepted" | "shipped" | "done";
+export type OrderFilter = "new" | "accepted" | "shipped" | "returns" | "done";
 type Filter = OrderFilter;
 type TrackingResult = { rows: number; shipped: number; unchanged: number; skipped: number; errors: { row: number; order: string | null; message: string }[]; blocked: boolean };
-type Counts = { new: number; accepted: number; shipped: number; cancel_requests: number; late: number; deliver_pending: number };
+type Counts = { new: number; accepted: number; shipped: number; cancel_requests: number; late: number; deliver_pending: number; returns?: number; return_requests?: number };
+type RetAction = "reject" | "returned" | "exchanged";
 const DAY: Record<string, string> = { mon: "월", tue: "화", wed: "수", thu: "목", fri: "금", sat: "토", sun: "일" };
 const won = (n: number) => `${n.toLocaleString("ko-KR")}원`;
 const TONE: Record<Fulfil, "neutral" | "positive" | "danger" | "brand"> = { new: "brand", accepted: "neutral", shipped: "neutral", delivered: "positive", canceled: "danger" };
@@ -37,6 +38,8 @@ export function Orders({ qs, initialFilter }: { qs: string; initialFilter?: Orde
   const [file, setFile] = useState<File | null>(null);
   const [upBusy, setUpBusy] = useState(false);
   const [upResult, setUpResult] = useState<TrackingResult | null>(null);
+  const [ret, setRet] = useState<{ o: PartnerOrder; action: RetAction } | null>(null);
+  const [fee, setFee] = useState("");
 
   const load = useCallback(async (f: Filter, page = 0) => {
     const my = ++seq.current; // 상태를 빨리 바꾸면 마지막 응답만
@@ -113,6 +116,21 @@ export function Orders({ qs, initialFilter }: { qs: string; initialFilter?: Orde
     } finally { setBusy(null); }
   };
 
+  // 반품·교환 — 받아들이기·거절·반품 마치기·교환품 보내기
+  const sendReturn = async (o: PartnerOrder, body: Record<string, unknown>, doneMsg: string) => {
+    setBusy(o.order_id);
+    try {
+      const r = await fetch(`/api/partner/orders/return?${qs}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ order_id: o.order_id, ...body }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error);
+      toast.show(doneMsg);
+      setRet(null); setReason(""); setFee(""); setTracking("");
+      await load(filter);
+    } catch (e) {
+      toast.show(`처리하지 못했어요. ${(e as Error).message || "다시 시도해 주세요"}`, { tone: "danger" });
+    } finally { setBusy(null); }
+  };
+
   const c = state.counts;
   const requests = c?.cancel_requests || 0;
   const shown = state.data;
@@ -131,6 +149,9 @@ export function Orders({ qs, initialFilter }: { qs: string; initialFilter?: Orde
       {requests > 0 && filter !== "accepted" && (
         <p className="text-label text-ink mb-3">주문자가 취소를 요청한 주문이 <span className="num font-bold">{requests}</span>건 있어요. &lsquo;접수&rsquo;에서 확인해 주세요</p>
       )}
+      {(c?.return_requests || 0) > 0 && filter !== "returns" && (
+        <p className="text-label text-ink mb-3">답하지 않은 반품·교환 요청이 <span className="num font-bold">{c!.return_requests}</span>건 있어요. &lsquo;반품·교환&rsquo;에서 확인해 주세요</p>
+      )}
       {c && (c.late > 0 || c.deliver_pending > 0) && (
         <p className="text-label text-ink mb-3">
           {c.late > 0 && <>결제하고 하루가 지나도록 보내지 않은 주문 <span className="num font-bold">{c.late}</span>건{c.deliver_pending > 0 && " · "}</>}
@@ -140,15 +161,15 @@ export function Orders({ qs, initialFilter }: { qs: string; initialFilter?: Orde
       <Tabs variant="line" value={filter} onChange={pick} label="주문 상태" className="mb-3"
         items={[
           { value: "new", label: "새 주문", count: c?.new }, { value: "accepted", label: "접수", count: c?.accepted },
-          { value: "shipped", label: "발송", count: c?.shipped }, { value: "done", label: "끝난 주문" },
+          { value: "shipped", label: "발송", count: c?.shipped }, { value: "returns", label: "반품·교환", count: c?.returns || undefined }, { value: "done", label: "끝난 주문" },
         ]} />
       {state.status === "loading" ? <SkeletonList rows={3} thumb={false} />
         : state.status === "error" ? (
           <EmptyState title="주문을 불러오지 못했어요" description={state.error}
             action={<Button size="sm" variant="secondary" icon="refresh" onClick={() => { setState({ status: "loading", data: [] }); load(filter); }}>다시 불러오기</Button>} />
         ) : shown.length === 0 ? (
-          <EmptyState title={filter === "new" ? "새 주문이 없어요" : filter === "done" ? "끝난 주문이 없어요" : `${FULFIL_LABEL[filter]} 상태의 주문이 없어요`}
-            description={filter === "new" ? "앱에서 결제가 끝난 주문이 여기로 들어와요" : undefined} />
+          <EmptyState title={filter === "new" ? "새 주문이 없어요" : filter === "done" ? "끝난 주문이 없어요" : filter === "returns" ? "반품·교환 요청이 없어요" : `${FULFIL_LABEL[filter]} 상태의 주문이 없어요`}
+            description={filter === "new" ? "앱에서 결제가 끝난 주문이 여기로 들어와요" : filter === "returns" ? "받은 주문에 주문자가 반품·교환을 요청하면 여기 모여요" : undefined} />
         ) : (
           <div className="flex flex-col gap-3">
             {canPick && (
@@ -173,7 +194,9 @@ export function Orders({ qs, initialFilter }: { qs: string; initialFilter?: Orde
                   </p>
                   <span className="flex flex-wrap items-center gap-1.5">
                     {o.first_order && <Badge tone="brand">첫 주문</Badge>}
-                    {o.cancel_requested_at ? <Badge tone="danger">취소 요청</Badge> : <Badge tone={TONE[o.status]}>{FULFIL_LABEL[o.status]}</Badge>}
+                    {o.cancel_requested_at ? <Badge tone="danger">취소 요청</Badge>
+                      : o.return && returnOpen(o.return.status) ? <Badge tone="danger">{RETURN_TYPE_LABEL[o.return.type]} {o.return.status === "approved" ? "진행 중" : "요청"}</Badge>
+                      : <Badge tone={TONE[o.status]}>{FULFIL_LABEL[o.status]}</Badge>}
                   </span>
                 </div>
                 <ul className="mt-2 divide-y divide-line">
@@ -201,6 +224,18 @@ export function Orders({ qs, initialFilter }: { qs: string; initialFilter?: Orde
                   </p>
                 )}
 
+                {o.return && (
+                  <div className="mt-3 border-t border-line pt-3 text-label">
+                    <p className="text-ink">
+                      <span className="font-medium">{RETURN_TYPE_LABEL[o.return.type]} {o.return.status === "requested" ? "요청" : o.return.status === "approved" ? "받아들임 · 회수 중" : o.return.status === "rejected" ? "거절함" : o.return.status === "returned" ? "반품 마침" : "교환품 보냄"}</span>
+                      <span className="text-ink-2"> · {RETURN_REASON_LABEL[o.return.reason]} · {timeAgo(o.return.requested_at)}</span>
+                    </p>
+                    {o.return.note && <p className="text-ink mt-1">{o.return.note}</p>}
+                    {o.return.reply && <p className="text-ink-2 mt-1">답한 말 · {o.return.reply}</p>}
+                    {o.return.fee ? <p className="text-ink-2 mt-1">반품 배송비 <span className="num">{won(o.return.fee)}</span>를 빼고 환불해요</p> : null}
+                    {returnOpen(o.return.status) && <p className="text-caption text-ink-2 mt-1">답할 때까지 구매확정과 정산이 멈춰요. 받는 분 정보는 회수가 끝날 때까지 보여요</p>}
+                  </div>
+                )}
                 {o.shipping ? (
                   <dl className="mt-3 rounded-md bg-sunken px-4 py-3 text-label grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
                     <dt className="text-ink-2">받는 분</dt><dd className="text-ink">{o.shipping.name} · <span className="num">{formatPhone(o.shipping.phone)}</span></dd>
@@ -208,7 +243,7 @@ export function Orders({ qs, initialFilter }: { qs: string; initialFilter?: Orde
                     <dd className="text-ink">{o.shipping.postal_code && <span className="num">({o.shipping.postal_code}) </span>}{o.shipping.address1} {o.shipping.address2}</dd>
                     {o.shipping.note && <><dt className="text-ink-2">메모</dt><dd className="text-ink">{o.shipping.note}</dd></>}
                   </dl>
-                ) : (o.status === "delivered" || o.status === "canceled") ? (
+                ) : (o.status === "delivered" || o.status === "canceled") && !(o.return && returnOpen(o.return.status)) ? (
                   <p className="text-caption text-ink-2 mt-3">받는 분 정보는 배송이 끝나 가렸어요</p>
                 ) : (
                   <p className="text-caption text-ink-2 mt-3">받는 분 정보를 받지 못했어요. 케어푸드에 문의해 주세요</p>
@@ -220,6 +255,15 @@ export function Orders({ qs, initialFilter }: { qs: string; initialFilter?: Orde
                 )}
                 {o.cancel_reason && <p className="text-label text-ink mt-2"><span className="text-ink-2">{o.canceled_by === "buyer" ? "주문자가 취소" : o.canceled_by === "admin" ? "케어푸드가 취소" : "취소 이유"} </span>{o.cancel_reason}</p>}
 
+                {!ro && o.status === "delivered" && o.return && returnOpen(o.return.status) && (
+                  <CardActions className="mt-3">
+                    {o.return.status === "requested" && <Button variant="secondary" loading={busy === o.order_id} onClick={() => sendReturn(o, { action: "approve" }, `${RETURN_TYPE_LABEL[o.return!.type]} 요청을 받아들였어요. 주문자에게 알렸어요`)}>받아들이기</Button>}
+                    {o.return.type === "return"
+                      ? <Button variant={o.return.status === "approved" ? "secondary" : "ghost"} onClick={() => { setFee(""); setReason(""); setRet({ o, action: "returned" }); }}>반품 마치기</Button>
+                      : <Button variant={o.return.status === "approved" ? "secondary" : "ghost"} onClick={() => { setCarrier(o.carrier || "cj"); setTracking(""); setReason(""); setRet({ o, action: "exchanged" }); }}>교환품 보내기</Button>}
+                    {o.return.status === "requested" && <Button variant="ghost" onClick={() => { setReason(""); setRet({ o, action: "reject" }); }}>거절하기</Button>}
+                  </CardActions>
+                )}
                 {!ro && (o.status === "new" || o.status === "accepted" || o.status === "shipped") && (
                   <CardActions className="mt-3">
                     {o.status === "new" && <Button variant="secondary" loading={busy === o.order_id} onClick={() => send(o, { status: "accepted" }, "주문을 접수했어요", "접수")}>접수하기</Button>}
@@ -256,6 +300,46 @@ export function Orders({ qs, initialFilter }: { qs: string; initialFilter?: Orde
           </Field>
           <Field label="송장 번호" hint={carrier === "direct" ? "직접 배송은 비워 둬도 돼요" : "영문·숫자 6~30자"}>
             <Input inputMode="numeric" value={tracking} onChange={(e) => setTracking(e.target.value)} />
+          </Field>
+        </div>
+      </Sheet>
+
+      <Sheet open={!!ret} onClose={() => setRet(null)}
+        title={ret?.action === "reject" ? `${ret ? RETURN_TYPE_LABEL[ret.o.return!.type] : ""} 요청 거절하기` : ret?.action === "returned" ? "반품 마치기" : "교환품 보내기"}
+        description={ret?.action === "reject" ? `주문자에게 이유를 보여 줘요. 거절하면 오늘부터 8일 뒤 저절로 구매확정돼요`
+          : ret?.action === "returned" ? "회수한 상품을 확인했으면 마쳐 주세요. 이 주문은 취소로 바뀌어 정산에서 빠지고, 케어푸드가 주문자에게 환불해요"
+          : "교환품을 보내면 발송으로 돌아가요. 배송 완료 뒤 8일이 지나면 구매확정돼요"}
+        footer={<div className="flex gap-2">
+          <Button variant="ghost" onClick={() => setRet(null)}>닫기</Button>
+          <Button block variant={ret?.action === "reject" ? "danger" : "primary"} loading={!!ret && busy === ret.o.order_id}
+            disabled={ret?.action === "reject" ? !reason.trim() : ret?.action === "exchanged" ? carrier !== "direct" && tracking.trim().length < 6 : false}
+            onClick={() => {
+              if (!ret) return;
+              if (ret.action === "reject") sendReturn(ret.o, { action: "reject", reply: reason }, "요청을 거절했어요. 주문자에게 알렸어요");
+              else if (ret.action === "returned") sendReturn(ret.o, { action: "returned", fee: fee.replace(/,/g, "") || 0, reply: reason }, "반품을 마쳤어요. 케어푸드가 환불해요");
+              else sendReturn(ret.o, { action: "exchanged", carrier, tracking_number: tracking, reply: reason }, "교환품을 보냈어요. 주문자에게 알렸어요");
+            }}>{ret?.action === "reject" ? "거절하기" : ret?.action === "returned" ? "반품 마치기" : "교환품 보내기"}</Button>
+        </div>}>
+        <div className="flex flex-col gap-3">
+          {ret?.action === "returned" && ret.o.return?.reason === "change_mind" && (
+            <Field label="반품 배송비" hint="마음이 바뀐 반품만 받을 수 있어요. 환불 금액에서 빼요 · 비우면 0원">
+              <UnitInput unit="원" value={fee} onChange={(e) => { const d = e.target.value.replace(/\D/g, "").slice(0, 6); setFee(d ? Number(d).toLocaleString("ko-KR") : ""); }} />
+            </Field>
+          )}
+          {ret?.action === "exchanged" && (
+            <>
+              <Field label="택배사">
+                <Select value={carrier} onChange={(e) => setCarrier(e.target.value)}>
+                  {Object.entries(CARRIERS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                </Select>
+              </Field>
+              <Field label="송장 번호" hint={carrier === "direct" ? "직접 배송은 비워 둬도 돼요" : "영문·숫자 6~30자"}>
+                <Input inputMode="numeric" value={tracking} onChange={(e) => setTracking(e.target.value)} />
+              </Field>
+            </>
+          )}
+          <Field label={ret?.action === "reject" ? "거절 이유" : "주문자에게 남길 말 (선택)"} hint={ret?.action === "reject" ? "예: 개봉한 냉장 식품은 다시 팔 수 없어 반품을 받기 어려워요" : undefined}>
+            <Textarea value={reason} onChange={(e) => setReason(e.target.value)} maxLength={300} rows={3} />
           </Field>
         </div>
       </Sheet>
