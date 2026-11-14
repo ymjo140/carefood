@@ -4,6 +4,7 @@ import { createServiceRoleClient } from "@/lib/supabase/server";
 import { addDays, todayKst } from "@/lib/day";
 import { getActorId, noActor } from "@/lib/actor-server";
 import { rateLimit } from "@/lib/rate-limit";
+import { ensureNickname } from "@/lib/community-profile";
 import { type DiaryRow } from "@/lib/challenges";
 import { JOIN_MESSAGES, memberRun, openGroup, startDate, type ChallengeRow, type GroupRow, type MemberRow, type StartChoice } from "@/lib/challenge-groups";
 
@@ -80,7 +81,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export async function POST(request: NextRequest) {
   const actor = await getActorId();
   if (!actor) return noActor();
-  const { challenge_id, start } = await request.json().catch(() => ({}));
+  const { challenge_id, start, nickname } = await request.json().catch(() => ({}));
   if (typeof challenge_id !== "string" || !UUID.test(challenge_id)) return NextResponse.json({ error: "챌린지를 골라 주세요" }, { status: 400 });
   const choice: StartChoice = start === "tomorrow" || start === "monday" ? start : "today";
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -97,6 +98,7 @@ export async function POST(request: NextRequest) {
     if (cur && from && addDays(from, (cur.community_challenges?.days || 7) - 1) >= today) return NextResponse.json({ error: "이미 하고 있어요" }, { status: 409 });
   }
   try {
+    await ensureNickname(sb, actor, nickname); // 진행표·초대에 보일 이름
     const r = await openGroup(sb, challenge_id, actor, startDate(choice, today));
     if (r.status !== "opened") return NextResponse.json({ error: JOIN_MESSAGES[r.status] || "참여하지 못했어요" }, { status: r.status === "missing" ? 404 : 409 });
     const list = await load(sb, actor);

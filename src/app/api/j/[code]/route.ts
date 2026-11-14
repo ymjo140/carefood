@@ -7,6 +7,7 @@ import { addDays, daysBetween, todayKst } from "@/lib/day";
 import { viewerFilters } from "@/lib/community-safety";
 import { CODE_RE, JOIN_MESSAGES, groupPeriod, nicknames, type ChallengeRow, type GroupRow } from "@/lib/challenge-groups";
 import { refCode, shareEvent } from "@/lib/share-links";
+import { ensureNickname } from "@/lib/community-profile";
 
 /**
  * GET  /api/j/[code] — 초대 링크를 받은 사람이 보는 것: 챌린지·기간·연 사람·같이 하는 사람(닉네임)·내 상태·연 사람의 인증 카드
@@ -82,6 +83,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   try {
     const found = await find(sb, code);
     if (!found) return NextResponse.json({ error: "초대 링크를 찾지 못했어요" }, { status: 404 });
+    // 진행표에 보일 닉네임 — 글을 쓴 적이 없으면 이 기기 닉네임으로 만든다
+    const body = await request.json().catch(() => ({}));
+    await ensureNickname(sb, actor, body.nickname);
     const via = await refCode();
     const { data, error } = await sb.rpc("challenge_group_join", { p_group: found.g.id, p_user: actor, p_today: todayKst(), p_via: via });
     if (error) throw new Error(error.message);

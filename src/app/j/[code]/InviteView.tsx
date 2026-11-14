@@ -6,6 +6,7 @@ import {
   AvatarStack, BottomBar, Button, Card, EmptyState, LinkButton, Notice, Page, ShareCardPreview, Skeleton, useToast,
 } from "@/components/ui";
 import { monthDay, weekday } from "@/lib/day";
+import { getOrCreateNickname } from "@/lib/nickname";
 
 /**
  * 초대 링크를 받은 화면 (/j/<code>) — 인스타·카톡 링크로 들어온 사람이 처음 보는 곳.
@@ -51,7 +52,7 @@ export default function InviteView() {
   const join = async () => {
     setBusy(true);
     try {
-      const r = await fetch(`/api/j/${code}`, { method: "POST" });
+      const r = await fetch(`/api/j/${code}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nickname: getOrCreateNickname() }) });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) {
         // 그사이 꽉 찼거나 닫혔으면 화면을 다시 불러 그 상태를 보여 준다
@@ -70,7 +71,7 @@ export default function InviteView() {
     if (!state.data) return;
     setBusy(true);
     try {
-      const r = await fetch("/api/community/challenges", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ challenge_id: state.data.challenge.id }) });
+      const r = await fetch("/api/community/challenges", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ challenge_id: state.data.challenge.id, nickname: getOrCreateNickname() }) });
       const d = await r.json().catch(() => ({}));
       if (!r.ok && r.status !== 409) throw new Error(d.error || "");
       if (d.group_id) router.push(`/community/challenges/g/${d.group_id}?joined=1`);

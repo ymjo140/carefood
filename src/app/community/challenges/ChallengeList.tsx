@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Button, Card, Chip, ConfirmSheet, DayDots, EmptyState, Sheet, SkeletonList, TextButton, TextLink, useToast } from "@/components/ui";
 import ShareCardSheet from "@/components/community/ShareCardSheet";
+import { getOrCreateNickname } from "@/lib/nickname";
 import { METRIC_META, metricValue, type ChallengeMetric, type DayState } from "@/lib/challenges";
 
 /**
@@ -43,7 +44,7 @@ export function ChallengeList() {
   const join = async (c: Item, when: Start = "today", invite = false) => {
     setBusy(c.id);
     try {
-      const r = await fetch("/api/community/challenges", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ challenge_id: c.id, start: when }) });
+      const r = await fetch("/api/community/challenges", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ challenge_id: c.id, start: when, nickname: getOrCreateNickname() }) });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(d.error || "");
       if (d.challenge) setState((s) => ({ ...s, items: s.items.map((x) => (x.id === c.id ? d.challenge : x)) }));
