@@ -5,6 +5,7 @@ import { headers } from "next/headers";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createClient as createPlainClient } from "@supabase/supabase-js";
 import { linkActorToAccount, resetActor } from "@/lib/actor-server";
+import { isKakaoEmail } from "@/lib/kakao";
 
 /** 로그인 뒤 돌아갈 곳 — 이 사이트 안의 경로만 */
 function safePath(p: string | null | undefined) {
@@ -32,6 +33,8 @@ export async function signup(
   if (password.length < 6) {
     return { error: "비밀번호는 6자 이상으로 정해 주세요." };
   }
+  // 카카오 계정용 주소는 이메일로 가입할 수 없다 (미리 가입해 남의 카카오 로그인을 가로채지 못하게)
+  if (isKakaoEmail(email)) return { error: "이 주소로는 가입할 수 없어요. 다른 이메일을 써 주세요." };
 
   const supabase = await createServerSupabaseClient();
   const { data, error } = await supabase.auth.signUp({ email, password });

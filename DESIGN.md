@@ -38,6 +38,7 @@
   - 영양소: `protein` `carbs` `fat` `sodium` — 데이터 색. **숫자·막대·점에만**, 바탕에는 쓰지 않는다.
   - 끼니는 색 없이 글자로.
   - 사진 위 글자: `media-scrim`(어두운 띠) + `on-media`(흰 글자) — 숏폼 칸·보기 화면의 사진 위에만. 두 테마에 같은 값. 스토리 보기 바탕은 `media`.
+  - 카카오 로그인 버튼: `kakao`(#FEE500) `on-kakao` — 카카오 디자인 가이드 색, `KakaoButton` 에만.
   - Tailwind 기본 팔레트(`bg-blue-500`, `text-white`)와 지운 토큰(`*-soft`, `caution`, `meal-*`)은 칠해지지 않는다.
 - **글자 5종**: `text-caption`(12) `text-label`(14) `text-body`(16) `text-title`(20) `text-display`(32)
 - **굵기 3종**: `font-regular` `font-medium` `font-bold`
@@ -76,7 +77,7 @@
 | 필요 | 컴포넌트 |
 |---|---|
 | 페이지 틀 / 제목 / 구역 제목 | `Page` / `PageHeader` / `SectionHeader` |
-| 누르는 것 | `Button` `LinkButton` `IconButton` `TextLink` |
+| 누르는 것 | `Button` `LinkButton` `IconButton` `TextLink` · 카카오 로그인 `KakaoButton`(카카오 가이드 색, 이 버튼에만) |
 | 누를 수 없는 라벨 | `Badge` (옅은 테두리 + 글자색) |
 | 골라서 거르는 것 | `Chip` `ChipRow` · 큰 선택지 `ChoiceCard` · 세로 하나 고르기 `ChoiceList` |
 | 보기 전환 | `Tabs` (pill: 화면 위쪽 / line: 카드·시트 안) · 페이지 이동 탭 `LinkTabs` |

@@ -5,6 +5,7 @@
  */
 export { cn } from "./cn";
 export { Icon, ICON_NAMES, type IconName } from "./Icon";
+export { KakaoButton } from "./KakaoButton";
 export { Button, LinkButton, IconButton, IconLink, TextLink, TextButton, buttonClass, type ButtonVariant, type ButtonSize } from "./Button";
 export { Badge, type BadgeTone } from "./Badge";
 export { Chip, ChipRow } from "./Chip";

@@ -3,12 +3,24 @@
 import { useActionState, useState, Suspense, startTransition } from "react";
 import { useSearchParams } from "next/navigation";
 import { login, signup } from "@/app/auth/actions";
-import { Button, Field, Input, Notice, Page, PageLoading, TextLink } from "@/components/ui";
+import { Button, Field, Input, KakaoButton, Notice, Page, PageLoading, TextLink } from "@/components/ui";
+
+/** 카카오·이메일 확인 콜백이 돌려보낸 이유 */
+const ERRORS: Record<string, string> = {
+  kakao_cancel: "카카오 로그인을 취소했어요",
+  kakao_state: "로그인 시간이 지났어요. 다시 눌러 주세요",
+  kakao: "카카오로 로그인하지 못했어요. 다시 시도해 주세요",
+  kakao_conflict: "이 카카오 계정은 연결할 수 없어요. 고객센터로 문의해 주세요",
+  kakao_off: "카카오 로그인을 준비하고 있어요. 지금은 이메일로 로그인해 주세요",
+  auth: "이메일 확인을 마치지 못했어요. 다시 시도해 주세요",
+};
 
 function LoginContent() {
   const searchParams = useSearchParams();
   const returnTo = searchParams.get("returnTo") || "";
+  const callbackError = ERRORS[searchParams.get("error") || ""] || null;
   const [mode, setMode] = useState<"login" | "signup">("login");
+  const [kakaoBusy, setKakaoBusy] = useState(false);
 
   const action = mode === "login" ? login : signup;
   const [state, formAction, isPending] = useActionState(action, { error: null });
@@ -23,9 +35,21 @@ function LoginContent() {
           </h1>
           <p className="text-label text-ink-2">
             {mode === "login"
-              ? "추천 결과와 프로필을 저장하세요"
-              : "간편하게 가입하고 추천을 받으세요"}
+              ? "기록과 챌린지를 어느 기기에서든 이어서 봐요"
+              : "간편하게 가입하고 기록을 이어 가요"}
           </p>
+        </div>
+
+        {/* 카카오 — 인스타·카톡 안 브라우저에서도 되는 첫 입구. 동의항목 없이 회원번호만 쓴다 */}
+        <div className="flex flex-col gap-3 mb-6">
+          <KakaoButton href={`/auth/kakao${returnTo ? `?next=${encodeURIComponent(returnTo)}` : ""}`} loading={kakaoBusy} onClick={() => setKakaoBusy(true)} />
+          {callbackError && <Notice tone="danger">{callbackError}</Notice>}
+        </div>
+
+        <div className="flex items-center gap-3 mb-6" aria-hidden="true">
+          <span className="h-px flex-1 bg-line" />
+          <span className="text-caption text-ink-2">또는 이메일로</span>
+          <span className="h-px flex-1 bg-line" />
         </div>
 
         {/* 폼 */}
@@ -69,7 +93,7 @@ function LoginContent() {
           {/* 에러 메시지 */}
           {state?.error && <Notice tone="danger">{state.error}</Notice>}
 
-          <Button type="submit" block loading={isPending}>
+          <Button type="submit" variant="secondary" block loading={isPending}>
             {isPending ? "처리하고 있어요" : mode === "login" ? "로그인하기" : "가입하기"}
           </Button>
         </form>
