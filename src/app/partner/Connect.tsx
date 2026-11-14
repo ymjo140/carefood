@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button, Card, EmptyState, Icon, LinkButton, Notice, SectionHeader, Skeleton, FilePick, buttonClass, timeAgo, useToast } from "@/components/ui";
 import type { ConnectStatus } from "@/lib/partner/connect-status";
+import { AGENCY_PRICE_PER_ITEM } from "@/lib/partner/rates";
 import { Feed } from "./Feed";
 import { ApiKeys } from "./ApiKeys";
 import { Agency, Examples, History } from "./ConnectExtras";
@@ -37,7 +38,7 @@ export function Connect({ qs, onChanged, linkSales }: { qs: string; onChanged: (
             <p className="text-label text-ink-2 mt-1">제품 &gt; 올리기에서 바로 시작할 수 있어요. 다시 올릴 때까지 가격이 그대로라, 확인한 지 60일이 넘은 가격은 앱에서 감춰져요</p>
           </Card>
           <Card>
-            <p className="text-body font-bold text-ink">대행 연동 (유료)</p>
+            <p className="text-body font-bold text-ink">대행 연동 <span className="text-label font-medium text-ink-2">상품당 <span className="num">{AGENCY_PRICE_PER_ITEM}</span>원</span></p>
             <p className="text-label text-ink-2 mt-1">표시사항 사진·상품 목록만 보내 주면 오늘끼록이 옮겨 적어요. 제품 &gt; 올리기에서 미리보기를 보고 &lsquo;반영하기&rsquo;를 눌러야 들어가요</p>
           </Card>
         </div>

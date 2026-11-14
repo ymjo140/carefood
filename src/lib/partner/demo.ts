@@ -18,6 +18,7 @@ type Sb = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
 import { DEMO_SKU_PREFIX, DEMO_USER_PREFIX } from "./demo-ids";
 import { selectAll } from "@/lib/supabase/all";
+import { AGENCY_EXAMPLE_FILE } from "./agency";
 import { closeMonth, markPaid, orderPayout, previousMonth, settlementMonths } from "./settlement";
 export { DEMO_SKU_PREFIX, DEMO_USER_PREFIX };
 
@@ -303,11 +304,11 @@ export async function seedDemo(sb: Sb, partner: Partner, userId: string | null):
   }
   // 대행 — 기다리는 예시가 이미 있으면 새로 만들지 않는다
   const { error: cErr } = await sb.from("partner_agency_uploads").update({ status: "canceled", decided_at: new Date().toISOString(), decided_note: "예시를 다시 채워서 닫음" })
-    .eq("partner_id", partner.id).eq("status", "waiting").eq("file_name", "예시_대행_목록.xlsx");
+    .eq("partner_id", partner.id).eq("status", "waiting").eq("file_name", AGENCY_EXAMPLE_FILE);
   if (cErr) throw new Error(cErr.message);
   const rows = asRows(agencySamples());
   const { data: up, error: aErr } = await sb.from("partner_agency_uploads").insert({
-    partner_id: partner.id, file_name: "예시_대행_목록.xlsx", rows, row_count: rows.length,
+    partner_id: partner.id, file_name: AGENCY_EXAMPLE_FILE, rows, row_count: rows.length,
     preview: previewRows(rows, partner.kind), note: "보내 주신 상품 목록 3개를 옮겨 적었어요. 김밥은 원재료명이 없어 비워 뒀어요", created_by: null,
   }).select("id").single();
   if (aErr) throw new Error(aErr.message);
@@ -403,7 +404,7 @@ export async function clearDemo(sb: Sb, partnerId: string) {
     const { error: dErr } = await sb.from("partner_items").delete().in("id", ids);
     if (dErr) throw new Error(dErr.message);
   }
-  const { error: uErr } = await sb.from("partner_agency_uploads").delete().eq("partner_id", partnerId).eq("file_name", "예시_대행_목록.xlsx");
+  const { error: uErr } = await sb.from("partner_agency_uploads").delete().eq("partner_id", partnerId).eq("file_name", AGENCY_EXAMPLE_FILE);
   if (uErr) throw new Error(uErr.message);
   const { error: kErr } = await sb.from("partner_collabs").delete().eq("partner_id", partnerId).like("user_id", `${DEMO_USER_PREFIX}%`);
   if (kErr) throw new Error(kErr.message);

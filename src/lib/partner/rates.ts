@@ -9,5 +9,11 @@ export const STANDARD_RATES = { order: 5, link: 2 } as const;
 
 /** 고객층 메시지(광고) 기본 발송비 — 보낸 사람 수 × 이 값(원). 보낼 때만 낸다 (11/14 결정: 처음에는 모든 업체 100원, 최소 충전 1만 원) */
 export const STANDARD_MESSAGE_PRICE = 100;
+/** 자동 알림(첫 주문 감사·다시 살 때·다시 찾아 주세요) — 보낸 건마다 이 값(원), 충전금에서 빠진다 (11/14 결정).
+ *  충전금이 모자라면 낼 수 있는 만큼만 보내고 나머지는 다음 차례에. 예시 업체는 0원 */
+export const FLOW_MESSAGE_PRICE = 10;
+/** 대행 연동 — 오늘끼록이 옮겨 적은 상품(바로 반영·검수 줄, 오류 줄 뺌)마다 이 값(원). 업체가 '반영하기'를 누를 때 충전금에서 빠진다 (11/14 결정).
+ *  예시 파일·예시 업체는 0원 */
+export const AGENCY_PRICE_PER_ITEM = 500;
 /** 정산 지급일 — 구매확정한 달의 다음 달 이날 (lib/partner/payout.ts PAY_DAY 와 같은 값) */
 export const PAY_DAY_OF_MONTH = 10;

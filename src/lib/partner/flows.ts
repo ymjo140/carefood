@@ -5,12 +5,15 @@
  *  · 다시 찾아 주세요: 마지막 주문 뒤 delay_days 일이 지났고 180일은 넘지 않은 사람
  * 모두 광고라 광고 동의자에게만, 21~8시는 야간 동의자에게만. 같은 업체 알림은 한 사람에게 7일에 한 번.
  * 같은 계기(주문)로는 한 번만 보낸다 — flow_sends 의 (업체, 종류, 사람, 계기) 가 겹치면 넣지 못한다.
+ * 건당 FLOW_MESSAGE_PRICE 원(예시 업체 0원) — 보낼 사람을 먼저 모으고 partner_credit_take 로 낼 수 있는 만큼만 한 번에 뺀 뒤 그만큼만 보낸다.
+ *   못 보낸 사람(충전금 부족)은 다음 차례에 다시 고른다. 겹쳐서 넣지 못한 건은 돌려준다.
  */
 import { adText, isNight } from "./crm";
 import { adsConsented, loadBuyers } from "./customers";
 import { COUPON_COLS, couponText, grantCoupon, type Coupon } from "./coupons";
 import { WEEK_MS } from "./quota";
 import { selectAll } from "@/lib/supabase/all";
+import { FLOW_MESSAGE_PRICE } from "./rates";
 
 type Sb = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 const DAY = 86400e3;
@@ -57,18 +60,17 @@ function due(kind: FlowKind, b: Awaited<ReturnType<typeof loadBuyers>>[number], 
 
 type Push = (userId: string, payload: { title: string; body: string; url: string; tag: string }) => Promise<boolean>;
 
-/** 켜진 자동 알림을 돌린다 */
-export async function runFlows(sb: Sb, push?: Push) {
-  const now = Date.now();
-  const { data: flows, error } = await sb.from("partner_flows").select("partner_id, kind, coupon_id, title, body, delay_days, partners!inner(name, status)")
+/** 켜진 자동 알림을 돌린다 — short: 충전금이 모자라 이번에 못 보낸 건수 */
+export async function runFlows(sb: Sb, push?: Push, now = Date.now()) {
+  const { data: flows, error } = await sb.from("partner_flows").select("partner_id, kind, coupon_id, title, body, delay_days, partners!inner(name, status, is_demo)")
     .eq("is_on", true).eq("partners.status", "active").limit(500);
   if (error) {
-    if (error.code === "42P01" || error.code === "PGRST205" || /does not exist|Could not find the table/i.test(error.message || "")) return { sent: 0 };
+    if (error.code === "42P01" || error.code === "PGRST205" || /does not exist|Could not find the table/i.test(error.message || "")) return { sent: 0, short: 0 };
     throw new Error(error.message);
   }
-  type F = { partner_id: string; kind: FlowKind; coupon_id: string | null; title: string; body: string; delay_days: number; partners: { name: string } };
+  type F = { partner_id: string; kind: FlowKind; coupon_id: string | null; title: string; body: string; delay_days: number; partners: { name: string; is_demo?: boolean | null } };
   const night = isNight(now);
-  let sent = 0;
+  let sent = 0, short = 0;
   const byPartner = new Map<string, F[]>();
   for (const f of (flows || []) as F[]) (byPartner.get(f.partner_id) || byPartner.set(f.partner_id, []).get(f.partner_id)!).push(f);
   for (const [pid, list] of byPartner) {
@@ -79,6 +81,8 @@ export async function runFlows(sb: Sb, push?: Push) {
       // 1,000줄에서 잘리면 받은 사람이 빠져 한 주에 두 번 보낼 수 있다 — 끝까지 받는다
       const recent = await selectAll<{ user_id: string }>(() => sb.from("flow_sends").select("user_id").eq("partner_id", pid).gte("sent_at", new Date(now - WEEK_MS).toISOString()), "id", 1_000_000);
       const capped = new Set(recent.map((r) => r.user_id));
+      // 1) 보낼 사람을 모은다 (한 사람은 한 번에 하나만)
+      const todo: { f: F; user: string; key: string; body: string; coupon: Coupon | null }[] = [];
       for (const f of list) {
         let coupon: Coupon | null = null;
         if (f.coupon_id) {
@@ -91,31 +95,51 @@ export async function runFlows(sb: Sb, push?: Push) {
           if (!key || capped.has(b.user)) continue;
           const consent = ads.get(b.user);
           if (!consent || (night && !consent.night)) continue;
-          // 먼저 기록을 넣어 같은 계기로 두 번 보내지 않는다
-          const body = coupon ? `${f.body} (${coupon.name}: ${couponText(coupon)})` : f.body;
-          const { data: ins, error: iErr } = await sb.from("flow_sends").insert({ partner_id: pid, kind: f.kind, user_id: b.user, trigger_key: key, title: f.title, body: body.slice(0, 200) }).select("id");
-          if (iErr) { if (iErr.code === "23505") continue; throw new Error(iErr.message); }
           capped.add(b.user);
+          todo.push({ f, user: b.user, key, coupon, body: coupon ? `${f.body} (${coupon.name}: ${couponText(coupon)})` : f.body });
+        }
+      }
+      if (todo.length === 0) continue;
+      // 2) 낼 수 있는 만큼 한 번에 뺀다 — 업체 줄을 잠그고 잔액을 본다(partner_credit_take)
+      const unit = list[0].partners.is_demo ? 0 : FLOW_MESSAGE_PRICE;
+      const { data: paid, error: tErr } = await sb.rpc("partner_credit_take", { p_partner: pid, p_unit: unit, p_want: todo.length, p_all: false, p_note: `자동 알림 {n}건 × ${unit}원` });
+      if (tErr) throw new Error(tErr.message);
+      const n = Math.max(0, Math.min(todo.length, Number(paid) || 0));
+      short += todo.length - n;
+      // 3) 낸 만큼만 보낸다. 먼저 기록을 넣어 같은 계기로 두 번 보내지 않는다
+      let used = 0;
+      try {
+        for (const t of todo.slice(0, n)) {
+          const { data: ins, error: iErr } = await sb.from("flow_sends").insert({ partner_id: pid, kind: t.f.kind, user_id: t.user, trigger_key: t.key, title: t.f.title, body: t.body.slice(0, 200) }).select("id");
+          if (iErr) { if (iErr.code === "23505") continue; throw new Error(iErr.message); }
+          used++;
           sent++;
-          if (coupon) {
-            const g = await grantCoupon(sb, { id: pid, name: f.partners.name }, coupon, [b.user], "flow", undefined, false); // 쿠폰 알림은 이 알림으로 갈음한다
-            if (g.granted === 0) console.error("자동 알림 쿠폰을 주지 못했어요(이미 있음):", pid, f.kind);
+          if (t.coupon) {
+            const g = await grantCoupon(sb, { id: pid, name: t.f.partners.name }, t.coupon, [t.user], "flow", undefined, false); // 쿠폰 알림은 이 알림으로 갈음한다
+            if (g.granted === 0) console.error("자동 알림 쿠폰을 주지 못했어요(이미 있음):", pid, t.f.kind);
           }
           if (push) {
-            const t = adText(f.partners.name, f.title, body);
+            const msg = adText(t.f.partners.name, t.f.title, t.body);
             try {
-              if (await push(b.user, { ...t, url: "/me/coupons", tag: `flow-${f.kind}-${pid}` })) {
+              if (await push(t.user, { ...msg, url: "/me/coupons", tag: `flow-${t.f.kind}-${pid}` })) {
                 await sb.from("flow_sends").update({ pushed: true }).eq("id", ins[0].id);
               }
-            } catch (e) { console.error("자동 알림 푸시를 보내지 못했어요:", pid, f.kind, (e as Error).message); } // 알림함에는 들어갔다
+            } catch (e) { console.error("자동 알림 푸시를 보내지 못했어요:", pid, t.f.kind, (e as Error).message); } // 알림함에는 들어갔다
           }
+        }
+      } finally {
+        // 4) 넣지 못한 건(겹침·도중 오류)은 돌려준다
+        const back = (n - used) * unit;
+        if (back > 0) {
+          const { error: rErr } = await sb.from("partner_credit_ledger").insert({ partner_id: pid, kind: "release", amount: back, status: "confirmed", note: `보내지 않은 자동 알림 ${n - used}건 돌려놓음` });
+          if (rErr) console.error("자동 알림 요금을 돌려놓지 못했어요:", pid, back, rErr.message);
         }
       }
     } catch (e) {
       console.error("자동 알림을 돌리지 못했어요:", pid, (e as Error).message);
     }
   }
-  return { sent };
+  return { sent, short };
 }
 
 /** 업체 화면 — 자동 알림마다 지난 30일 보낸 수 */

@@ -12,12 +12,10 @@ import { pendingInquiryNotices } from "./inquiries";
 type Sb = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 type Line = { id: string; partner_id: string; order_id: string; orders: { is_demo: boolean | null } };
 
-async function memberSubs(sb: Sb, partnerIds: string[]): Promise<Map<string, PushSub[]>> {
+/** 로그인 계정(auth_user_id) → 그 사람 기기들 (account_links.actor_id → push_subscriptions) */
+async function subsByAuth(sb: Sb, authIds: string[]): Promise<Map<string, PushSub[]>> {
   const out = new Map<string, PushSub[]>();
-  if (partnerIds.length === 0) return out;
-  const { data: ms, error } = await sb.from("partner_members").select("partner_id, auth_user_id").in("partner_id", partnerIds).eq("notify_orders", true); // 설정 > 담당자·알림에서 끈 사람은 뺀다
-  if (error) throw new Error(error.message);
-  const auth = [...new Set(((ms || []) as { auth_user_id: string }[]).map((m) => m.auth_user_id).filter(Boolean))];
+  const auth = [...new Set(authIds.filter(Boolean))];
   if (auth.length === 0) return out;
   const { data: links, error: lErr } = await sb.from("account_links").select("auth_user_id, actor_id").in("auth_user_id", auth);
   if (lErr) throw new Error(lErr.message);
@@ -26,9 +24,21 @@ async function memberSubs(sb: Sb, partnerIds: string[]): Promise<Map<string, Pus
   if (actors.length === 0) return out;
   const { data: subs, error: sErr } = await sb.from("push_subscriptions").select("endpoint, user_id, p256dh, auth").in("user_id", actors);
   if (sErr) throw new Error(sErr.message);
+  for (const a of auth) {
+    const mine = ((subs || []) as PushSub[]).filter((x) => x.user_id === actorOf.get(a));
+    if (mine.length) out.set(a, mine);
+  }
+  return out;
+}
+
+async function memberSubs(sb: Sb, partnerIds: string[]): Promise<Map<string, PushSub[]>> {
+  const out = new Map<string, PushSub[]>();
+  if (partnerIds.length === 0) return out;
+  const { data: ms, error } = await sb.from("partner_members").select("partner_id, auth_user_id").in("partner_id", partnerIds).eq("notify_orders", true); // 설정 > 담당자·알림에서 끈 사람은 뺀다
+  if (error) throw new Error(error.message);
+  const byAuth = await subsByAuth(sb, ((ms || []) as { auth_user_id: string }[]).map((m) => m.auth_user_id));
   for (const m of (ms || []) as { partner_id: string; auth_user_id: string }[]) {
-    const actor = actorOf.get(m.auth_user_id);
-    const mine = ((subs || []) as PushSub[]).filter((x) => x.user_id === actor);
+    const mine = byAuth.get(m.auth_user_id) || [];
     if (mine.length) out.set(m.partner_id, [...(out.get(m.partner_id) || []), ...mine]);
   }
   return out;
@@ -88,4 +98,48 @@ export async function notifyPartners(sb: Sb, send: boolean): Promise<{ new_order
   }
   const total = (m: Map<string, Set<string>>) => [...m.values()].reduce((s, v) => s + v.size, 0);
   return { new_orders: total(newBy), cancel_requests: total(cancelBy), return_requests: total(returnBy), inquiries: [...asked.byPartner.values()].reduce((s, v) => s + v, 0), pushed };
+}
+
+/**
+ * 관리자 계정 — ADMIN_EMAILS(쉼표로 구분)에 있는 이메일이거나 app_metadata.role = admin (lib/actor-server.ts getAdminUser 와 같은 기준).
+ * 로그인 계정 목록을 1,000명씩 넘겨 본다(최대 2만 명).
+ */
+export async function adminAuthIds(sb: Sb, emails = process.env.ADMIN_EMAILS || ""): Promise<string[]> {
+  const allow = new Set(emails.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean));
+  const out: string[] = [];
+  for (let page = 1; page <= 20; page++) {
+    const { data, error } = await sb.auth.admin.listUsers({ page, perPage: 1000 });
+    if (error) throw new Error(error.message);
+    const users = (data?.users || []) as { id: string; email?: string | null; app_metadata?: { role?: string } | null }[];
+    for (const u of users) if ((u.email && allow.has(u.email.toLowerCase())) || u.app_metadata?.role === "admin") out.push(u.id);
+    if (users.length < 1000) break;
+  }
+  return out;
+}
+
+/**
+ * 관리자 알림 — 새 입점 신청을 관리자 기기에 푸시로 알린다. /api/push/run 이 30분마다 부른다.
+ * 알린 신청에는 admin_notified_at 을 적어 다시 보내지 않는다(푸시 키가 없을 때는 적지 않는다 — 키가 생기면 그때 알린다).
+ * 기다리는(pending) 신청만 — 그새 관리자가 처리한 신청은 알리지 않는다.
+ */
+export async function notifyApplications(sb: Sb, send: boolean, admins: () => Promise<string[]> = () => adminAuthIds(sb)): Promise<{ applications: number; pushed: number }> {
+  const { data, error } = await sb.from("vendor_applications").select("id, company_name")
+    .is("admin_notified_at", null).eq("status", "pending").order("created_at").limit(200);
+  if (error) {
+    if (error.code === "42703" || error.code === "42P01" || /does not exist|Could not find/i.test(error.message || "")) return { applications: 0, pushed: 0 }; // 마이그레이션 전
+    throw new Error(error.message);
+  }
+  const apps = (data || []) as { id: string; company_name: string | null }[];
+  if (apps.length === 0 || !send) return { applications: apps.length, pushed: 0 };
+  const subs = await subsByAuth(sb, await admins());
+  const name = (apps[0].company_name || "이름 없는 업체").slice(0, 30);
+  const title = apps.length === 1 ? `입점 신청이 왔어요 — ${name}` : `입점 신청 ${apps.length}건이 왔어요`;
+  let pushed = 0;
+  for (const list of subs.values()) {
+    if (await sendToUser(sb, list, { title, body: "관리 > 입점 맨 위 '입점 신청'에서 확인하고 연락해 주세요", url: "/admin/partners", tag: "admin-applications" })) pushed++;
+  }
+  const ids = apps.map((a) => a.id);
+  const { error: mErr } = await sb.from("vendor_applications").update({ admin_notified_at: new Date().toISOString() }).in("id", ids).is("admin_notified_at", null);
+  if (mErr) throw new Error(mErr.message);
+  return { applications: apps.length, pushed };
 }
