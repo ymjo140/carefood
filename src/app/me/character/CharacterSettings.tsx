@@ -75,6 +75,7 @@ export function CharacterSettings() {
         </div>
       </section>
 
+      {/* ds-wiring-drop: talk-h — '말 거는 방식' 구역을 지움 (캐릭터를 고르면 늘 켜지고, 끄려면 '캐릭터 없이') */}
       <BottomBar>
         <Button block loading={saving} disabled={!changed} onClick={save}>저장하기</Button>
       </BottomBar>
