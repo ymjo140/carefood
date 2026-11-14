@@ -20,6 +20,10 @@ type Data = {
   prev?: { from: string; to: string; totals: Totals | null; purchases: number | null };
 };
 type Share = { key: string; label: string; share: number };
+type SortKey = "impressions" | "views" | "saves" | "clicks";
+/** 제품 표 정렬 — 위 퍼널의 단계와 같은 이름 (담기 = 식단 기록 + 식단 리스트 + 즐겨찾기) */
+const SORTS: { value: SortKey; label: string }[] = [{ value: "impressions", label: "노출 순" }, { value: "views", label: "조회 순" }, { value: "saves", label: "담기 순" }, { value: "clicks", label: "클릭 순" }];
+const saves = (p: Product) => p.diary + p.plans + p.favorites;
 type Totals = { impressions: number; views: number; clicks: number; diary: number; favorites: number; plans: number };
 type Period = "this_month" | "30d" | "last_month";
 const PERIODS: { value: Period; label: string }[] = [{ value: "this_month", label: "이번 달" }, { value: "30d", label: "지난 30일" }, { value: "last_month", label: "지난달" }];
@@ -37,6 +41,7 @@ const pct = (a: number, b: number) => (b > 0 ? `${Math.round((a / b) * 100)}%` :
 /** 성과 — 내 제품을 본·누른·기록한 수와, 그 사람들의 목표 분포(통계만) */
 export function Report({ qs, onMakeSegment }: { qs: string; onMakeSegment?: (goal: string) => void }) {
   const [period, setPeriod] = useState<Period>("30d");
+  const [sortBy, setSortBy] = useState<SortKey>("views");
   const [state, setState] = useState<{ status: "loading" | "error" | "done"; data?: Data; error?: string }>({ status: "loading" });
 
   // 기간을 빨리 바꾸면 늦게 온 예전 응답이 새 결과를 덮지 않게 — 마지막 요청만 상태를 바꾼다
@@ -87,13 +92,13 @@ export function Report({ qs, onMakeSegment }: { qs: string; onMakeSegment?: (goa
             <h3 className="text-label font-bold text-ink mt-8 mb-2">어디서 빠지나</h3>
             <Card>
               <ol className="grid grid-cols-5 gap-2">
-                {[
+                {([
                   { label: "노출", v: d.totals.impressions, prev: null },
                   { label: "조회", v: d.totals.views, prev: d.totals.impressions },
                   { label: "담기", v: d.totals.diary + d.totals.plans + d.totals.favorites, prev: d.totals.views },
                   { label: "클릭", v: d.totals.clicks, prev: d.totals.views },
                   { label: "확정 구매", v: d.purchases ?? null, prev: d.totals.clicks },
-                ].map((s) => (
+                ] as { label: string; v: number | null; prev: number | null }[]).map((s) => (
                   <li key={s.label} className="min-w-0">
                     <span className="block text-caption text-ink-2">{s.label}</span>
                     <span className="block num text-body font-bold text-ink truncate">{s.v === null ? "보고 대기" : n(s.v)}</span>
@@ -125,7 +130,10 @@ export function Report({ qs, onMakeSegment }: { qs: string; onMakeSegment?: (goa
               </Card>
             )}
 
-            <h3 className="text-label font-bold text-ink mt-8 mb-2">제품별</h3>
+            <div className="flex flex-wrap items-center justify-between gap-2 mt-8 mb-2">
+              <h3 className="text-label font-bold text-ink">제품별</h3>
+              <Tabs variant="line" value={sortBy} onChange={setSortBy} label="제품 표 정렬" items={SORTS} />
+            </div>
             <Card padding="none" className="overflow-x-auto">
               <table className="w-full text-label">
                 <thead>
@@ -135,13 +143,13 @@ export function Report({ qs, onMakeSegment }: { qs: string; onMakeSegment?: (goa
                     <th className="text-right font-medium px-3 py-2.5 whitespace-nowrap">조회</th>
                     <th className="text-right font-medium px-3 py-2.5 whitespace-nowrap">클릭</th>
                     <th className="text-right font-medium px-3 py-2.5 whitespace-nowrap">기록</th>
-                    <th className="text-right font-medium px-3 py-2.5 whitespace-nowrap">담기</th>
+                    <th className="text-right font-medium px-3 py-2.5 whitespace-nowrap">식단 리스트</th>
                     <th className="text-right font-medium px-3 py-2.5 whitespace-nowrap">즐겨찾기</th>
                     <th className="text-right font-medium px-4 py-2.5 whitespace-nowrap">맛 평가</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-line">
-                  {d.products.map((p) => (
+                  {[...d.products].sort((a, b) => (sortBy === "saves" ? saves(b) - saves(a) : b[sortBy] - a[sortBy])).map((p) => (
                     <tr key={p.product_id}>
                       <td className="px-4 py-2.5 min-w-48"><TextLink href={`/products/${p.product_id}`}>{p.name}</TextLink></td>
                       <td className="px-3 py-2.5 num text-right text-ink whitespace-nowrap">{n(p.impressions)}</td>

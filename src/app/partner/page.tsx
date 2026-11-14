@@ -16,6 +16,7 @@ import { Orders } from "./Orders";
 import { Today } from "./Today";
 import { Segments } from "./Segments";
 import { Connect, type Batch } from "./Connect";
+import { ProductSheet } from "./ProductSheet";
 
 type Partner = { id: string; slug: string; name: string; kind: string; status: string };
 type Claim = { phrase: string; why: string; suggest?: string };
@@ -30,7 +31,7 @@ type Load<T> = { status: "loading" | "error" | "done" | "login" | "not_member"; 
 const STATUS_LABEL: Record<Item["status"], string> = { pending: "검수 중", approved: "반영", rejected: "반려", discontinued: "판매 종료" };
 const STATUS_TONE = { pending: "neutral", approved: "positive", rejected: "danger", discontinued: "neutral" } as const;
 const KIND_LABEL: Record<string, string> = { meal_service: "식단 서비스", brand: "식품 브랜드", mall: "유통·몰" };
-type Filter = "all" | "pending" | "approved" | "rejected";
+type Filter = "all" | "pending" | "approved" | "rejected" | "discontinued";
 
 /**
  * 입점 업체 화면 — 탭 여덟 개(오늘·주문·성과·고객층·수요·제품·정산·연동), 업체 유형이 순서를 정한다 (v3 6장).
@@ -46,6 +47,7 @@ function PartnerHome() {
   const [filter, setFilter] = useState<Filter>("all");
   const [view, setView] = useState<Tab>(() => { const t = sp.get("tab"); return isTab(t) ? t : "today"; });
   const [prefill, setPrefill] = useState<{ need?: string; goal?: string } | null>(null);
+  const [openItem, setOpenItem] = useState<string | null>(null);
 
   const loadMe = useCallback(async () => {
     try {
@@ -74,7 +76,7 @@ function PartnerHome() {
   useEffect(() => { if (me.status === "done" && view === "products") loadItems(filter); }, [me.status, view, filter, loadItems]); // eslint-disable-line react-hooks/set-state-in-effect -- 불러온 뒤에 상태를 바꾼다
 
   const go = useCallback((tab: Tab, opts?: { filter?: string; need?: string; goal?: string }) => {
-    if (tab === "products" && opts?.filter && ["pending", "approved", "rejected"].includes(opts.filter)) { setFilter(opts.filter as Filter); setItems({ status: "loading" }); }
+    if (tab === "products" && opts?.filter && ["pending", "approved", "rejected", "discontinued"].includes(opts.filter)) { setFilter(opts.filter as Filter); setItems({ status: "loading" }); }
     if (tab === "segments" && (opts?.need || opts?.goal)) setPrefill({ need: opts.need, goal: opts.goal });
     setView(tab);
     const next = new URLSearchParams(sp.toString());
@@ -143,6 +145,7 @@ function PartnerHome() {
               { value: "pending", label: "검수 중", count: counts.pending || 0 },
               { value: "approved", label: "반영", count: counts.approved || 0 },
               { value: "rejected", label: "반려", count: counts.rejected || 0 },
+              { value: "discontinued", label: "판매 종료", count: counts.discontinued || 0 },
             ]} />
           {items.status === "loading" ? <SkeletonList rows={4} thumb={false} />
             : items.status === "error" ? (
@@ -155,8 +158,7 @@ function PartnerHome() {
             ) : (
               <Card padding="none" className="divide-y divide-line">
                 {items.data.map((it) => (
-                  <ListRow key={it.id}
-                    href={it.product_id && it.status === "approved" ? `/products/${it.product_id}` : undefined}
+                  <ListRow key={it.id} onClick={() => setOpenItem(it.id)}
                     title={it.name}
                     meta={
                       <span className="flex flex-col gap-0.5">
@@ -177,8 +179,9 @@ function PartnerHome() {
                 ))}
               </Card>
             )}
+          <ProductSheet qs={qs} id={openItem} onClose={() => setOpenItem(null)} onSaved={() => { loadMe(); loadItems(filter); }} />
           <p className="text-caption text-ink-2 mt-3">
-            표현 점검은 상품명·소개·강조 문구에서 질병·효능으로 읽힐 수 있는 말을 먼저 알려 드리는 안내예요. 법적 판단은 아니고, 근거를 달면 검수에서 통과될 수 있어요
+            제품을 누르면 상태·이유·판매처별 가격을 보고 바로 고칠 수 있어요. 표현 점검은 상품명·소개·강조 문구에서 질병·효능으로 읽힐 수 있는 말을 먼저 알려 드리는 안내예요. 법적 판단은 아니고, 근거를 달면 검수에서 통과될 수 있어요
           </p>
         </section>
       )}
