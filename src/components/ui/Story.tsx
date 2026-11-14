@@ -151,7 +151,7 @@ export function StorySticker({ href, children, label }: { href: string; children
 
 /** 사진 아래 한두 줄 설명 (협찬 표시 포함) */
 export function StoryCaption({ children }: { children: ReactNode }) {
-  return <p className="text-label text-on-media line-clamp-2 px-1">{children}</p>;
+  return <p className="max-w-full text-label text-on-media line-clamp-2 rounded-md bg-media-scrim px-3 py-1.5">{children}</p>;
 }
 
 /** 아래 줄 아이콘 버튼 — 어두운 바탕용 */

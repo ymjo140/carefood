@@ -149,7 +149,7 @@ const SW = 900, PAD = 52;
 
 function stickerHeight(d: CardData) {
   if (d.kind === "meal") return 520;
-  if (d.kind === "challenge") return 470;
+  if (d.kind === "challenge") return 540;
   return 560;
 }
 
@@ -192,7 +192,7 @@ function drawSticker(ctx: Ctx, p: Palette, f: Fonts, d: CardData, o: CardOptions
     const end = numUnit(ctx, f, L, y + 270, String(d.done), `/${d.total_days}일`, 112, p.brandInk, p.ink2);
     font(ctx, f, 36, 500); ctx.fillStyle = p.ink;
     ctx.fillText(d.finished ? "해냈어요" : "해내는 중", end + 20, y + 268);
-    dots(ctx, p, d.days, L, y + 312, IW, Math.min(96, Math.floor((IW - 28 * 6) / Math.max(7, d.days.length)) + 6));
+    dots(ctx, p, d.days, L, y + 320, IW, Math.min(84, Math.floor((IW - 28 * 6) / Math.max(7, d.days.length))));
   }
 
   if (d.kind === "group_buy") {
