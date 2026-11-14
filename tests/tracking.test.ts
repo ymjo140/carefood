@@ -12,7 +12,9 @@ function shop(lines: Record<string, unknown>[]): Fake {
     orders: [{ id: "o1", status: "dispatched", paid_at: iso(now - 72 * HOUR) }, { id: "o2", status: "dispatched", paid_at: iso(now - 72 * HOUR) }],
     order_items: lines.map((l, i) => ({
       id: `l${i}`, order_id: "o1", partner_id: "p1", fulfil_status: "shipped", tracking_carrier: "cj", tracking_number: "123456789012",
-      shipped_at: iso(now - 48 * HOUR), tracking_checked_at: null, tracking_status: null, delivered_at: null, delivered_by: null, ...l,
+      shipped_at: iso(now - 48 * HOUR), tracking_checked_at: null, tracking_status: null, delivered_at: null, delivered_by: null,
+      orders: { is_demo: false }, ...l, // 진짜 DB 는 orders!inner(is_demo) 로 묶어 읽는다
+
     })),
   }), {});
 }
@@ -86,5 +88,14 @@ describe("배송 완료 찍기", () => {
     const f = vi.fn(async () => ({ ok: true, json: async () => ({ errors: [{ message: "not found", extensions: { code: "NOT_FOUND" } }] }) }) as unknown as Response);
     expect(await trackOne("cj", "123456789012", f)).toEqual({ code: "UNKNOWN", time: null });
     expect(await trackOne("direct", "x", f)).toBeNull();
+  });
+  it("테스트 매장 예시 주문은 묻지 않는다", async () => {
+    process.env.TRACKER_CLIENT_ID = "id"; process.env.TRACKER_CLIENT_SECRET = "secret";
+    const sb = shop([{ orders: { is_demo: true } }]);
+    const f = reply("DELIVERED", iso(now));
+    const r = await autoDeliver(sb, { now, fetch: f });
+    expect(f).not.toHaveBeenCalled();
+    expect(r.checked).toBe(0);
+    delete process.env.TRACKER_CLIENT_ID; delete process.env.TRACKER_CLIENT_SECRET;
   });
 });

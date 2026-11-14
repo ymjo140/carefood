@@ -64,9 +64,10 @@ export async function autoDeliver(sb: Sb, opt: { now?: number; fetch?: Fetch } =
   if (!trackingReady()) return { checked: 0, delivered: 0, failed: 0, skipped: "택배 조회 키가 없어요" };
   const now = opt.now ?? Date.now();
   const iso = (t: number) => new Date(t).toISOString();
-  // 조회할 줄 — 발송, 조회되는 택배사, 발송 12시간 뒤, 3시간 안에 묻지 않은 것. 오래 안 물은 것부터
-  const rows = await selectUpTo<Due>(() => sb.from("order_items").select("id, order_id, partner_id, tracking_carrier, tracking_number, shipped_at, tracking_checked_at")
-    .eq("fulfil_status", "shipped").in("tracking_carrier", Object.keys(TRACKER_CARRIER)).not("tracking_number", "is", null)
+  // 조회할 줄 — 발송, 조회되는 택배사, 발송 12시간 뒤, 3시간 안에 묻지 않은 것. 오래 안 물은 것부터.
+  // 테스트 매장 예시 주문(is_demo)은 송장이 가짜라 묻지 않는다(조회 한도만 쓴다)
+  const rows = await selectUpTo<Due>(() => sb.from("order_items").select("id, order_id, partner_id, tracking_carrier, tracking_number, shipped_at, tracking_checked_at, orders!inner(is_demo)")
+    .eq("orders.is_demo", false).eq("fulfil_status", "shipped").in("tracking_carrier", Object.keys(TRACKER_CARRIER)).not("tracking_number", "is", null)
     .lte("shipped_at", iso(now - FIRST_CHECK_HOURS * HOUR))
     .or(`tracking_checked_at.is.null,tracking_checked_at.lt.${iso(now - RECHECK_HOURS * HOUR)}`), ["tracking_checked_at", "id"], 3000);
   // 묶음(주문 × 업체)마다 한 번 — 같은 송장
