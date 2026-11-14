@@ -146,8 +146,7 @@ export default function GroupBuyView() {
                 {gb.calories != null && <><span className="num font-bold text-ink">{Math.round(gb.calories)}</span>kcal · </>}
                 {gb.lowest_price != null ? <>지금 최저 <span className="num font-bold text-ink">{gb.lowest_price.toLocaleString("ko-KR")}</span>원</> : "아직 가격 정보가 없어요"}
               </>
-            }
-            trailing={<Icon name="external" size={16} className="text-ink-3" />} />
+            } />
         )}
 
         <div className="flex flex-col gap-2">
