@@ -24,7 +24,10 @@ create index if not exists order_inquiries_user_idx on public.order_inquiries (u
 alter table public.order_inquiries enable row level security;
 revoke all on public.order_inquiries from anon, authenticated;
 
--- 로그인하면 기기 기록을 계정으로 옮긴다 — 주문(orders)과 함께 문의도 옮긴다
+-- 로그인하면 기기 기록을 계정으로 옮긴다 — 주문(orders)과 함께 문의도 옮긴다.
+-- 같이: 빠져 있던 업체 기능 기록(받은 쿠폰 coupon_grants · 자동 알림 보낸 기록 flow_sends · 협업 제안 partner_collabs · 협업 받기 프로필 creator_profiles)과
+--       사람이 만든 챌린지(community_challenges.creator_id)도 옮긴다. 로그인 전에 받은 쿠폰이 로그인 뒤 쿠폰함에서 사라지던 것.
+--       같은 것이 계정에 이미 있으면(고유 키 충돌) 기기 쪽 줄을 지운다 — 기존 규칙 그대로.
 create or replace function public.merge_actor(from_id text, to_id text)
  returns integer
  language plpgsql
@@ -51,7 +54,8 @@ begin
     ('user_interactions','user_id'), ('user_profiles','user_id'), ('user_taste_preferences','user_id'),
     ('challenge_groups','host_id'), ('challenge_cheers','from_user'), ('challenge_cheers','to_user'),
     ('community_challenge_members','invited_by'), ('share_links','owner'), ('share_events','visitor'),
-    ('order_inquiries','user_id')
+    ('order_inquiries','user_id'), ('coupon_grants','user_id'), ('flow_sends','user_id'), ('partner_collabs','user_id'),
+    ('creator_profiles','user_id'), ('community_challenges','creator_id')
   ) v(tbl, col) loop
     for r in execute format('select ctid from public.%I where %I = $1', t.tbl, t.col) using from_id loop
       begin
