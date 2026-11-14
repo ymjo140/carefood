@@ -6,6 +6,8 @@ import Link from "next/link";
 import type { ProductWithPrices, TasteLevel, DishCategory } from "@/types/database";
 import { DISH_CATEGORY_LABELS } from "@/types/database";
 import { useFavorites } from "@/hooks/useFavorites";
+import { defaultServingG, scaleNutrient } from "@/lib/serving";
+import { platformLabel } from "@/lib/platforms";
 import { Badge, Button, Card, Chip, cn, EmptyState, Icon, IconButton, Input, Kcal, MACRO_META, Notice, Price, ProductImage, ProgressBar, SearchField, SectionHeader, Sheet, SkeletonList, Tabs, TextLink, type BadgeTone, type Macro } from "@/components/ui";
 
 /* ───── 타입 ───── */
@@ -441,6 +443,14 @@ function ProductCard({ product, isFavorite, onToggleFavorite }: {
   const matchReasons = (product as ProductWithPrices & { match_reasons?: string[] }).match_reasons;
   const reasons = matchReasons?.length ? matchReasons.slice(0, 3) : (product.functional_tags || []).slice(0, 2).map((t: string) => ALL_TAG_LABELS[t] || t);
   const href = `/products/${product.id}`;
+  // 상세와 같은 기준 — DB 영양값은 nutrient_base_g(보통 100g) 당이라, 1회 먹는 양으로 바꿔 보인다 (lib/serving.ts)
+  //  예전에는 100g 당 값을 그대로 보여 목록 133kcal · 상세 465kcal(1회 350g)처럼 달랐다
+  const extra = product as ProductWithPrices & { carbs_g?: number | null; fat_g?: number | null; nutrient_base_g?: number | null; meal_role?: string | null };
+  const servingG = defaultServingG(product as ProductWithPrices & { meal_role?: string | null });
+  const baseG = Number(extra.nutrient_base_g) > 0 ? Number(extra.nutrient_base_g) : 100;
+  const per = (v: number | null | undefined) => scaleNutrient(v, servingG, baseG);
+  const kcal = per(product.calories);
+  const servingNote = servingG === baseG ? `${baseG}g 당` : `1회 ${servingG}g`;
 
   return (
     <Card className="flex gap-4 relative">
@@ -465,7 +475,7 @@ function ProductCard({ product, isFavorite, onToggleFavorite }: {
               {product.name}
             </Link>
             {product.manufacturer && (
-              <p className="text-caption text-ink-2 mt-0.5 truncate">{product.manufacturer}</p>
+              <p className="text-caption text-ink-2 mt-0.5 truncate">{platformLabel(product.manufacturer)}</p>
             )}
           </div>
           {matchScore == null && <HealthBadge score={product.health_score} />}
@@ -481,7 +491,12 @@ function ProductCard({ product, isFavorite, onToggleFavorite }: {
 
         {/* 칼로리 + 가격 */}
         <div className="flex items-baseline justify-between gap-3 mt-auto">
-          {product.calories != null ? <Kcal value={product.calories} className="text-label" /> : <span />}
+          {kcal != null ? (
+            <span className="flex items-baseline gap-1.5 min-w-0">
+              <Kcal value={Math.round(kcal)} className="text-label" />
+              <span className="text-caption text-ink-2 whitespace-nowrap">{servingNote}</span>
+            </span>
+          ) : <span />}
           {bestPrice ? (
             <Price value={bestPrice} className="text-body" />
           ) : (
@@ -490,10 +505,10 @@ function ProductCard({ product, isFavorite, onToggleFavorite }: {
         </div>
 
         <MacroMiniBars
-          protein={product.protein_g}
-          carbs={(product as ProductWithPrices & { carbs_g?: number | null }).carbs_g ?? null}
-          fat={(product as ProductWithPrices & { fat_g?: number | null }).fat_g ?? null}
-          sodium={product.sodium_mg}
+          protein={per(product.protein_g)}
+          carbs={per(extra.carbs_g)}
+          fat={per(extra.fat_g)}
+          sodium={per(product.sodium_mg)}
         />
       </div>
     </Card>
