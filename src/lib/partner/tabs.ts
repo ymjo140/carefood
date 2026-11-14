@@ -5,7 +5,7 @@
 export type Tab = "today" | "orders" | "report" | "segments" | "demand" | "products" | "commission" | "connect";
 
 export const TAB_LABEL: Record<Tab, string> = {
-  today: "오늘", orders: "주문", report: "성과", segments: "고객층", demand: "수요", products: "제품", commission: "정산", connect: "연동",
+  today: "오늘", orders: "주문", report: "성과", segments: "고객", demand: "수요", products: "제품", commission: "정산", connect: "연동",
 };
 
 const ORDER: Record<string, Tab[]> = {

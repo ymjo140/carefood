@@ -54,3 +54,15 @@ export async function sendToUser(sb: any, subs: PushSub[], payload: PushPayload)
   const results = await Promise.all(subs.map((s) => sendPush(sb, s, payload)));
   return results.some(Boolean);
 }
+
+/** 사람 한 명에게 보내는 함수 — 이 기기 알림을 쓸 수 없으면 undefined (알림함에만 남는다) */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function userPusher(sb: any): ((userId: string, payload: PushPayload) => Promise<boolean>) | undefined {
+  if (!pushReady()) return undefined;
+  return async (userId, payload) => {
+    const { data, error } = await sb.from("push_subscriptions").select("endpoint, user_id, p256dh, auth").eq("user_id", userId);
+    if (error) throw new Error(error.message);
+    if (!data?.length) return false;
+    return sendToUser(sb, data as PushSub[], payload);
+  };
+}

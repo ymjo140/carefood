@@ -163,6 +163,7 @@ export function MeView() {
         <SectionHeader title="내 활동" />
         <ul className="flex flex-col">
           {ORDERING_ENABLED && <Row icon="cart" title="주문 내역" meta="배송 상태·취소·환불" href="/me/orders" />}
+          <Row icon="tag" title="쿠폰함" meta="입점 업체가 준 쿠폰" href="/me/coupons" />
           <Row icon="feed" title="내가 쓴 글" href="/community?tab=mine" />
           <Row icon="bell" title="알림" href="/notifications" />
           <Row icon="bell" title="알림 설정" meta="끼니 기록·주간 요약·커뮤니티 소식" href="/me/notifications" />

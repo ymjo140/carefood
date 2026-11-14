@@ -77,7 +77,10 @@ export function Orders({ qs }: { qs: string }) {
                     주문 <span className="num">{o.order_id.slice(0, 8)}</span> · {timeAgo(o.ordered_at)}
                     {o.delivery_week_start && <> · <span className="num">{o.delivery_week_start}</span> 주 배송</>}
                   </p>
-                  {o.cancel_requested_at ? <Badge tone="danger">취소 요청</Badge> : <Badge tone={TONE[o.status]}>{FULFIL_LABEL[o.status]}</Badge>}
+                  <span className="flex flex-wrap items-center gap-1.5">
+                    {o.first_order && <Badge tone="brand">첫 주문</Badge>}
+                    {o.cancel_requested_at ? <Badge tone="danger">취소 요청</Badge> : <Badge tone={TONE[o.status]}>{FULFIL_LABEL[o.status]}</Badge>}
+                  </span>
                 </div>
                 <ul className="mt-2 divide-y divide-line">
                   {o.lines.map((l, i) => (
@@ -93,9 +96,9 @@ export function Orders({ qs }: { qs: string }) {
                     </li>
                   ))}
                 </ul>
-                <p className="text-label text-ink mt-2 flex justify-between">
-                  <span className="text-ink-2">합계 <span className="text-caption">(배송비 {o.shipping_fee > 0 ? won(o.shipping_fee) : "무료"} 포함)</span></span>
-                  <span className="num font-bold">{won(o.amount + o.shipping_fee)}</span>
+                <p className="text-label text-ink mt-2 flex justify-between gap-3">
+                  <span className="text-ink-2">합계 <span className="text-caption">(배송비 {o.shipping_fee > 0 ? won(o.shipping_fee) : "무료"} 포함{o.discount > 0 && <> · 우리 쿠폰 −{won(o.discount)}</>})</span></span>
+                  <span className="num font-bold whitespace-nowrap">{won(o.amount + o.shipping_fee - (o.discount || 0))}</span>
                 </p>
                 {o.cancel_requested_at && (
                   <p className="text-label text-ink mt-2">

@@ -2,12 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { getAdminUser } from "@/lib/actor-server";
-import { pushReady, sendToUser, type PushPayload, type PushSub } from "@/lib/push";
+import { pushReady, sendToUser, userPusher, type PushPayload, type PushSub } from "@/lib/push";
 import { addDays, daysBetween, kstHour, mondayOf, todayKst, weekday } from "@/lib/day";
 import { buildNotifications } from "@/lib/notifications";
 import { isWeekPlan, plannedMeal, type PlanGrid } from "@/lib/weekly-plan";
 import { runDueCampaigns } from "@/lib/partner/crm";
 import { runConsentNotices } from "@/lib/consent-notice";
+import { runFlows } from "@/lib/partner/flows";
 
 /**
  * POST /api/push/run — 보낼 때가 된 알림을 보낸다. Supabase 예약 작업(pg_cron + pg_net, 30분마다)이 부른다.
@@ -26,6 +27,7 @@ import { runConsentNotices } from "@/lib/consent-notice";
  *   - 커뮤니티 8~22시: 내 글 답글 · 내 답글의 답글 · 새 팔로워 (좋아요는 보내지 않음), 여러 개면 묶어서
  *   - 업체 광고(고객층 발송): 검수를 통과해 보낼 시각이 된 것 (lib/partner/crm.ts runDueCampaigns, 21~8시는 야간 동의자만)
  *   - 광고 수신 동의 2년 확인 안내: 8~21시에만 (lib/consent-notice.ts)
+ *   - 업체 자동 알림(첫 주문 감사·다시 살 때·다시 찾아 주세요): 광고 동의자에게, 21~8시는 야간 동의자만 (lib/partner/flows.ts)
  */
 const JWKS = createRemoteJWKSet(new URL("https://token.actions.githubusercontent.com/.well-known/jwks"));
 const REPO = "ymjo140/carefood";
@@ -63,6 +65,7 @@ export async function POST(req: NextRequest) {
   // 알림함에는 늘 들어가고, 이 기기 알림은 키가 있을 때만. dry 에서는 보내지 않는다.
   let ads = { sent: 0, campaigns: 0 };
   let consent = { sent: 0 };
+  let flows = { sent: 0 };
   if (req.nextUrl.searchParams.get("dry") !== "1") {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const sbAds = createServiceRoleClient() as any;
@@ -73,6 +76,9 @@ export async function POST(req: NextRequest) {
         return sendToUser(sbAds, data as PushSub[], payload);
       } : undefined);
     } catch (e) { console.error("고객층 발송을 돌리지 못했어요:", (e as Error).message); }
+    // 업체 자동 알림 — 밤에는 야간 동의자만 고른다(lib/partner/flows.ts)
+    try { flows = await runFlows(sbAds, userPusher(sbAds)); }
+    catch (e) { console.error("업체 자동 알림을 돌리지 못했어요:", (e as Error).message); }
     // 광고 수신 동의 2년 확인 안내 — 낮 시간에만 (안내 자체는 광고가 아니지만 밤에 깨우지 않는다)
     const h = kstHour();
     if (h >= 8 && h < 21) {
@@ -86,11 +92,11 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  if (!pushReady()) return NextResponse.json({ sent: 0, ads, consent, skipped: "VAPID 키가 아직 없어요" });
+  if (!pushReady()) return NextResponse.json({ sent: 0, ads, consent, flows, skipped: "VAPID 키가 아직 없어요" });
   const dry = req.nextUrl.searchParams.get("dry") === "1";
   const hourParam = Number(req.nextUrl.searchParams.get("hour"));
   const hour = dry && Number.isInteger(hourParam) && hourParam >= 0 && hourParam < 24 ? hourParam : kstHour(); // 관리자 dry 로 시간대를 바꿔 볼 수 있다
-  if (hour < 8 || hour >= 22) return NextResponse.json({ sent: 0, ads, consent, skipped: "밤 시간" });
+  if (hour < 8 || hour >= 22) return NextResponse.json({ sent: 0, ads, consent, flows, skipped: "밤 시간" });
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sb = createServiceRoleClient() as any;
@@ -100,7 +106,7 @@ export async function POST(req: NextRequest) {
   const subsBy = new Map<string, PushSub[]>();
   for (const s of (subRows || []) as PushSub[]) subsBy.set(s.user_id, [...(subsBy.get(s.user_id) || []), s]);
   const users = [...subsBy.keys()];
-  if (!users.length) return NextResponse.json({ sent: 0, ads, consent, users: 0 });
+  if (!users.length) return NextResponse.json({ sent: 0, ads, consent, flows, users: 0 });
 
   const lastMonday = addDays(mondayOf(today), -7);
   const [pRes, dRes, lRes, mRes, planRes] = await Promise.all([
@@ -220,5 +226,5 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ dry, hour, users: users.length, sent: counts, ads, consent });
+  return NextResponse.json({ dry, hour, users: users.length, sent: counts, ads, consent, flows });
 }

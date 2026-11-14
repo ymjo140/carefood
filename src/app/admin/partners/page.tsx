@@ -24,8 +24,8 @@ type ReviewItem = {
 };
 type Load<T> = { status: "loading" | "error" | "done"; data: T; error?: string };
 type SettleMonth = {
-  month: string; clicks: number; orders: number; confirmed_amount: number; commission: number; order_sales: number; order_shipping: number; order_fee: number; open: boolean;
-  settlement: { commission: number; order_sales: number; order_shipping: number; order_fee: number; status: "closed" | "paid"; closed_at: string; paid_at: string | null } | null;
+  month: string; clicks: number; orders: number; confirmed_amount: number; commission: number; order_sales: number; order_shipping: number; order_discount?: number; order_fee: number; open: boolean;
+  settlement: { commission: number; order_sales: number; order_shipping: number; order_discount?: number; order_fee: number; status: "closed" | "paid"; closed_at: string; paid_at: string | null } | null;
 };
 const won = (n: number) => `${n.toLocaleString("ko-KR")}원`;
 
@@ -323,12 +323,12 @@ function Settlements({ partnerId, onFail }: { partnerId: string; onFail: (w: str
             <div className="min-w-0">
               <p className="text-label text-ink">
                 <span className="num font-bold">{m.month}</span> · 수수료 <span className="num font-bold">{won(s ? s.commission : m.commission)}</span>
-                {(s ? s.order_sales : m.order_sales) > 0 && <> · 앱 주문 대금 <span className="num">{won((s || m).order_sales + (s || m).order_shipping - (s || m).order_fee)}</span></>}
+                {(s ? s.order_sales : m.order_sales) > 0 && <> · 앱 주문 대금 <span className="num">{won((s || m).order_sales - ((s || m).order_discount || 0) + (s || m).order_shipping - (s || m).order_fee)}</span></>}
               </p>
               <p className="text-caption text-ink-2">
                 클릭 <span className="num">{m.clicks.toLocaleString("ko-KR")}</span> · 주문 <span className="num">{m.orders.toLocaleString("ko-KR")}</span> · 구매확정 <span className="num">{won(m.confirmed_amount)}</span>
                 {drift !== 0 && <> · 마감 뒤 <span className="num">{drift > 0 ? "+" : "−"}{won(Math.abs(drift))}</span></>}
-                {(s ? s.order_sales : m.order_sales) > 0 && <> · 앱 주문 판매 <span className="num">{won((s || m).order_sales)}</span> + 배송비 <span className="num">{won((s || m).order_shipping)}</span> − 수수료 <span className="num">{won((s || m).order_fee)}</span></>}
+                {(s ? s.order_sales : m.order_sales) > 0 && <> · 앱 주문 판매 <span className="num">{won((s || m).order_sales)}</span>{((s || m).order_discount || 0) > 0 && <> − 쿠폰 <span className="num">{won((s || m).order_discount || 0)}</span></>} + 배송비 <span className="num">{won((s || m).order_shipping)}</span> − 수수료 <span className="num">{won((s || m).order_fee)}</span></>}
               </p>
             </div>
             {s?.status === "paid" ? <Badge tone="positive">정산 끝</Badge>

@@ -14,7 +14,7 @@ import { Report } from "./Report";
 import { Demand } from "./Demand";
 import { Orders } from "./Orders";
 import { Today } from "./Today";
-import { Segments } from "./Segments";
+import { CustomersTab } from "./Customers";
 import { Connect, type Batch } from "./Connect";
 import { ProductSheet } from "./ProductSheet";
 
@@ -132,7 +132,7 @@ function PartnerHome() {
       {current === "today" && <Today qs={qs} go={go} />}
       {current === "orders" && <Orders qs={qs} />}
       {current === "report" && <Report qs={qs} onMakeSegment={(goal) => go("segments", { goal })} />}
-      {current === "segments" && <Segments qs={qs} go={go} prefill={prefill} />}
+      {current === "segments" && <CustomersTab qs={qs} go={go} prefill={prefill} />}
       {current === "demand" && <Demand qs={qs} onMakeSegment={(need) => go("segments", { need })} />}
       {current === "commission" && <Commission qs={qs} readOnly={!!as} />}
       {current === "connect" && <Connect qs={qs} batches={batches} isDemo={!!partner.is_demo} readOnly={!!me.data.read_only} onChanged={() => { loadMe(); setItems({ status: "loading" }); }} onReport={() => go("commission")} />}
