@@ -301,7 +301,7 @@ export async function seedDemo(sb: Sb, partner: Partner, userId: string | null):
  * 테스트 매장 — 석 달 넘게 장사한 가게처럼: 제품 원가·과세 구분, 업체 정보(비어 있을 때만), 지난 달들 정산(지난 달은 마감만, 그 앞은 정산 끝, 한 달은 입금 차이).
  * 정산 숫자는 실제 마감 함수(closeMonth)로 센다 — 화면·엑셀과 같은 계산.
  */
-export async function seedDemoStore(sb: Sb, partner: Partner) {
+export async function seedDemoStore(sb: Sb, partner: Partner, now = Date.now()) {
   const COST: Record<string, [number, "taxable" | "exempt"]> = {
     "EX-001": [3100, "taxable"], "EX-002": [4300, "taxable"], "EX-003": [2400, "taxable"], "EX-004": [3000, "taxable"], "EX-005": [1700, "taxable"], "EX-006": [4600, "exempt"],
   };
@@ -321,18 +321,19 @@ export async function seedDemoStore(sb: Sb, partner: Partner) {
     const { error } = await sb.from("partners").update(fill).eq("id", partner.id);
     if (error) throw new Error(error.message);
   }
-  // 지난 달들 정산 — 돈이 오간 달은 모두 마감하고, 지난 달만 빼고 정산을 끝낸다(그 앞달은 1,000원 덜 보내 입금 대사에 보이게).
-  // 지난 달은 마감만 — 다음 지급(10일) 대기. 예전 달을 마감하지 않으면 정산 화면이 '지급일 지남'으로 가득 찬다(11/14 테스트 매장 확인)
+  // 지난 달들 정산 — 돈이 오간 달은 모두 마감하고, 지급일(다음 달 10일)이 지난 달은 정산을 끝낸다(마지막으로 끝낸 달은 1,000원 덜 보내 입금 대사에 보이게).
+  // 지난 달은 이번 달 10일 전이면 마감만 — 지급 대기. 지급일 지난 달을 남기면 정산 화면이 '지급일이 지났어요'로 보인다(11/14 테스트 매장 확인)
   const { error: dErr } = await sb.from("partner_settlements").delete().eq("partner_id", partner.id);
   if (dErr) throw new Error(dErr.message);
-  const last = previousMonth();
+  const waiting = new Date(now + 9 * 3600e3).getUTCDate() < 10 ? previousMonth(now) : null;
   const months = (await settlementMonths(sb, partner.id))
     .filter((x) => !x.open && (orderPayout(x) !== 0 || x.commission !== 0)).map((x) => x.month).sort();
+  const paid = months.filter((m) => m !== waiting);
   for (const month of months) {
     const st = await closeMonth(sb, partner.id, month, null);
-    if (!st || month === last) continue;
+    if (!st || month === waiting) continue;
     const net = orderPayout(st) - st.commission;
-    const short = month === months[months.length - (months.includes(last) ? 2 : 1)];
+    const short = month === paid[paid.length - 1];
     await markPaid(sb, partner.id, month, "예시 입금", short ? net - 1000 : net);
   }
 }
