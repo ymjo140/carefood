@@ -13,7 +13,7 @@ const DAY = 86400e3;
 const MIN_PEOPLE = 10;
 
 import type { Tab } from "./tabs";
-export type Kpi = { label: string; value: string; unit?: string; tab: Tab; note?: string };
+export type Kpi = { label: string; value: string; unit?: string; tab: Tab; note?: string; how: string };
 export type Task = { kind: string; title: string; reason: string; action: string; tab: Tab; filter?: string; blocking: boolean; weight: number };
 
 const n = (v: number) => v.toLocaleString("ko-KR");
@@ -168,22 +168,22 @@ export async function buildToday(sb: Sb, partner: { id: string; kind: string; na
   const topGoal = report.audience && "goals" in report.audience ? report.audience.goals?.[0] : undefined;
   const kpis: Kpi[] =
     partner.kind === "meal_service" ? [
-      orders ? { label: "이번 주 주문", value: n(orders.week), unit: "건", tab: "orders" } : { label: "이번 주 구매 링크 클릭", value: n(clicksWeek), unit: "번", tab: "report" },
-      orders ? { label: "재주문률", value: orders.repeat !== null ? String(orders.repeat) : "—", unit: orders.repeat !== null ? "%" : undefined, tab: "orders", note: orders.repeat === null ? "주문한 사람이 10명 미만이라 가렸어요" : undefined }
-        : { label: "확정 구매 28일", value: n(confirmed.length), unit: "건", tab: "commission" },
-      orders ? { label: "주문 간격이 벌어진 단골", value: orders.gap ? n(orders.gap) : "—", unit: orders.gap ? "명" : undefined, tab: "segments" }
-        : { label: "7일 안에 판매가 끝나는 메뉴", value: n(ending), unit: "개", tab: "products" },
-      { label: "반려된 메뉴", value: n(rejected.length), unit: "개", tab: "products" },
+      orders ? { label: "이번 주 주문", value: n(orders.week), unit: "건", tab: "orders", how: "지난 7일 동안 결제된 앱 주문 수" } : { label: "이번 주 구매 링크 클릭", value: n(clicksWeek), unit: "번", tab: "report", how: "지난 7일 동안 내 구매 링크를 누른 횟수 (같은 사람이 여러 번 누르면 모두)" },
+      orders ? { label: "재주문률", value: orders.repeat !== null ? String(orders.repeat) : "—", unit: orders.repeat !== null ? "%" : undefined, tab: "orders", note: orders.repeat === null ? "주문한 사람이 10명 미만이라 가렸어요" : undefined, how: "지난 90일 동안 주문한 사람 중 두 번 이상 주문한 사람의 비율" }
+        : { label: "확정 구매 28일", value: n(confirmed.length), unit: "건", tab: "commission", how: "지난 28일 주문일 기준으로 업체가 보고한 구매확정 수" },
+      orders ? { label: "주문 간격이 벌어진 단골", value: orders.gap ? n(orders.gap) : "—", unit: orders.gap ? "명" : undefined, tab: "segments", how: "두 번 이상 주문했는데 최근 2주 주문이 없는 사람 (10명 미만이면 —)" }
+        : { label: "7일 안에 판매가 끝나는 메뉴", value: n(ending), unit: "개", tab: "products", how: "판매 종료일이 오늘부터 7일 안인 반영된 메뉴" },
+      { label: "반려된 메뉴", value: n(rejected.length), unit: "개", tab: "products", how: "반려된 뒤 아직 고치지 않은 메뉴" },
     ] : partner.kind === "brand" ? [
-      { label: "노출 28일", value: n(t?.impressions || 0), unit: "번", tab: "report" },
-      { label: "조회 → 담기", value: t && t.views > 0 ? String(Math.round((saves / t.views) * 100)) : "—", unit: t && t.views > 0 ? "%" : undefined, tab: "report" },
-      { label: "본 사람의 첫째 목표", value: topGoal ? topGoal.label : "—", tab: "report", note: topGoal ? `${topGoal.share}%` : "10명 이상 모이면 보여요" },
-      { label: "반려된 제품", value: n(rejected.length), unit: "개", tab: "products" },
+      { label: "노출 28일", value: n(t?.impressions || 0), unit: "번", tab: "report", how: "지난 28일 추천·목록·식단 채우기에 내 제품이 보인 횟수" },
+      { label: "조회 → 담기", value: t && t.views > 0 ? String(Math.round((saves / t.views) * 100)) : "—", unit: t && t.views > 0 ? "%" : undefined, tab: "report", how: "지난 28일 상세 조회 대비 식단 기록·식단 리스트·즐겨찾기에 담은 횟수" },
+      { label: "본 사람의 첫째 목표", value: topGoal ? topGoal.label : "—", tab: "report", note: topGoal ? `${topGoal.share}%` : "10명 이상 모이면 보여요", how: "지난 28일 내 제품을 본·누른·기록한 사람들이 고른 목표 중 가장 많은 것 (질환 관심은 쓰지 않아요)" },
+      { label: "반려된 제품", value: n(rejected.length), unit: "개", tab: "products", how: "반려된 뒤 아직 고치지 않은 제품" },
     ] : [
-      { label: "구매 링크 클릭 28일", value: n(t?.clicks || 0), unit: "번", tab: "report" },
-      { label: "확정 구매 금액 28일", value: n(purchaseAmount), unit: "원", tab: "commission" },
-      { label: "전환 보고가 끊긴 날", value: gapDays === null ? "—" : String(gapDays), unit: gapDays === null ? undefined : "일", tab: "commission", note: gapDays === null ? "아직 보고가 없어요" : undefined },
-      { label: "60일 넘은 가격", value: n(stale60), unit: "개", tab: "connect" },
+      { label: "구매 링크 클릭 28일", value: n(t?.clicks || 0), unit: "번", tab: "report", how: "지난 28일 내 구매 링크를 누른 횟수" },
+      { label: "확정 구매 금액 28일", value: n(purchaseAmount), unit: "원", tab: "commission", how: "지난 28일 주문일 기준으로 업체가 보고한 구매확정 금액의 합" },
+      { label: "전환 보고가 끊긴 날", value: gapDays === null ? "—" : String(gapDays), unit: gapDays === null ? undefined : "일", tab: "commission", note: gapDays === null ? "아직 보고가 없어요" : undefined, how: "마지막으로 구매 확정을 보고한 날부터 오늘까지" },
+      { label: "60일 넘은 가격", value: n(stale60), unit: "개", tab: "connect", how: "판매 중 가격 중 마지막 확인이 60일 넘어 앱에서 감춘 것" },
     ];
 
   return {

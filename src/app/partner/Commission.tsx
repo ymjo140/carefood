@@ -2,6 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button, Card, EmptyState, Field, Input, Notice, SectionHeader, SkeletonList, buttonClass, useToast } from "@/components/ui";
+import { DisputeList, DisputeSheet, type DisputeTarget } from "./Disputes";
+
+/** 표 줄 안의 '다르게 보여요' — 줄마다 있어 눈에 덜 띄게 글자 버튼으로 */
+function DisputeButton({ onClick }: { onClick: () => void }) {
+  return <button type="button" className="press mt-1 text-caption font-medium text-brand-ink hover:underline underline-offset-4" onClick={onClick}>다르게 보여요</button>;
+}
 
 type Settlement = { commission: number; order_sales: number; order_shipping: number; order_fee: number; status: "closed" | "paid"; closed_at: string; paid_at: string | null };
 type Month = {
@@ -16,8 +22,10 @@ type Result = { rows: number; saved: number; error: number; errors: RowError[] }
 const won = (n: number) => `${n.toLocaleString("ko-KR")}원`;
 
 /** 정산 — 달별 클릭·주문·수수료, 마감·입금 상태, 주문 내역 올리기 */
-export function Commission({ qs }: { qs: string }) {
+export function Commission({ qs, readOnly = false }: { qs: string; readOnly?: boolean }) {
   const toast = useToast();
+  const [dispute, setDispute] = useState<DisputeTarget | null>(null);
+  const [disputeTick, setDisputeTick] = useState(0);
   const [state, setState] = useState<{ status: "loading" | "error" | "done"; data?: Data; error?: string }>({ status: "loading" });
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
@@ -98,6 +106,7 @@ export function Commission({ qs }: { qs: string }) {
                           <span className={`block text-caption ${s?.status === "paid" ? "text-positive" : "text-ink-2"}`}>
                             {s?.status === "paid" ? "정산 끝" : s ? "마감" : m.open ? "집계 중" : "마감 전"}
                           </span>
+                          {!readOnly && <DisputeButton onClick={() => setDispute({ target: "month", month: m.month, label: `${m.month} 정산` })} />}
                         </td>
                         <td className="px-3 py-2.5 num text-right text-ink">{m.clicks.toLocaleString("ko-KR")}</td>
                         <td className="px-3 py-2.5 num text-right text-ink">{m.orders.toLocaleString("ko-KR")}</td>
@@ -155,7 +164,9 @@ export function Commission({ qs }: { qs: string }) {
             )}
           </>
         )}
-      <Credits qs={qs} />
+      <Credits qs={qs} onDispute={readOnly ? undefined : setDispute} />
+      <DisputeList qs={qs} refresh={disputeTick} />
+      <DisputeSheet qs={qs} target={dispute} onClose={() => setDispute(null)} onSent={() => setDisputeTick((t) => t + 1)} />
     </section>
   );
 }
@@ -168,7 +179,7 @@ const KIND: Record<Ledger["kind"], string> = { topup: "충전", hold: "발송비
  * 고객층 충전금 — 발송비는 보낼 때 충전금에서 낸다 (11/13 결정). 결제(PG) 전에는 계좌이체로 충전하고,
  * 케어푸드가 입금을 확인하면 반영·세금계산서를 발행한다.
  */
-export function Credits({ qs }: { qs: string }) {
+export function Credits({ qs, onDispute }: { qs: string; onDispute?: (t: DisputeTarget) => void }) {
   const toast = useToast();
   const [state, setState] = useState<{ status: "loading" | "error" | "done"; data?: CreditData; error?: string }>({ status: "loading" });
   const [amount, setAmount] = useState("");
@@ -241,6 +252,7 @@ export function Credits({ qs }: { qs: string }) {
                         <td className="px-3 py-2.5 text-ink">
                           {KIND[l.kind]}{l.partner_campaigns?.title ? ` · ${l.partner_campaigns.title}` : ""}
                           {l.status !== "confirmed" && <span className="text-ink-2"> · {l.status === "requested" ? "입금 확인 중" : "취소"}</span>}
+                          {onDispute && <span className="block"><DisputeButton onClick={() => onDispute({ target: "ledger", ledger_id: l.id, label: `${l.created_at.slice(0, 10)} ${KIND[l.kind]} ${l.amount > 0 ? "+" : "−"}${won(Math.abs(l.amount))}` })} /></span>}
                         </td>
                         <td className={`px-4 py-2.5 num text-right whitespace-nowrap ${l.status === "confirmed" ? "text-ink" : "text-ink-3"}`}>
                           {l.amount > 0 ? "+" : "−"}{won(Math.abs(l.amount))}

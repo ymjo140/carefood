@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { connection } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { adminOnly, getAdminUser } from "@/lib/actor-server";
+import { loadClaimTerms } from "@/lib/partner/claims-server";
 import { adText, checkMessage, cleanConditions, creditBalance, describeConditions, notReady, releaseHold } from "@/lib/partner/crm";
 
 /**
@@ -28,11 +29,12 @@ export async function GET() {
   try {
     type P = { id: string; name: string; crm_unit_price: number | null };
     const partners = await Promise.all(((pa.data || []) as P[]).map(async (p) => ({ ...p, balance: (await creditBalance(sb, p.id)).balance })));
+    const terms = await loadClaimTerms(sb);
     type C = { title: string; body: string; conditions: unknown; partners: { name: string } | null; [k: string]: unknown };
     return NextResponse.json({
       ready: true,
       campaigns: ((camp.data || []) as C[]).map((c) => ({
-        ...c, summary: describeConditions(cleanConditions(c.conditions)), hits: checkMessage(c.title, c.body).hits,
+        ...c, summary: describeConditions(cleanConditions(c.conditions)), hits: checkMessage(c.title, c.body, terms).hits,
         preview: adText(c.partners?.name || "", c.title, c.body),
       })),
       topups: top.data || [],

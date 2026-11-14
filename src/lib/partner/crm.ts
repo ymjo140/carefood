@@ -11,7 +11,7 @@
  *   - 메시지 앞에 "(광고)"와 보낸 곳, 끝에 받지 않는 방법이 붙는다 (정보통신망법 제50조④)
  */
 import { kstHour } from "@/lib/day";
-import { checkClaims, type ClaimHit } from "./claims";
+import { checkClaimsWith, type ClaimHit, type ClaimTerm } from "./claims";
 import { wants, SEGMENTS, type SegmentKey } from "./demand";
 import { WEEK_MS } from "./quota";
 
@@ -240,11 +240,11 @@ export function previewOf(a: Audience, unitPrice: number | null) {
 }
 
 /** 메시지 문구 점검 — 길이·표현 */
-export function checkMessage(title: string, body: string): { error?: string; hits: ClaimHit[] } {
+export function checkMessage(title: string, body: string, terms?: ClaimTerm[] | null): { error?: string; hits: ClaimHit[] } {
   if (!title.trim() || title.length > 30) return { error: "제목은 1~30자로 적어 주세요", hits: [] };
   if (!body.trim() || body.length > 120) return { error: "본문은 1~120자로 적어 주세요", hits: [] };
   if (/\(광고\)|수신\s*거부/.test(title + body)) return { error: "(광고) 표시와 받지 않는 방법은 케어푸드가 붙여요. 문구에서 빼 주세요", hits: [] };
-  return { hits: checkClaims(title, body) };
+  return { hits: checkClaimsWith(terms, title, body) };
 }
 
 /** 실제로 나가는 모양 — 알림함·이 기기 알림이 같이 쓴다 */

@@ -49,6 +49,27 @@ export function Estimate({ children, className }: { children: ReactNode; classNa
   );
 }
 
+/**
+ * 셈 방법 펼치기 — 숫자 옆 "어떻게 셌나요". 어떤 기록을 어떤 기간으로 셌는지 한두 줄. 닫힌 채로 시작한다
+ * (해커톤 기획의 "근거 펼치기"). 숫자마다 붙이지 말고 숫자 묶음 하나에 하나.
+ */
+export function HowCounted({ children, className }: { children: ReactNode; className?: string }) {
+  return (
+    <details className={cn("text-caption text-ink-2", className)}>
+      <summary className="inline-flex items-center gap-1 cursor-pointer list-none min-h-6 hover:text-ink transition-colors [&::-webkit-details-marker]:hidden">
+        <Icon name="info" size={14} className="shrink-0 text-ink-3" />어떻게 셌나요
+      </summary>
+      <div className="mt-2 flex flex-col gap-1 pl-5">{children}</div>
+    </details>
+  );
+}
+
+/** 데이터 기준 시각 — "11월 14일 10:32 기준". 실시간으로 센 값이면 불러온 시각 (한국 시간) */
+export function AsOf({ at, className }: { at: Date | string | number; className?: string }) {
+  const kst = new Date(new Date(at).getTime() + 9 * 3600e3);
+  return <span className={cn("text-caption text-ink-2 num", className)}>{kst.getUTCMonth() + 1}월 {kst.getUTCDate()}일 {kst.toISOString().slice(11, 16)} 기준</span>;
+}
+
 /** 썸네일 자리 — 이미지 없을 때 */
 export function Thumb({ src, alt = "", size = 48, className }: { src?: string | null; alt?: string; size?: number; className?: string }) {
   return (

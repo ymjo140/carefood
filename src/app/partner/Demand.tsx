@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Button, Card, EmptyState, Estimate, Notice, Price, ProgressBar, SectionHeader, SkeletonList, Stat } from "@/components/ui";
+import { AsOf, Button, Card, EmptyState, Estimate, Notice, Price, ProgressBar, SectionHeader, SkeletonList, Stat } from "@/components/ui";
 import type { GroupBuyRow, MealRow, PriceRow } from "@/lib/partner/demand-more";
 
 type Row = { key: string; label: string; rule: string; share: number | null; supply: number; partner_supply: number; mine: number };
@@ -14,13 +14,13 @@ const n = (v: number) => v.toLocaleString("ko-KR");
 
 /** 수요 — 조건별로 찾는 사람 비율과 지금 살 수 있는 제품 수. 찾는 사람이 많은데 제품이 적은 조건이 위로 온다 */
 export function Demand({ qs, onMakeSegment }: { qs: string; onMakeSegment?: (need: string) => void }) {
-  const [state, setState] = useState<{ status: "loading" | "error" | "done"; data?: Data; error?: string }>({ status: "loading" });
+  const [state, setState] = useState<{ status: "loading" | "error" | "done"; data?: Data; error?: string; at?: number }>({ status: "loading" });
   const load = useCallback(async () => {
     try {
       const r = await fetch(`/api/partner/demand?${qs}`);
       const j = await r.json();
       if (!r.ok) throw new Error(j.error);
-      setState({ status: "done", data: j });
+      setState({ status: "done", data: j, at: Date.now() });
     } catch (e) { setState({ status: "error", error: (e as Error).message || "불러오지 못했어요" }); }
   }, [qs]);
   useEffect(() => { load(); }, [load]); // eslint-disable-line react-hooks/set-state-in-effect -- 불러온 뒤에 상태를 바꾼다
@@ -29,7 +29,7 @@ export function Demand({ qs, onMakeSegment }: { qs: string; onMakeSegment?: (nee
   const top = d?.segments[0];
   return (
     <section>
-      <SectionHeader title="수요" />
+      <SectionHeader title="수요" action={state.at ? <AsOf at={state.at} /> : undefined} />
       {state.status === "loading" ? <SkeletonList rows={5} thumb={false} />
         : state.status === "error" || !d ? (
           <EmptyState title="수요를 불러오지 못했어요" description={state.error}

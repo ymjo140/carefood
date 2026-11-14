@@ -1,10 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Button, Card, EmptyState, Icon, SectionHeader, Skeleton, Stat, cn } from "@/components/ui";
+import { AsOf, Button, Card, EmptyState, HowCounted, Icon, SectionHeader, Skeleton, Stat, cn } from "@/components/ui";
 import type { Tab } from "@/lib/partner/tabs";
 
-type Kpi = { label: string; value: string; unit?: string; tab: Tab; note?: string };
+type Kpi = { label: string; value: string; unit?: string; tab: Tab; note?: string; how?: string };
 type Task = { kind: string; title: string; reason: string; action: string; tab: Tab; filter?: string; blocking: boolean };
 type Step = { key: string; label: string; value: number };
 type Data = {
@@ -20,13 +20,13 @@ const BASE: Record<string, string> = { views: "impressions", saves: "views", cli
  * 1순위는 할 일 첫째 줄. 숫자·퍼널은 해당 탭으로 데려간다.
  */
 export function Today({ qs, go }: { qs: string; go: (tab: Tab, opts?: { filter?: string; need?: string }) => void }) {
-  const [state, setState] = useState<{ status: "loading" | "error" | "done"; data?: Data; error?: string }>({ status: "loading" });
+  const [state, setState] = useState<{ status: "loading" | "error" | "done"; data?: Data; error?: string; at?: number }>({ status: "loading" });
   const load = useCallback(async () => {
     try {
       const r = await fetch(`/api/partner/today?${qs}`);
       const d = await r.json();
       if (!r.ok) throw new Error(d.error);
-      setState({ status: "done", data: d });
+      setState({ status: "done", data: d, at: Date.now() });
     } catch (e) { setState({ status: "error", error: (e as Error).message || "불러오지 못했어요" }); }
   }, [qs]);
   useEffect(() => { load(); }, [load]); // eslint-disable-line react-hooks/set-state-in-effect -- 불러온 뒤에 상태를 바꾼다
@@ -76,6 +76,7 @@ export function Today({ qs, go }: { qs: string; go: (tab: Tab, opts?: { filter?:
 
   return (
     <div className="flex flex-col gap-8">
+      <div>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {d.kpis.map((k) => (
           <button key={k.label} type="button" onClick={() => go(k.tab)} className="press text-left rounded-lg border border-line bg-surface p-4 hover:border-line-strong transition-colors">
@@ -83,6 +84,14 @@ export function Today({ qs, go }: { qs: string; go: (tab: Tab, opts?: { filter?:
             {k.note && <span className="block text-caption text-ink-2 mt-1">{k.note}</span>}
           </button>
         ))}
+      </div>
+      <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1 mt-3">
+        <HowCounted>
+          {d.kpis.filter((k) => k.how).map((k) => <p key={k.label}><span className="text-ink">{k.label}</span> — {k.how}</p>)}
+          <p>사람 수가 10명 미만인 값은 누구인지 짐작할 수 없도록 —로 가려요.</p>
+        </HowCounted>
+        {state.at && <AsOf at={state.at} />}
+      </div>
       </div>
 
       <section>
