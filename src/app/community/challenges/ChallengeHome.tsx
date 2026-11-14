@@ -22,7 +22,7 @@ export type SeasonView = {
 };
 type Seasons = { current: SeasonView | null; next: SeasonView | null; my_tier: number; goal_kcal: number | null };
 type Pick = { kind: "season" | "template"; challenge_id?: string; metric: string; target: number; days: number; title: string; reason: string };
-type RankRow = { id: string; title: string; meta: string; value: string; kind: string; metric: string };
+type RankRow = { id: string; title: string; meta: string; value: string; kind: string; metric: string; mine: boolean };
 type Discover = { picks: Pick[]; ranks: { popular: RankRow[]; completed: RankRow[]; friends: RankRow[] }; follows: number };
 type RankTab = "popular" | "completed" | "friends";
 
@@ -148,7 +148,8 @@ export function ChallengeHome() {
                 <ListRow key={r.id} leading={<span className="w-5 text-center num font-bold text-brand-ink">{i + 1}</span>} title={r.title} meta={r.meta}
                   trailing={<span className="flex flex-col items-end">
                     <span className="num text-label font-bold text-ink whitespace-nowrap">{r.value}</span>
-                    <TextButton className="text-caption min-h-8" disabled={busy === r.id} onClick={() => joinRank(r)}>나도 하기</TextButton>
+                    {r.mine ? <span className="text-caption text-positive font-medium min-h-8 inline-flex items-center">하고 있어요</span>
+                      : <TextButton className="text-caption min-h-8" disabled={busy === r.id} onClick={() => joinRank(r)}>나도 하기</TextButton>}
                   </span>} />
               ))}
             </ol>

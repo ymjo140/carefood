@@ -41,7 +41,8 @@ export async function GET() {
     const endOf = (m: Mem, c: Row) => addDays(m.challenge_groups?.start_on || m.started_on, c.days - 1);
     const meta = (c: Row) => c.kind === "season" ? `${(c.challenge_seasons?.title || "시즌").split(" · ")[0]} · ${c.days}일`
       : c.kind === "user" ? `사용자 챌린지 · ${c.days}일` : `기본 · ${c.days}일`;
-    const row = (c: Row, value: string) => ({ id: c.id, title: c.title, meta: meta(c), value, kind: c.kind, metric: c.metric });
+    const mineNow = new Set(actor ? members.filter((m) => m.user_id === actor && endOf(m, byId.get(m.challenge_id)!) >= today).map((m) => m.challenge_id) : []);
+    const row = (c: Row, value: string) => ({ id: c.id, title: c.title, meta: meta(c), value, kind: c.kind, metric: c.metric, mine: mineNow.has(c.id) });
 
     // 많이 하는
     const weekAgo = Date.now() - 7 * 86400e3;

@@ -84,7 +84,6 @@ export function SeasonDetail() {
             <div className="flex flex-col gap-0.5">
               <h2 className="text-body font-bold text-ink">{c.title}</h2>
               <p className="text-label text-ink-2">{c.rule}</p>
-              {c.macro && <p className="text-caption text-ink-2 num">탄 <span className="text-carbs font-bold">{c.macro.c[0]}~{c.macro.c[1]}%</span> · 단 <span className="text-protein font-bold">{c.macro.p[0]}~{c.macro.p[1]}%</span> · 지 <span className="text-fat font-bold">{c.macro.f[0]}~{c.macro.f[1]}%</span></p>}
               {c.people != null && <p className="text-caption text-ink-2 num">{won(c.people)}명이 하고 있어요</p>}
             </div>
 
