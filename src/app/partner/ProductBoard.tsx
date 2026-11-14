@@ -1,13 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AsOf, Badge, Button, Card, EmptyState, Field, HowCounted, Icon, Input, Sheet, SkeletonList, TextButton, useToast } from "@/components/ui";
+import { AsOf, Badge, Button, Card, EmptyState, Field, HowCounted, Icon, Input, Select, Sheet, SkeletonList, TextButton, UnitInput, useToast } from "@/components/ui";
+import type { BoardRow as Row } from "@/lib/partner/product-sales";
 
-type Row = {
-  item_id: string | null; sku: string; name: string; status: string | null; stock: number | null; low: boolean;
-  new: number; accepted: number; shipped: number; cancel_requests: number; sold_30: number;
-};
 const n = (v: number) => v.toLocaleString("ko-KR");
+const TAX: Record<string, string> = { taxable: "과세", exempt: "면세" };
 
 /**
  * 판매·출고 — 제품마다 재고와 처리할 주문 줄 수 (앱 주문, v3 10.3).
@@ -19,6 +17,9 @@ export function ProductBoard({ qs, toOrders }: { qs: string; toOrders: () => voi
   const [edit, setEdit] = useState<Row | null>(null);
   const [value, setValue] = useState("");
   const [busy, setBusy] = useState(false);
+  const [costing, setCosting] = useState<Row | null>(null);
+  const [cost, setCost] = useState("");
+  const [tax, setTax] = useState("");
   const seq = useRef(0);
 
   const load = useCallback(async () => {
@@ -47,6 +48,22 @@ export function ProductBoard({ qs, toOrders }: { qs: string; toOrders: () => voi
     } finally { setBusy(false); }
   };
 
+  const saveCost = async () => {
+    if (!costing?.item_id) return;
+    setBusy(true);
+    try {
+      const r = await fetch(`/api/partner/items/${costing.item_id}/cost?${qs}`, { method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ unit_cost: cost === "" ? null : Number(cost.replace(/,/g, "")), tax_type: tax || null }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error);
+      toast.show("원가를 저장했어요");
+      setCosting(null);
+      load();
+    } catch (e) {
+      toast.show(`${(e as Error).message || "원가를 저장하지 못했어요. 다시 시도해 주세요"}`, { tone: "danger" });
+    } finally { setBusy(false); }
+  };
+
   if (state.status === "loading") return <SkeletonList rows={4} thumb={false} />;
   if (state.status === "error" || !state.rows) return (
     <EmptyState title="판매 현황을 불러오지 못했어요" description={state.error}
@@ -71,11 +88,13 @@ export function ProductBoard({ qs, toOrders }: { qs: string; toOrders: () => voi
             <tr className="text-left text-ink-2 border-b border-line">
               <th className="px-4 py-2 font-medium min-w-40">제품</th>
               <th className="px-3 py-2 font-medium text-right whitespace-nowrap">재고</th>
+              <th className="px-3 py-2 font-medium text-right whitespace-nowrap">소진 예상</th>
               <th className="px-3 py-2 font-medium text-right whitespace-nowrap">새 주문</th>
               <th className="px-3 py-2 font-medium text-right whitespace-nowrap">출고 준비</th>
               <th className="px-3 py-2 font-medium text-right whitespace-nowrap">배송 중</th>
               <th className="px-3 py-2 font-medium text-right whitespace-nowrap">취소 요청</th>
-              <th className="px-4 py-2 font-medium text-right whitespace-nowrap">30일 판매</th>
+              <th className="px-3 py-2 font-medium text-right whitespace-nowrap">30일 판매</th>
+              <th className="px-4 py-2 font-medium text-right whitespace-nowrap">원가 · 마진</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-line">
@@ -92,11 +111,22 @@ export function ProductBoard({ qs, toOrders }: { qs: string; toOrders: () => voi
                     </TextButton>
                   ) : <span className="num">{r.stock === null ? "—" : n(r.stock)}</span>}
                 </td>
+                <td className={`px-3 py-2.5 num text-right whitespace-nowrap ${r.days_left !== null && r.days_left <= 7 ? "text-danger font-medium" : ""}`}>
+                  {r.days_left === null ? "—" : r.days_left === 0 ? "오늘" : `약 ${n(r.days_left)}일`}
+                </td>
                 <td className="px-3 py-2.5 num text-right whitespace-nowrap">{n(r.new)}</td>
                 <td className="px-3 py-2.5 num text-right whitespace-nowrap">{n(r.accepted)}</td>
                 <td className="px-3 py-2.5 num text-right whitespace-nowrap">{n(r.shipped)}</td>
                 <td className={`px-3 py-2.5 num text-right whitespace-nowrap ${r.cancel_requests ? "text-danger font-medium" : ""}`}>{n(r.cancel_requests)}</td>
-                <td className="px-4 py-2.5 num text-right whitespace-nowrap">{n(r.sold_30)}</td>
+                <td className="px-3 py-2.5 num text-right whitespace-nowrap">{n(r.sold_30)}</td>
+                <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                  {r.item_id && !state.readOnly ? (
+                    <TextButton onClick={() => { setCosting(r); setCost(r.unit_cost === null ? "" : n(r.unit_cost)); setTax(r.tax_type || ""); }} className="num justify-end">
+                      {r.unit_cost === null ? "적기" : <>{n(r.unit_cost)}원{r.margin !== null && <span className="text-ink-2"> · {r.margin}%</span>}</>}
+                    </TextButton>
+                  ) : <span className="num">{r.unit_cost === null ? "—" : `${n(r.unit_cost)}원${r.margin !== null ? ` · ${r.margin}%` : ""}`}</span>}
+                  {r.tax_type && <span className="block text-caption text-ink-2">{TAX[r.tax_type]}</span>}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -105,7 +135,8 @@ export function ProductBoard({ qs, toOrders }: { qs: string; toOrders: () => voi
       <div className="flex flex-wrap items-center gap-3">
         <HowCounted>
           앱 주문 줄 수예요 (한 주문에 같은 제품이 여러 줄이면 줄마다). 재고는 적어 둔 제품만 세요 — 주문할 때 줄고, 취소되거나 결제하지 않고 한 시간이 지나면 돌아와요.
-          0 이 되면 앱에서 살 수 없게 되고 추천에서 빠져요. 5개 이하면 재고 적음으로 알려요
+          0 이 되면 앱에서 살 수 없게 되고 추천에서 빠져요. 5개 이하이거나 7일 안에 떨어질 것 같으면 재고 적음으로 알려요.
+          소진 예상은 재고 ÷ 지난 30일 하루 평균 판매로 짐작한 날 수예요. 마진은 (지금 판매가 − 원가) ÷ 판매가이고, 원가·과세 구분은 업체 화면과 정산 엑셀에만 쓰여요
         </HowCounted>
         {state.asOf && <AsOf at={state.asOf} />}
       </div>
@@ -115,6 +146,19 @@ export function ProductBoard({ qs, toOrders }: { qs: string; toOrders: () => voi
         <Field label="남은 수량(개)" hint="판매 단위 기준 · 0 이면 앱에서 살 수 없어요">
           <Input inputMode="numeric" value={value} onChange={(e) => setValue(e.target.value.replace(/\D/g, "").slice(0, 7))} />
         </Field>
+      </Sheet>
+      <Sheet open={!!costing} onClose={() => setCosting(null)} title={costing ? `${costing.name} 원가` : ""} size="sm"
+        footer={<><Button variant="ghost" onClick={() => setCosting(null)}>취소</Button><Button block loading={busy} onClick={saveCost}>저장하기</Button></>}>
+        <div className="flex flex-col gap-3">
+          <Field label="원가 (판매 단위 하나)" hint={costing?.price ? `지금 판매가 ${n(costing.price)}원 · 비우면 원가를 지워요` : "비우면 원가를 지워요"}>
+            <UnitInput unit="원" value={cost} onChange={(e) => { const d = e.target.value.replace(/\D/g, "").slice(0, 8); setCost(d ? n(Number(d)) : ""); }} />
+          </Field>
+          <Field label="과세 구분" hint="정산 엑셀에서 과세·면세 판매액을 나눠 보여요">
+            <Select value={tax} onChange={(e) => setTax(e.target.value)}>
+              <option value="">모름</option><option value="taxable">과세</option><option value="exempt">면세</option>
+            </Select>
+          </Field>
+        </div>
       </Sheet>
     </div>
   );

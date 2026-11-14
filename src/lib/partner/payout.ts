@@ -21,11 +21,11 @@ export function payDate(month: string) {
 }
 
 type Line = {
-  order_id: string; product_name: string; unit_price: number | null; quantity: number | null; fulfil_status: string;
+  order_id: string; partner_sku: string | null; product_name: string; unit_price: number | null; quantity: number | null; fulfil_status: string;
   delivered_at: string | null; confirmed_at: string | null; confirm_by: string | null;
   orders: { paid_at: string; shipping_fees: Record<string, number> | null; discount_fees: Record<string, number> | null };
 };
-const COLS = "order_id, product_name, unit_price, quantity, fulfil_status, delivered_at, confirmed_at, confirm_by, orders!inner(paid_at, shipping_fees, discount_fees)";
+const COLS = "order_id, partner_sku, product_name, unit_price, quantity, fulfil_status, delivered_at, confirmed_at, confirm_by, orders!inner(paid_at, shipping_fees, discount_fees)";
 
 /** 한 줄이 구매확정된 때 (아직이면 null) */
 export function effConfirm(l: Pick<Line, "fulfil_status" | "delivered_at" | "confirmed_at">, now = Date.now()): number | null {
@@ -39,7 +39,7 @@ export function effConfirm(l: Pick<Line, "fulfil_status" | "delivered_at" | "con
 export type Stage = "preparing" | "shipping" | "delivered" | "confirmed";
 export type Bundle = {
   order_id: string; paid_at: string; delivered_at: string | null; confirmed_at: number | null; confirm_by: "buyer" | "auto" | null; auto_at: number | null;
-  stage: Stage; lines: { name: string; qty: number; amount: number }[];
+  stage: Stage; lines: { sku: string | null; name: string; qty: number; amount: number }[];
   sales: number; discount: number; shipping: number; fee: number; payout: number;
 };
 
@@ -62,7 +62,7 @@ export function toBundles(lines: Line[], partnerId: string, rate: number | null,
       order_id, paid_at: o.paid_at, delivered_at: delivered, confirmed_at: confirmed,
       confirm_by: confirmed === null ? null : ls.some((l) => l.confirm_by === "buyer") ? "buyer" : "auto",
       auto_at: delivered ? Date.parse(delivered) + CONFIRM_DAYS * DAY : null,
-      stage, lines: ls.map((l) => ({ name: l.product_name, qty: l.quantity || 1, amount: (l.unit_price || 0) * (l.quantity || 1) })),
+      stage, lines: ls.map((l) => ({ sku: l.partner_sku, name: l.product_name, qty: l.quantity || 1, amount: (l.unit_price || 0) * (l.quantity || 1) })),
       sales, discount, shipping, fee, payout: sales - discount + shipping - fee,
     });
   }
