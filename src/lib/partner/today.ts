@@ -145,6 +145,10 @@ export async function buildToday(sb: Sb, partner: { id: string; kind: string; na
     kind: "CANCEL_REQUESTS", blocking: true, weight: 140 + oc.cancel_requests, tab: "orders", filter: "accepted",
     title: `취소 요청 ${n(oc.cancel_requests)}건`, reason: "보내기 전이면 취소해 주세요. 이미 보냈다면 발송 처리하면 돼요", action: "취소 요청 보기",
   });
+  if (oc?.return_requests) tasks.push({
+    kind: "RETURN_REQUESTS", blocking: true, weight: 135 + oc.return_requests, tab: "orders", filter: "returns",
+    title: `반품·교환 요청 ${n(oc.return_requests)}건`, reason: "답할 때까지 구매확정과 정산이 멈춰요", action: "반품·교환 보기",
+  });
   if (oc?.new) tasks.push({
     kind: "NEW_ORDERS", blocking: true, weight: 130 + oc.new, tab: "orders", filter: "new",
     title: `새 주문 ${n(oc.new)}건을 접수해 주세요`, reason: oc.late ? `결제하고 하루가 지나도록 보내지 않은 주문이 ${n(oc.late)}건 있어요` : "먼저 들어온 주문부터 보여 드려요", action: "새 주문 보기",

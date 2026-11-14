@@ -1,9 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Badge, Button, Card, CardActions, ConfirmSheet, EmptyState, Field, Input, LinkButton, Price, Sheet, SkeletonList, timeAgo, useToast } from "@/components/ui";
-import { BUYER_LABEL, CARRIERS } from "@/lib/order-status";
-import { AUTO_CONFIRM_DAYS, type BuyerOrder, type OrderGroup } from "@/lib/orders";
+import { Badge, Button, Card, CardActions, ChoiceList, ConfirmSheet, EmptyState, Field, Input, LinkButton, Price, Sheet, SkeletonList, Tabs, Textarea, timeAgo, useToast } from "@/components/ui";
+import { AUTO_CONFIRM_DAYS, BUYER_LABEL, CARRIERS, RETURN_REASONS, RETURN_REASON_LABEL, RETURN_TYPE_LABEL, returnOpen, type ReturnReason, type ReturnType } from "@/lib/order-status";
+import type { BuyerOrder, OrderGroup } from "@/lib/orders";
 
 const DAY: Record<string, string> = { mon: "월", tue: "화", wed: "수", thu: "목", fri: "금", sat: "토", sun: "일" };
 const won = (n: number) => `${n.toLocaleString("ko-KR")}원`;
@@ -19,6 +19,10 @@ export function OrderList() {
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState<{ order: BuyerOrder; group: OrderGroup } | null>(null);
+  const [returning, setReturning] = useState<{ order: BuyerOrder; group: OrderGroup } | null>(null);
+  const [rType, setRType] = useState<ReturnType>("return");
+  const [rReason, setRReason] = useState<ReturnReason | null>(null);
+  const [rNote, setRNote] = useState("");
 
   const load = useCallback(async () => {
     try {
@@ -45,6 +49,22 @@ export function OrderList() {
       await load();
     } catch (e) {
       toast.show((e as Error).message || "취소하지 못했어요. 다시 시도해 주세요", { tone: "danger" });
+    } finally { setBusy(false); }
+  };
+
+  const requestReturn = async () => {
+    if (!returning || !rReason) return;
+    setBusy(true);
+    try {
+      const r = await fetch(`/api/orders/${returning.order.id}/return`, { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ partner_id: returning.group.partner_id, type: rType, reason: rReason, note: rNote }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error);
+      toast.show(`${RETURN_TYPE_LABEL[rType]}을 요청했어요. 판매 업체가 답하면 알려 드려요`);
+      setReturning(null);
+      await load();
+    } catch (e) {
+      toast.show(`요청하지 못했어요. ${(e as Error).message || "다시 시도해 주세요"}`, { tone: "danger" });
     } finally { setBusy(false); }
   };
 
@@ -114,7 +134,11 @@ export function OrderList() {
                         {CARRIERS[g.carrier] || g.carrier}{g.tracking_number && <> · 송장 <span className="num select-all">{g.tracking_number}</span></>}
                       </p>
                     )}
-                    {g.status === "canceled" && g.cancel_reason && (
+                    {g.status === "canceled" && g.return?.status === "returned" ? (
+                      <p className="text-label text-ink-2 mt-1.5">
+                        반품을 마쳤어요{g.return.fee ? <> · 반품 배송비 <span className="num">{won(g.return.fee)}</span>를 빼고 돌려드려요</> : null}{g.return.reply && <> · {g.return.reply}</>}
+                      </p>
+                    ) : g.status === "canceled" && g.cancel_reason && (
                       <p className="text-label text-ink-2 mt-1.5">
                         {g.canceled_by === "buyer" ? "직접 취소했어요" : g.canceled_by === "partner" ? "판매 업체가 취소했어요" : "케어푸드가 취소했어요"} · {g.cancel_reason}
                       </p>
@@ -122,8 +146,19 @@ export function OrderList() {
                     {g.status === "accepted" && g.cancel_requested_at && (
                       <p className="text-label text-ink-2 mt-1.5">취소를 요청했어요. 판매 업체가 확인하고 있어요</p>
                     )}
-                    {(g.status === "shipped" || g.status === "delivered") && g.cancel_requested_at && (
-                      <p className="text-label text-ink-2 mt-1.5">취소를 요청했지만 판매 업체가 이미 보냈어요. 반품은 케어푸드에 문의해 주세요</p>
+                    {(g.status === "shipped" || g.status === "delivered") && g.cancel_requested_at && !g.return && (
+                      <p className="text-label text-ink-2 mt-1.5">취소를 요청했지만 판매 업체가 이미 보냈어요. 받은 뒤 반품·교환을 요청할 수 있어요</p>
+                    )}
+                    {g.status === "shipped" && g.return?.status === "exchanged" && (
+                      <p className="text-label text-ink-2 mt-1.5">교환 상품을 보냈어요{g.return.reply && <> · {g.return.reply}</>}</p>
+                    )}
+                    {g.status === "delivered" && g.return && returnOpen(g.return.status) && (
+                      <p className="text-label text-ink mt-1.5">
+                        {RETURN_TYPE_LABEL[g.return.type]}을 요청했어요 · {g.return.status === "approved" ? "판매 업체가 받아들였어요. 회수 안내를 기다려 주세요" : "판매 업체가 확인하고 있어요"}
+                      </p>
+                    )}
+                    {g.status === "delivered" && g.return?.status === "rejected" && (
+                      <p className="text-label text-ink mt-1.5">판매 업체가 {RETURN_TYPE_LABEL[g.return.type]} 요청을 거절했어요{g.return.reply && <> · {g.return.reply}</>}. 더 도움이 필요하면 케어푸드에 문의해 주세요</p>
                     )}
                     {!unpaid && g.status === "shipped" && g.partner_id && (
                       <>
@@ -133,10 +168,17 @@ export function OrderList() {
                     )}
                     {!unpaid && g.status === "delivered" && g.partner_id && (g.confirmed_at ? (
                       <p className="text-label text-ink-2 mt-1.5">{md(g.confirmed_at)}에 구매확정했어요</p>
-                    ) : (
+                    ) : g.return?.status === "approved" ? null : (
                       <>
-                        <p className="text-caption text-ink-2 mt-1.5">받은 상품에 문제가 없으면 구매확정해 주세요. {g.delivered_at ? <>{autoDay(g.delivered_at)}에 저절로 확정돼요</> : <>배송 완료 {AUTO_CONFIRM_DAYS}일 뒤 저절로 확정돼요</>}</p>
-                        <Button size="sm" variant="ghost" className="mt-1 -ml-3" onClick={() => setConfirm({ order: o, group: g })}>구매확정하기</Button>
+                        {!g.return || !returnOpen(g.return.status)
+                          ? <p className="text-caption text-ink-2 mt-1.5">받은 상품에 문제가 없으면 구매확정해 주세요. {g.delivered_at ? <>{autoDay(g.delivered_at)}에 저절로 확정돼요</> : <>배송 완료 {AUTO_CONFIRM_DAYS}일 뒤 저절로 확정돼요</>}</p>
+                          : <p className="text-caption text-ink-2 mt-1.5">판매 업체가 답할 때까지 구매확정을 멈췄어요</p>}
+                        <span className="flex flex-wrap gap-1 mt-1 -ml-3">
+                          <Button size="sm" variant="ghost" onClick={() => setConfirm({ order: o, group: g })}>{g.return?.status === "requested" ? "요청 거두고 구매확정하기" : "구매확정하기"}</Button>
+                          {(!g.return || g.return.status === "exchanged") && (
+                            <Button size="sm" variant="ghost" onClick={() => { setRType("return"); setRReason(null); setRNote(""); setReturning({ order: o, group: g }); }}>반품·교환 요청하기</Button>
+                          )}
+                        </span>
                       </>
                     ))}
                     {!unpaid && (g.status === "new" || (g.status === "accepted" && !g.cancel_requested_at)) && (
@@ -175,9 +217,26 @@ export function OrderList() {
         </Field>
       </Sheet>
 
+      <Sheet open={!!returning} onClose={() => setReturning(null)} title="반품·교환 요청하기"
+        description={returning ? `${returning.group.seller} · 판매 업체가 답할 때까지 구매확정이 멈춰요` : undefined}
+        footer={<div className="flex gap-2">
+          <Button variant="ghost" onClick={() => setReturning(null)}>닫기</Button>
+          <Button block loading={busy} disabled={!rReason || (rReason !== "change_mind" && !rNote.trim())} onClick={requestReturn}>{RETURN_TYPE_LABEL[rType]} 요청하기</Button>
+        </div>}>
+        <div className="flex flex-col gap-4">
+          <Tabs variant="line" value={rType} onChange={setRType} label="반품 또는 교환"
+            items={[{ value: "return", label: "반품 (환불)" }, { value: "exchange", label: "교환 (같은 상품)" }]} />
+          <ChoiceList label="이유" value={rReason} onChange={setRReason} options={RETURN_REASONS.map((r) => ({ value: r, label: RETURN_REASON_LABEL[r] }))} />
+          <Field label={rReason === "change_mind" ? "남길 말 (선택)" : "어떤 문제인지"}
+            hint={rReason === "change_mind" ? "마음이 바뀐 반품은 반품 배송비를 빼고 돌려받아요. 먹을거리는 열었거나 시간이 지나면 받아 주지 않을 수 있어요" : "사진은 판매 업체가 회수할 때 보여 주세요"}>
+            <Textarea value={rNote} onChange={(e) => setRNote(e.target.value)} maxLength={300} rows={3} placeholder="예: 포장이 터져서 왔어요" />
+          </Field>
+        </div>
+      </Sheet>
+
       <ConfirmSheet open={!!confirm} onClose={() => setConfirm(null)} onConfirm={doConfirm} loading={busy}
         title="구매확정할까요?" confirmLabel="구매확정하기" tone="primary"
-        description={confirm ? `${confirm.group.seller} 주문이에요. 확정하면 판매 업체에 대금이 정산돼요. 그 뒤 반품·교환은 케어푸드에 문의해 주세요` : ""} />
+        description={confirm ? `${confirm.group.seller} 주문이에요. 확정하면 판매 업체에 대금이 정산돼요.${confirm.group.return?.status === "requested" ? " 남긴 반품·교환 요청은 거둬요." : ""} 그 뒤 반품·교환은 케어푸드에 문의해 주세요` : ""} />
     </>
   );
 }

@@ -1,5 +1,5 @@
 /**
- * 업체 알림 — 새 주문·취소 요청을 업체 담당자 기기에 푸시로 알린다. 서버 전용. /api/push/run 이 30분마다 부른다 (11/14 구조 진단 P0).
+ * 업체 알림 — 새 주문·취소 요청·반품·교환 요청을 업체 담당자 기기에 푸시로 알린다. 서버 전용. /api/push/run 이 30분마다 부른다 (11/14 구조 진단 P0).
  *  · 알린 줄에는 partner_notified_at / cancel_notified_at 을 적어 다시 보내지 않는다. 기기가 없어도 적는다(쌓였다가 한꺼번에 가지 않게).
  *  · 담당자(partner_members.auth_user_id) → account_links.actor_id → push_subscriptions. 예시 주문(is_demo)은 보내지 않고 적기만 한다.
  *  · 담당자마다 설정에서 끌 수 있다(partner_members.notify_orders). 모두 껐어도 알린 것으로 적는다 — 다시 켜도 지난 주문이 한꺼번에 오지 않게.
@@ -39,24 +39,29 @@ function byPartner(lines: Line[]) {
   return m;
 }
 
-export async function notifyPartners(sb: Sb, send: boolean): Promise<{ new_orders: number; cancel_requests: number; pushed: number }> {
-  const [nw, cr] = await Promise.all([
+export async function notifyPartners(sb: Sb, send: boolean): Promise<{ new_orders: number; cancel_requests: number; return_requests: number; pushed: number }> {
+  const [nw, cr, rr] = await Promise.all([
     sb.from("order_items").select("id, partner_id, order_id, orders!inner(is_demo)").eq("fulfil_status", "new").is("partner_notified_at", null)
       .not("partner_id", "is", null).not("orders.paid_at", "is", null).limit(2000),
     sb.from("order_items").select("id, partner_id, order_id, orders!inner(is_demo)").eq("fulfil_status", "accepted").not("cancel_requested_at", "is", null)
       .is("cancel_notified_at", null).not("partner_id", "is", null).limit(2000),
+    sb.from("order_items").select("id, partner_id, order_id, orders!inner(is_demo)").eq("fulfil_status", "delivered").eq("return_status", "requested")
+      .is("return_notified_at", null).not("partner_id", "is", null).limit(2000),
   ]);
-  for (const r of [nw, cr]) if (r.error) throw new Error(r.error.message);
-  const newLines = (nw.data || []) as Line[], cancelLines = (cr.data || []) as Line[];
-  const newBy = byPartner(newLines), cancelBy = byPartner(cancelLines);
+  for (const r of [nw, cr, rr]) if (r.error) throw new Error(r.error.message);
+  const newLines = (nw.data || []) as Line[], cancelLines = (cr.data || []) as Line[], returnLines = (rr.data || []) as Line[];
+  const newBy = byPartner(newLines), cancelBy = byPartner(cancelLines), returnBy = byPartner(returnLines);
   let pushed = 0;
   if (send) {
-    const subs = await memberSubs(sb, [...new Set([...newBy.keys(), ...cancelBy.keys()])]);
+    const subs = await memberSubs(sb, [...new Set([...newBy.keys(), ...cancelBy.keys(), ...returnBy.keys()])]);
     for (const [pid, list] of subs) {
-      const n = newBy.get(pid)?.size || 0, c = cancelBy.get(pid)?.size || 0;
-      if (!n && !c) continue;
-      const title = n && c ? `새 주문 ${n}건 · 취소 요청 ${c}건` : n ? `새 주문 ${n}건이 들어왔어요` : `취소 요청 ${c}건이 왔어요`;
-      const body = c ? "보내기 전이면 취소해 주세요. 업체 화면 주문에서 확인할 수 있어요" : "업체 화면 주문에서 먼저 들어온 주문부터 접수해 주세요";
+      const n = newBy.get(pid)?.size || 0, c = cancelBy.get(pid)?.size || 0, rq = returnBy.get(pid)?.size || 0;
+      if (!n && !c && !rq) continue;
+      const parts = [n && `새 주문 ${n}건`, c && `취소 요청 ${c}건`, rq && `반품·교환 요청 ${rq}건`].filter(Boolean) as string[];
+      const title = parts.length > 1 ? parts.join(" · ") : n ? `새 주문 ${n}건이 들어왔어요` : c ? `취소 요청 ${c}건이 왔어요` : `반품·교환 요청 ${rq}건이 왔어요`;
+      const body = c ? "보내기 전이면 취소해 주세요. 업체 화면 주문에서 확인할 수 있어요"
+        : rq && !n ? "업체 화면 주문 > 반품·교환에서 받아들이거나 거절해 주세요. 답할 때까지 구매확정이 멈춰요"
+        : "업체 화면 주문에서 먼저 들어온 주문부터 접수해 주세요";
       if (await sendToUser(sb, list, { title, body, url: `/partner?tab=orders`, tag: `partner-orders-${pid}` })) pushed++;
     }
   }
@@ -68,6 +73,7 @@ export async function notifyPartners(sb: Sb, send: boolean): Promise<{ new_order
     }
   };
   // 푸시 키가 없을 때는 적지 않는다 — 키가 생기면 그때 알린다
-  if (send) await Promise.all([mark(newLines.map((l) => l.id), "partner_notified_at"), mark(cancelLines.map((l) => l.id), "cancel_notified_at")]);
-  return { new_orders: [...newBy.values()].reduce((s, v) => s + v.size, 0), cancel_requests: [...cancelBy.values()].reduce((s, v) => s + v.size, 0), pushed };
+  if (send) await Promise.all([mark(newLines.map((l) => l.id), "partner_notified_at"), mark(cancelLines.map((l) => l.id), "cancel_notified_at"), mark(returnLines.map((l) => l.id), "return_notified_at")]);
+  const total = (m: Map<string, Set<string>>) => [...m.values()].reduce((s, v) => s + v.size, 0);
+  return { new_orders: total(newBy), cancel_requests: total(cancelBy), return_requests: total(returnBy), pushed };
 }
