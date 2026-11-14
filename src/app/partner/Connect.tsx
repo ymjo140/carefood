@@ -131,7 +131,7 @@ function BatchResult({ batch, fresh }: { batch: Batch; fresh: boolean }) {
   );
 }
 
-const VIA: Record<string, string> = { excel: "엑셀", feed: "피드", api: "API" };
+const VIA: Record<string, string> = { excel: "엑셀", feed: "피드", api: "API", web: "화면에서 고침" };
 const n = (v: number) => v.toLocaleString("ko-KR");
 
 /** 연동 상태 — 마지막 수신 · 오래된 가격 · 구매 확정 보고. 문제가 있는 줄에는 경고 아이콘과 할 일 */
