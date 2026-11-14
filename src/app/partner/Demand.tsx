@@ -8,7 +8,7 @@ type Data = { people: number | null; segments: Row[] };
 const n = (v: number) => v.toLocaleString("ko-KR");
 
 /** 수요 — 조건별로 찾는 사람 비율과 지금 살 수 있는 제품 수. 찾는 사람이 많은데 제품이 적은 조건이 위로 온다 */
-export function Demand({ qs }: { qs: string }) {
+export function Demand({ qs, onMakeSegment }: { qs: string; onMakeSegment?: (need: string) => void }) {
   const [state, setState] = useState<{ status: "loading" | "error" | "done"; data?: Data; error?: string }>({ status: "loading" });
   const load = useCallback(async () => {
     try {
@@ -42,6 +42,7 @@ export function Demand({ qs }: { qs: string }) {
                 <Stat label="살 수 있는 제품" value={n(top.supply)} unit="개" emphasis />
                 <Stat label="내 제품" value={n(top.mine)} unit="개" />
               </div>
+              {onMakeSegment && <Button size="sm" variant="secondary" className="mt-4" onClick={() => onMakeSegment(top.key)}>이 조건을 찾는 사람으로 고객층 만들기</Button>}
             </Card>
 
             <Card padding="none" className="overflow-x-auto mt-3">
@@ -61,6 +62,9 @@ export function Demand({ qs }: { qs: string }) {
                       <td className="px-4 py-2.5 sm:min-w-48">
                         <span className="block text-ink">{s.label}</span>
                         <span className="block text-caption text-ink-2">{s.rule}</span>
+                        {onMakeSegment && s.share !== null && (
+                          <button type="button" className="press mt-1 text-caption font-medium text-brand-ink hover:underline underline-offset-4" onClick={() => onMakeSegment(s.key)}>고객층 만들기</button>
+                        )}
                       </td>
                       <td className="px-3 py-2.5 num text-right text-ink whitespace-nowrap">{s.share !== null ? `${s.share}%` : "—"}</td>
                       <td className="px-3 py-2.5 num text-right text-ink">{n(s.supply)}</td>

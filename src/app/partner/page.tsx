@@ -1,49 +1,51 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
-  Badge, Button, Card, EmptyState, LinkButton, ListRow, Notice, Page, PageHeader, PageLoading, SectionHeader,
-  SkeletonList, Stat, Tabs, buttonClass, timeAgo, useToast,
+  Badge, Button, Card, EmptyState, Icon, LinkButton, ListRow, Page, PageHeader, PageLoading, SectionHeader,
+  SkeletonList, Tabs, timeAgo,
 } from "@/components/ui";
 import { REVIEW_LABELS } from "@/lib/partner/schema";
+import { TAB_LABEL, isTab, tabsFor, type Tab } from "@/lib/partner/tabs";
+import { ORDERING_ENABLED } from "@/lib/features";
 import { Commission } from "./Commission";
-import { Feed } from "./Feed";
 import { Report } from "./Report";
-import { ApiKeys } from "./ApiKeys";
 import { Demand } from "./Demand";
 import { Orders } from "./Orders";
-import { ORDERING_ENABLED } from "@/lib/features";
+import { Today } from "./Today";
+import { Segments } from "./Segments";
+import { Connect, type Batch } from "./Connect";
 
 type Partner = { id: string; slug: string; name: string; kind: string; status: string };
-type Batch = {
-  id: string; file_name: string | null; row_count: number; ok_count: number; review_count: number; error_count: number;
-  unchanged_count: number; errors: RowError[]; created_at: string;
-};
-type RowError = { row: number; sku?: string; field?: string; message: string };
+type Claim = { phrase: string; why: string; suggest?: string };
 type Item = {
   id: string; partner_sku: string; status: "pending" | "approved" | "rejected" | "discontinued"; review_reasons: string[];
   warnings: string[]; reject_note: string | null; product_id: string | null; updated_at: string; name: string;
+  claims: Claim[]; dropped: string | null; price_age: number | null;
 };
 type Me = { partner: Partner; role: string; counts: Record<string, number>; batches: Batch[] };
 type Load<T> = { status: "loading" | "error" | "done" | "login" | "not_member"; data?: T; error?: string };
 
 const STATUS_LABEL: Record<Item["status"], string> = { pending: "검수 중", approved: "반영", rejected: "반려", discontinued: "판매 종료" };
 const STATUS_TONE = { pending: "neutral", approved: "positive", rejected: "danger", discontinued: "neutral" } as const;
+const KIND_LABEL: Record<string, string> = { meal_service: "식단 서비스", brand: "식품 브랜드", mall: "유통·몰" };
 type Filter = "all" | "pending" | "approved" | "rejected";
 
+/**
+ * 입점 업체 화면 — 탭 여덟 개(오늘·주문·성과·고객층·수요·제품·정산·연동), 업체 유형이 순서를 정한다 (v3 6장).
+ * ?tab= 으로 탭을 열 수 있고(관리자 ?as= 와 함께 남는다), 다른 탭에서 "이 조건으로 고객층 만들기"를 누르면 조건을 들고 고객층으로 간다.
+ */
 function PartnerHome() {
-  const as = useSearchParams().get("as");
+  const sp = useSearchParams();
+  const router = useRouter();
+  const as = sp.get("as");
   const qs = as ? `as=${encodeURIComponent(as)}` : "";
-  const toast = useToast();
   const [me, setMe] = useState<Load<Me>>({ status: "loading" });
   const [items, setItems] = useState<Load<Item[]>>({ status: "loading" });
   const [filter, setFilter] = useState<Filter>("all");
-  const [view, setView] = useState<"products" | "feed" | "api" | "report" | "demand" | "orders" | "commission">("products");
-  const [file, setFile] = useState<File | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [result, setResult] = useState<Batch | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
+  const [view, setView] = useState<Tab>(() => { const t = sp.get("tab"); return isTab(t) ? t : "today"; });
+  const [prefill, setPrefill] = useState<{ need?: string; goal?: string } | null>(null);
 
   const loadMe = useCallback(async () => {
     try {
@@ -66,31 +68,17 @@ function PartnerHome() {
   }, [qs]);
 
   useEffect(() => { loadMe(); }, [loadMe]); // eslint-disable-line react-hooks/set-state-in-effect -- 불러온 뒤에 상태를 바꾼다
-  useEffect(() => { if (me.status === "done") loadItems(filter); }, [me.status, filter, loadItems]); // eslint-disable-line react-hooks/set-state-in-effect -- 불러온 뒤에 상태를 바꾼다
+  useEffect(() => { if (me.status === "done" && view === "products") loadItems(filter); }, [me.status, view, filter, loadItems]); // eslint-disable-line react-hooks/set-state-in-effect -- 불러온 뒤에 상태를 바꾼다
 
-  const upload = async () => {
-    if (!file) return;
-    setUploading(true);
-    try {
-      const fd = new FormData();
-      fd.append("file", file);
-      const r = await fetch(`/api/partner/upload?${qs}`, { method: "POST", body: fd });
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error);
-      setResult({
-        id: d.batch_id, file_name: file.name, row_count: d.rows, ok_count: d.ok, review_count: d.review, error_count: d.error,
-        unchanged_count: d.unchanged, errors: d.errors, created_at: new Date().toISOString(),
-      });
-      setFile(null);
-      if (fileRef.current) fileRef.current.value = "";
-      toast.show(`${d.rows}줄을 올렸어요`);
-      loadMe();
-      setItems({ status: "loading" });
-      loadItems(filter);
-    } catch (e) {
-      toast.show(`올리지 못했어요. ${(e as Error).message || "다시 시도해 주세요"}`, { tone: "danger" });
-    } finally { setUploading(false); }
-  };
+  const go = useCallback((tab: Tab, opts?: { filter?: string; need?: string; goal?: string }) => {
+    if (tab === "products" && opts?.filter && ["pending", "approved", "rejected"].includes(opts.filter)) { setFilter(opts.filter as Filter); setItems({ status: "loading" }); }
+    if (tab === "segments" && (opts?.need || opts?.goal)) setPrefill({ need: opts.need, goal: opts.goal });
+    setView(tab);
+    const next = new URLSearchParams(sp.toString());
+    next.set("tab", tab);
+    router.replace(`/partner?${next.toString()}`, { scroll: false });
+    window.scrollTo({ top: 0 });
+  }, [router, sp]);
 
   if (me.status === "loading") return <PageLoading />;
   if (me.status === "login") {
@@ -121,122 +109,77 @@ function PartnerHome() {
   }
 
   const { partner, counts, batches } = me.data;
-  const last = result || batches[0] || null;
+  const tabs = tabsFor(partner.kind, ORDERING_ENABLED);
+  const current = tabs.includes(view) ? view : "today";
 
   return (
-    <Page>
+    <Page width="wide">
       <PageHeader
         title={partner.name}
-        description={partner.status === "active" ? "입점 업체 · 반영된 제품이 앱에 보이고 있어요" : "입점 준비 중 · 반영된 제품은 운영을 시작하면 앱에 보여요"}
-        actions={<a href="/api/partner/template" className={buttonClass({ variant: "secondary", size: "sm" })}>양식 내려받기</a>}
+        description={`${KIND_LABEL[partner.kind] || "입점 업체"} · ${partner.status === "active" ? "반영된 제품이 앱에 보이고 있어요" : "입점 준비 중 · 반영된 제품은 운영을 시작하면 앱에 보여요"}`}
+        actions={as ? <Badge tone="brand">관리자 보기</Badge> : undefined}
       />
 
-      <div className="grid grid-cols-3 gap-3 mb-8">
-        <Card><Stat label="반영" value={(counts.approved || 0).toLocaleString()} /></Card>
-        <Card><Stat label="검수 중" value={(counts.pending || 0).toLocaleString()} /></Card>
-        <Card><Stat label="반려" value={(counts.rejected || 0).toLocaleString()} /></Card>
-      </div>
+      <Tabs value={current} onChange={(t) => go(t)} label="입점 업체 메뉴" className="mb-6"
+        items={tabs.map((t) => ({ value: t, label: TAB_LABEL[t], count: t === "products" ? counts.rejected || 0 : undefined }))} />
 
-      <Tabs value={view} onChange={setView} label="입점 업체 메뉴" className="mb-6"
-        items={[
-          { value: "products", label: "제품" }, { value: "feed", label: "피드" }, { value: "api", label: "API" },
-          { value: "report", label: "성과" }, { value: "demand", label: "수요" },
-          // 앱 안 주문은 결제가 붙은 뒤에 연다 (lib/features.ts) — 그 전에는 탭을 두지 않는다
-          ...(ORDERING_ENABLED ? [{ value: "orders" as const, label: "주문" }] : []),
-          { value: "commission", label: "정산" },
-        ]} />
+      {current === "today" && <Today qs={qs} go={go} />}
+      {current === "orders" && <Orders qs={qs} />}
+      {current === "report" && <Report qs={qs} onMakeSegment={(goal) => go("segments", { goal })} />}
+      {current === "segments" && <Segments qs={qs} go={go} prefill={prefill} />}
+      {current === "demand" && <Demand qs={qs} onMakeSegment={(need) => go("segments", { need })} />}
+      {current === "commission" && <Commission qs={qs} />}
+      {current === "connect" && <Connect qs={qs} batches={batches} onChanged={() => { loadMe(); setItems({ status: "loading" }); }} />}
 
-      {view === "products" && <>
-      <SectionHeader title="제품 올리기" />
-      <Card className="mb-3">
-        <p className="text-label text-ink-2">
-          케어푸드 양식(.xlsx)의 &lsquo;제품&rsquo; 시트에 한 줄에 제품 하나씩 적어 올려요. 가격·재고·링크만 바뀐 줄은 바로 반영되고,
-          새 제품과 영양·원재료·알레르기가 바뀐 줄은 케어푸드가 확인한 뒤 반영돼요.
-        </p>
-        <div className="flex flex-wrap items-center gap-2 mt-4">
-          <label className={buttonClass({ variant: "secondary" })}>
-            파일 고르기
-            <input ref={fileRef} type="file" accept=".xlsx" className="sr-only" onChange={(e) => setFile(e.target.files?.[0] || null)} />
-          </label>
-          <span className="text-label text-ink-2 min-w-0 truncate">{file ? file.name : "고른 파일이 없어요"}</span>
-          <Button className="ml-auto" disabled={!file} loading={uploading} onClick={upload}>올리기</Button>
-        </div>
-      </Card>
-
-      {last && <BatchResult batch={last} fresh={!!result} />}
-
-      <SectionHeader title="제품" className="mt-8" />
-      <Tabs variant="line" value={filter} onChange={(f) => { setFilter(f); setItems({ status: "loading" }); }} label="제품 상태" className="mb-3"
-        items={[
-          { value: "all", label: "전체" },
-          { value: "pending", label: "검수 중", count: counts.pending || 0 },
-          { value: "approved", label: "반영", count: counts.approved || 0 },
-          { value: "rejected", label: "반려", count: counts.rejected || 0 },
-        ]} />
-      {items.status === "loading" ? <SkeletonList rows={4} thumb={false} />
-        : items.status === "error" ? (
-          <EmptyState title="제품 목록을 불러오지 못했어요" description={items.error}
-            action={<Button size="sm" variant="secondary" icon="refresh" onClick={() => { setItems({ status: "loading" }); loadItems(filter); }}>다시 불러오기</Button>} />
-        ) : !items.data?.length ? (
-          <EmptyState title={filter === "all" ? "아직 올린 제품이 없어요" : `${STATUS_LABEL[filter as Item["status"]]} 제품이 없어요`}
-            description={filter === "all" ? "양식을 내려받아 제품을 적고 위에서 올려 주세요" : undefined} />
-        ) : (
-          <Card padding="none" className="divide-y divide-line">
-            {items.data.map((it) => (
-              <ListRow key={it.id}
-                href={it.product_id && it.status === "approved" ? `/products/${it.product_id}` : undefined}
-                title={it.name}
-                meta={
-                  <span className="flex flex-col gap-0.5">
-                    <span><span className="num">{it.partner_sku}</span> · {timeAgo(it.updated_at)}</span>
-                    {it.status === "pending" && it.review_reasons.length > 0 && <span>{it.review_reasons.map((r) => REVIEW_LABELS[r] || r).join(" · ")}</span>}
-                    {it.reject_note && <span className="text-danger">반려 이유: {it.reject_note}</span>}
-                  </span>
-                }
-                trailing={<Badge tone={STATUS_TONE[it.status]}>{STATUS_LABEL[it.status]}</Badge>}
-              />
-            ))}
-          </Card>
-        )}
-
-      </>}
-
-      {view === "feed" && <Feed qs={qs} onFetched={() => { loadMe(); loadItems(filter); }} />}
-      {view === "api" && <ApiKeys qs={qs} />}
-      {view === "report" && <Report qs={qs} />}
-      {view === "demand" && <Demand qs={qs} />}
-      {view === "orders" && <Orders qs={qs} />}
-      {view === "commission" && <Commission qs={qs} />}
-    </Page>
-  );
-}
-
-/** 마지막으로 올린 결과 — 줄별 오류까지 */
-function BatchResult({ batch, fresh }: { batch: Batch; fresh: boolean }) {
-  const failed = batch.error_count > 0;
-  return (
-    <Notice tone={failed ? "danger" : "neutral"} title={`${fresh ? "방금" : timeAgo(batch.created_at)} 올린 ${batch.file_name || "파일"}`}>
-      <p>
-        <span className="num">{batch.row_count}</span>줄 중 바로 반영 <span className="num">{batch.ok_count}</span> ·
-        검수 중 <span className="num">{batch.review_count}</span> · 바뀐 것 없음 <span className="num">{batch.unchanged_count}</span> ·
-        반려 <span className="num">{batch.error_count}</span>
-      </p>
-      {batch.errors.length > 0 && (
-        <div className="mt-3 overflow-x-auto">
-          <table className="w-full text-label">
-            <thead>
-              <tr className="text-left text-ink-2"><th className="py-1 pr-3 font-medium whitespace-nowrap">줄</th><th className="py-1 pr-3 font-medium whitespace-nowrap">제품 코드</th><th className="py-1 font-medium">고칠 것</th></tr>
-            </thead>
-            <tbody className="divide-y divide-line">
-              {batch.errors.slice(0, 100).map((e, i) => (
-                <tr key={i}><td className="py-1.5 pr-3 num align-top">{e.row}</td><td className="py-1.5 pr-3 num align-top whitespace-nowrap">{e.sku || "—"}</td><td className="py-1.5 text-ink">{e.message}</td></tr>
-              ))}
-            </tbody>
-          </table>
-          {batch.errors.length > 100 && <p className="mt-2">앞의 100개만 보여요. 고쳐서 다시 올리면 나머지도 보여요</p>}
-        </div>
+      {current === "products" && (
+        <section>
+          <SectionHeader title="제품" />
+          <Tabs variant="line" value={filter} onChange={(f) => { setFilter(f); setItems({ status: "loading" }); }} label="제품 상태" className="mb-3"
+            items={[
+              { value: "all", label: "전체" },
+              { value: "pending", label: "검수 중", count: counts.pending || 0 },
+              { value: "approved", label: "반영", count: counts.approved || 0 },
+              { value: "rejected", label: "반려", count: counts.rejected || 0 },
+            ]} />
+          {items.status === "loading" ? <SkeletonList rows={4} thumb={false} />
+            : items.status === "error" ? (
+              <EmptyState title="제품 목록을 불러오지 못했어요" description={items.error}
+                action={<Button size="sm" variant="secondary" icon="refresh" onClick={() => { setItems({ status: "loading" }); loadItems(filter); }}>다시 불러오기</Button>} />
+            ) : !items.data?.length ? (
+              <EmptyState title={filter === "all" ? "아직 올린 제품이 없어요" : `${STATUS_LABEL[filter as Item["status"]]} 제품이 없어요`}
+                description={filter === "all" ? "연동 탭에서 피드를 연결하거나 엑셀로 올려 주세요" : undefined}
+                action={filter === "all" ? <Button size="sm" variant="secondary" onClick={() => go("connect")}>연동하러 가기</Button> : undefined} />
+            ) : (
+              <Card padding="none" className="divide-y divide-line">
+                {items.data.map((it) => (
+                  <ListRow key={it.id}
+                    href={it.product_id && it.status === "approved" ? `/products/${it.product_id}` : undefined}
+                    title={it.name}
+                    meta={
+                      <span className="flex flex-col gap-0.5">
+                        <span><span className="num">{it.partner_sku}</span> · {timeAgo(it.updated_at)}{it.price_age !== null && it.price_age >= 50 ? <> · 가격 확인 <span className="num">{it.price_age}</span>일 전</> : null}</span>
+                        {it.status === "pending" && it.review_reasons.length > 0 && <span>{it.review_reasons.map((r) => REVIEW_LABELS[r] || r).join(" · ")}</span>}
+                        {it.reject_note && <span className="text-danger">반려 이유: {it.reject_note}</span>}
+                        {it.dropped && <span className="inline-flex items-center gap-1 text-ink"><Icon name="alert" size={14} className="text-danger" />추천에서 빠짐 · {it.dropped}</span>}
+                        {it.claims.map((c) => (
+                          <span key={c.phrase} className="inline-flex items-start gap-1 text-ink">
+                            <Icon name="alert" size={14} className="text-ink-2 shrink-0 mt-0.5" />
+                            <span>&lsquo;{c.phrase}&rsquo; — {c.why}{c.suggest ? ` · 바꿀 말: ${c.suggest}` : ""}</span>
+                          </span>
+                        ))}
+                      </span>
+                    }
+                    trailing={<Badge tone={STATUS_TONE[it.status]}>{STATUS_LABEL[it.status]}</Badge>}
+                  />
+                ))}
+              </Card>
+            )}
+          <p className="text-caption text-ink-2 mt-3">
+            표현 점검은 상품명·소개·강조 문구에서 질병·효능으로 읽힐 수 있는 말을 먼저 알려 드리는 안내예요. 법적 판단은 아니고, 근거를 달면 검수에서 통과될 수 있어요
+          </p>
+        </section>
       )}
-    </Notice>
+    </Page>
   );
 }
 

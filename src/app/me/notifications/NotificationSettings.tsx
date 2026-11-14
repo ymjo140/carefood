@@ -136,6 +136,74 @@ export function NotificationSettings() {
         </div>
         {!on && <p className="text-caption text-ink-2 mt-2">이 기기 알림을 켜야 실제로 받아요. 고른 종류는 다른 기기에도 똑같이 적용돼요</p>}
       </section>
+
+      <AdConsent />
     </div>
+  );
+}
+
+/**
+ * 업체 소식(광고) 받기 — 정보통신망법 제50조의 광고성 정보 수신 동의. 기본은 꺼짐, 사람 기준.
+ * 밤 9시~아침 8시는 따로 동의해야 하고, 고른 목표로 대상을 고르는 데 쓰는 것도 따로 동의한다(민감정보 이용 목적).
+ * 켜고 끌 때마다 날짜를 알려 드린다 (처리 결과 통지).
+ */
+type Consent = { ads: boolean; night: boolean; targeting: boolean };
+function AdConsent() {
+  const toast = useToast();
+  const [state, setState] = useState<{ status: "loading" | "error" | "done" | "not_ready"; value?: Consent }>({ status: "loading" });
+  const [attempt, setAttempt] = useState(0);
+  const [busy, setBusy] = useState(false); // 바꾸는 중에는 다른 칸을 잠근다 (요청이 엇갈려 끈 동의가 되살아나지 않게)
+
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/marketing-consent")
+      .then(async (r) => { const d = await r.json(); if (!r.ok) throw new Error(d.error); if (alive) setState(d.ready ? { status: "done", value: { ads: d.ads, night: d.night, targeting: d.targeting } } : { status: "not_ready" }); })
+      .catch(() => { if (alive) setState({ status: "error" }); });
+    return () => { alive = false; };
+  }, [attempt]);
+
+  const set = async (key: keyof Consent, next: boolean) => {
+    if (!state.value || busy) return;
+    const before = state.value;
+    setBusy(true);
+    setState({ status: "done", value: { ...before, [key]: next, ...(key === "ads" && !next ? { night: false, targeting: false } : {}) } });
+    try {
+      const r = await fetch("/api/marketing-consent", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ [key]: next }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error);
+      setState({ status: "done", value: { ads: d.ads, night: d.night, targeting: d.targeting } });
+      const day = new Date().toLocaleDateString("ko-KR", { month: "long", day: "numeric" });
+      const what = key === "ads" ? "업체 소식 받기" : key === "night" ? "밤에도 받기" : "목표로 맞는 소식만 받기";
+      toast.show(`${day}에 ${what}를 ${next ? "켰어요" : "껐어요"}`);
+    } catch {
+      setState({ status: "done", value: before });
+      toast.show("설정을 바꾸지 못했어요. 다시 시도해 주세요", { tone: "danger" });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (state.status === "not_ready") return null;
+  return (
+    <section>
+      <SectionHeader title="업체 소식 (광고)" />
+      {state.status === "loading" ? <Skeleton className="h-36 w-full rounded-lg" />
+        : state.status === "error" || !state.value ? (
+          <EmptyState title="광고 알림 설정을 불러오지 못했어요" description="연결이 잠깐 끊겼을 수 있어요"
+            action={<Button size="sm" variant="secondary" icon="refresh" onClick={() => { setState({ status: "loading" }); setAttempt((n) => n + 1); }}>다시 불러오기</Button>} />
+        ) : (
+          <>
+            <div className="flex flex-col divide-y divide-line">
+              <Switch label="업체 소식·할인 받기" checked={state.value.ads} disabled={busy} onChange={(v) => set("ads", v)}
+                description="입점 업체의 신제품·할인·공구 소식을 알림함과 이 기기 알림으로 보내요. 업체에는 내 정보를 주지 않아요" />
+              <Switch label="밤 9시~아침 8시에도 받기" checked={state.value.night} disabled={busy || !state.value.ads} onChange={(v) => set("night", v)}
+                description="끄면 그 시간에는 업체 소식을 보내지 않아요" />
+              <Switch label="고른 목표에 맞는 소식만 받기" checked={state.value.targeting} disabled={busy || !state.value.ads} onChange={(v) => set("targeting", v)}
+                description="가입할 때 고른 목표·입맛을 맞춤 광고 대상을 고르는 데 써요. 질환 관심은 쓰지 않아요" />
+            </div>
+            <p className="text-caption text-ink-2 mt-2">업체 소식은 한 주에 2번까지만 보내요. 받은 소식 끝에도 끄는 방법이 적혀 있어요</p>
+          </>
+        )}
+    </section>
   );
 }

@@ -8,12 +8,17 @@ type Data = {
   days: number; products: Product[];
   totals: { impressions: number; views: number; clicks: number; diary: number; favorites: number; plans: number } | null;
   audience: { people: number | null; goals?: { label: string; share: number }[]; hidden?: number } | null;
+  /** 업체가 보고한 구매확정 수 — 보고가 한 번도 없으면 null */
+  purchases?: number | null;
 };
 type Days = "7" | "28" | "90";
 const n = (v: number) => v.toLocaleString("ko-KR");
+const pct = (a: number, b: number) => (b > 0 ? `${Math.round((a / b) * 100)}%` : "—");
+/** 목표 이름 → 고객층 조건 키 (lib/partner/report.ts GOAL_LABELS 와 lib/partner/crm.ts CRM_GOALS) */
+const GOAL_KEY: Record<string, string> = { "체중 관리": "weight_loss", "근력": "muscle", "균형 식단": "balanced", "활력": "energy", "장 건강": "gut_health", "피부": "skin" };
 
 /** 성과 — 내 제품을 본·누른·기록한 수와, 그 사람들의 목표 분포(통계만) */
-export function Report({ qs }: { qs: string }) {
+export function Report({ qs, onMakeSegment }: { qs: string; onMakeSegment?: (goal: string) => void }) {
   const [days, setDays] = useState<Days>("28");
   const [state, setState] = useState<{ status: "loading" | "error" | "done"; data?: Data; error?: string }>({ status: "loading" });
 
@@ -49,11 +54,28 @@ export function Report({ qs }: { qs: string }) {
               <Card><Stat label="식단 리스트 담기" value={n(d.totals.plans)} /></Card>
               <Card><Stat label="즐겨찾기" value={n(d.totals.favorites)} /></Card>
             </div>
-            <p className="text-caption text-ink-2 mt-2">
-              노출 대비 조회 <span className="num">{d.totals.impressions > 0 ? Math.round((d.totals.views / d.totals.impressions) * 100) : 0}</span>% ·
-              조회 대비 클릭 <span className="num">{d.totals.views > 0 ? Math.round((d.totals.clicks / d.totals.views) * 100) : 0}</span>% ·
-              노출은 추천·목록·식단 채우기에 보인 횟수로, 11월 12일부터 세요
-            </p>
+            <h3 className="text-label font-bold text-ink mt-8 mb-2">어디서 빠지나</h3>
+            <Card>
+              <ol className="grid grid-cols-5 gap-2">
+                {[
+                  { label: "노출", v: d.totals.impressions, prev: null },
+                  { label: "조회", v: d.totals.views, prev: d.totals.impressions },
+                  { label: "담기", v: d.totals.diary + d.totals.plans + d.totals.favorites, prev: d.totals.views },
+                  { label: "클릭", v: d.totals.clicks, prev: d.totals.views },
+                  { label: "확정 구매", v: d.purchases ?? null, prev: d.totals.clicks },
+                ].map((s) => (
+                  <li key={s.label} className="min-w-0">
+                    <span className="block text-caption text-ink-2">{s.label}</span>
+                    <span className="block num text-body font-bold text-ink truncate">{s.v === null ? "보고 대기" : n(s.v)}</span>
+                    <span className="block num text-caption text-ink-3">{s.prev !== null && s.v !== null ? pct(s.v, s.prev) : " "}</span>
+                  </li>
+                ))}
+              </ol>
+              <p className="text-caption text-ink-2 mt-3">
+                비율은 바로 앞 단계 대비(클릭은 조회 대비)예요. 노출은 추천·목록·식단 채우기에 보인 횟수로, 11월 12일부터 세요.
+                {d.purchases === null ? " 확정 구매는 업체가 주문을 보고해야 보여요" : " 확정 구매는 업체가 보고한 구매확정이에요"}
+              </p>
+            </Card>
 
             <h3 className="text-label font-bold text-ink mt-8 mb-2">제품별</h3>
             <Card padding="none" className="overflow-x-auto">
@@ -106,6 +128,11 @@ export function Report({ qs }: { qs: string }) {
                   </ul>
                 )}
                 {!!d.audience.hidden && <p className="text-caption text-ink-2 mt-3">10명 미만인 목표 <span className="num">{d.audience.hidden}</span>개는 가렸어요</p>}
+                {onMakeSegment && d.audience.goals?.[0] && GOAL_KEY[d.audience.goals[0].label] && (
+                  <Button size="sm" variant="secondary" className="mt-4" onClick={() => onMakeSegment(GOAL_KEY[d.audience!.goals![0].label])}>
+                    &lsquo;{d.audience.goals[0].label}&rsquo; 목표인 사람으로 고객층 만들기
+                  </Button>
+                )}
               </Card>
             )}
           </>

@@ -7,6 +7,7 @@ import {
 } from "@/components/ui";
 import { LinkTabs, ADMIN_TABS } from "@/components/ui/LinkTabs";
 import { ALLERGENS, CATEGORIES, REVIEW_LABELS, stable, type PartnerItem } from "@/lib/partner/schema";
+import { AdminCrm } from "./Crm";
 
 type Partner = {
   id: string; slug: string; name: string; kind: string; status: "onboarding" | "active" | "paused"; contact_email: string | null;
@@ -76,6 +77,8 @@ export default function AdminPartnersPage() {
             {queue.data.map((it) => <ReviewCard key={it.id} item={it} onDone={done} onFail={fail} />)}
           </div>
         )}
+
+      <AdminCrm />
 
       <SectionHeader title="업체" className="mt-10" />
       <NewPartner onDone={(m) => { toast.show(m); loadPartners(); }} onFail={fail} />

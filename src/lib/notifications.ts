@@ -80,3 +80,28 @@ export async function buildNotifications(sb: any, actor: string): Promise<Notifi
   items.sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
   return items;
 }
+
+/**
+ * 업체 광고(고객층 발송) — 알림함에만 더한다. 커뮤니티 웹 푸시(buildNotifications)와 섞지 않는다.
+ * 받은 것만(비교용 제외), 최근 30일. 표가 없으면(마이그레이션 전) 빈 목록.
+ */
+export type AdNotification = { id: string; type: "ad"; at: string; who: string; text: string; url: string };
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function adNotifications(sb: any, actor: string): Promise<AdNotification[]> {
+  const { data, error } = await sb.from("campaign_recipients")
+    .select("campaign_id, sent_at, partner_campaigns(title, body, partners(name))")
+    .eq("user_id", actor).eq("holdout", false).gte("sent_at", new Date(Date.now() - 30 * 86400e3).toISOString())
+    .order("sent_at", { ascending: false }).limit(20);
+  if (error) {
+    if (error.code === "42P01" || error.code === "PGRST205" || /does not exist|Could not find the table/i.test(error.message || "")) return [];
+    throw new Error(error.message);
+  }
+  type Row = { campaign_id: string; sent_at: string; partner_campaigns: { title: string; body: string; partners: { name: string } | null } | null };
+  return ((data || []) as Row[]).filter((r) => r.partner_campaigns).map((r) => ({
+    id: `ad-${r.campaign_id}`, type: "ad" as const, at: r.sent_at,
+    who: r.partner_campaigns!.partners?.name || "입점 업체",
+    text: `${r.partner_campaigns!.title} — ${r.partner_campaigns!.body}`,
+    url: `/c/${r.campaign_id}`,
+  }));
+}

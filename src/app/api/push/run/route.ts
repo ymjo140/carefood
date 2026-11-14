@@ -6,6 +6,7 @@ import { pushReady, sendToUser, type PushPayload, type PushSub } from "@/lib/pus
 import { addDays, daysBetween, kstHour, mondayOf, todayKst, weekday } from "@/lib/day";
 import { buildNotifications } from "@/lib/notifications";
 import { isWeekPlan, plannedMeal, type PlanGrid } from "@/lib/weekly-plan";
+import { runDueCampaigns } from "@/lib/partner/crm";
 
 /**
  * POST /api/push/run — 보낼 때가 된 알림을 보낸다. Supabase 예약 작업(pg_cron + pg_net, 30분마다)이 부른다.
@@ -22,6 +23,7 @@ import { isWeekPlan, plannedMeal, type PlanGrid } from "@/lib/weekly-plan";
  *   - 챌린지 20~22시: 하고 있는 챌린지가 있는데 오늘 기록이 하나도 없으면 (그날 저녁 알림 대신)
  *   - 주간 요약 월요일 9~12시: 지난주(월~일)에 하루라도 기록했으면 기록한 날 수 · 하루 평균
  *   - 커뮤니티 8~22시: 내 글 답글 · 내 답글의 답글 · 새 팔로워 (좋아요는 보내지 않음), 여러 개면 묶어서
+ *   - 업체 광고(고객층 발송): 검수를 통과해 보낼 시각이 된 것 (lib/partner/crm.ts runDueCampaigns, 21~8시는 야간 동의자만)
  */
 const JWKS = createRemoteJWKSet(new URL("https://token.actions.githubusercontent.com/.well-known/jwks"));
 const REPO = "ymjo140/carefood";
@@ -54,11 +56,27 @@ function slotOf(hour: number): "lunch" | "dinner" | null {
 
 export async function POST(req: NextRequest) {
   if (!(await authorized(req))) return NextResponse.json({ error: "권한이 없어요" }, { status: 403 });
-  if (!pushReady()) return NextResponse.json({ sent: 0, skipped: "VAPID 키가 아직 없어요" });
+
+  // 업체 광고(고객층 발송) — 시간 거르기 앞에서 돈다: 밤 발송은 이미 야간 동의자만 골라 두었다(lib/partner/crm.ts).
+  // 알림함에는 늘 들어가고, 이 기기 알림은 키가 있을 때만. dry 에서는 보내지 않는다.
+  let ads = { sent: 0, campaigns: 0 };
+  if (req.nextUrl.searchParams.get("dry") !== "1") {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sbAds = createServiceRoleClient() as any;
+    try {
+      ads = await runDueCampaigns(sbAds, pushReady() ? async (userId, payload) => {
+        const { data, error } = await sbAds.from("push_subscriptions").select("endpoint, user_id, p256dh, auth").eq("user_id", userId);
+        if (error || !data?.length) return false;
+        return sendToUser(sbAds, data as PushSub[], payload);
+      } : undefined);
+    } catch (e) { console.error("고객층 발송을 돌리지 못했어요:", (e as Error).message); }
+  }
+
+  if (!pushReady()) return NextResponse.json({ sent: 0, ads, skipped: "VAPID 키가 아직 없어요" });
   const dry = req.nextUrl.searchParams.get("dry") === "1";
   const hourParam = Number(req.nextUrl.searchParams.get("hour"));
   const hour = dry && Number.isInteger(hourParam) && hourParam >= 0 && hourParam < 24 ? hourParam : kstHour(); // 관리자 dry 로 시간대를 바꿔 볼 수 있다
-  if (hour < 8 || hour >= 22) return NextResponse.json({ sent: 0, skipped: "밤 시간" });
+  if (hour < 8 || hour >= 22) return NextResponse.json({ sent: 0, ads, skipped: "밤 시간" });
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sb = createServiceRoleClient() as any;
@@ -68,7 +86,7 @@ export async function POST(req: NextRequest) {
   const subsBy = new Map<string, PushSub[]>();
   for (const s of (subRows || []) as PushSub[]) subsBy.set(s.user_id, [...(subsBy.get(s.user_id) || []), s]);
   const users = [...subsBy.keys()];
-  if (!users.length) return NextResponse.json({ sent: 0, users: 0 });
+  if (!users.length) return NextResponse.json({ sent: 0, ads, users: 0 });
 
   const lastMonday = addDays(mondayOf(today), -7);
   const [pRes, dRes, lRes, mRes, planRes] = await Promise.all([
@@ -188,5 +206,5 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ dry, hour, users: users.length, sent: counts });
+  return NextResponse.json({ dry, hour, users: users.length, sent: counts, ads });
 }
