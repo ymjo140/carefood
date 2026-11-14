@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AsOf, Button, Card, EmptyState, HowCounted, ProgressBar, SectionHeader, SkeletonList, Stat, Tabs, TextButton, TextLink } from "@/components/ui";
+import { AsOf, BarList, Button, Card, EmptyState, HowCounted, ProgressBar, SectionHeader, SkeletonList, Stat, Tabs, TextButton, TextLink, TrendChart } from "@/components/ui";
 
 type Product = { product_id: string; name: string; sku: string; impressions: number; views: number; clicks: number; diary: number; favorites: number; plans: number; rating: number | null; rating_n: number };
 type Data = {
@@ -19,9 +19,10 @@ type Data = {
   period?: Period; from?: string; to?: string; as_of?: string;
   prev?: { from: string; to: string; totals: Totals | null; purchases: number | null; sales?: SalesTotals };
   sales?: { rows: SalesRow[]; totals: SalesTotals };
+  daily?: { day: string; revenue: number; orders: number; prev_revenue: number | null; prev_orders: number | null }[];
 };
 type SalesRow = { sku: string; name: string; quantity: number; revenue: number; buyers: number; repeat_buyers: number; repeat_rate: number | null; avg_gap: number | null; canceled: number; cancel_rate: number | null };
-type SalesTotals = { quantity: number; revenue: number; buyers: number; repeat_buyers: number };
+type SalesTotals = { quantity: number; revenue: number; buyers: number; repeat_buyers: number; orders?: number };
 type Share = { key: string; label: string; share: number };
 type SortKey = "impressions" | "views" | "saves" | "clicks";
 /** 제품 표 정렬 — 위 퍼널의 단계와 같은 이름 (담기 = 식단 기록 + 식단 리스트 + 즐겨찾기) */
@@ -74,7 +75,9 @@ export function Report({ qs, onMakeSegment }: { qs: string; onMakeSegment?: (goa
             action={<Button size="sm" variant="secondary" icon="refresh" onClick={() => { setState({ status: "loading" }); load(period); }}>다시 불러오기</Button>} />
         ) : (
           <>
-          {d.sales && d.sales.rows.length > 0 && <AppSales sales={d.sales} prev={d.prev?.sales ?? null} />}
+          <Dashboard d={d} />
+          <h3 className="text-body font-bold text-ink mt-10 mb-3">자세히</h3>
+          {d.sales && d.sales.rows.length > 0 && <AppSales sales={d.sales} />}
           {!d.totals ? (
           <EmptyState title="아직 반영된 제품이 없어요" description="제품이 반영되고 업체가 운영 중이 되면 여기 노출·조회·클릭 성과가 모여요" />
         ) : (
@@ -85,7 +88,7 @@ export function Report({ qs, onMakeSegment }: { qs: string; onMakeSegment?: (goa
                 ["impressions", "노출"], ["views", "상세 조회"], ["clicks", "구매 링크 클릭"], ["diary", "식단 기록"], ["plans", "식단 리스트 담기"], ["favorites", "즐겨찾기"],
               ] as [keyof Totals, string][]).map(([k, label]) => (
                 <Card key={k}>
-                  <Stat label={label} value={n(d.totals![k])} emphasis={k === "clicks"} />
+                  <Stat label={label} value={n(d.totals![k])} />
                   <Delta cur={d.totals![k]} prev={d.prev?.totals?.[k]} />
                 </Card>
               ))}
@@ -96,29 +99,6 @@ export function Report({ qs, onMakeSegment }: { qs: string; onMakeSegment?: (goa
               <p>식단 기록은 그 기간 날짜의 식단에 넣은 횟수, 식단 리스트 담기는 그 기간에 저장한 식단 리스트에 들어 있는 횟수예요.</p>
               <p>지난 기간은 같은 길이의 바로 앞 기간이에요 (이번 달이면 지난달의 같은 날짜까지).</p>
             </HowCounted>
-            <h3 className="text-label font-bold text-ink mt-8 mb-2">어디서 빠지나</h3>
-            <Card>
-              <ol className="grid grid-cols-5 gap-2">
-                {([
-                  { label: "노출", v: d.totals.impressions, prev: null },
-                  { label: "조회", v: d.totals.views, prev: d.totals.impressions },
-                  { label: "담기", v: d.totals.diary + d.totals.plans + d.totals.favorites, prev: d.totals.views },
-                  { label: "클릭", v: d.totals.clicks, prev: d.totals.views },
-                  { label: "확정 구매", v: d.purchases ?? null, prev: d.totals.clicks },
-                ] as { label: string; v: number | null; prev: number | null }[]).map((s) => (
-                  <li key={s.label} className="min-w-0">
-                    <span className="block text-caption text-ink-2">{s.label}</span>
-                    <span className="block num text-body font-bold text-ink truncate">{s.v === null ? "보고 대기" : n(s.v)}</span>
-                    <span className="block num text-caption text-ink-3">{s.prev !== null && s.v !== null ? pct(s.v, s.prev) : " "}</span>
-                  </li>
-                ))}
-              </ol>
-              <p className="text-caption text-ink-2 mt-3">
-                비율은 바로 앞 단계 대비(클릭은 조회 대비)예요. 노출은 추천·목록·식단 채우기에 보인 횟수로, 11월 12일부터 세요.
-                {d.purchases === null ? " 확정 구매는 업체가 주문을 보고해야 보여요" : " 확정 구매는 업체가 보고한 구매확정이에요"}
-              </p>
-            </Card>
-
             <h3 className="text-label font-bold text-ink mt-8 mb-2">어디에 보였나</h3>
             {!d.placements?.length ? (
               <p className="text-label text-ink-2">아직 노출이 쌓이지 않았어요</p>
@@ -240,18 +220,11 @@ function ShareList({ title, rows, hidden, note, compare, compareLabel }: {
 }
 
 /** 앱 주문 판매 — 제품별 판매 수량·판매액·구매자·재주문율·재주문 간격·취소율 (같은 기간, 결제 시각 기준) */
-function AppSales({ sales, prev }: { sales: { rows: SalesRow[]; totals: SalesTotals }; prev: SalesTotals | null }) {
-  const t = sales.totals;
+function AppSales({ sales }: { sales: { rows: SalesRow[]; totals: SalesTotals } }) {
   return (
     <div className="mb-10">
-      <h3 className="text-label font-bold text-ink mb-2">앱 주문 판매</h3>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <Card><Stat label="판매액" value={`${n(t.revenue)}원`} /><Delta cur={t.revenue} prev={prev?.revenue} /></Card>
-        <Card><Stat label="판매 수량" value={n(t.quantity)} unit="개" /><Delta cur={t.quantity} prev={prev?.quantity} /></Card>
-        <Card><Stat label="구매자" value={n(t.buyers)} unit="명" /><Delta cur={t.buyers} prev={prev?.buyers} /></Card>
-        <Card><Stat label="다시 산 사람" value={t.buyers ? `${Math.round((t.repeat_buyers / t.buyers) * 100)}%` : "—"} /><span className="block text-caption text-ink-2 mt-1 num">{n(t.repeat_buyers)}명</span></Card>
-      </div>
-      <Card padding="none" className="mt-3 overflow-x-auto">
+      <h3 className="text-label font-bold text-ink mb-2">앱 주문 제품별</h3>
+      <Card padding="none" className="overflow-x-auto">
         <table className="w-full text-label">
           <thead>
             <tr className="text-left text-ink-2 border-b border-line">
@@ -284,6 +257,82 @@ function AppSales({ sales, prev }: { sales: { rows: SalesRow[]; totals: SalesTot
         <p>재주문율은 이 기간에 그 제품을 산 사람 중, 기간 끝까지 그 제품을 서로 다른 주문으로 두 번 이상 산 사람의 비율이에요. 재주문 간격은 그 사람들의 주문 사이 날 수 평균이에요.</p>
         <p>판매액은 쿠폰 할인 전 상품 금액이에요. 쿠폰 할인과 배송비는 정산에서 셈해요.</p>
       </HowCounted>
+    </div>
+  );
+}
+
+const won = (v: number) => `${n(v)}원`;
+const shortDay = (iso: string) => { const [, m, d] = iso.split("-"); return `${Number(m)}/${Number(d)}`; };
+
+/**
+ * 맨 위 대시보드 — 핵심 숫자 4개(지난 기간 대비) · 하루별 추이 · 어디서 빠지나 · 많이 팔린(본) 제품
+ * 앱 주문이 있으면 판매 중심, 없으면 구매 링크 중심으로 같은 자리를 채운다. 형광펜은 첫 숫자 하나.
+ */
+function Dashboard({ d }: { d: Data }) {
+  const [metric, setMetric] = useState<"revenue" | "orders">("revenue");
+  const sales = d.sales && d.sales.rows.length > 0 ? d.sales : null;
+  const t = d.totals;
+  const ps = d.prev?.sales, pt = d.prev?.totals;
+  const saves = t ? t.diary + t.plans + t.favorites : 0;
+  const kpis: { label: string; value: string; cur: number; prev: number | null | undefined }[] = sales ? [
+    { label: "판매액", value: won(sales.totals.revenue), cur: sales.totals.revenue, prev: ps?.revenue },
+    { label: "주문", value: `${n(sales.totals.orders ?? 0)}건`, cur: sales.totals.orders ?? 0, prev: ps?.orders },
+    { label: "구매자", value: `${n(sales.totals.buyers)}명`, cur: sales.totals.buyers, prev: ps?.buyers },
+    { label: "다시 산 사람", value: sales.totals.buyers ? `${Math.round((sales.totals.repeat_buyers / sales.totals.buyers) * 100)}%` : "—", cur: sales.totals.repeat_buyers, prev: ps?.repeat_buyers },
+  ] : t ? [
+    { label: "상세 조회", value: n(t.views), cur: t.views, prev: pt?.views },
+    { label: "구매 링크 클릭", value: n(t.clicks), cur: t.clicks, prev: pt?.clicks },
+    { label: "식단에 담기", value: n(saves), cur: saves, prev: pt ? pt.diary + pt.plans + pt.favorites : null },
+    { label: "확정 구매", value: d.purchases === null || d.purchases === undefined ? "보고 대기" : `${n(d.purchases)}건`, cur: d.purchases ?? 0, prev: d.prev?.purchases },
+  ] : [];
+  if (kpis.length === 0) return null; // 제품도 주문도 없으면 아래 비어 있음 안내가 대신한다
+  const series = (d.daily || []).map((x) => ({ label: shortDay(x.day), value: metric === "revenue" ? x.revenue : x.orders, prev: metric === "revenue" ? x.prev_revenue : x.prev_orders }));
+  const funnel = t ? [
+    { key: "imp", label: "노출", value: t.impressions, prev: null as number | null },
+    { key: "view", label: "상세 조회", value: t.views, prev: t.impressions },
+    { key: "save", label: "식단에 담기", value: saves, prev: t.views },
+    { key: "click", label: "구매 링크 클릭", value: t.clicks, prev: t.views },
+    ...(sales ? [{ key: "order", label: "앱 주문", value: sales.totals.orders ?? 0, prev: t.views }] : []),
+    ...(d.purchases !== null && d.purchases !== undefined ? [{ key: "buy", label: "확정 구매(보고)", value: d.purchases, prev: t.clicks }] : []),
+  ] : [];
+  const top = sales
+    ? sales.rows.slice(0, 5).map((r) => ({ key: r.sku, label: r.name, value: r.revenue, display: won(r.revenue), sub: `${n(r.quantity)}개` }))
+    : [...d.products].sort((a, b) => b.views - a.views).slice(0, 5).map((p) => ({ key: p.product_id, label: p.name, value: p.views, display: `${n(p.views)}회`, sub: `클릭 ${n(p.clicks)}` }));
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {kpis.map((k, i) => (
+          <Card key={k.label}>
+            <Stat label={k.label} value={k.value} emphasis={i === 0} />
+            <Delta cur={k.cur} prev={k.prev} />
+          </Card>
+        ))}
+      </div>
+      {sales && series.length > 1 && (
+        <Card>
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <p className="text-label font-bold text-ink">하루별 {metric === "revenue" ? "판매액" : "주문"}</p>
+            <Tabs variant="line" value={metric} onChange={setMetric} label="추이 보기" items={[{ value: "revenue", label: "판매액" }, { value: "orders", label: "주문" }]} />
+          </div>
+          <TrendChart data={series} label={metric === "revenue" ? "이번 기간 판매액" : "이번 기간 주문"} format={metric === "revenue" ? won : (v) => `${n(v)}건`} />
+        </Card>
+      )}
+      <div className="grid gap-3 md:grid-cols-2">
+        {funnel.length > 0 && (
+          <Card>
+            <p className="text-label font-bold text-ink mb-3">어디서 빠지나</p>
+            <BarList rows={funnel.map((f) => ({ key: f.key, label: f.label, value: f.value, display: n(f.value), sub: f.prev !== null ? pct(f.value, f.prev) : undefined }))} />
+            <p className="text-caption text-ink-2 mt-3">옆의 %는 앞 단계 대비예요(클릭·앱 주문은 상세 조회 대비, 확정 구매는 클릭 대비)</p>
+          </Card>
+        )}
+        {top.length > 0 && (
+          <Card>
+            <p className="text-label font-bold text-ink mb-3">{sales ? "많이 팔린 제품" : "많이 본 제품"}</p>
+            <BarList rows={top} />
+          </Card>
+        )}
+      </div>
     </div>
   );
 }

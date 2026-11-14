@@ -91,9 +91,26 @@ export async function productSales(sb: Sb, partnerId: string, range: { from: num
   }).sort((x, y) => y.revenue - x.revenue);
   // 합계는 모든 제품으로 — 구매자는 사람 단위로 한 번
   const allBuyers = new Set<string>(), allRepeat = new Set<string>();
+  const orderIds = new Set(rs.filter((r) => r.fulfil_status !== "canceled" && Date.parse(r.orders.paid_at) >= range.from).map((r) => r.order_id));
   for (const a of by.values()) for (const u of a.buyers) { allBuyers.add(u); if ((a.orders.get(u)?.size || 0) >= 2) allRepeat.add(u); }
   return {
     rows: out,
-    totals: { quantity: out.reduce((s, r) => s + r.quantity, 0), revenue: out.reduce((s, r) => s + r.revenue, 0), buyers: allBuyers.size, repeat_buyers: allRepeat.size },
+    totals: { quantity: out.reduce((s, r) => s + r.quantity, 0), revenue: out.reduce((s, r) => s + r.revenue, 0), buyers: allBuyers.size, repeat_buyers: allRepeat.size, orders: orderIds.size },
   };
+}
+
+/** 하루별 판매액·주문 수 (한국 시간 날짜, 결제 시각 기준, 취소 줄 뺌) — 기간의 날마다 한 칸 (없는 날은 0) */
+export async function dailySales(sb: Sb, partnerId: string, range: { from: number; to: number }) {
+  const rs = (await rows(sb, partnerId, range.to)).filter((r) => Date.parse(r.orders.paid_at) >= range.from && r.fulfil_status !== "canceled");
+  const kst = (t: number) => new Date(t + 9 * 3600e3).toISOString().slice(0, 10);
+  const days: string[] = [];
+  for (let t = range.from; t < range.to; t += DAY) days.push(kst(t));
+  const by = new Map(days.map((d) => [d, { revenue: 0, orders: new Set<string>() }]));
+  for (const r of rs) {
+    const b = by.get(kst(Date.parse(r.orders.paid_at)));
+    if (!b) continue;
+    b.revenue += (r.unit_price || 0) * (r.quantity || 1);
+    b.orders.add(r.order_id);
+  }
+  return days.map((d) => ({ day: d, revenue: by.get(d)!.revenue, orders: by.get(d)!.orders.size }));
 }

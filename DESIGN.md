@@ -84,6 +84,7 @@
 | 목록 한 줄 | `ListRow` + `Thumb` / `Avatar` |
 | 입력 | `Field` `Input` `Textarea` `Select` `SearchField` · 숫자+단위 `UnitInput` · 슬라이더 `RangeInput`(.ds-range), `.ds-check`, `RatingInput` `ScaleInput` · 한 번 누르는 맛 평가 `QuickRating` |
 | 영양 | `MacroGrid` `MacroStat` `MacroInline` `ProgressBar` `Stat` `Kcal` `Price` |
+| 그래프(대시보드) | 하루별 추이 `TrendChart` · 가로 막대 `BarList` · 빈틈 그림 `GapChart` — 축 하나, 이번 값 강조색·비교 회색 점선 |
 | 끼니 | `MealTag` `MealSlot` `mealMeta()` |
 | 커뮤니티 글 | `PostAuthor` `PostActions` `PostAction` `PostTags` · 댓글 한 줄 `CommentItem` |
 | 공구 조건 | 구성 목록(보기·고르기) `OfferOptionList` · 수량 `QtyStepper` |

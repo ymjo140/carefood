@@ -33,3 +33,4 @@ export { ReelRow, ReelTile, ReelAddTile, ReelSkeleton, clock } from "./Reel";
 export { ReelMedia, VideoClip, VideoAttach } from "./ReelMedia";
 export { CommentItem } from "./Comment";
 export { OfferOptionList, QtyStepper, type OfferRow } from "./Offer";
+export { TrendChart, BarList, GapChart } from "./Chart";

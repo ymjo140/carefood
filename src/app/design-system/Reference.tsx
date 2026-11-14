@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Badge, Button, Card, CardActions, CardButton, Chip, ChipRow, ConfirmSheet, EmptyState, Field, Icon, ICON_NAMES, IconButton, IconLink,
-  Input, Kcal, LinkButton, ListRow, MacroGrid, MacroInline, MealSlot, MealTag, Notice, Estimate, HowCounted, AsOf, CodeBlock, Page, PageHeader, Price,
+  Input, Kcal, LinkButton, ListRow, MacroGrid, MacroInline, MealSlot, MealTag, Notice, Estimate, HowCounted, AsOf, CodeBlock, TrendChart, BarList, GapChart, Page, PageHeader, Price,
   ProgressBar, SearchField, SectionHeader, Select, Sheet, Spinner, Stat, Steps, Tabs, Textarea, TextLink, TextButton, Thumb, ProductImage,
   Avatar, useToast, cn, type BadgeTone,
   BottomNavItems, SkeletonList, FoodEntryForm, DragArea, DragGhost, DragHandle, useDragItem, useDropTarget, type DragData, ChoiceCard, ChoiceList, LinkTabs, RatingStars, RatingInput, ScaleInput, QuickRating, PostAuthor, PostAction, PostActions, PostTags, ThreadItem, MealAttach, PlanAttach, ProductTagLinks, PhotoGrid, PollAttach, DayDots, Switch,
@@ -858,6 +858,25 @@ export default function Reference({ status }: { status: DsStatus }) {
       </Section>
 
       {/* ───────────── 끼니 ───────────── */}
+      <Section id="charts" title="그래프" description="성과·수요·정산 대시보드. 축 하나 · 가는 선 · 이번 값은 강조색, 비교는 회색 점선 · 올리거나 화살표 키로 값 보기 · 표로도 읽힘">
+        <div className="grid gap-4 md:grid-cols-2">
+          <Card>
+            <TrendChart label="이번 기간 판매액" format={(v) => `${v.toLocaleString("ko-KR")}원`}
+              data={[3, 5, 4, 8, 6, 9, 12, 10, 14, 11].map((v, i) => ({ label: `11/${i + 1}`, value: v * 10000, prev: [2, 4, 5, 5, 7, 6, 8, 9, 8, 10][i] * 10000 }))} />
+            <span className="text-caption text-ink-2"><Code>{'<TrendChart data label format>'}</Code> — 하루별 추이, prev 가 있으면 지난 기간 점선</span>
+          </Card>
+          <Card>
+            <BarList rows={[{ key: "a", label: "노출", value: 4800, display: "4,800" }, { key: "b", label: "상세 조회", value: 390, display: "390", sub: "8%" }, { key: "c", label: "구매 링크 클릭", value: 120, display: "120", sub: "31%" }]} />
+            <span className="block mt-3 text-caption text-ink-2"><Code>{'<BarList rows>'}</Code> — 큰 것 비교·단계별 줄어듦, 숫자는 글자로</span>
+          </Card>
+          <Card className="md:col-span-2">
+            <GapChart xLabel="찾는 사람" yLabel="맞는 제품" xFormat={(v) => `${v}%`} yFormat={(v) => `${v}개`} selected="b"
+              points={[{ key: "a", label: "단백질 많은 한 끼", x: 31, y: 120 }, { key: "b", label: "나트륨 적은 한 끼", x: 24, y: 18 }, { key: "c", label: "당류 적은 간식", x: 9, y: 60 }, { key: "d", label: "가벼운 한 끼", x: 18, y: 80 }]} />
+            <span className="text-caption text-ink-2"><Code>{'<GapChart points selected onSelect>'}</Code> — 많이 찾는데 제품이 적은 곳(오른쪽 아래)을 고르는 그림</span>
+          </Card>
+        </div>
+      </Section>
+
       <Section id="meals" title="끼니" description="색을 쓰지 않고 글자로 구분. 비어 있는 칸은 점선">
         <div className="grid gap-4 md:grid-cols-2">
           <Demo label="끼니 라벨" code='<MealTag meal="lunch" />'>
