@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AsOf, Button, Card, EmptyState, HowCounted, ProgressBar, SectionHeader, SkeletonList, Stat, Tabs, TextLink } from "@/components/ui";
+import { AsOf, Button, Card, EmptyState, HowCounted, ProgressBar, SectionHeader, SkeletonList, Stat, Tabs, TextButton, TextLink } from "@/components/ui";
 
 type Product = { product_id: string; name: string; sku: string; impressions: number; views: number; clicks: number; diary: number; favorites: number; plans: number; rating: number | null; rating_n: number };
 type Data = {
@@ -165,8 +165,13 @@ export function Report({ qs, onMakeSegment }: { qs: string; onMakeSegment?: (goa
                 <p className="text-caption text-ink-2 mb-4">
                   본·누른·기록한 약 <span className="num">{n(d.audience.people)}</span>명 기준 · 한 사람이 여러 칸에 들 수 있어요
                   {d.audience.category && <> · 옆의 회색 숫자는 같은 기간 {d.audience.category.label} 제품을 본 약 <span className="num">{n(d.audience.category.people)}</span>명의 비율이에요</>}
-                  {d.audience.category_failed && <> · 같은 카테고리 비교는 불러오지 못했어요. 기간을 다시 골라 다시 불러와 주세요</>}
                 </p>
+                {d.audience.category_failed && (
+                  <p className="text-caption text-ink-2 -mt-2 mb-4">
+                    같은 카테고리 비교는 불러오지 못했어요. 내 숫자는 맞게 나와요 ·{" "}
+                    <TextButton className="text-caption" onClick={() => { setState({ status: "loading" }); load(period); }}>다시 불러오기</TextButton>
+                  </p>
+                )}
                 <div className="grid gap-6 sm:grid-cols-3">
                   <ShareList title="고른 목표" rows={d.audience.goals || []} hidden={d.audience.hidden || 0} compare={d.audience.category?.goals} compareLabel={d.audience.category?.label} />
                   <ShareList title="입맛" rows={d.audience.tastes || []} hidden={d.audience.tastes_hidden || 0} compare={d.audience.category?.tastes} compareLabel={d.audience.category?.label} />
