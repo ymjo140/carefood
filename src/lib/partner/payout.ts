@@ -4,8 +4,12 @@
  *    계산은 같은 규칙으로 확정을 본다(effConfirm).
  *  · 업체 묶음(주문 하나 × 업체 하나) 단위로 센다: 판매액 − 업체 쿠폰 할인 + 배송비 − 수수료. 수수료는 묶음마다 반올림해서
  *    날짜별 합 = 달 합 = 엑셀 합이 늘 같다.
- *  · 확정일(한국 시간)이 속한 달에 정산하고, 다음 달 10일에 지급한다.
+ *  · 확정일(한국 시간)이 속한 달에 정산하고, 다음 달 10일에 지급한다(11/14 확정).
+ *  · 반품 배송비(마음이 바뀐 반품): 주문자 환불에서 뺀 돈이라 업체에 준다(11/14 결정). 반품을 마친 날을 확정일로 보고,
+ *    판매·수수료 없이 배송비 칸에만 더하는 묶음(kind "return_fee")으로 센다 — 주문 수에는 넣지 않는다.
  */
+import { selectAll } from "@/lib/supabase/all";
+
 type Sb = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 const DAY = 86400e3;
 const KST = 9 * 3600e3;
@@ -39,7 +43,9 @@ export function effConfirm(l: Pick<Line, "fulfil_status" | "delivered_at" | "con
 
 export type Stage = "preparing" | "shipping" | "delivered" | "confirmed";
 export type Bundle = {
-  order_id: string; paid_at: string; delivered_at: string | null; confirmed_at: number | null; confirm_by: "buyer" | "auto" | null; auto_at: number | null;
+  /** order: 확정된 주문 묶음 · return_fee: 반품을 마친 묶음의 반품 배송비(업체 몫) */
+  kind: "order" | "return_fee";
+  order_id: string; paid_at: string; delivered_at: string | null; confirmed_at: number | null; confirm_by: "buyer" | "auto" | "return" | null; auto_at: number | null;
   stage: Stage; lines: { sku: string | null; name: string; qty: number; amount: number }[];
   sales: number; discount: number; shipping: number; fee: number; payout: number;
 };
@@ -60,7 +66,7 @@ export function toBundles(lines: Line[], partnerId: string, rate: number | null,
     const delivered = allDelivered ? ls.map((l) => l.delivered_at).filter((x): x is string => !!x).sort().pop() || null : null;
     const fee = rate === null ? 0 : Math.round(((sales - discount) * rate) / 100);
     out.push({
-      order_id, paid_at: o.paid_at, delivered_at: delivered, confirmed_at: confirmed,
+      kind: "order", order_id, paid_at: o.paid_at, delivered_at: delivered, confirmed_at: confirmed,
       confirm_by: confirmed === null ? null : ls.some((l) => l.confirm_by === "buyer") ? "buyer" : "auto",
       auto_at: delivered ? Date.parse(delivered) + CONFIRM_DAYS * DAY : null,
       stage, lines: ls.map((l) => ({ sku: l.partner_sku, name: l.product_name, qty: l.quantity || 1, amount: (l.unit_price || 0) * (l.quantity || 1) })),
@@ -68,6 +74,23 @@ export function toBundles(lines: Line[], partnerId: string, rate: number | null,
     });
   }
   return out;
+}
+
+type ReturnLine = { order_id: string; product_name: string; return_fee: number | null; return_resolved_at: string; orders: { paid_at: string } };
+
+/** 반품을 마친 묶음 → 반품 배송비 묶음 (묶음에 한 번, 반품을 마친 날이 확정일) */
+export function toReturnFeeBundles(lines: ReturnLine[]): Bundle[] {
+  const by = new Map<string, ReturnLine[]>();
+  for (const l of lines) if ((l.return_fee || 0) > 0) (by.get(l.order_id) || by.set(l.order_id, []).get(l.order_id)!).push(l);
+  return [...by.entries()].map(([order_id, ls]) => {
+    const fee = Math.max(...ls.map((l) => l.return_fee || 0));
+    const at = Date.parse(ls.map((l) => l.return_resolved_at).sort().pop()!);
+    return {
+      kind: "return_fee" as const, order_id, paid_at: ls[0].orders.paid_at, delivered_at: null, confirmed_at: at, confirm_by: "return" as const, auto_at: null,
+      stage: "confirmed" as const, lines: ls.map((l) => ({ sku: null, name: `반품 배송비 · ${l.product_name}`, qty: 0, amount: 0 })),
+      sales: 0, discount: 0, shipping: fee, fee: 0, payout: fee,
+    };
+  });
 }
 
 async function page(q: () => any, max = 100000): Promise<Line[]> { // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -93,9 +116,16 @@ export async function loadBundles(sb: Sb, partnerId: string, rate: number | null
     return q.order("delivered_at").order("id");
   });
   const live = opts.live ? page(() => sb.from("order_items").select(COLS).eq("partner_id", partnerId).in("fulfil_status", ["new", "accepted", "shipped"]).not("orders.paid_at", "is", null).order("created_at").order("id")) : Promise.resolve([]);
-  const [a, b] = await Promise.all([delivered, live]);
+  // 반품을 마친 날이 이 창 안인 반품 배송비 (취소로 바뀐 줄이라 위 두 조회에 없다)
+  const returned = selectAll<ReturnLine>(() => {
+    let q = sb.from("order_items").select("order_id, product_name, return_fee, return_resolved_at, orders!inner(paid_at)").eq("partner_id", partnerId)
+      .eq("return_status", "returned").gt("return_fee", 0).gte("return_resolved_at", new Date(opts.deliveredFrom).toISOString());
+    if (opts.deliveredTo) q = q.lt("return_resolved_at", new Date(opts.deliveredTo).toISOString());
+    return q;
+  }, "id", 1_000_000);
+  const [a, b, r] = await Promise.all([delivered, live, returned]);
   // 한 주문의 줄이 두 쪽에 나뉘면(일부만 배송 완료) 같은 묶음으로 합친다
-  return toBundles([...a, ...b], partnerId, rate, now);
+  return [...toBundles([...a, ...b], partnerId, rate, now), ...toReturnFeeBundles(r)];
 }
 
 export type DayRow = { day: string; orders: number; sales: number; discount: number; shipping: number; fee: number; payout: number };
@@ -117,7 +147,8 @@ export function dailyOf(bundles: Bundle[], month: string, now = Date.now()): Day
     if (b.confirmed_at === null) continue;
     const r = by.get(kstDay(b.confirmed_at));
     if (!r) continue;
-    r.orders++; r.sales += b.sales; r.discount += b.discount; r.shipping += b.shipping; r.fee += b.fee; r.payout += b.payout;
+    if (b.kind === "order") r.orders++;
+    r.sales += b.sales; r.discount += b.discount; r.shipping += b.shipping; r.fee += b.fee; r.payout += b.payout;
   }
   return rows;
 }
@@ -129,7 +160,8 @@ export function monthlyOf(bundles: Bundle[]) {
     if (b.confirmed_at === null) continue;
     const k = kstMonthOf(b.confirmed_at);
     const v = out.get(k) || out.set(k, { orders: 0, sales: 0, discount: 0, shipping: 0, fee: 0, payout: 0 }).get(k)!;
-    v.orders++; v.sales += b.sales; v.discount += b.discount; v.shipping += b.shipping; v.fee += b.fee; v.payout += b.payout;
+    if (b.kind === "order") v.orders++;
+    v.sales += b.sales; v.discount += b.discount; v.shipping += b.shipping; v.fee += b.fee; v.payout += b.payout;
   }
   return out;
 }

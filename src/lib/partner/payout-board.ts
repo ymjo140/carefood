@@ -52,11 +52,11 @@ export async function payoutBoard(sb: Sb, partnerId: string, month: string, now 
   const paidMonths = new Set(months.filter((m) => m.settlement?.status === "paid").map((m) => m.month));
   const flowFrom = now - 90 * 86400e3; // 흐름은 최근 90일에 결제한 주문
   for (const b of bundles) {
-    if (Date.parse(b.paid_at) < flowFrom) continue;
+    if (b.kind !== "order" || Date.parse(b.paid_at) < flowFrom) continue; // 흐름은 주문 묶음만 (반품 배송비는 장부에만)
     const k = b.stage === "confirmed" && paidMonths.has(kstMonthOf(b.confirmed_at!)) ? "paid" : b.stage;
     stages[k].amount += b.sales; stages[k].count++;
   }
-  const pending = bundles.filter((b) => b.stage !== "confirmed");
+  const pending = bundles.filter((b) => b.kind === "order" && b.stage !== "confirmed");
   const nextAuto = pending.filter((b) => b.stage === "delivered" && b.auto_at).sort((a, b) => a.auto_at! - b.auto_at!)[0];
 
   // ── 날짜별 장부 (확정일) + 지난 달 같은 날
@@ -90,7 +90,7 @@ export async function confirmedBundles(sb: Sb, partnerId: string, range: { from:
       .sort((a, b) => a.confirmed_at - b.confirmed_at)
       .map((b) => ({
         order: b.order_id.slice(0, 8).toUpperCase(), paid_day: kstDay(Date.parse(b.paid_at)), delivered_day: b.delivered_at ? kstDay(Date.parse(b.delivered_at)) : null,
-        confirmed_day: kstDay(b.confirmed_at), confirm_by: b.confirm_by, lines: b.lines,
+        confirmed_day: kstDay(b.confirmed_at), confirm_by: b.confirm_by, kind: b.kind, lines: b.lines,
         sales: b.sales, discount: b.discount, shipping: b.shipping, fee: b.fee, payout: b.payout,
       })),
   };
@@ -120,10 +120,10 @@ export async function buildMonthWorkbook(sb: Sb, partnerId: string, month: strin
   add("기준", `구매확정일(한국 시간) · 구매자가 누른 때 또는 배송 완료 ${CONFIRM_DAYS}일 뒤`);
   add("지급일", payDate(month));
   add("상태", s?.status === "paid" ? "정산 끝" : s ? "마감" : month >= currentMonth() ? "집계 중" : "마감 전");
-  add("확정 주문(업체 묶음)", rows.length);
+  add("확정 주문(업체 묶음)", rows.filter((r) => r.kind === "order").length);
   add("판매액", sum("sales"));
   add("업체 쿠폰 할인", -sum("discount"));
-  add("배송비", sum("shipping"));
+  add("배송비 (반품 배송비 포함)", sum("shipping"));
   add(`앱 주문 수수료${rate === null ? "" : ` (${rate}%)`}`, -sum("fee"));
   add("앱 주문 대금 (케어푸드 → 업체)", sum("payout"));
   add("구매 링크 수수료 (업체 → 케어푸드)", -link);
@@ -140,10 +140,11 @@ export async function buildMonthWorkbook(sb: Sb, partnerId: string, month: strin
   const byDay = new Map<string, { day: string; orders: number; sales: number; discount: number; shipping: number; fee: number; payout: number }>();
   for (const r of rows) {
     const v = byDay.get(r.confirmed_day) || byDay.set(r.confirmed_day, { day: r.confirmed_day, orders: 0, sales: 0, discount: 0, shipping: 0, fee: 0, payout: 0 }).get(r.confirmed_day)!;
-    v.orders++; v.sales += r.sales; v.discount += r.discount; v.shipping += r.shipping; v.fee += r.fee; v.payout += r.payout;
+    if (r.kind === "order") v.orders++;
+    v.sales += r.sales; v.discount += r.discount; v.shipping += r.shipping; v.fee += r.fee; v.payout += r.payout;
   }
   for (const r of byDay.values()) d.addRow(r);
-  d.addRow({ day: "합계", orders: rows.length, sales: sum("sales"), discount: sum("discount"), shipping: sum("shipping"), fee: sum("fee"), payout: sum("payout") }).font = { bold: true };
+  d.addRow({ day: "합계", orders: rows.filter((r) => r.kind === "order").length, sales: sum("sales"), discount: sum("discount"), shipping: sum("shipping"), fee: sum("fee"), payout: sum("payout") }).font = { bold: true };
 
   const o = wb.addWorksheet("주문별");
   o.columns = [
@@ -153,7 +154,7 @@ export async function buildMonthWorkbook(sb: Sb, partnerId: string, month: strin
     { header: "수수료", key: "fee", width: 10 }, { header: "받을 돈", key: "payout", width: 12 },
   ];
   head(o);
-  for (const r of rows) o.addRow({ ...r, by: r.confirm_by === "buyer" ? "구매자" : `${CONFIRM_DAYS}일 자동`, items: r.lines.map((l) => `${l.name} × ${l.qty}`).join(", ") });
+  for (const r of rows) o.addRow({ ...r, by: r.confirm_by === "buyer" ? "구매자" : r.confirm_by === "return" ? "반품 배송비" : `${CONFIRM_DAYS}일 자동`, items: r.lines.map((l) => `${l.name} × ${l.qty}`).join(", ") });
   // 과세 구분 — 제품 > 판매·재고에서 적은 과세·면세로 판매액을 나눈다 (쿠폰 할인 전 상품 금액, 업체 묶음 쿠폰은 제품에 나누지 않는다)
   const taxRows = await selectAll<{ partner_sku: string; tax_type: string }>(() => sb.from("partner_items").select("partner_sku, tax_type").eq("partner_id", partnerId).not("tax_type", "is", null), "id");
   const taxOf = new Map(taxRows.map((r) => [r.partner_sku, r.tax_type]));
