@@ -294,6 +294,8 @@
 @media (max-width: 639.98px) {
   html[data-bottom-nav] { --ds-nav-h: calc(56px + env(safe-area-inset-bottom)); }
 }
+/* 주 행동 줄(BottomBar)이 있으면 탭 바 대신 그 줄 위로 (알림이 주 버튼을 가리지 않게) */
+html[data-bottom-bar] { --ds-nav-h: calc(4.75rem + env(safe-area-inset-bottom)); }
 @utility above-nav {
   bottom: calc(var(--ds-nav-h, 0px) + max(1.5rem, env(safe-area-inset-bottom)));
 }

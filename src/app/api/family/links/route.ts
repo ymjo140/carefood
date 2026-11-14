@@ -36,7 +36,7 @@ export async function GET() {
   return NextResponse.json({
     watching: out.filter((l) => l.status === "active").map((l) => ({ id: l.id, label: l.label, scopes: scopesOf(l), alert_evening: l.alert_evening, since: l.consented_at })),
     invites: out.filter((l) => l.status === "pending" && Date.parse(l.expires_at) > now).map((l) => ({ id: l.id, label: l.label, url: `${site()}/f/${l.code}`, expires_at: l.expires_at })),
-    watchers: watchers.map((l) => ({ id: l.id, who: names.get(l.viewer_id) || "가족", scopes: scopesOf(l), since: l.consented_at })),
+    watchers: watchers.map((l) => ({ id: l.id, who: names.get(l.viewer_id) || null, scopes: scopesOf(l), since: l.consented_at })),
   });
 }
 

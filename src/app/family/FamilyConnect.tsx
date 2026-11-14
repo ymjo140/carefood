@@ -17,7 +17,7 @@ type Scopes = { meals: boolean; products: boolean; meds: boolean; numbers: boole
 type Links = {
   watching: { id: string; label: string; scopes: Scopes; alert_evening: boolean }[];
   invites: { id: string; label: string; url: string; expires_at: string }[];
-  watchers: { id: string; who: string; scopes: Scopes }[];
+  watchers: { id: string; who: string | null; scopes: Scopes }[];
 };
 type Today = {
   date: string;
@@ -153,13 +153,13 @@ export function FamilyConnect() {
           <div className="flex flex-col gap-3">
             {watchers.map((w) => (
               <Card key={w.id} className="flex flex-col gap-1">
-                <h3 className="text-body font-bold text-ink">{w.who} 님에게 보여 주는 것</h3>
+                <h3 className="text-body font-bold text-ink">{w.who ? `${w.who} 님에게` : "연결된 가족에게"} 보여 주는 것</h3>
                 {(Object.keys(SCOPE_LABEL) as (keyof Scopes)[]).map((k) => (
                   <Switch key={k} checked={w.scopes[k]} disabled={busy === w.id} label={SCOPE_LABEL[k].title} description={SCOPE_LABEL[k].hint}
                     onChange={(v) => saveScopes(w.id, { ...w.scopes, [k]: v })} />
                 ))}
                 <p className="text-caption text-ink-2">체중·건강 목표·먹은 음식 이름은 보여 주지 않아요</p>
-                <TextButton className="self-start text-danger" onClick={() => setEnding({ id: w.id, title: `${w.who} 님에게 그만 보여 줄까요?` })}>그만 보여 주기</TextButton>
+                <TextButton className="self-start text-danger" onClick={() => setEnding({ id: w.id, title: `${w.who ? `${w.who} 님에게` : "이 가족에게"} 그만 보여 줄까요?` })}>그만 보여 주기</TextButton>
               </Card>
             ))}
           </div>

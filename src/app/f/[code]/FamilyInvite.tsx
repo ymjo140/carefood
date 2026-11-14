@@ -20,6 +20,7 @@ const MESSAGES: Record<string, string> = {
   missing: "초대 링크를 찾지 못했어요",
   expired: "초대 링크가 지났어요. 가족에게 새 링크를 받아 주세요",
   used: "이미 받은 초대예요. 가족에게 새 링크를 받아 주세요",
+  self: "내가 보낸 초대예요. 이 링크를 가족에게 보내 주세요",
 };
 
 export default function FamilyInvite() {
