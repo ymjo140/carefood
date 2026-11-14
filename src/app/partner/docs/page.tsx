@@ -64,7 +64,7 @@ const PUT_EXAMPLE = `curl -X PUT "${BASE}/products/GR-2611-014" \\
 
 const OFFER_EXAMPLE = `curl -X PATCH "${BASE}/products/GR-2611-014/offer" \\
   -H "Authorization: Bearer cf_live_…" -H "Content-Type: application/json" \\
-  -d '{ "price": 5500, "status": "sold_out" }'
+  -d '{ "price": 5500, "stock": 120 }'   # stock: 남은 수량 (null 이면 세지 않음, 0 이면 앱에서 살 수 없음)
 
 → 200  { "partner_sku": "GR-2611-014", "result": "applied" }`;
 

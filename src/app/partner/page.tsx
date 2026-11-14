@@ -17,6 +17,7 @@ import { Today } from "./Today";
 import { CustomersTab } from "./Customers";
 import { Connect, type Batch } from "./Connect";
 import { ProductSheet } from "./ProductSheet";
+import { ProductBoard } from "./ProductBoard";
 
 type Partner = { id: string; slug: string; name: string; kind: string; status: string; is_demo?: boolean };
 type Claim = { phrase: string; why: string; suggest?: string };
@@ -48,6 +49,7 @@ function PartnerHome() {
   const [view, setView] = useState<Tab>(() => { const t = sp.get("tab"); return isTab(t) ? t : "today"; });
   const [prefill, setPrefill] = useState<{ need?: string; goal?: string } | null>(null);
   const [openItem, setOpenItem] = useState<string | null>(null);
+  const [productView, setProductView] = useState<"info" | "board">("info");
 
   const loadMe = useCallback(async () => {
     try {
@@ -140,6 +142,9 @@ function PartnerHome() {
       {current === "products" && (
         <section>
           <SectionHeader title="제품" />
+          <Tabs value={productView} onChange={setProductView} label="제품 보기" className="mb-4"
+            items={[{ value: "info", label: "제품 정보" }, { value: "board", label: "판매·출고" }]} />
+          {productView === "board" ? <ProductBoard qs={qs} toOrders={() => go("orders")} /> : (<>
           <Tabs variant="line" value={filter} onChange={(f) => { setFilter(f); setItems({ status: "loading" }); }} label="제품 상태" className="mb-3"
             items={[
               { value: "all", label: "전체" },
@@ -184,6 +189,7 @@ function PartnerHome() {
           <p className="text-caption text-ink-2 mt-3">
             제품을 누르면 상태·이유·판매처별 가격을 보고 바로 고칠 수 있어요. 표현 점검은 상품명·소개·강조 문구에서 질병·효능으로 읽힐 수 있는 말을 먼저 알려 드리는 안내예요. 법적 판단은 아니고, 근거를 달면 검수에서 통과될 수 있어요
           </p>
+          </>)}
         </section>
       )}
     </Page>

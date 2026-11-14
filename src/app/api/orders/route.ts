@@ -6,7 +6,8 @@ import { ORDERING_ENABLED } from "@/lib/features";
 import { isDay } from "@/lib/day";
 import { parseShipping, sellerShipping } from "@/lib/order-status";
 import { partnerOffersFor } from "@/lib/partner/orders";
-import { listMyOrders, releaseOrderCoupons } from "@/lib/orders";
+import { expireUnpaidOrders, listMyOrders } from "@/lib/orders";
+import { putStock, takeStock } from "@/lib/partner/stock";
 import { bestCoupons, spendCoupon } from "@/lib/partner/coupons";
 
 /**
@@ -16,7 +17,7 @@ import { bestCoupons, spendCoupon } from "@/lib/partner/coupons";
  * 그 밖의 제품(시판·크롤링 가격)은 주문에 넣지 않고 건너뛴 수만 돌려준다 — 장보기 목록에서 몰마다 따로 산다.
  * 받는 분 정보와 제3자 제공 동의 시각을 주문에 적고, 결제가 끝나면(paid_at) 업체 화면·API 에 보인다.
  * 업체 쿠폰: 업체 묶음마다 쓸 수 있는 것 중 할인이 가장 큰 하나를 저절로 쓴다 (lib/partner/coupons.ts). 업체 부담이라 discount_fees 에 업체별로 적는다.
- * 결제하지 않고 30분이 지난 내 주문에 묶인 쿠폰은 새 주문 전에 돌려준다.
+ * 재고: 업체가 재고를 적어 둔 제품은 주문할 때 빼고(모자라면 409), 주문을 만들지 못하면 돌려놓는다. 결제하지 않고 60분이 지나면 닫고 돌려놓는다.
  *
  * GET /api/orders — 내 주문 내역 (판매 업체별 묶음·배송 상태·환불, lib/orders.ts)
  *
@@ -70,23 +71,17 @@ export async function POST(request: NextRequest) {
     }
     const shipping_fee = Object.values(shipping_fees).reduce((s, v) => s + v, 0);
 
-    // 결제하지 않은 채 30분이 지난 내 주문에 묶인 쿠폰을 먼저 돌려준다
-    // 그 주문의 할인도 같이 지운다 — 나중에 그 주문을 결제하더라도 쿠폰 없이 할인받지 않게
-    const { data: stale, error: sErr } = await sb.from("orders").select("id, total_price, shipping_fee, discount_amount").eq("user_id", user_id).is("paid_at", null).neq("status", "cancelled")
-      .gt("discount_amount", 0).lt("created_at", new Date(Date.now() - 30 * 60e3).toISOString()).limit(20);
-    if (sErr) throw new Error(sErr.message);
-    for (const o of (stale || []) as { id: string; total_price: number; shipping_fee: number }[]) {
-      const { error: zErr } = await sb.from("orders").update({ discount_amount: 0, discount_fees: {}, final_price: (o.total_price || 0) + (o.shipping_fee || 0) })
-        .eq("id", o.id).is("paid_at", null);
-      if (zErr) throw new Error(zErr.message);
-      await releaseOrderCoupons(sb, o.id);
-    }
+    // 결제하지 않고 60분이 지난 내 주문을 먼저 닫는다 — 잡아 둔 재고·쿠폰이 돌아온다
+    await expireUnpaidOrders(sb, user_id);
     const bundles = new Map<string, { subtotal: number; fee: number }>();
     for (const pid of Object.keys(shipping_fees)) bundles.set(pid, { subtotal: rows.filter((r) => r.partner_id === pid).reduce((s, r) => s + r.unit_price * r.quantity, 0), fee: shipping_fees[pid] });
     const best = await bestCoupons(sb, user_id, bundles);
     const discount_fees: Record<string, number> = Object.fromEntries([...best].map(([pid, c]) => [pid, c.discount]));
     const discount = Object.values(discount_fees).reduce((s, v) => s + v, 0);
 
+    // 재고 — 모자란 제품이 있으면 주문하지 않는다
+    const stock = await takeStock(sb, rows.map((r) => ({ partner_id: r.partner_id, sku: r.partner_sku, qty: r.quantity, name: r.product_name })));
+    if (!stock.ok) return NextResponse.json({ error: `재고가 모자라요: ${stock.short.join(", ")}. 수량을 줄이거나 빼고 다시 주문해 주세요` }, { status: 409 });
     const { data: order, error: oErr } = await sb.from("orders").insert({
       user_id, status: "pending", total_items: rows.length, total_price: total, shipping_fee, shipping_fees,
       discount_amount: discount, discount_fees, final_price: total + shipping_fee - discount,
@@ -94,13 +89,14 @@ export async function POST(request: NextRequest) {
       delivery_preference: { note: parsed.shipping.note }, weekly_box_snapshot: items,
       shipping: parsed.shipping, third_party_consent_at: new Date().toISOString(),
     }).select("id, status, total_items").single();
-    if (oErr) throw new Error(oErr.message);
+    if (oErr) { await putStock(sb, stock.taken); throw new Error(oErr.message); }
 
     const { error: iErr } = await sb.from("order_items").insert(rows.map((r) => ({ order_id: order.id, ...r })));
     if (iErr) {
       // 상품 없는 주문이 남지 않게 지운다
       const { error: undoErr } = await sb.from("orders").delete().eq("id", order.id);
       if (undoErr) console.error("상품을 넣지 못한 주문을 지우지 못했어요:", order.id, undoErr.message);
+      await putStock(sb, stock.taken);
       throw new Error(iErr.message);
     }
     // 쿠폰을 쓴다 — 그새 다른 주문에서 썼거나 끝났으면 이 주문 할인에서 뺀다 (결제 전이라 금액을 고칠 수 있다)

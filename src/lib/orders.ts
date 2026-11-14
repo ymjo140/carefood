@@ -7,6 +7,7 @@
  */
 import { type Fulfil, type Shipping } from "./order-status";
 import { restoreCoupons } from "./partner/coupons";
+import { putBackRows } from "./partner/stock";
 
 type Sb = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -141,6 +142,31 @@ export async function releaseOrderCoupons(sb: Sb, orderId: string) {
   await restoreCoupons(sb, orderId, [...new Set(((data || []) as { partner_id: string }[]).map((r) => r.partner_id))]);
 }
 
+/**
+ * 결제하지 않고 60분이 지난 주문을 닫는다 — 잡아 둔 재고와 쿠폰을 돌려준다.
+ * /api/push/run(30분마다)이 부르고, 주문할 때 그 사람 것만 먼저 부른다. 결제(PG)를 붙이면 결제 창 시간보다 길게 둔다.
+ */
+export async function expireUnpaidOrders(sb: Sb, userId?: string) {
+  let q = sb.from("orders").select("id").is("paid_at", null).neq("status", "cancelled").lt("created_at", new Date(Date.now() - 60 * 60e3).toISOString()).limit(200);
+  if (userId) q = q.eq("user_id", userId);
+  const { data, error } = await q;
+  if (error) throw new Error(error.message);
+  let n = 0;
+  for (const o of (data || []) as { id: string }[]) {
+    const { data: claimed, error: cErr } = await sb.from("orders").update({ status: "cancelled", updated_at: new Date().toISOString() })
+      .eq("id", o.id).is("paid_at", null).neq("status", "cancelled").select("id");
+    if (cErr) throw new Error(cErr.message);
+    if (!claimed?.length) continue; // 그새 결제됐거나 다른 곳에서 닫았다
+    const { data: done, error: iErr } = await sb.from("order_items").update({ fulfil_status: "canceled", canceled_by: "admin", canceled_at: new Date().toISOString(), cancel_reason: "결제하지 않아 닫음" })
+      .eq("order_id", o.id).neq("fulfil_status", "canceled").select("partner_id, partner_sku, quantity");
+    if (iErr) throw new Error(iErr.message);
+    await putBackRows(sb, done || []);
+    await releaseOrderCoupons(sb, o.id);
+    n++;
+  }
+  return n;
+}
+
 export type CancelResult = { ok: true; result: "canceled" | "requested" } | { ok: false; code: "not_found" | "conflict" | "invalid"; message: string };
 
 /**
@@ -160,10 +186,13 @@ export async function buyerCancel(sb: Sb, userId: string, orderId: string, partn
 
   if (!o.paid_at) {
     if (o.status === "cancelled") return { ok: true, result: "canceled" };
-    const { error: iErr } = await sb.from("order_items").update({ fulfil_status: "canceled", canceled_by: "buyer", canceled_at: now, cancel_reason: why || "결제 전 취소" }).eq("order_id", orderId);
+    // 아직 취소되지 않은 줄만 바꾸고, 바뀐 줄만큼 재고를 돌려놓는다 (두 번 눌러도 한 번)
+    const { data: done, error: iErr } = await sb.from("order_items").update({ fulfil_status: "canceled", canceled_by: "buyer", canceled_at: now, cancel_reason: why || "결제 전 취소" })
+      .eq("order_id", orderId).neq("fulfil_status", "canceled").select("partner_id, partner_sku, quantity");
     if (iErr) throw new Error(iErr.message);
     const { error: oErr } = await sb.from("orders").update({ status: "cancelled", updated_at: now }).eq("id", orderId);
     if (oErr) throw new Error(oErr.message);
+    await putBackRows(sb, done || []);
     await releaseOrderCoupons(sb, orderId);
     return { ok: true, result: "canceled" };
   }
@@ -177,9 +206,10 @@ export async function buyerCancel(sb: Sb, userId: string, orderId: string, partn
   if (status === "shipped" || status === "delivered") return { ok: false, code: "conflict", message: "이미 발송해서 취소할 수 없어요. 반품은 케어푸드에 문의해 주세요" };
 
   if (status === "new") {
-    const { error: uErr } = await sb.from("order_items").update({ fulfil_status: "canceled", canceled_by: "buyer", canceled_at: now, cancel_reason: why || "주문자 취소" })
-      .eq("order_id", orderId).eq("partner_id", partnerId).eq("fulfil_status", "new");
+    const { data: done, error: uErr } = await sb.from("order_items").update({ fulfil_status: "canceled", canceled_by: "buyer", canceled_at: now, cancel_reason: why || "주문자 취소" })
+      .eq("order_id", orderId).eq("partner_id", partnerId).eq("fulfil_status", "new").select("partner_id, partner_sku, quantity");
     if (uErr) throw new Error(uErr.message);
+    await putBackRows(sb, done || []);
     await syncOrderStatus(sb, orderId);
     await recomputeRefund(sb, orderId);
     return { ok: true, result: "canceled" };

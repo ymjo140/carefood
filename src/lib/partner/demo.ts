@@ -224,6 +224,11 @@ export type DemoResult = { excel: IngestResult; api: IngestResult; agency_id: st
 export async function seedDemo(sb: Sb, partner: Partner, userId: string | null): Promise<DemoResult> {
   const excel = await ingestRows(sb, partner, asRows(excelSamples()), "excel", "예시_제품목록.xlsx", userId);
   const api = await ingestRows(sb, partner, asRows(apiSamples()), "api", null, userId);
+  // 재고 예시 — 넉넉한 것 하나, 적은 것 하나 (나머지는 세지 않음)
+  for (const [sku, stock] of [["EX-001", 40], ["EX-005", 3]] as const) {
+    const { error } = await sb.from("partner_items").update({ stock, stock_updated_at: new Date().toISOString() }).eq("partner_id", partner.id).eq("partner_sku", sku);
+    if (error) throw new Error(error.message);
+  }
   // 대행 — 기다리는 예시가 이미 있으면 새로 만들지 않는다
   const { error: cErr } = await sb.from("partner_agency_uploads").update({ status: "canceled", decided_at: new Date().toISOString(), decided_note: "예시를 다시 채워서 닫음" })
     .eq("partner_id", partner.id).eq("status", "waiting").eq("file_name", "예시_대행_목록.xlsx");

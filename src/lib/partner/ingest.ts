@@ -42,6 +42,9 @@ export async function applyOffers(sb: Sb, partnerId: string, itemId: string, pro
   const { data: pa } = await sb.from("partners").select("status").eq("id", partnerId).single();
   const { error: pErr } = await sb.from("products").update({ is_purchasable: onSale(item) && pa?.status === "active", updated_at: now }).eq("id", productId);
   if (pErr) throw new Error(`판매 상태를 반영하지 못했어요: ${pErr.message}`);
+  // 재고가 0 인 제품은 판매 중이어도 살 수 없다 — 판매 기간·재고를 함께 보는 DB 함수로 한 번 더 맞춘다 (lib/partner/stock.ts)
+  const { error: rErr } = await sb.rpc("partner_refresh_availability", { p_item: itemId });
+  if (rErr) throw new Error(`재고를 반영하지 못했어요: ${rErr.message}`);
 }
 
 /** 엑셀·피드·API 에서 읽은 줄을 받는다 */
@@ -223,11 +226,11 @@ export async function rejectItem(sb: Sb, itemId: string, note: string) {
 /** 업체 상태가 바뀌면 그 업체 제품의 '살 수 있음'도 맞춘다 (운영 중일 때만 추천·식단 채우기에 나온다) */
 export async function syncPartnerProducts(sb: Sb, partnerId: string) {
   const { data: pa } = await sb.from("partners").select("status").eq("id", partnerId).single();
-  const { data: items, error } = await sb.from("partner_items").select("product_id, approved_data").eq("partner_id", partnerId).not("product_id", "is", null);
+  const { data: items, error } = await sb.from("partner_items").select("product_id, approved_data, stock").eq("partner_id", partnerId).not("product_id", "is", null);
   if (error) throw new Error(error.message);
   for (const it of items || []) {
     if (!it.approved_data) continue;
-    const { error: uErr } = await sb.from("products").update({ is_purchasable: pa?.status === "active" && onSale(it.approved_data), updated_at: new Date().toISOString() }).eq("id", it.product_id);
+    const { error: uErr } = await sb.from("products").update({ is_purchasable: pa?.status === "active" && onSale(it.approved_data) && (it.stock ?? 1) > 0, updated_at: new Date().toISOString() }).eq("id", it.product_id);
     if (uErr) throw new Error(uErr.message);
   }
 }
