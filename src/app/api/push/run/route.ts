@@ -10,6 +10,7 @@ import { runDueCampaigns } from "@/lib/partner/crm";
 import { runConsentNotices } from "@/lib/consent-notice";
 import { runFlows } from "@/lib/partner/flows";
 import { notifyPartners } from "@/lib/partner/notify";
+import { autoCloseLastMonth } from "@/lib/partner/settlement";
 import { AUTO_CONFIRM_DAYS, expireUnpaidOrders } from "@/lib/orders";
 
 /**
@@ -89,6 +90,11 @@ export async function POST(req: NextRequest) {
     // 업체 담당자에게 새 주문·취소 요청 알림 (lib/partner/notify.ts)
     try { await notifyPartners(sbAds, pushReady()); }
     catch (e) { console.error("업체 주문 알림을 보내지 못했어요:", (e as Error).message); }
+    // 지난 달 정산 자동 마감 — 아직 마감하지 않은 업체만, 돈이 오가지 않은 달은 건너뜀 (lib/partner/settlement.ts)
+    try {
+      const r = await autoCloseLastMonth(sbAds);
+      for (const f of r.failed) console.error(`정산 자동 마감 실패 ${r.month} ${f.partner_id}:`, f.message);
+    } catch (e) { console.error("정산 자동 마감을 돌리지 못했어요:", (e as Error).message); }
     // 업체 자동 알림 — 밤에는 야간 동의자만 고른다(lib/partner/flows.ts)
     try { flows = await runFlows(sbAds, userPusher(sbAds)); }
     catch (e) { console.error("업체 자동 알림을 돌리지 못했어요:", (e as Error).message); }

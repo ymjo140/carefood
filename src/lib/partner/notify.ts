@@ -2,6 +2,7 @@
  * 업체 알림 — 새 주문·취소 요청을 업체 담당자 기기에 푸시로 알린다. 서버 전용. /api/push/run 이 30분마다 부른다 (11/14 구조 진단 P0).
  *  · 알린 줄에는 partner_notified_at / cancel_notified_at 을 적어 다시 보내지 않는다. 기기가 없어도 적는다(쌓였다가 한꺼번에 가지 않게).
  *  · 담당자(partner_members.auth_user_id) → account_links.actor_id → push_subscriptions. 예시 주문(is_demo)은 보내지 않고 적기만 한다.
+ *  · 담당자마다 설정에서 끌 수 있다(partner_members.notify_orders). 모두 껐어도 알린 것으로 적는다 — 다시 켜도 지난 주문이 한꺼번에 오지 않게.
  *  · 업무 알림이라 광고 동의·야간 규칙과 무관하다(내용에 혜택·광고 없음).
  */
 import { sendToUser, type PushSub } from "@/lib/push";
@@ -12,7 +13,7 @@ type Line = { id: string; partner_id: string; order_id: string; orders: { is_dem
 async function memberSubs(sb: Sb, partnerIds: string[]): Promise<Map<string, PushSub[]>> {
   const out = new Map<string, PushSub[]>();
   if (partnerIds.length === 0) return out;
-  const { data: ms, error } = await sb.from("partner_members").select("partner_id, auth_user_id").in("partner_id", partnerIds);
+  const { data: ms, error } = await sb.from("partner_members").select("partner_id, auth_user_id").in("partner_id", partnerIds).eq("notify_orders", true); // 설정 > 담당자·알림에서 끈 사람은 뺀다
   if (error) throw new Error(error.message);
   const auth = [...new Set(((ms || []) as { auth_user_id: string }[]).map((m) => m.auth_user_id).filter(Boolean))];
   if (auth.length === 0) return out;

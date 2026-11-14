@@ -11,6 +11,7 @@ import { AdminCrm } from "./Crm";
 import { ClaimTerms } from "./ClaimTerms";
 import { AdminDisputes } from "./Disputes";
 import { AdminAgency } from "./Agency";
+import { AdminPayouts } from "./Payouts";
 
 type Partner = {
   id: string; slug: string; name: string; kind: string; status: "onboarding" | "active" | "paused"; contact_email: string | null;
@@ -51,6 +52,7 @@ export default function AdminPartnersPage() {
   const toast = useToast();
   const [partners, setPartners] = useState<Load<Partner[]>>({ status: "loading", data: [] });
   const [queue, setQueue] = useState<Load<ReviewItem[]>>({ status: "loading", data: [] });
+  const [payTick, setPayTick] = useState(0); // 업체별 정산에서 마감·정산 끝을 누르면 지급 대기도 다시
 
   const loadPartners = useCallback(async () => {
     try { setPartners({ status: "done", data: (await api<{ partners: Partner[] }>("/api/admin/partners")).partners }); }
@@ -83,6 +85,7 @@ export default function AdminPartnersPage() {
           </div>
         )}
 
+      <AdminPayouts refresh={payTick} />
       <AdminCrm />
       <AdminDisputes />
       <ClaimTerms />
@@ -98,7 +101,7 @@ export default function AdminPartnersPage() {
           <EmptyState title="아직 업체가 없어요" description="위에서 업체를 만들고 담당자 계정을 연결해요" />
         ) : (
           <div className="flex flex-col gap-3 mt-3">
-            {partners.data.map((p) => <PartnerRow key={p.id} p={p} onDone={(m) => { toast.show(m); loadPartners(); }} onFail={fail} />)}
+            {partners.data.map((p) => <PartnerRow key={p.id} p={p} onDone={(m) => { toast.show(m); loadPartners(); }} onFail={fail} onSettled={() => setPayTick((t) => t + 1)} />)}
           </div>
         )}
     </Page>
@@ -228,7 +231,7 @@ function NewPartner({ onDone, onFail }: { onDone: (m: string) => void; onFail: (
 }
 
 /* ── 업체 한 줄 ── */
-function PartnerRow({ p, onDone, onFail }: { p: Partner; onDone: (m: string) => void; onFail: (w: string, e: unknown) => void }) {
+function PartnerRow({ p, onDone, onFail, onSettled }: { p: Partner; onDone: (m: string) => void; onFail: (w: string, e: unknown) => void; onSettled: () => void }) {
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
   const [rate, setRate] = useState(p.commission_rate === null ? "" : String(p.commission_rate));
@@ -283,14 +286,14 @@ function PartnerRow({ p, onDone, onFail }: { p: Partner; onDone: (m: string) => 
         <Button type="submit" size="sm" variant="secondary" loading={busy} disabled={!email.includes("@")}>담당자 연결하기</Button>
       </form>
       <Sheet open={settling} onClose={() => setSettling(false)} title={`${p.name} 정산`} description="끝난 달을 마감하면 그때의 금액이 정산서로 남아요">
-        {settling && <Settlements partnerId={p.id} onFail={onFail} />}
+        {settling && <Settlements partnerId={p.id} onFail={onFail} onSettled={onSettled} />}
       </Sheet>
     </Card>
   );
 }
 
 /* ── 정산: 달별 마감·정산 끝 ── */
-function Settlements({ partnerId, onFail }: { partnerId: string; onFail: (w: string, e: unknown) => void }) {
+function Settlements({ partnerId, onFail, onSettled }: { partnerId: string; onFail: (w: string, e: unknown) => void; onSettled: () => void }) {
   const toast = useToast();
   const [state, setState] = useState<Load<SettleMonth[]>>({ status: "loading", data: [] });
   const [busy, setBusy] = useState<string | null>(null);
@@ -307,6 +310,7 @@ function Settlements({ partnerId, onFail }: { partnerId: string; onFail: (w: str
       const amt = (paid[month] || "").replace(/[^\d-]/g, "");
       await api("/api/admin/partners/settlements", post({ partner_id: partnerId, month, action, ...(action === "paid" && amt ? { paid_amount: Number(amt) } : {}) }));
       toast.show(action === "close" ? `${month} 정산을 마감했어요` : `${month} 정산을 끝냈어요`);
+      onSettled();
       await load();
     } catch (e) { onFail(action === "close" ? "마감" : "정산을 끝내", e); } finally { setBusy(null); }
   };
