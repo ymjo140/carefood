@@ -16,7 +16,7 @@ export const VIEWS: Partial<Record<Tab, { value: string; label: string }[]>> = {
   products: [{ value: "stock", label: "판매·재고" }, { value: "info", label: "제품 정보" }, { value: "upload", label: "올리기" }],
   marketing: [{ value: "coupons", label: "쿠폰" }, { value: "flows", label: "자동 알림" }, { value: "ads", label: "광고" }, { value: "collabs", label: "협업" }],
   analytics: [{ value: "report", label: "성과" }, { value: "demand", label: "수요 → 기획" }],
-  settings: [{ value: "connect", label: "연동" }],
+  settings: [{ value: "info", label: "업체 정보" }, { value: "team", label: "담당자·알림" }, { value: "connect", label: "연동" }],
 };
 
 export function viewsOf(tab: Tab) {

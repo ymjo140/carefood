@@ -130,6 +130,14 @@ export async function buildToday(sb: Sb, partner: { id: string; kind: string; na
   const demand = await buildDemand(sb, pid);
   const gapRow = demand.segments.find((s) => s.share !== null) || null;
 
+  // 정산 정보 — 앱 주문을 받는 업체인데 계좌·세금계산서 메일·사업자 번호 중 빈 것이 있으면 (매달 10일 지급에 필요)
+  let settleMissing: string[] = [];
+  if (orders) {
+    const { data, error } = await sb.from("partners").select("business_number, tax_email, bank_account").eq("id", pid).single();
+    if (error) throw new Error(error.message);
+    settleMissing = [!data.bank_account && "정산 계좌", !data.tax_email && "세금계산서 메일", !data.business_number && "사업자 번호"].filter(Boolean) as string[];
+  }
+
   // ── 할 일 ──
   const tasks: Task[] = [];
   const oc = orders?.counts;
@@ -181,6 +189,10 @@ export async function buildToday(sb: Sb, partner: { id: string; kind: string; na
   if (lowStock) tasks.push({
     kind: "LOW_STOCK", blocking: false, weight: 45 + lowStock, tab: "products", view: "stock",
     title: `재고가 ${LOW_STOCK}개 이하인 제품 ${n(lowStock)}개`, reason: "다 팔리면 앱에서 살 수 없게 돼요", action: "재고 보기",
+  });
+  if (settleMissing.length) tasks.push({
+    kind: "SETTLE_INFO", blocking: false, weight: 55, tab: "settings", view: "info",
+    title: "정산에 필요한 정보가 비어 있어요", reason: `${settleMissing.join(" · ")} — 매달 10일 대금 지급과 세금계산서 발행에 필요해요`, action: "업체 정보 열기",
   });
   if (orders?.atRisk) tasks.push({
     kind: "AT_RISK", blocking: false, weight: 40 + orders.atRisk, tab: "customers", filter: "at_risk",

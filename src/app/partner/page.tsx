@@ -14,6 +14,7 @@ import { Orders, type OrderFilter } from "./Orders";
 import { Today } from "./Today";
 import { CustomersTab } from "./Customers";
 import { Connect, ProductUpload, type Batch } from "./Connect";
+import { PartnerInfo, PartnerTeam } from "./Settings";
 import { ProductBoard } from "./ProductBoard";
 import { ProductInfo, isProductFilter, type ProductFilter } from "./Products";
 
@@ -130,7 +131,9 @@ function PartnerHome() {
         <DemandFlow qs={qs} onMakeSegment={(need) => go("marketing", { view: "ads", need })} onSent={() => go("marketing", { view: "collabs" })} />
       )}
       {current === "settlement" && <Settlement qs={qs} readOnly={!!as} />}
-      {current === "settings" && <Connect qs={qs} onChanged={loadMe} linkSales={<LinkSalesUpload qs={qs} readOnly={readOnly} />} />}
+      {current === "settings" && view === "info" && <PartnerInfo qs={qs} />}
+      {current === "settings" && view === "team" && <PartnerTeam qs={qs} />}
+      {current === "settings" && view === "connect" && <Connect qs={qs} onChanged={loadMe} linkSales={<LinkSalesUpload qs={qs} readOnly={readOnly} />} />}
     </Page>
   );
 }

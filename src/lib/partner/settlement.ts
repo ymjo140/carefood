@@ -63,7 +63,7 @@ export async function settlementMonths(sb: Sb, partnerId: string): Promise<Settl
 }
 
 /** 지난 달 마감 — 그 달의 숫자를 다시 세어 적는다. 정산을 끝낸 달은 고치지 않는다 */
-export async function closeMonth(sb: Sb, partnerId: string, month: string, userId: string | null): Promise<Settlement> {
+export async function closeMonth(sb: Sb, partnerId: string, month: string, userId: string | null, opt: { auto?: boolean; dry?: boolean } = {}): Promise<Settlement | null> {
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) throw new Error("달은 2026-11 처럼 적어 주세요");
   if (month >= currentMonth()) throw new Error("끝난 달만 마감할 수 있어요");
   const rates = await partnerRates(sb, partnerId);
@@ -86,11 +86,55 @@ export async function closeMonth(sb: Sb, partnerId: string, month: string, userI
     partner_id: partnerId, month, clicks: c.count || 0, orders: (o.data || []).length,
     confirmed_amount: confirmed.reduce((s, r) => s + r.amount, 0), commission: confirmed.reduce((s, r) => s + (r.commission || 0), 0),
     order_sales: app.sales, order_shipping: app.shipping, order_discount: app.discount, order_fee: app.fee,
-    status: "closed", closed_at: new Date().toISOString(), closed_by: userId, paid_at: null, paid_amount: null,
+    status: "closed", closed_at: new Date().toISOString(), closed_by: userId, paid_at: null, paid_amount: null, auto_closed: !!opt.auto,
   };
-  const { data, error } = await sb.from("partner_settlements").upsert(row, { onConflict: "partner_id,month" }).select(SETTLE_COLS).single();
-  if (error) throw new Error(error.message);
+  // 미리 세기(dry) — 적지 않고 숫자만 (관리자 지급 대기열의 '아직 마감 안 된 달')
+  if (opt.dry) return { ...row, status: "closed", note: null } as Settlement;
+  // 자동 마감은 주고받을 돈이 없는 달은 적지 않는다
+  if (opt.auto && row.orders === 0 && row.confirmed_amount === 0 && row.order_sales === 0 && row.order_shipping === 0) return null;
+  // 읽고 → 쓰는 사이에 정산을 끝냈거나 다른 쪽이 마감했으면 덮어쓰지 않는다: 있던 줄은 '마감' 상태일 때만 고치고, 없던 줄은 새로 넣는다
+  if (prev.data) {
+    if (opt.auto) return null; // 자동 마감은 이미 마감한 달을 다시 세지 않는다
+    const { data, error } = await sb.from("partner_settlements").update(row).eq("partner_id", partnerId).eq("month", month).eq("status", "closed").select(SETTLE_COLS);
+    if (error) throw new Error(error.message);
+    if (!data?.length) throw new Error("그새 정산을 끝낸 달이에요. 새로 불러와 주세요");
+    return data[0];
+  }
+  const { data, error } = await sb.from("partner_settlements").insert(row).select(SETTLE_COLS).single();
+  if (error) {
+    if (error.code === "23505") { if (opt.auto) return null; throw new Error("그새 다른 곳에서 마감했어요. 새로 불러와 주세요"); }
+    throw new Error(error.message);
+  }
   return data;
+}
+
+/** 지난 달 → 'YYYY-MM' (한국 시간) */
+export function previousMonth(now = Date.now()): string {
+  const cur = kstMonth(now);
+  const [y, m] = cur.split("-").map(Number);
+  return m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, "0")}`;
+}
+
+/**
+ * 지난 달 자동 마감 — 운영 중인 업체 가운데 아직 마감하지 않은 업체만 (/api/push/run 이 30분마다).
+ * 달이 끝나면 그 달에 확정된 묶음은 더 늘지 않는다(확정일 기준). 수수료율이 없는 업체 등 실패는 업체마다 기록하고 넘어간다 — 관리자가 손으로 마감
+ */
+export async function autoCloseLastMonth(sb: Sb, now = Date.now()): Promise<{ month: string; closed: number; skipped: number; failed: { partner_id: string; message: string }[] }> {
+  const month = previousMonth(now);
+  const [p, st] = await Promise.all([
+    sb.from("partners").select("id").eq("status", "active").eq("is_demo", false),
+    sb.from("partner_settlements").select("partner_id").eq("month", month),
+  ]);
+  if (p.error) throw new Error(p.error.message);
+  if (st.error) throw new Error(st.error.message);
+  const done = new Set(((st.data || []) as { partner_id: string }[]).map((r) => r.partner_id));
+  const out = { month, closed: 0, skipped: 0, failed: [] as { partner_id: string; message: string }[] };
+  for (const { id } of (p.data || []) as { id: string }[]) {
+    if (done.has(id)) continue;
+    try { if (await closeMonth(sb, id, month, null, { auto: true })) out.closed++; else out.skipped++; }
+    catch (e) { out.failed.push({ partner_id: id, message: (e as Error).message }); }
+  }
+  return out;
 }
 
 /**
