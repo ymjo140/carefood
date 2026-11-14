@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Badge, Button, Card, EmptyState, Field, ListRow, SectionHeader, Select, SkeletonList, TextButton, Textarea, FilePick, buttonClass, timeAgo, useToast } from "@/components/ui";
+import { AGENCY_PRICE_PER_ITEM } from "@/lib/partner/rates";
 
 type Upload = {
   id: string; file_name: string | null; row_count: number; note: string | null; status: "waiting" | "confirmed" | "returned" | "canceled";
@@ -67,7 +68,7 @@ export function AdminAgency({ partners }: { partners: { slug: string; name: stri
   const ups = state.uploads || [];
   return (
     <section className="mt-10">
-      <SectionHeader title="대행 연동" description="업체 대신 엑셀을 올려요. 업체가 미리보기를 보고 반영하기를 눌러야 들어가요"
+      <SectionHeader title="대행 연동" description={`업체 대신 엑셀을 올려요. 업체가 미리보기를 보고 반영하기를 눌러야 들어가고, 그때 바로 반영·검수 상품당 ${AGENCY_PRICE_PER_ITEM}원이 업체 충전금에서 빠져요`}
         action={<a href="/api/partner/template" className={buttonClass({ variant: "ghost", size: "sm" })}>양식 내려받기</a>} />
       <Card className="mb-3">
         <form onSubmit={upload} className="flex flex-col gap-3">

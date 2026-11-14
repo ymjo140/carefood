@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Button, ChoiceCard, Field, Icon, Input, LinkButton, Page, PageHeader, SectionHeader, Stat, Textarea, TextLink, useToast } from "@/components/ui";
 import { APPLY_KINDS, parseApplication, type ApplyKind } from "@/lib/partner/apply";
-import { PAY_DAY_OF_MONTH, STANDARD_MESSAGE_PRICE, STANDARD_RATES } from "@/lib/partner/rates";
+import { AGENCY_PRICE_PER_ITEM, FLOW_MESSAGE_PRICE, PAY_DAY_OF_MONTH, STANDARD_MESSAGE_PRICE, STANDARD_RATES } from "@/lib/partner/rates";
 
 type Form = {
   company_name: string; representative: string; email: string; phone: string; website: string;
@@ -91,7 +91,10 @@ export default function VendorApplyPage() {
         <ul className="mt-5 flex flex-col gap-1.5 text-label text-ink-2">
           <li>앱 주문 수수료는 판매액에서 오늘끼록 쿠폰 할인을 뺀 금액에만 매겨요. 배송비에는 붙지 않아요</li>
           <li>구매 링크 수수료는 오늘끼록 링크로 들어가 내 몰에서 구매확정된 판매액에만 매겨요</li>
-          <li>고객에게 보내는 혜택 메시지는 원할 때만 써요 · 보낸 사람 수 × <span className="num">{STANDARD_MESSAGE_PRICE}</span>원</li>
+          <li>아래는 고를 수 있는 기능이고, 쓴 만큼만 충전금에서 내요</li>
+          <li>혜택 메시지(직접 골라 보내는 광고) · 보낸 사람 수 × <span className="num">{STANDARD_MESSAGE_PRICE}</span>원</li>
+          <li>자동 알림(첫 주문 감사·다시 살 때·다시 찾아 주세요) · 보낸 건마다 <span className="num">{FLOW_MESSAGE_PRICE}</span>원</li>
+          <li>대행 연동(오늘끼록이 상품 목록을 옮겨 적어 올림) · 상품당 <span className="num">{AGENCY_PRICE_PER_ITEM}</span>원</li>
         </ul>
       </section>
 

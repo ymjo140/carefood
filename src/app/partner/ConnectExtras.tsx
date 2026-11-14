@@ -6,6 +6,7 @@ import {
   TextButton, Textarea, buttonClass, timeAgo, useToast,
 } from "@/components/ui";
 import type { AgencyUpload } from "@/lib/partner/agency";
+import { AGENCY_PRICE_PER_ITEM } from "@/lib/partner/rates";
 import { WEB_EDIT } from "@/lib/partner/connect-status";
 import { VIA, type Batch } from "./Connect";
 
@@ -129,16 +130,19 @@ export function Examples({ qs, isDemo, readOnly, onChanged }: { qs: string; isDe
   );
 }
 
+type Upload = AgencyUpload & { due?: { items: number; unit: number; amount: number } };
+const won = (v: number) => `${v.toLocaleString("ko-KR")}원`;
 const AGENCY_STATUS: Record<AgencyUpload["status"], string> = { waiting: "확인 기다림", confirmed: "반영함", returned: "돌려보냄", canceled: "거둬들임" };
 
 /**
  * 오늘끼록이 대신 올린 파일 — 업체가 미리보기를 보고 반영하거나 돌려보낸다.
  * 반영·돌려보내기 뒤에는 이 목록과 연동 기록·제품 수를 다시 불러온다.
+ * 반영하면 옮겨 적은 상품 수 × AGENCY_PRICE_PER_ITEM 원이 충전금에서 빠진다 — 미리 금액과 잔액을 보여 주고, 모자라면 반영하기를 막는다.
  */
 export function Agency({ qs, refresh, onChanged }: { qs: string; refresh: number; onChanged: () => void }) {
   const toast = useToast();
-  const [state, setState] = useState<{ status: "loading" | "error" | "done"; uploads?: AgencyUpload[]; readOnly?: boolean; ready?: boolean; error?: string }>({ status: "loading" });
-  const [open, setOpen] = useState<AgencyUpload | null>(null);
+  const [state, setState] = useState<{ status: "loading" | "error" | "done"; uploads?: Upload[]; readOnly?: boolean; ready?: boolean; balance?: number; error?: string }>({ status: "loading" });
+  const [open, setOpen] = useState<Upload | null>(null);
   const [mode, setMode] = useState<"view" | "return">("view");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
@@ -150,7 +154,7 @@ export function Agency({ qs, refresh, onChanged }: { qs: string; refresh: number
       const r = await fetch(`/api/partner/agency?${qs}`);
       const d = await r.json();
       if (!r.ok) throw new Error(d.error);
-      if (my === seq.current) setState({ status: "done", uploads: d.uploads, readOnly: d.read_only, ready: d.ready });
+      if (my === seq.current) setState({ status: "done", uploads: d.uploads, readOnly: d.read_only, ready: d.ready, balance: d.balance ?? 0 });
     } catch (e) { if (my === seq.current) setState({ status: "error", error: (e as Error).message || "불러오지 못했어요" }); }
   }, [qs]);
   useEffect(() => { load(); }, [load, refresh]); // eslint-disable-line react-hooks/set-state-in-effect -- 불러온 뒤에 상태를 바꾼다
@@ -165,7 +169,8 @@ export function Agency({ qs, refresh, onChanged }: { qs: string; refresh: number
       if (!r.ok) throw new Error(d.error);
       if (action === "confirm") {
         const x = d.result;
-        toast.show(x ? `반영했어요. 바로 반영 ${x.ok} · 검수 중 ${x.review} · 반려 ${x.error}` : "반영했어요");
+        const paid = d.fee > 0 ? ` · 충전금에서 ${won(d.fee)}을 냈어요` : "";
+        toast.show(x ? `반영했어요. 바로 반영 ${x.ok} · 검수 중 ${x.review} · 반려 ${x.error}${paid}` : `반영했어요${paid}`);
       } else toast.show("돌려보냈어요. 오늘끼록이 고쳐서 다시 올려요");
       close();
       load();
@@ -177,11 +182,13 @@ export function Agency({ qs, refresh, onChanged }: { qs: string; refresh: number
   };
 
   const ups = state.uploads || [];
+  const due = open?.status === "waiting" ? open.due : undefined;
+  const short = !!due && due.amount > (state.balance ?? 0);
   const waiting = ups.filter((u) => u.status === "waiting").length;
   return (
     <section>
       <SectionHeader title="오늘끼록이 대신 올린 파일"
-        description={waiting > 0 ? `확인을 기다리는 파일 ${waiting}개 — 미리보기를 보고 반영하기를 눌러야 들어가요` : "대행 연동을 신청하면 오늘끼록이 옮겨 적은 파일이 여기에 와요"} />
+        description={waiting > 0 ? `확인을 기다리는 파일 ${waiting}개 — 미리보기를 보고 반영하기를 눌러야 들어가요` : `대행 연동을 신청하면 오늘끼록이 옮겨 적은 파일이 여기에 와요. 반영할 때 상품당 ${AGENCY_PRICE_PER_ITEM}원이에요`} />
       {state.status === "loading" ? <SkeletonList rows={2} /> : state.status === "error" ? (
         <EmptyState title="대신 올린 파일을 불러오지 못했어요" description={state.error}
           action={<Button size="sm" variant="secondary" icon="refresh" onClick={() => { setState({ status: "loading" }); load(); }}>다시 불러오기</Button>} />
@@ -208,7 +215,7 @@ export function Agency({ qs, refresh, onChanged }: { qs: string; refresh: number
         footer={open?.status === "waiting" && !state.readOnly ? (mode === "view" ? (
           <>
             <Button variant="secondary" block onClick={() => setMode("return")}>돌려보내기</Button>
-            <Button block loading={busy} onClick={() => decide("confirm")}>반영하기</Button>
+            <Button block loading={busy} disabled={short} onClick={() => decide("confirm")}>반영하기</Button>
           </>
         ) : (
           <>
@@ -224,6 +231,16 @@ export function Agency({ qs, refresh, onChanged }: { qs: string; refresh: number
               검수 <span className="num">{open.preview.review ?? 0}</span> · 오류 <span className="num">{open.preview.error ?? 0}</span>로 들어가요.
               이미 있는 제품은 바뀐 칸만 반영돼요
             </p>
+            {due && due.amount > 0 && (
+              <p className="text-label text-ink">
+                반영하면 충전금에서 <span className="num">{due.items}</span>개 × <span className="num">{won(due.unit)}</span> = <span className="num font-bold">{won(due.amount)}</span>이 빠져요
+                <span className="text-ink-2"> (잔액 <span className="num">{won(state.balance ?? 0)}</span>)</span>
+              </p>
+            )}
+            {short && !state.readOnly && (
+              <Notice tone="caution" title="충전금이 모자라요">마케팅 &gt; 광고에서 충전한 뒤 반영해 주세요. 그동안 파일은 기다림으로 남아요</Notice>
+            )}
+            {open.status === "confirmed" && open.fee > 0 && <p className="text-label text-ink-2">반영할 때 낸 금액 <span className="num">{won(open.fee)}</span></p>}
             {(open.preview.errors || []).length > 0 && (
               <div className="overflow-x-auto">
                 <table className="w-full text-label">

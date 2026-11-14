@@ -102,6 +102,10 @@ class Builder {
           if (dup && this.op === "insert") return { data: null, error: { message: "duplicate key", code: "23505" } };
           if (dup) { Object.assign(dup, p); out.push(dup); continue; }
         }
+        // 고유 키 흉내: flow_sends(partner_id, kind, user_id, trigger_key)
+        if (this.table === "flow_sends" && all.some((r) => r.partner_id === p.partner_id && r.kind === p.kind && r.user_id === p.user_id && r.trigger_key === p.trigger_key)) {
+          return { data: null, error: { message: "duplicate key", code: "23505" } };
+        }
         const row = { id: p.id ?? `${this.table}-${all.length + 1}`, ...p };
         all.push(row); out.push(row);
       }

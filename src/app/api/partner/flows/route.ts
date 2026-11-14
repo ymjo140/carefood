@@ -3,22 +3,26 @@ import { connection } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { canAct, getPartnerContext, readOnly } from "@/lib/partner/auth";
 import { FLOWS, flowCounts, isFlowKind, listFlows } from "@/lib/partner/flows";
-import { checkMessage, notReady } from "@/lib/partner/crm";
+import { checkMessage, creditBalance, notReady } from "@/lib/partner/crm";
+import { FLOW_MESSAGE_PRICE } from "@/lib/partner/rates";
 import { loadClaimTerms } from "@/lib/partner/claims-server";
 
 type Sb = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const bad = (error: string, status = 400) => NextResponse.json({ error }, { status });
 
-/** GET /api/partner/flows[?as=slug] — 자동 알림 세 가지와 지난 30일 보낸 수 */
+/** GET /api/partner/flows[?as=slug] — 자동 알림 세 가지와 지난 30일 보낸 수, 건당 요금·충전금 잔액 */
 export async function GET(req: NextRequest) {
   await connection();
   const ctx = await getPartnerContext(req.nextUrl.searchParams.get("as"));
   if ("error" in ctx) return ctx.error;
   const sb = createServiceRoleClient() as Sb;
   try {
-    const [flows, counts] = await Promise.all([listFlows(sb, ctx.partner.id), flowCounts(sb, ctx.partner.id)]);
-    return NextResponse.json({ ready: true, read_only: !canAct(ctx), flows: flows.map((f) => ({ ...f, ...FLOWS[f.kind], sent_30: counts[f.kind] || 0 })) });
+    const [flows, counts, credit] = await Promise.all([listFlows(sb, ctx.partner.id), flowCounts(sb, ctx.partner.id), creditBalance(sb, ctx.partner.id)]);
+    return NextResponse.json({
+      ready: true, read_only: !canAct(ctx), unit_price: ctx.partner.is_demo ? 0 : FLOW_MESSAGE_PRICE, balance: credit.balance,
+      flows: flows.map((f) => ({ ...f, ...FLOWS[f.kind], sent_30: counts[f.kind] || 0 })),
+    });
   } catch (e) {
     if (notReady(e as { message?: string })) return NextResponse.json({ ready: false, read_only: true, flows: [] });
     console.error("자동 알림을 불러오지 못했어요:", (e as Error).message);

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Button, Card, EmptyState, Field, Input, Notice, SectionHeader, SkeletonList, TextButton, FilePick, buttonClass, useToast } from "@/components/ui";
 import { DisputeList, DisputeSheet, type DisputeTarget } from "./Disputes";
 import { Payout } from "./Payout";
+import { AGENCY_PRICE_PER_ITEM, FLOW_MESSAGE_PRICE } from "@/lib/partner/rates";
 
 /** 표 줄 안의 '다르게 보여요' — 줄마다 있어 눈에 덜 띄게 글자 버튼으로 */
 function DisputeButton({ onClick }: { onClick: () => void }) {
@@ -188,10 +189,10 @@ export function LinkSalesUpload({ qs, readOnly = false }: { qs: string; readOnly
 
 type Ledger = { id: string; kind: "topup" | "hold" | "release" | "charge" | "adjust"; amount: number; status: "requested" | "confirmed" | "canceled"; note: string | null; created_at: string; partner_campaigns: { title: string } | null };
 type CreditData = { ready: boolean; unit_price: number | null; balance: number; pending: number; ledger: Ledger[]; read_only: boolean };
-const KIND: Record<Ledger["kind"], string> = { topup: "충전", hold: "발송비 잡아 둠", release: "돌려받음", charge: "발송비", adjust: "조정" };
+const KIND: Record<Ledger["kind"], string> = { topup: "충전", hold: "발송비 잡아 둠", release: "돌려받음", charge: "사용", adjust: "조정" };
 
 /**
- * 고객층 충전금 — 발송비는 보낼 때 충전금에서 낸다 (11/13 결정). 결제(PG) 전에는 계좌이체로 충전하고,
+ * 충전금 — 혜택 메시지 발송비(11/13)·자동 알림(건당 10원)·대행 연동(상품당 500원, 11/14)을 여기서 낸다. 결제(PG) 전에는 계좌이체로 충전하고,
  * 오늘끼록이 입금을 확인하면 반영·세금계산서를 발행한다.
  */
 export function Credits({ qs, onDispute }: { qs: string; onDispute?: (t: DisputeTarget) => void }) {
@@ -226,7 +227,7 @@ export function Credits({ qs, onDispute }: { qs: string; onDispute?: (t: Dispute
   if (state.status === "done" && !state.data?.ready) return null;
   return (
     <section>
-      <SectionHeader title="광고 충전금" />
+      <SectionHeader title="충전금" description={`혜택 메시지 · 자동 알림(건당 ${FLOW_MESSAGE_PRICE}원) · 대행 연동(상품당 ${AGENCY_PRICE_PER_ITEM}원) 요금이 여기서 빠져요`} />
       {state.status === "loading" ? <SkeletonList rows={2} thumb={false} />
         : state.status === "error" || !state.data ? (
           <EmptyState title="충전금을 불러오지 못했어요" description={state.error}
@@ -238,7 +239,7 @@ export function Credits({ qs, onDispute }: { qs: string; onDispute?: (t: Dispute
               <p className="num text-title font-bold text-ink">{won(state.data.balance)}</p>
               <p className="text-label text-ink-2 mt-1">
                 {state.data.pending > 0 && <>입금 확인 중 <span className="num">{won(state.data.pending)}</span> · </>}
-                건당 발송비 {state.data.unit_price === null ? "정해지지 않았어요" : <span className="num">{won(state.data.unit_price)}</span>}
+                혜택 메시지 건당 {state.data.unit_price === null ? "정해지지 않았어요" : <span className="num">{won(state.data.unit_price)}</span>}
               </p>
               {!state.data.read_only && (
                 <div className="flex flex-wrap items-end gap-2 mt-4">
@@ -265,7 +266,7 @@ export function Credits({ qs, onDispute }: { qs: string; onDispute?: (t: Dispute
                       <tr key={l.id}>
                         <td className="px-4 py-2.5 num text-ink-2 whitespace-nowrap">{l.created_at.slice(0, 10)}</td>
                         <td className="px-3 py-2.5 text-ink">
-                          {KIND[l.kind]}{l.partner_campaigns?.title ? ` · ${l.partner_campaigns.title}` : ""}
+                          {KIND[l.kind]}{l.partner_campaigns?.title ? ` · ${l.partner_campaigns.title}` : (l.kind === "charge" || l.kind === "release") && l.note ? ` · ${l.note}` : ""}
                           {l.status !== "confirmed" && <span className="text-ink-2"> · {l.status === "requested" ? "입금 확인 중" : "취소"}</span>}
                           {onDispute && <span className="block"><DisputeButton onClick={() => onDispute({ target: "ledger", ledger_id: l.id, label: `${l.created_at.slice(0, 10)} ${KIND[l.kind]} ${l.amount > 0 ? "+" : "−"}${won(Math.abs(l.amount))}` })} /></span>}
                         </td>

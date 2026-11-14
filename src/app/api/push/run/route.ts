@@ -9,7 +9,7 @@ import { isWeekPlan, plannedMeal, type PlanGrid } from "@/lib/weekly-plan";
 import { runDueCampaigns } from "@/lib/partner/crm";
 import { runConsentNotices } from "@/lib/consent-notice";
 import { runFlows } from "@/lib/partner/flows";
-import { notifyPartners } from "@/lib/partner/notify";
+import { notifyApplications, notifyPartners } from "@/lib/partner/notify";
 import { autoDeliver } from "@/lib/partner/tracking";
 import { autoCloseLastMonth } from "@/lib/partner/settlement";
 import { AUTO_CONFIRM_DAYS, expireUnpaidOrders } from "@/lib/orders";
@@ -43,7 +43,8 @@ import type { MascotKind } from "@/components/ui/Mascot";
  *   - 커뮤니티 8~22시: 내 글 답글 · 내 답글의 답글 · 새 팔로워 (좋아요는 보내지 않음), 여러 개면 묶어서
  *   - 업체 광고(고객층 발송): 검수를 통과해 보낼 시각이 된 것 (lib/partner/crm.ts runDueCampaigns, 21~8시는 야간 동의자만)
  *   - 광고 수신 동의 2년 확인 안내: 8~21시에만 (lib/consent-notice.ts)
- *   - 업체 자동 알림(첫 주문 감사·다시 살 때·다시 찾아 주세요): 광고 동의자에게, 21~8시는 야간 동의자만 (lib/partner/flows.ts)
+ *   - 업체 자동 알림(첫 주문 감사·다시 살 때·다시 찾아 주세요): 광고 동의자에게, 21~8시는 야간 동의자만, 건당 10원 (lib/partner/flows.ts)
+ *   - 관리자: 새 입점 신청 (lib/partner/notify.ts notifyApplications)
  */
 const JWKS = createRemoteJWKSet(new URL("https://token.actions.githubusercontent.com/.well-known/jwks"));
 const REPO = "ymjo140/carefood";
@@ -81,7 +82,7 @@ export async function POST(req: NextRequest) {
   // 알림함에는 늘 들어가고, 이 기기 알림은 키가 있을 때만. dry 에서는 보내지 않는다.
   let ads = { sent: 0, campaigns: 0 };
   let consent = { sent: 0 };
-  let flows = { sent: 0 };
+  let flows = { sent: 0, short: 0 };
   if (req.nextUrl.searchParams.get("dry") !== "1") {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const sbAds = createServiceRoleClient() as any;
@@ -108,6 +109,9 @@ export async function POST(req: NextRequest) {
     // 업체 담당자에게 새 주문·취소 요청 알림 (lib/partner/notify.ts)
     try { await notifyPartners(sbAds, pushReady()); }
     catch (e) { console.error("업체 주문 알림을 보내지 못했어요:", (e as Error).message); }
+    // 관리자에게 새 입점 신청 알림 (lib/partner/notify.ts)
+    try { await notifyApplications(sbAds, pushReady()); }
+    catch (e) { console.error("입점 신청 알림을 보내지 못했어요:", (e as Error).message); }
     // 지난 달 정산 자동 마감 — 아직 마감하지 않은 업체만, 돈이 오가지 않은 달은 건너뜀 (lib/partner/settlement.ts)
     try {
       const r = await autoCloseLastMonth(sbAds);

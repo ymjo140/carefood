@@ -13,11 +13,12 @@ const DAYS_LABEL: Record<Flow["kind"], string> = { first_thanks: "도착하고 �
 /**
  * 자동 알림 — 첫 주문 감사 · 다시 살 때 · 다시 찾아 주세요 (v3 10.2)
  * 켜 두면 30분마다 조건이 된 고객에게 한 번씩 간다. 광고라 광고 수신 동의자에게만, 같은 업체 알림은 한 사람에게 7일에 한 번.
+ * 보낸 건마다 FLOW_MESSAGE_PRICE 원이 충전금에서 빠진다 — 켜 둔 알림이 있는데 잔액이 한 건 값보다 적으면 멈춘다고 알린다.
  * 켜고 끄기·고치기 뒤에 목록을 다시 불러온다.
  */
 export function Flows({ qs, coupons, toCoupons }: { qs: string; coupons: { status: string; list: CouponRow[] }; toCoupons: () => void }) {
   const toast = useToast();
-  const [state, setState] = useState<{ status: "loading" | "error" | "done"; flows?: Flow[]; readOnly?: boolean; ready?: boolean; error?: string }>({ status: "loading" });
+  const [state, setState] = useState<{ status: "loading" | "error" | "done"; flows?: Flow[]; readOnly?: boolean; ready?: boolean; unit?: number; balance?: number; error?: string }>({ status: "loading" });
   const [edit, setEdit] = useState<(Flow & { days: string }) | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const seq = useRef(0);
@@ -28,7 +29,7 @@ export function Flows({ qs, coupons, toCoupons }: { qs: string; coupons: { statu
       const r = await fetch(`/api/partner/flows?${qs}`);
       const d = await r.json();
       if (!r.ok) throw new Error(d.error);
-      if (my === seq.current) setState({ status: "done", flows: d.flows, readOnly: d.read_only, ready: d.ready });
+      if (my === seq.current) setState({ status: "done", flows: d.flows, readOnly: d.read_only, ready: d.ready, unit: d.unit_price ?? 0, balance: d.balance ?? 0 });
     } catch (e) { if (my === seq.current) setState({ status: "error", error: (e as Error).message || "불러오지 못했어요" }); }
   }, [qs]);
   useEffect(() => { load(); }, [load]); // eslint-disable-line react-hooks/set-state-in-effect -- 불러온 뒤에 상태를 바꾼다
@@ -58,9 +59,11 @@ export function Flows({ qs, coupons, toCoupons }: { qs: string; coupons: { statu
     : !(Number(edit.days) >= 1 && Number(edit.days) <= 180) ? { field: "days", message: "1~180 사이 날 수를 적어 주세요" }
     : null;
   const nameOf = (id: string | null) => coupons.list.find((c) => c.id === id)?.name;
+  const unit = state.unit ?? 0;
+  const stalled = unit > 0 && (state.balance ?? 0) < unit && (state.flows || []).some((f) => f.is_on);
   return (
     <section>
-      <SectionHeader title="자동 알림" description="켜 두면 조건이 된 고객에게 한 번씩 저절로 가요. 광고 수신에 동의한 고객에게만, 같은 업체 알림은 7일에 한 번" />
+      <SectionHeader title="자동 알림" description={`켜 두면 조건이 된 고객에게 한 번씩 저절로 가요. 광고 수신에 동의한 고객에게만, 같은 업체 알림은 7일에 한 번${unit > 0 ? ` · 보낸 건마다 ${unit}원` : ""}`} />
       {state.status === "loading" ? <SkeletonList rows={3} thumb={false} /> : state.status === "error" ? (
         <EmptyState title="자동 알림을 불러오지 못했어요" description={state.error}
           action={<Button size="sm" variant="secondary" icon="refresh" onClick={() => { setState({ status: "loading" }); load(); }}>다시 불러오기</Button>} />
@@ -68,10 +71,15 @@ export function Flows({ qs, coupons, toCoupons }: { qs: string; coupons: { statu
         <EmptyState title="자동 알림을 준비하고 있어요" description="준비가 끝나면 여기에서 켤 수 있어요" />
       ) : (
         <div className="flex flex-col gap-3">
+          {stalled && (
+            <Notice tone="caution" title="충전금이 모자라 자동 알림이 멈췄어요">
+              한 건에 <span className="num">{unit}</span>원이 들어요. 마케팅 &gt; 광고의 충전금을 채우면 다음 차례(30분마다)부터 다시 가요
+            </Notice>
+          )}
           {(state.flows || []).map((f) => (
             <Card key={f.kind}>
               <Switch checked={f.is_on} disabled={state.readOnly || busy === f.kind} label={f.label}
-                description={`${f.when} · 지난 30일 ${f.sent_30}명에게 보냄`} onChange={(on) => save({ ...f, is_on: on })} />
+                description={`${f.when} · 지난 30일 ${f.sent_30}명에게 보냄${unit > 0 && f.sent_30 > 0 ? ` (${(f.sent_30 * unit).toLocaleString("ko-KR")}원)` : ""}`} onChange={(on) => save({ ...f, is_on: on })} />
               <div className="mt-2 pt-3 border-t border-line flex flex-wrap items-start gap-3">
                 <div className="min-w-0 flex-1">
                   <p className="text-label text-ink">{f.title}</p>
