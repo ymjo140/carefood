@@ -1,28 +1,34 @@
 /**
  * 구독 요금제 — 화면·서버·시험이 같이 쓰는 규칙 (DB 쓰기 없음). 서버 조회는 lib/subscription.ts.
- *  - 기본(무료): 캐릭터 없이 글자로만.
- *  - 끼록이 플랜: 끼록이.  모든 캐릭터 플랜: 끼록이·람이·끼냥이.
+ * 11/14 바뀜: 재료 캐릭터 1마리는 무료(기록 습관을 만드는 장치). 돈은 그 위의 기능에서 받는다.
+ *  - 무료: 기록·챌린지·가족 + 캐릭터 1마리(같이 먹기·칭찬·자라기·끼니 알림).
+ *  - 기본 구독: 기록 직후 숫자 체크 · 매 끼니 메뉴 추천 · 주간 리포트.
+ *  - 플러스 구독: 기본 구독 + 캐릭터 3마리 · 성격 한 번 바꾸기 · 꾸미기 소품.
  *  - 매달 같은 날 자동 결제 (31일에 시작하면 짧은 달은 그달 마지막 날). 해지해도 남은 기간까지 쓴다.
- *  - 결제가 실패하면 3일 동안은 그대로 쓰고(다시 시도), 그 뒤엔 기본으로.
- *  - 환불: 결제 후 7일 안에 해지하고 그 기간에 유료 캐릭터를 한 번도 쓰지 않았으면 전액. 아니면 다음 결제부터 멈춤.
- *  - 구독을 열기 전(SUBSCRIPTION_ENABLED 꺼짐)에는 체험 기간 — 모든 캐릭터를 쓸 수 있다.
- *    열면 구독하지 않은 사람은 저절로 기본이 된다 (결제는 본인이 구독하기를 눌러야만 — 무료에서 유료로 저절로 넘어가지 않는다).
+ *  - 결제가 실패하면 3일 동안은 그대로 쓰고(다시 시도), 그 뒤엔 무료로.
+ *  - 환불: 결제 후 7일 안에 해지하고 그 기간에 구독 기능을 한 번도 쓰지 않았으면 전액. 아니면 다음 결제부터 멈춤.
+ *  - 구독을 열기 전(SUBSCRIPTION_ENABLED 꺼짐)에는 체험 기간 — 모든 기능을 쓸 수 있다.
+ *    열면 구독하지 않은 사람은 저절로 무료가 된다 (결제는 본인이 구독하기를 눌러야만).
  * 가격은 부가세 포함. 바꾸면 DB subscription_plans 도 같이 (가격 인상은 기존 구독자에게 30일 전 안에 따로 동의를 받는다).
+ * DB 요금제 코드는 그대로 둔다: basic=무료, kkirok=기본 구독, all=플러스 구독.
  */
-import type { MascotKind } from "@/components/ui/Mascot";
 
 export type PlanCode = "basic" | "kkirok" | "all";
-export type Plan = { code: PlanCode; name: string; price: number; characters: MascotKind[]; about: string };
+/** check: 기록 직후 숫자 체크 · recs: 매 끼니 추천 · report: 주간 리포트 · closet: 꾸미기 · swap: 성격 바꾸기 */
+export type Perk = "check" | "recs" | "report" | "closet" | "swap";
+export type Plan = { code: PlanCode; name: string; price: number; slots: number; perks: Perk[]; about: string };
 
 export const PLANS: Plan[] = [
-  { code: "basic", name: "기본", price: 0, characters: [], about: "캐릭터 없이 글자로만" },
-  { code: "kkirok", name: "끼록이 플랜", price: 1900, characters: ["kkirok"], about: "끼록이와 같이 기록해요" },
-  { code: "all", name: "모든 캐릭터 플랜", price: 3900, characters: ["kkirok", "rami", "kkinyang"], about: "끼록이·람이·끼냥이 중 골라요" },
+  { code: "basic", name: "무료", price: 0, slots: 1, perks: [], about: "기록 · 챌린지 · 가족 · 캐릭터 1마리" },
+  { code: "kkirok", name: "기본 구독", price: 1900, slots: 1, perks: ["check", "recs", "report"], about: "기록할 때 숫자 체크 · 매 끼니 메뉴 추천 · 주간 리포트" },
+  { code: "all", name: "플러스 구독", price: 3900, slots: 3, perks: ["check", "recs", "report", "closet", "swap"], about: "기본 구독 + 캐릭터 3마리 · 성격 바꾸기 · 꾸미기" },
 ];
-export const ALL_KINDS: MascotKind[] = ["kkirok", "rami", "kkinyang"];
+export const ALL_PERKS: Perk[] = ["check", "recs", "report", "closet", "swap"];
+/** 체험 기간에 키울 수 있는 캐릭터 수 */
+export const BETA_SLOTS = 30;
 export const planOf = (code: string | null | undefined) => PLANS.find((p) => p.code === code) ?? PLANS[0];
-/** 그 캐릭터를 쓸 수 있는 가장 싼 요금제 */
-export const cheapestPlanFor = (kind: MascotKind) => PLANS.filter((p) => p.characters.includes(kind)).sort((a, b) => a.price - b.price)[0];
+/** 그 기능이 들어 있는 가장 싼 요금제 */
+export const cheapestPlanFor = (perk: Perk) => PLANS.filter((p) => p.perks.includes(perk)).sort((a, b) => a.price - b.price)[0];
 
 export const GRACE_DAYS = 3;
 export const REFUND_DAYS = 7;
@@ -43,7 +49,9 @@ export type Access = {
   renews: boolean;
   /** 결제가 실패해 다시 시도하는 중 */
   retrying: boolean;
-  characters: MascotKind[];
+  /** 키울 수 있는 캐릭터 수 */
+  slots: number;
+  perks: Perk[];
 };
 
 const DAY = 86400e3;
@@ -62,14 +70,11 @@ export function accessOf(sub: SubRow | null | undefined, now: Date, enabled: boo
     plan: plan.code, until: s?.current_period_end ?? null,
     renews: !!s && s.source === "pg" && !s.cancel_at_period_end && s.status !== "canceled", retrying: s?.status === "past_due",
   };
-  if (!enabled) return { mode: "beta", ...base, characters: [...ALL_KINDS] };
-  return { mode: "store", ...base, characters: [...plan.characters] };
+  if (!enabled) return { mode: "beta", ...base, slots: BETA_SLOTS, perks: [...ALL_PERKS] };
+  return { mode: "store", ...base, slots: plan.slots, perks: [...plan.perks] };
 }
 
-/** 고른 캐릭터를 지금 쓸 수 있으면 그대로, 아니면 '캐릭터 없이' (구독이 끝나면 저절로 기본) */
-export function effectiveKind(pref: MascotKind | "none", a: Pick<Access, "characters">): MascotKind | "none" {
-  return pref !== "none" && a.characters.includes(pref) ? pref : "none";
-}
+export const hasPerk = (a: Pick<Access, "perks">, perk: Perk) => a.perks.includes(perk);
 
 /**
  * 결제일 n번째 달 — 첫 결제 시각(anchor)에서 n달 뒤, 같은 날·같은 시각 (한국 시간 기준, 없는 날이면 그달 마지막 날).
@@ -90,10 +95,10 @@ export function nextPeriod(s: Pick<SubRow, "anchor_at" | "current_period_end">):
   return { start: s.current_period_end, end: addMonthsKst(s.anchor_at, n) };
 }
 
-/** 해지할 때 환불 — 결제 후 7일 안 + 그 기간에 유료 캐릭터를 쓰지 않았으면 전액, 아니면 없음(남은 기간까지 쓰고 멈춤) */
-export function refundOnCancel(o: { paidAt: string; now: Date; usedPaidCharacter: boolean }): "full" | "none" {
+/** 해지할 때 환불 — 결제 후 7일 안 + 그 기간에 구독 기능을 쓰지 않았으면 전액, 아니면 없음(남은 기간까지 쓰고 멈춤) */
+export function refundOnCancel(o: { paidAt: string; now: Date; usedPerk: boolean }): "full" | "none" {
   const within = o.now.getTime() - new Date(o.paidAt).getTime() < REFUND_DAYS * DAY;
-  return within && !o.usedPaidCharacter ? "full" : "none";
+  return within && !o.usedPerk ? "full" : "none";
 }
 
 /** 요금제 바꾸기 — 올리면 바로(남은 날만큼 차액), 내리면 다음 결제일부터 */

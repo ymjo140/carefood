@@ -1,5 +1,6 @@
 "use client";
 
+import { INGREDIENTS as BUDDY_INGREDIENTS, PERSONALITIES as BUDDY_PERSONALITIES } from "@/lib/buddy";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Badge, Button, Card, CardActions, CardButton, Chip, ChipRow, ConfirmSheet, EmptyState, Field, Icon, ICON_NAMES, IconButton, IconLink,
@@ -8,7 +9,7 @@ import {
   Avatar, useToast, cn, type BadgeTone,
   BottomNavItems, SkeletonList, FoodEntryForm, DragArea, DragGhost, DragHandle, useDragItem, useDropTarget, type DragData, ChoiceCard, ChoiceList, LinkTabs, RatingStars, RatingInput, ScaleInput, QuickRating, PostAuthor, PostAction, PostActions, PostTags, ThreadItem, MealAttach, PlanAttach, CertAttach, ProductTagLinks, PhotoGrid, PollAttach, DayDots, Switch,
   ReelRow, ReelTile, ReelAddTile, ReelSkeleton, ReelMedia, CommentItem, VideoAttach, OfferOptionList, QtyStepper, UnitInput, RangeInput, Checkbox, FilePick,
-  MemberProgressRow, AvatarStack, Mascot, MASCOTS, type MascotMood, StoryFrame, StoryProgress, StoryHeader, StoryMedia, StorySticker, StoryCaption, StoryAction, StoryReply, ShareCardPreview, ShareSteps,
+  MemberProgressRow, AvatarStack, Mascot, MASCOTS, type MascotMood, StoryFrame, StoryProgress, StoryHeader, StoryMedia, StorySticker, StoryCaption, StoryAction, StoryReply, ShareCardPreview, ShareSteps, Buddy,
 } from "@/components/ui";
 
 // 서버(UTC)와 브라우저 시간대가 달라도 같은 글자가 나오도록 한국 시간으로 고정
@@ -618,7 +619,7 @@ export default function Reference({ status }: { status: DsStatus }) {
       </Section>
 
       {/* ───────────── 캐릭터 ───────────── */}
-      <Section id="mascot" title="캐릭터" description="끼록이·람이·끼냥이 — 내 화면(챌린지·기록·인증 카드)에만. 가족 화면에는 쓰지 않습니다. 색은 mascot-* 토큰(일러스트 예외, 두 테마 같은 값). 몸 크기는 바뀌지 않고 표정·몸짓만">
+      <Section id="mascot" title="브랜드 마스코트" description="끼록이(람이·끼냥이는 예전 시안) — 앱 아이콘·공지에. 사용자가 키우는 캐릭터는 아래 재료 캐릭터(Buddy). 가족 화면에는 쓰지 않습니다. 색은 mascot-* 토큰(일러스트 예외, 두 테마 같은 값). 몸 크기는 바뀌지 않고 표정·몸짓만">
         <div className="flex flex-col gap-4">
           {MASCOTS.map((m) => (
             <Demo key={m.kind} label={`${m.name} · ${m.about}`} code={`<Mascot kind="${m.kind}" mood="done" streak={9} />`}>
@@ -632,6 +633,52 @@ export default function Reference({ status }: { status: DsStatus }) {
               </div>
             </Demo>
           ))}
+        </div>
+      </Section>
+
+      {/* ───────────── 재료 캐릭터 ───────────── */}
+      <Section id="buddy" title="재료 캐릭터" description="Buddy — 재료 30종 × 성격 8 × 표정 8 × 자라기 4. 사용자가 키우는 캐릭터(끼록이는 브랜드 마스코트로만). 내 화면에만, 가족 화면에는 쓰지 않습니다. 색은 food-* 토큰(일러스트 예외, 두 테마 같은 값). 몸은 먹은 양으로 바뀌지 않고, 크기는 같이 기록한 날 수(stage)로만">
+        <div className="flex flex-col gap-4">
+          <Demo label="재료 30종 (기다려요 · 다정한)" code={`<Buddy ingredient="sweetpotato" personality="kind" />`}>
+            <div className="grid grid-cols-5 sm:grid-cols-6 md:grid-cols-10 gap-2">
+              {BUDDY_INGREDIENTS.map((i) => (
+                <div key={i.key} className="flex flex-col items-center gap-1">
+                  <Buddy ingredient={i.key} personality="kind" size={56} />
+                  <span className="text-caption text-ink-2">{i.name}</span>
+                </div>
+              ))}
+            </div>
+          </Demo>
+          <Demo label="성격 8가지 — 이름은 '성격 + 재료'" code={`<Buddy ingredient="sweetpotato" personality="picky" />`}>
+            <div className="flex flex-wrap items-end gap-4">
+              {BUDDY_PERSONALITIES.map((p) => (
+                <div key={p.key} className="flex flex-col items-center gap-1">
+                  <Buddy ingredient="sweetpotato" personality={p.key} size={64} />
+                  <span className="text-caption text-ink-2">{p.adj} 고구마</span>
+                </div>
+              ))}
+            </div>
+          </Demo>
+          <Demo label="표정 8가지 · 자라기 4단계" code={`<Buddy ingredient="tofu" personality="chatty" mood="done" stage="kid" />`}>
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-wrap items-end gap-4">
+                {(["wait", "logged", "done", "full", "worried", "sulk", "away", "together"] as MascotMood[]).map((mood) => (
+                  <div key={mood} className="flex flex-col items-center gap-1">
+                    <Buddy ingredient="tofu" personality="chatty" mood={mood} size={64} />
+                    <span className="font-mono text-caption text-ink-3">{mood}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="flex flex-wrap items-end gap-4">
+                {(["sprout", "kid", "grown", "best"] as const).map((st) => (
+                  <div key={st} className="flex flex-col items-center gap-1">
+                    <Buddy ingredient="avocado" personality="brave" stage={st} size={72} />
+                    <span className="font-mono text-caption text-ink-3">{st}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </Demo>
         </div>
       </Section>
 

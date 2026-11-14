@@ -17,10 +17,7 @@ import { asResult, selectAll, selectAllIn } from "@/lib/supabase/all";
 import { BRAND } from "@/lib/brand";
 import { loadGroupAlerts } from "@/lib/challenge-alerts";
 import { loadFamilyAlerts } from "@/lib/family-alerts";
-import { MASCOT_PUSH_HOUR, planMascotPush } from "@/lib/mascot-push";
-import { loadAccessMany } from "@/lib/subscription";
-import { effectiveKind } from "@/lib/plans";
-import type { MascotKind } from "@/components/ui/Mascot";
+import { KKIROK_WHO, MASCOT_PUSH_HOUR, buddyWho, planMascotPush } from "@/lib/mascot-push";
 
 /**
  * POST /api/push/run — 보낼 때가 된 알림을 보낸다. Supabase 예약 작업(pg_cron + pg_net, 30분마다)이 부른다.
@@ -238,16 +235,17 @@ export async function POST(req: NextRequest) {
   // ── 캐릭터 삐짐 (광고 — 광고 동의자에게만, 낮 12시대) (lib/mascot-push.ts) ──
   if (hour === MASCOT_PUSH_HOUR) {
     try {
-      // 구독이 끝나 쓸 수 없는 캐릭터면 '캐릭터 없이'로 보고 보내지 않는다
-      const picked = users.filter((u) => prefsBy.get(u)?.mascot !== "none");
-      const access = await loadAccessMany(sb, picked);
-      const kindOf = (u: string) => effectiveKind((prefsBy.get(u)?.mascot || "kkirok") as MascotKind, access.get(u)!);
-      const want = picked.filter((u) => kindOf(u) !== "none");
+      const want = users.filter((u) => prefsBy.get(u)?.mascot !== "none");
       const ads = await selectAllIn<{ user_id: string }>(want, 200, (p) => sb.from("marketing_consents").select("user_id").in("user_id", p).eq("ads", true), "user_id");
+      // 같이 다니는 재료 캐릭터 (없으면 끼록이)
+      const buddies = await selectAllIn<{ user_id: string; ingredient: string; personality: string }>(ads.map((a) => a.user_id), 200,
+        (p) => sb.from("buddies").select("user_id, ingredient, personality").in("user_id", p).eq("active", true), "user_id");
+      const buddyBy = new Map(buddies.map((b) => [b.user_id, b]));
       for (const { user_id: u } of ads) {
         const rows = diaryBy.get(u) || [];
-        const kind = kindOf(u) as MascotKind;
-        const plan = planMascotPush({ kind, days: new Set(rows.map((r) => r.date)), today, ever: rows.length > 0 });
+        const b = buddyBy.get(u);
+        const who = b ? buddyWho(b.ingredient, b.personality, `${u}:${today}`) : KKIROK_WHO;
+        const plan = planMascotPush({ who, days: new Set(rows.map((r) => r.date)), today, ever: rows.length > 0 });
         if (plan) await send(u, "mascot", plan.key, plan.payload);
       }
     } catch (e) { console.error("캐릭터 알림을 만들지 못했어요:", (e as Error).message); }

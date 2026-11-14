@@ -40,3 +40,4 @@ export { TrendChart, BarList, GapChart } from "./Chart";
 export { StoryFrame, StoryProgress, StoryHeader, StoryMedia, StorySticker, StoryCaption, StoryAction, StoryReply } from "./Story";
 export { ShareCardPreview, ShareSteps } from "./ShareCard";
 export { Mascot, MASCOTS, MOOD_NAMES, type MascotKind, type MascotMood } from "./Mascot";
+export { Buddy } from "./Buddy";
