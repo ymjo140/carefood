@@ -11,7 +11,8 @@ let cache: { at: number; terms: ClaimTerm[] } | null = null;
 export async function loadClaimTerms(sb: Sb): Promise<ClaimTerm[]> {
   if (cache && Date.now() - cache.at < 60e3) return cache.terms;
   const { data, error } = await sb.from("partner_claim_terms").select("pattern, kind, suggest").eq("is_active", true).order("sort").limit(500);
-  // ds-allow: 사전을 못 읽으면 기본 사전으로 점검을 이어 간다 (점검을 건너뛰지 않는다)
+  // 사전을 못 읽으면 기록을 남기고 기본 사전으로 점검을 이어 간다 (점검을 건너뛰지 않는다). 표가 아직 없는 것은 기록하지 않는다
+  if (error && error.code !== "42P01" && error.code !== "PGRST205") console.error("금지 표현 사전을 읽지 못했어요:", error.message);
   const rows = error ? [] : ((data || []) as { pattern: string; kind: ClaimKind; suggest: string | null }[]).filter((t) => !patternError(t.pattern));
   const terms = rows.length ? rows : DEFAULT_TERMS;
   cache = { at: Date.now(), terms };

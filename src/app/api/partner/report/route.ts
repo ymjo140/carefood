@@ -3,26 +3,7 @@ import { connection } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { getPartnerContext } from "@/lib/partner/auth";
 import { buildReport } from "@/lib/partner/report";
-
-const DAY = 86400e3;
-const KST = 9 * 3600e3;
-/** 기간 — 지난 30일(기본) · 이번 달 · 지난달 (한국 시간 달 경계). 비교할 지난 기간은 같은 길이의 바로 앞 (달이면 그 앞 달) */
-function periodOf(p: string | null, now = Date.now()) {
-  const k = new Date(now + KST);
-  const monthStart = (y: number, m: number) => Date.UTC(y, m, 1) - KST;
-  if (p === "this_month") {
-    const from = monthStart(k.getUTCFullYear(), k.getUTCMonth());
-    // 지난달의 같은 날수까지 (11월 14일이면 10월 1~14일)
-    const pFrom = monthStart(k.getUTCFullYear(), k.getUTCMonth() - 1);
-    return { key: "this_month", cur: { from, to: now }, prev: { from: pFrom, to: Math.min(from, pFrom + (now - from)) } };
-  }
-  if (p === "last_month") {
-    const from = monthStart(k.getUTCFullYear(), k.getUTCMonth() - 1);
-    const to = monthStart(k.getUTCFullYear(), k.getUTCMonth());
-    return { key: "last_month", cur: { from, to }, prev: { from: monthStart(k.getUTCFullYear(), k.getUTCMonth() - 2), to: from } };
-  }
-  return { key: "30d", cur: { from: now - 30 * DAY, to: now }, prev: { from: now - 60 * DAY, to: now - 30 * DAY } };
-}
+import { periodOf } from "@/lib/partner/period";
 
 /**
  * GET /api/partner/report?period=30d|this_month|last_month[&as=slug] — 내 제품의 성과와 본 사람들 (통계만, lib/partner/report.ts)

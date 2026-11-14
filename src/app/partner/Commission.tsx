@@ -1,12 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Button, Card, EmptyState, Field, Input, Notice, SectionHeader, SkeletonList, buttonClass, useToast } from "@/components/ui";
+import { Button, Card, EmptyState, Field, Input, Notice, SectionHeader, SkeletonList, TextButton, buttonClass, useToast } from "@/components/ui";
 import { DisputeList, DisputeSheet, type DisputeTarget } from "./Disputes";
 
 /** 표 줄 안의 '다르게 보여요' — 줄마다 있어 눈에 덜 띄게 글자 버튼으로 */
 function DisputeButton({ onClick }: { onClick: () => void }) {
-  return <button type="button" className="press mt-1 text-caption font-medium text-brand-ink hover:underline underline-offset-4" onClick={onClick}>다르게 보여요</button>;
+  return <TextButton onClick={onClick}>다르게 보여요</TextButton>;
 }
 
 type Settlement = { commission: number; order_sales: number; order_shipping: number; order_fee: number; status: "closed" | "paid"; closed_at: string; paid_at: string | null };
@@ -108,9 +108,9 @@ export function Commission({ qs, readOnly = false }: { qs: string; readOnly?: bo
                           </span>
                           {!readOnly && <DisputeButton onClick={() => setDispute({ target: "month", month: m.month, label: `${m.month} 정산` })} />}
                         </td>
-                        <td className="px-3 py-2.5 num text-right text-ink">{m.clicks.toLocaleString("ko-KR")}</td>
-                        <td className="px-3 py-2.5 num text-right text-ink">{m.orders.toLocaleString("ko-KR")}</td>
-                        <td className="px-3 py-2.5 num text-right text-ink">{m.canceled.toLocaleString("ko-KR")}</td>
+                        <td className="px-3 py-2.5 num text-right text-ink whitespace-nowrap">{m.clicks.toLocaleString("ko-KR")}</td>
+                        <td className="px-3 py-2.5 num text-right text-ink whitespace-nowrap">{m.orders.toLocaleString("ko-KR")}</td>
+                        <td className="px-3 py-2.5 num text-right text-ink whitespace-nowrap">{m.canceled.toLocaleString("ko-KR")}</td>
                         <td className="px-3 py-2.5 num text-right text-ink whitespace-nowrap">{won(m.confirmed_amount)}</td>
                         <td className={`py-2.5 num text-right font-bold text-ink whitespace-nowrap ${appOrders ? "px-3" : "px-4"}`}>
                           {won(s ? s.commission : m.commission)}

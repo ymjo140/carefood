@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { AsOf, Button, Card, EmptyState, Estimate, Notice, Price, ProgressBar, SectionHeader, SkeletonList, Stat } from "@/components/ui";
+import { AsOf, Button, Card, EmptyState, Estimate, Notice, TextButton, Price, ProgressBar, SectionHeader, SkeletonList, Stat } from "@/components/ui";
 import type { GroupBuyRow, MealRow, PriceRow } from "@/lib/partner/demand-more";
 
 type Row = { key: string; label: string; rule: string; share: number | null; supply: number; partner_supply: number; mine: number };
@@ -68,13 +68,13 @@ export function Demand({ qs, onMakeSegment }: { qs: string; onMakeSegment?: (nee
                         <span className="block text-ink">{s.label}</span>
                         <span className="block text-caption text-ink-2">{s.rule}</span>
                         {onMakeSegment && s.share !== null && (
-                          <button type="button" className="press mt-1 text-caption font-medium text-brand-ink hover:underline underline-offset-4" onClick={() => onMakeSegment(s.key)}>고객층 만들기</button>
+                          <TextButton onClick={() => onMakeSegment(s.key)}>고객층 만들기</TextButton>
                         )}
                       </td>
                       <td className="px-3 py-2.5 num text-right text-ink whitespace-nowrap">{s.share !== null ? `${s.share}%` : "—"}</td>
-                      <td className="px-3 py-2.5 num text-right text-ink">{n(s.supply)}</td>
-                      <td className="px-3 py-2.5 num text-right text-ink hidden sm:table-cell">{n(s.partner_supply)}</td>
-                      <td className="px-4 py-2.5 num text-right font-bold text-ink">{n(s.mine)}</td>
+                      <td className="px-3 py-2.5 num text-right text-ink whitespace-nowrap">{n(s.supply)}</td>
+                      <td className="px-3 py-2.5 num text-right text-ink whitespace-nowrap hidden sm:table-cell">{n(s.partner_supply)}</td>
+                      <td className="px-4 py-2.5 num text-right font-bold text-ink whitespace-nowrap">{n(s.mine)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -124,7 +124,7 @@ function More({ more }: { more: NonNullable<Data["more"]> }) {
                     <span className="block text-ink">{r.label}</span>
                     <span className="block text-caption text-ink-2">기록한 약 <span className="num">{r.people}</span>명 기준</span>
                   </td>
-                  {r.meals.map((m) => <td key={m.key} className="px-3 py-2.5 num text-right text-ink">{m.share !== null ? `${m.share}%` : "—"}</td>)}
+                  {r.meals.map((m) => <td key={m.key} className="px-3 py-2.5 num text-right text-ink whitespace-nowrap">{m.share !== null ? `${m.share}%` : "—"}</td>)}
                 </tr>
               ))}
             </tbody>
@@ -156,7 +156,7 @@ function More({ more }: { more: NonNullable<Data["more"]> }) {
                     </td>
                     <td className="px-3 py-2.5 text-right whitespace-nowrap">{r.price !== null ? <Price value={r.price} /> : <span className="text-ink-2">판매 중 가격 없음</span>}</td>
                     <td className="px-3 py-2.5 num text-right text-ink whitespace-nowrap">{r.low.toLocaleString("ko-KR")}~{r.high.toLocaleString("ko-KR")}원</td>
-                    <td className="px-4 py-2.5 num text-right font-bold text-ink">{r.rank !== null ? `${r.rank}%` : "—"}</td>
+                    <td className="px-4 py-2.5 num text-right font-bold text-ink whitespace-nowrap">{r.rank !== null ? `${r.rank}%` : "—"}</td>
                   </tr>
                 ))}
               </tbody>

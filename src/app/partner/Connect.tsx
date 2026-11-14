@@ -137,13 +137,15 @@ const n = (v: number) => v.toLocaleString("ko-KR");
 /** 연동 상태 — 마지막 수신 · 오래된 가격 · 구매 확정 보고. 문제가 있는 줄에는 경고 아이콘과 할 일 */
 function Status({ qs, refresh, onReport }: { qs: string; refresh: number; onReport?: () => void }) {
   const [state, setState] = useState<{ status: "loading" | "error" | "done"; data?: ConnectStatus; error?: string }>({ status: "loading" });
+  const seq = useRef(0); // 다시 불러오기가 겹치면 마지막 응답만 쓴다
   const load = useCallback(async () => {
+    const my = ++seq.current;
     try {
       const r = await fetch(`/api/partner/status?${qs}`);
       const j = await r.json();
       if (!r.ok) throw new Error(j.error);
-      setState({ status: "done", data: j });
-    } catch (e) { setState({ status: "error", error: (e as Error).message || "불러오지 못했어요" }); }
+      if (my === seq.current) setState({ status: "done", data: j });
+    } catch (e) { if (my === seq.current) setState({ status: "error", error: (e as Error).message || "불러오지 못했어요" }); }
   }, [qs]);
   useEffect(() => { load(); }, [load, refresh]); // eslint-disable-line react-hooks/set-state-in-effect -- 불러온 뒤에 상태를 바꾼다
 

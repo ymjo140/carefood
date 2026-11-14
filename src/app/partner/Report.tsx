@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AsOf, Button, Card, EmptyState, HowCounted, ProgressBar, SectionHeader, SkeletonList, Stat, Tabs, TextLink } from "@/components/ui";
 
 type Product = { product_id: string; name: string; sku: string; impressions: number; views: number; clicks: number; diary: number; favorites: number; plans: number; rating: number | null; rating_n: number };
@@ -12,6 +12,7 @@ type Data = {
     people: number | null; goals?: Share[]; hidden?: number; tastes?: Share[]; tastes_hidden?: number;
     meals?: Share[]; meals_hidden?: number; meal_people?: number | null;
     category?: { label: string; people: number; goals: Record<string, number>; tastes: Record<string, number> } | null;
+    category_failed?: boolean;
   } | null;
   /** 업체가 보고한 구매확정 수 — 보고가 한 번도 없으면 null */
   purchases?: number | null;
@@ -38,13 +39,16 @@ export function Report({ qs, onMakeSegment }: { qs: string; onMakeSegment?: (goa
   const [period, setPeriod] = useState<Period>("30d");
   const [state, setState] = useState<{ status: "loading" | "error" | "done"; data?: Data; error?: string }>({ status: "loading" });
 
+  // 기간을 빨리 바꾸면 늦게 온 예전 응답이 새 결과를 덮지 않게 — 마지막 요청만 상태를 바꾼다
+  const seq = useRef(0);
   const load = useCallback(async (p: Period) => {
+    const my = ++seq.current;
     try {
       const r = await fetch(`/api/partner/report?period=${p}&${qs}`);
       const j = await r.json();
       if (!r.ok) throw new Error(j.error);
-      setState({ status: "done", data: j });
-    } catch (e) { setState({ status: "error", error: (e as Error).message || "불러오지 못했어요" }); }
+      if (my === seq.current) setState({ status: "done", data: j });
+    } catch (e) { if (my === seq.current) setState({ status: "error", error: (e as Error).message || "불러오지 못했어요" }); }
   }, [qs]);
   useEffect(() => { load(period); }, [load, period]); // eslint-disable-line react-hooks/set-state-in-effect -- 불러온 뒤에 상태를 바꾼다
 
@@ -140,12 +144,12 @@ export function Report({ qs, onMakeSegment }: { qs: string; onMakeSegment?: (goa
                   {d.products.map((p) => (
                     <tr key={p.product_id}>
                       <td className="px-4 py-2.5 min-w-48"><TextLink href={`/products/${p.product_id}`}>{p.name}</TextLink></td>
-                      <td className="px-3 py-2.5 num text-right text-ink">{n(p.impressions)}</td>
-                      <td className="px-3 py-2.5 num text-right text-ink">{n(p.views)}</td>
-                      <td className="px-3 py-2.5 num text-right text-ink">{n(p.clicks)}</td>
-                      <td className="px-3 py-2.5 num text-right text-ink">{n(p.diary)}</td>
-                      <td className="px-3 py-2.5 num text-right text-ink">{n(p.plans)}</td>
-                      <td className="px-3 py-2.5 num text-right text-ink">{n(p.favorites)}</td>
+                      <td className="px-3 py-2.5 num text-right text-ink whitespace-nowrap">{n(p.impressions)}</td>
+                      <td className="px-3 py-2.5 num text-right text-ink whitespace-nowrap">{n(p.views)}</td>
+                      <td className="px-3 py-2.5 num text-right text-ink whitespace-nowrap">{n(p.clicks)}</td>
+                      <td className="px-3 py-2.5 num text-right text-ink whitespace-nowrap">{n(p.diary)}</td>
+                      <td className="px-3 py-2.5 num text-right text-ink whitespace-nowrap">{n(p.plans)}</td>
+                      <td className="px-3 py-2.5 num text-right text-ink whitespace-nowrap">{n(p.favorites)}</td>
                       <td className="px-4 py-2.5 num text-right text-ink whitespace-nowrap">{p.rating !== null ? `${p.rating} (${p.rating_n})` : "—"}</td>
                     </tr>
                   ))}
@@ -161,6 +165,7 @@ export function Report({ qs, onMakeSegment }: { qs: string; onMakeSegment?: (goa
                 <p className="text-caption text-ink-2 mb-4">
                   본·누른·기록한 약 <span className="num">{n(d.audience.people)}</span>명 기준 · 한 사람이 여러 칸에 들 수 있어요
                   {d.audience.category && <> · 옆의 회색 숫자는 같은 기간 {d.audience.category.label} 제품을 본 약 <span className="num">{n(d.audience.category.people)}</span>명의 비율이에요</>}
+                  {d.audience.category_failed && <> · 같은 카테고리 비교는 불러오지 못했어요. 기간을 다시 골라 다시 불러와 주세요</>}
                 </p>
                 <div className="grid gap-6 sm:grid-cols-3">
                   <ShareList title="고른 목표" rows={d.audience.goals || []} hidden={d.audience.hidden || 0} compare={d.audience.category?.goals} compareLabel={d.audience.category?.label} />

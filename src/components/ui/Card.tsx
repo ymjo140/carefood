@@ -1,4 +1,4 @@
-import type { HTMLAttributes, ReactNode } from "react";
+import type { ButtonHTMLAttributes, HTMLAttributes, ReactNode } from "react";
 import { cn } from "./cn";
 
 /**
@@ -29,6 +29,18 @@ export function Card({
     >
       {children}
     </div>
+  );
+}
+
+/**
+ * 눌러서 다른 곳으로 가는 카드 — 카드 모양의 button. 숫자 카드에서 해당 탭으로 갈 때처럼 카드 전체가 하나의 동작일 때만.
+ * 카드 안에 다른 버튼이 있으면 쓰지 않는다 (버튼 안 버튼).
+ */
+export function CardButton({ className, children, type = "button", ...rest }: ButtonHTMLAttributes<HTMLButtonElement>) {
+  return (
+    <button type={type} className={cn("press block w-full text-left rounded-lg border border-line bg-surface p-4 hover:border-line-strong transition-colors", className)} {...rest}>
+      {children}
+    </button>
   );
 }
 

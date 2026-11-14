@@ -139,3 +139,17 @@ export function TextLink({ className, children, ...rest }: ComponentProps<typeof
     </Link>
   );
 }
+
+/**
+ * 글자 버튼 — TextLink 의 버튼판. 표 줄 안처럼 채운·테두리 버튼이 무거운 자리의 보조 동작 ("다르게 보여요", "고객층 만들기").
+ * 누르는 영역은 44px 높이를 지킨다 (글자는 작아도 영역은 줄이지 않는다).
+ */
+export function TextButton({ className, children, type = "button", ...rest }: ButtonHTMLAttributes<HTMLButtonElement>) {
+  return (
+    <button type={type}
+      className={cn("press inline-flex items-center gap-0.5 min-h-11 text-label font-medium text-brand-ink hover:underline underline-offset-4 disabled:opacity-40 disabled:pointer-events-none", className)}
+      {...rest}>
+      {children}
+    </button>
+  );
+}

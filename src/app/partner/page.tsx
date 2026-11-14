@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   Badge, Button, Card, EmptyState, Icon, LinkButton, ListRow, Page, PageHeader, PageLoading, SectionHeader,
@@ -58,13 +58,16 @@ function PartnerHome() {
     } catch (e) { setMe({ status: "error", error: (e as Error).message || "불러오지 못했어요" }); }
   }, [qs]);
 
+  // 상태 필터를 빨리 바꾸면 늦게 온 예전 응답이 새 목록을 덮지 않게 — 마지막 요청만 상태를 바꾼다
+  const itemsSeq = useRef(0);
   const loadItems = useCallback(async (f: Filter) => {
+    const my = ++itemsSeq.current;
     try {
       const r = await fetch(`/api/partner/items?${qs}${f === "all" ? "" : `&status=${f}`}`);
       const d = await r.json();
       if (!r.ok) throw new Error(d.error);
-      setItems({ status: "done", data: d.items });
-    } catch (e) { setItems({ status: "error", error: (e as Error).message || "불러오지 못했어요" }); }
+      if (my === itemsSeq.current) setItems({ status: "done", data: d.items });
+    } catch (e) { if (my === itemsSeq.current) setItems({ status: "error", error: (e as Error).message || "불러오지 못했어요" }); }
   }, [qs]);
 
   useEffect(() => { loadMe(); }, [loadMe]); // eslint-disable-line react-hooks/set-state-in-effect -- 불러온 뒤에 상태를 바꾼다
