@@ -252,7 +252,7 @@ export default function Reference({ status }: { status: DsStatus }) {
   return (
     <Page width="wide">
       <PageHeader
-        title="케어푸드 디자인 시스템"
+        title="오늘끼록 디자인 시스템"
         description="새 화면은 여기 있는 값과 컴포넌트만 씁니다. 없는 게 필요하면 먼저 여기에 추가하세요."
         actions={
           <Tabs label="테마" items={[{ value: "system", label: "시스템" }, { value: "light", label: "라이트" }, { value: "dark", label: "다크" }]}

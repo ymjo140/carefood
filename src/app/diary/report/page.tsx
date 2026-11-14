@@ -278,7 +278,7 @@ function ReportContent() {
       {/* ── 공유 ── */}
       <ShareButton
         title={`이번 주 영양 점수: ${overallScore}점`}
-        text={`케어푸드 주간 리포트${grades.some(g => g.grade === "excellent") ? `\n우수: ${grades.filter(g => g.grade === "excellent").map(g => g.label).join(", ")}` : ""}${gapNutrients.length > 0 ? `\n부족: ${gapNutrients.map(g => `${g.label} ${Math.round(g.ratio * 100)}%`).join(", ")}` : ""}\n나도 무료로 확인해 보기`}
+        text={`오늘끼록 주간 리포트${grades.some(g => g.grade === "excellent") ? `\n우수: ${grades.filter(g => g.grade === "excellent").map(g => g.label).join(", ")}` : ""}${gapNutrients.length > 0 ? `\n부족: ${gapNutrients.map(g => `${g.label} ${Math.round(g.ratio * 100)}%`).join(", ")}` : ""}\n나도 무료로 확인해 보기`}
         url="https://carefood-iota.vercel.app/diary/report"
         className={cn(buttonClass({ variant: "secondary", block: true }))}
       >

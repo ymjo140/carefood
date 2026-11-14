@@ -15,7 +15,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const b = await req.json().catch(() => ({}));
   if (b?.action !== "cancel") return NextResponse.json({ error: "할 일을 골라 주세요" }, { status: 400 });
   const { data, error } = await (createServiceRoleClient() as any) // eslint-disable-line @typescript-eslint/no-explicit-any
-    .from("partner_agency_uploads").update({ status: "canceled", decided_by: admin.id, decided_at: new Date().toISOString(), decided_note: "케어푸드가 거둬들임" })
+    .from("partner_agency_uploads").update({ status: "canceled", decided_by: admin.id, decided_at: new Date().toISOString(), decided_note: "오늘끼록이 거둬들임" })
     .eq("id", id).eq("status", "waiting").select("id");
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   if (!data?.length) return NextResponse.json({ error: "이미 업체가 처리했거나 거둬들인 파일이에요" }, { status: 409 });

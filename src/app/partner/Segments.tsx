@@ -49,7 +49,7 @@ const isNightTime = (t: string) => { const h = Number(t.slice(0, 2)); return h >
 const fmtWhen = (iso: string) => new Date(iso).toLocaleString("ko-KR", { month: "long", day: "numeric", weekday: "short", hour: "numeric", minute: "2-digit" });
 
 /**
- * 고객층 — 조건 고르기 → 메시지 → 확인·예약. 업체는 조건·인원·합계만 본다. 사람을 고르고 보내는 일은 케어푸드가 한다.
+ * 고객층 — 조건 고르기 → 메시지 → 확인·예약. 업체는 조건·인원·합계만 본다. 사람을 고르고 보내는 일은 오늘끼록이 한다.
  * 발송비는 검수 요청 때 충전금에서 잡아 두고, 보낸 수만큼 확정한다. (v3 7.5·8장)
  */
 export function Segments({ qs, onTopup, prefill }: { qs: string; onTopup: () => void; prefill?: { need?: string; goal?: string } | null }) {
@@ -107,7 +107,7 @@ export function Segments({ qs, onTopup, prefill }: { qs: string; onTopup: () => 
         <SectionHeader title="고객층"
           action={!compose && !ro ? <Button size="sm" icon="plus" onClick={() => setCompose({ conditions: EMPTY, segmentId: null })}>새로 보내기</Button> : undefined} />
         <p className="text-label text-ink-2">
-          조건을 고르면 그 조건에 맞고 업체 소식 받기에 동의한 사람 수만 보여 드려요. 보내는 일은 케어푸드가 하고, 업체에는 누가 받았는지 주지 않아요.
+          조건을 고르면 그 조건에 맞고 업체 소식 받기에 동의한 사람 수만 보여 드려요. 보내는 일은 오늘끼록이 하고, 업체에는 누가 받았는지 주지 않아요.
         </p>
         <Card tone="sunken" className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-2">
           <span className="text-label text-ink-2">충전금 <span className="num font-bold text-ink">{won(d.balance)}</span>
@@ -397,7 +397,7 @@ function Composer({ qs, data, initial, segmentId, post, onClose, onDone }: {
                   <p className="text-label text-ink whitespace-pre-line">{body || "본문"}</p>
                   <p className="text-caption text-ink-2 mt-1">받지 않으려면 마이 &gt; 알림 설정에서 끌 수 있어요</p>
                 </Card>
-                <p className="text-caption text-ink-2 mt-2">(광고) 표시·보낸 곳·받지 않는 방법은 케어푸드가 붙여요. 알림함과, 알림을 켠 기기에 같이 가요</p>
+                <p className="text-caption text-ink-2 mt-2">(광고) 표시·보낸 곳·받지 않는 방법은 오늘끼록이 붙여요. 알림함과, 알림을 켠 기기에 같이 가요</p>
               </div>
             </>
           )}
@@ -432,7 +432,7 @@ function Composer({ qs, data, initial, segmentId, post, onClose, onDone }: {
             <dt className="text-ink-2">셈하는 법</dt>
             <dd className="text-ink-2">발송비는 검수를 요청할 때 잡아 두고, 실제로 보낸 사람 수만큼만 빠져요. 반려·취소되면 돌려드려요. 보낸 뒤 7일 안의 구매 링크 클릭과 구매확정을 이 발송의 결과로 보여 드려요</dd>
           </dl>
-          {data.unit_price === null && <Notice tone="caution">건당 발송비가 정해지면 예약할 수 있어요. 케어푸드에 문의해 주세요</Notice>}
+          {data.unit_price === null && <Notice tone="caution">건당 발송비가 정해지면 예약할 수 있어요. 오늘끼록에 문의해 주세요</Notice>}
           {(lacking || short) && (
             <Notice tone="caution" title="충전금이 모자라요">
               <span className="num">{won(short ?? (cost! - data.balance))}</span> 더 있어야 해요. 아래 광고 충전금에서 충전을 신청하면 입금을 확인한 뒤 반영해요

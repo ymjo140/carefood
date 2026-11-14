@@ -11,7 +11,7 @@ const SHOW_DAYS = 30;
 
 const kstDate = (iso: string) => new Date(Date.parse(iso) + 9 * 3600e3).toISOString().slice(0, 10).replace(/^(\d{4})-(\d{2})-(\d{2})$/, (_, y, m, d) => `${y}년 ${Number(m)}월 ${Number(d)}일`);
 export const consentNoticeText = (adsAt: string) =>
-  `${kstDate(adsAt)}에 케어푸드 앱에서 업체 소식(광고) 받기에 동의하셨어요. 계속 받으려면 그대로 두시면 되고, 그만 받으려면 마이 > 알림 설정에서 끌 수 있어요`;
+  `${kstDate(adsAt)}에 오늘끼록 앱에서 업체 소식(광고) 받기에 동의하셨어요. 계속 받으려면 그대로 두시면 되고, 그만 받으려면 마이 > 알림 설정에서 끌 수 있어요`;
 
 /** 보낼 때가 된 사람에게 알리고 confirmed_at 을 적는다. 표가 없으면 0 */
 export async function runConsentNotices(sb: Sb, push?: (userId: string, payload: { title: string; body: string; url: string; tag: string }) => Promise<boolean>) {
@@ -47,5 +47,5 @@ export async function consentNotifications(sb: Sb, actor: string): Promise<Conse
   }
   if (!data?.ads || !data.confirmed_at || !data.ads_at) return [];
   if (Date.parse(data.confirmed_at) < Date.now() - SHOW_DAYS * DAY || Date.parse(data.confirmed_at) < Date.parse(data.ads_at)) return [];
-  return [{ id: `consent-${data.confirmed_at}`, type: "consent", at: data.confirmed_at, who: "케어푸드", text: consentNoticeText(data.ads_at), url: "/me/notifications" }];
+  return [{ id: `consent-${data.confirmed_at}`, type: "consent", at: data.confirmed_at, who: "오늘끼록", text: consentNoticeText(data.ads_at), url: "/me/notifications" }];
 }

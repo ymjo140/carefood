@@ -89,7 +89,7 @@ export function Examples({ qs, isDemo, readOnly, onChanged }: { qs: string; isDe
           <div className="mt-6 pt-4 border-t border-line">
             <p className="text-label font-medium text-ink">테스트 업체용 예시 채우기</p>
             <p className="text-label text-ink-2 mt-1">
-              예시 제품을 엑셀(6개)·API(가격·품절 2줄)로 보내고, 케어푸드가 대신 올린 파일 1건과 예시 고객 18명의 주문을 만들어요.
+              예시 제품을 엑셀(6개)·API(가격·품절 2줄)로 보내고, 오늘끼록이 대신 올린 파일 1건과 예시 고객 18명의 주문을 만들어요.
               예시 제품은 검수 대기로만 두고 실제 제품 목록에는 넣지 않아요. 다시 채우면 예시 주문은 새로 만들어요
             </p>
             {readOnly ? (
@@ -132,7 +132,7 @@ export function Examples({ qs, isDemo, readOnly, onChanged }: { qs: string; isDe
 const AGENCY_STATUS: Record<AgencyUpload["status"], string> = { waiting: "확인 기다림", confirmed: "반영함", returned: "돌려보냄", canceled: "거둬들임" };
 
 /**
- * 케어푸드가 대신 올린 파일 — 업체가 미리보기를 보고 반영하거나 돌려보낸다.
+ * 오늘끼록이 대신 올린 파일 — 업체가 미리보기를 보고 반영하거나 돌려보낸다.
  * 반영·돌려보내기 뒤에는 이 목록과 연동 기록·제품 수를 다시 불러온다.
  */
 export function Agency({ qs, refresh, onChanged }: { qs: string; refresh: number; onChanged: () => void }) {
@@ -166,7 +166,7 @@ export function Agency({ qs, refresh, onChanged }: { qs: string; refresh: number
       if (action === "confirm") {
         const x = d.result;
         toast.show(x ? `반영했어요. 바로 반영 ${x.ok} · 검수 중 ${x.review} · 반려 ${x.error}` : "반영했어요");
-      } else toast.show("돌려보냈어요. 케어푸드가 고쳐서 다시 올려요");
+      } else toast.show("돌려보냈어요. 오늘끼록이 고쳐서 다시 올려요");
       close();
       load();
       onChanged();
@@ -180,15 +180,15 @@ export function Agency({ qs, refresh, onChanged }: { qs: string; refresh: number
   const waiting = ups.filter((u) => u.status === "waiting").length;
   return (
     <section>
-      <SectionHeader title="케어푸드가 대신 올린 파일"
-        description={waiting > 0 ? `확인을 기다리는 파일 ${waiting}개 — 미리보기를 보고 반영하기를 눌러야 들어가요` : "대행 연동을 신청하면 케어푸드가 옮겨 적은 파일이 여기에 와요"} />
+      <SectionHeader title="오늘끼록이 대신 올린 파일"
+        description={waiting > 0 ? `확인을 기다리는 파일 ${waiting}개 — 미리보기를 보고 반영하기를 눌러야 들어가요` : "대행 연동을 신청하면 오늘끼록이 옮겨 적은 파일이 여기에 와요"} />
       {state.status === "loading" ? <SkeletonList rows={2} /> : state.status === "error" ? (
         <EmptyState title="대신 올린 파일을 불러오지 못했어요" description={state.error}
           action={<Button size="sm" variant="secondary" icon="refresh" onClick={() => { setState({ status: "loading" }); load(); }}>다시 불러오기</Button>} />
       ) : !state.ready ? (
         <EmptyState title="대행 연동을 준비하고 있어요" description="준비가 끝나면 여기에서 대신 올린 파일을 확인할 수 있어요" />
       ) : ups.length === 0 ? (
-        <EmptyState title="대신 올린 파일이 없어요" description="표시사항 사진과 상품 목록을 보내 주시면 케어푸드가 양식에 옮겨 적어 여기에 올려요" />
+        <EmptyState title="대신 올린 파일이 없어요" description="표시사항 사진과 상품 목록을 보내 주시면 오늘끼록이 양식에 옮겨 적어 여기에 올려요" />
       ) : (
         <Card padding="none">
           <ul className="divide-y divide-line">
@@ -204,7 +204,7 @@ export function Agency({ qs, refresh, onChanged }: { qs: string; refresh: number
       )}
 
       <Sheet open={!!open} onClose={close} title={open?.file_name || "대신 올린 파일"}
-        description={open ? `${timeAgo(open.created_at)} 케어푸드가 올림 · ${AGENCY_STATUS[open.status]}` : undefined}
+        description={open ? `${timeAgo(open.created_at)} 오늘끼록이 올림 · ${AGENCY_STATUS[open.status]}` : undefined}
         footer={open?.status === "waiting" && !state.readOnly ? (mode === "view" ? (
           <>
             <Button variant="secondary" block onClick={() => setMode("return")}>돌려보내기</Button>
@@ -218,7 +218,7 @@ export function Agency({ qs, refresh, onChanged }: { qs: string; refresh: number
         )) : undefined}>
         {open && (
           <div className="flex flex-col gap-4">
-            {open.note && <Notice title="케어푸드가 남긴 말">{open.note}</Notice>}
+            {open.note && <Notice title="오늘끼록이 남긴 말">{open.note}</Notice>}
             <p className="text-label text-ink-2">
               <span className="num">{n(open.row_count)}</span>줄 — 반영하면 바로 반영 <span className="num">{open.preview.ok ?? 0}</span> ·
               검수 <span className="num">{open.preview.review ?? 0}</span> · 오류 <span className="num">{open.preview.error ?? 0}</span>로 들어가요.

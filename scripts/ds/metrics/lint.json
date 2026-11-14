@@ -1,5 +1,5 @@
 {
-  "checkedAt": "2026-11-14T06:34:58.134Z",
+  "checkedAt": "2026-11-14T08:08:19.828Z",
   "files": 177,
   "total": 0,
   "warnTotal": 0,
@@ -399,7 +399,7 @@
     },
     {
       "file": "src/app/layout.tsx",
-      "line": 84,
+      "line": 85,
       "rule": "hex-color",
       "level": "error",
       "message": "색을 직접 썼어요 → 디자인 토큰(text-ink, bg-surface 등)을 쓰세요",
@@ -408,7 +408,7 @@
     },
     {
       "file": "src/app/layout.tsx",
-      "line": 85,
+      "line": 86,
       "rule": "hex-color",
       "level": "error",
       "message": "색을 직접 썼어요 → 디자인 토큰(text-ink, bg-surface 등)을 쓰세요",
@@ -417,7 +417,7 @@
     },
     {
       "file": "src/app/layout.tsx",
-      "line": 94,
+      "line": 95,
       "rule": "silent-catch",
       "level": "warn",
       "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",

@@ -13,14 +13,14 @@ const ENDPOINTS: [string, string, string][] = [
   ["DELETE", "/products/{partner_sku}", "판매 종료 (기록은 남아요)"],
   ["GET", "/products?status=rejected", "내 제품과 검수 상태, 반려 이유"],
   ["GET", "/batches/{batch_id}", "한 번 보낸 묶음의 처리 결과"],
-  ["POST", "/conversions", "케어푸드 링크로 들어온 주문 (구매 수수료 정산)"],
-  ["GET", "/orders?status=new", "케어푸드 앱에서 들어온 주문 (앱 주문이 열린 뒤)"],
+  ["POST", "/conversions", "오늘끼록 링크로 들어온 주문 (구매 수수료 정산)"],
+  ["GET", "/orders?status=new", "오늘끼록 앱에서 들어온 주문 (앱 주문이 열린 뒤)"],
   ["PATCH", "/orders/{order_id}", "주문 접수·발송(송장)·배송 완료·취소"],
 ];
 
 const RESULTS: [string, string][] = [
   ["applied", "바로 반영했어요 (가격·재고·링크만 바뀐 경우)"],
-  ["pending_review", "케어푸드가 확인한 뒤 반영해요 (새 제품, 영양·원재료·알레르기 변경). 응답 코드 202"],
+  ["pending_review", "오늘끼록이 확인한 뒤 반영해요 (새 제품, 영양·원재료·알레르기 변경). 응답 코드 202"],
   ["unchanged", "지난번과 같아서 아무것도 하지 않았어요"],
 ];
 
@@ -122,7 +122,7 @@ export default function PartnerDocsPage() {
   const codeTables = FIELDS.filter((f) => f.enumOf && !f.key.endsWith("_2"));
   return (
     <Page>
-      <PageHeader title="입점 업체 연동 문서" description="제품·가격·재고·주문을 케어푸드에 보내는 세 가지 길 — 엑셀, 상품 피드, API. 세 길 모두 같은 칸을 써요" />
+      <PageHeader title="입점 업체 연동 문서" description="제품·가격·재고·주문을 오늘끼록에 보내는 세 가지 길 — 엑셀, 상품 피드, API. 세 길 모두 같은 칸을 써요" />
 
       <SectionHeader title="세 가지 길" />
       <Table head={["길", "받는 방법"]} rows={[
@@ -141,7 +141,7 @@ export default function PartnerDocsPage() {
         <li>인증: 모든 요청에 <span className="num">Authorization: Bearer &lt;API 키&gt;</span>. 키는 입점 업체 화면의 API 탭에서 만들고, 서버에만 두세요</li>
         <li>본문은 JSON(UTF-8), 2MB 까지. 키 하나에 1분 120번까지 보낼 수 있어요</li>
         <li>같은 내용을 다시 보내도 한 번만 반영돼요. 제품은 제품 코드, 주문은 주문 번호가 기준이에요</li>
-        <li>가격·재고·링크만 바뀌면 바로 반영하고, 새 제품과 영양·원재료·알레르기 변경은 케어푸드가 확인한 뒤 반영해요</li>
+        <li>가격·재고·링크만 바뀌면 바로 반영하고, 새 제품과 영양·원재료·알레르기 변경은 오늘끼록이 확인한 뒤 반영해요</li>
       </ul>
 
       <SectionHeader title="요청" className="mt-10" />
@@ -161,13 +161,13 @@ export default function PartnerDocsPage() {
 
       <SectionHeader title="주문 보내기 (구매 수수료)" className="mt-10" />
       <p className="text-label text-ink mb-2">
-        케어푸드의 구매 링크에는 <span className="num">cf_click</span> 값이 붙어요. 그 방문에서 나온 주문에 이 값을 같이 저장해 두었다가 보내 주세요.
+        오늘끼록의 구매 링크에는 <span className="num">cf_click</span> 값이 붙어요. 그 방문에서 나온 주문에 이 값을 같이 저장해 두었다가 보내 주세요.
         취소·반품은 같은 주문 번호로 status 만 바꿔 다시 보내요. 값에는 고객을 알아볼 정보가 없어요.
       </p>
       <Code>{CONV_EXAMPLE}</Code>
       <p className="text-label text-ink-2 mt-2">status: ordered · confirmed · canceled · returned. 수수료는 confirmed 금액에만 계산해요. ordered_at 에 시간대가 없으면 한국 시간으로 읽어요.</p>
 
-      <SectionHeader title="앱 주문 받기" className="mt-10" description="케어푸드 앱 안 주문이 열린 뒤에 쓰여요. 그 전에는 빈 목록이 와요" />
+      <SectionHeader title="앱 주문 받기" className="mt-10" description="오늘끼록 앱 안 주문이 열린 뒤에 쓰여요. 그 전에는 빈 목록이 와요" />
       <p className="text-label text-ink mb-2">
         결제가 끝난 주문만 와요. 한 주문 안의 우리 업체 상품은 한 묶음으로 움직여요: new → accepted → shipped → delivered.
         받는 분 정보(shipping)는 배송에만 쓰고, 배송이 끝나면 응답에서 빠져요.

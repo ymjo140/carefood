@@ -5,7 +5,7 @@ import { canAct, getPartnerContext } from "@/lib/partner/auth";
 import { listAgency } from "@/lib/partner/agency";
 import { notReady } from "@/lib/partner/crm";
 
-/** GET /api/partner/agency[?as=slug] — 케어푸드가 대신 올린 파일 (최근 20개) */
+/** GET /api/partner/agency[?as=slug] — 오늘끼록이 대신 올린 파일 (최근 20개) */
 export async function GET(req: NextRequest) {
   await connection();
   const ctx = await getPartnerContext(req.nextUrl.searchParams.get("as"));

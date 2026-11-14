@@ -91,7 +91,7 @@ export function PartnerInfo({ qs }: { qs: string }) {
             <Field label="담당 연락처"><Input inputMode="tel" value={f.contact_phone} onChange={set("contact_phone")} disabled={ro} /></Field>
             <Field label="누리집" className="sm:col-span-2"><Input type="url" value={f.website_url} onChange={set("website_url")} disabled={ro} placeholder="https://" /></Field>
           </div>
-          <p className="text-caption text-ink-2 mt-3">이름·업체 유형·수수료율은 케어푸드가 정해요. 바꾸려면 케어푸드에 문의해 주세요</p>
+          <p className="text-caption text-ink-2 mt-3">이름·업체 유형·수수료율은 오늘끼록이 정해요. 바꾸려면 오늘끼록에 문의해 주세요</p>
         </Card>
       </section>
 
@@ -164,9 +164,9 @@ export function PartnerTeam({ qs }: { qs: string }) {
       </section>
 
       <section>
-        <SectionHeader title="담당자" description="담당자를 더하거나 빼려면 케어푸드에 문의해 주세요" />
+        <SectionHeader title="담당자" description="담당자를 더하거나 빼려면 오늘끼록에 문의해 주세요" />
         {d.members.length === 0 ? (
-          <EmptyState title="연결된 담당자가 없어요" description="케어푸드가 담당자 계정을 연결하면 여기 보여요" />
+          <EmptyState title="연결된 담당자가 없어요" description="오늘끼록이 담당자 계정을 연결하면 여기 보여요" />
         ) : (
           <Card className="py-1">
             {d.members.map((m, i) => (

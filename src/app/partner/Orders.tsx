@@ -76,7 +76,7 @@ export function Orders({ qs, initialFilter }: { qs: string; initialFilter?: Orde
 
   const exportShip = async () => {
     setExporting(true);
-    try { await downloadFile(`/api/partner/orders/export?${qs}`, "케어푸드_출고목록.xlsx"); }
+    try { await downloadFile(`/api/partner/orders/export?${qs}`, "오늘끼록_출고목록.xlsx"); }
     catch (e) { toast.show(`출고 목록을 내려받지 못했어요. ${(e as Error).message || "다시 시도해 주세요"}`, { tone: "danger" }); }
     finally { setExporting(false); }
   };
@@ -246,14 +246,14 @@ export function Orders({ qs, initialFilter }: { qs: string; initialFilter?: Orde
                 ) : (o.status === "delivered" || o.status === "canceled") && !(o.return && returnOpen(o.return.status)) ? (
                   <p className="text-caption text-ink-2 mt-3">받는 분 정보는 배송이 끝나 가렸어요</p>
                 ) : (
-                  <p className="text-caption text-ink-2 mt-3">받는 분 정보를 받지 못했어요. 케어푸드에 문의해 주세요</p>
+                  <p className="text-caption text-ink-2 mt-3">받는 분 정보를 받지 못했어요. 오늘끼록에 문의해 주세요</p>
                 )}
                 {o.carrier && (
                   <p className="text-label text-ink mt-2">
                     <span className="text-ink-2">발송 </span>{CARRIERS[o.carrier] || o.carrier}{o.tracking_number && <> · <span className="num">{o.tracking_number}</span></>}
                   </p>
                 )}
-                {o.cancel_reason && <p className="text-label text-ink mt-2"><span className="text-ink-2">{o.canceled_by === "buyer" ? "주문자가 취소" : o.canceled_by === "admin" ? "케어푸드가 취소" : "취소 이유"} </span>{o.cancel_reason}</p>}
+                {o.cancel_reason && <p className="text-label text-ink mt-2"><span className="text-ink-2">{o.canceled_by === "buyer" ? "주문자가 취소" : o.canceled_by === "admin" ? "오늘끼록이 취소" : "취소 이유"} </span>{o.cancel_reason}</p>}
 
                 {!ro && o.status === "delivered" && o.return && returnOpen(o.return.status) && (
                   <CardActions className="mt-3">
@@ -307,7 +307,7 @@ export function Orders({ qs, initialFilter }: { qs: string; initialFilter?: Orde
       <Sheet open={!!ret} onClose={() => setRet(null)}
         title={ret?.action === "reject" ? `${ret ? RETURN_TYPE_LABEL[ret.o.return!.type] : ""} 요청 거절하기` : ret?.action === "returned" ? "반품 마치기" : "교환품 보내기"}
         description={ret?.action === "reject" ? `주문자에게 이유를 보여 줘요. 거절하면 오늘부터 8일 뒤 저절로 구매확정돼요`
-          : ret?.action === "returned" ? "회수한 상품을 확인했으면 마쳐 주세요. 이 주문은 취소로 바뀌어 정산에서 빠지고, 케어푸드가 주문자에게 환불해요"
+          : ret?.action === "returned" ? "회수한 상품을 확인했으면 마쳐 주세요. 이 주문은 취소로 바뀌어 정산에서 빠지고, 오늘끼록이 주문자에게 환불해요"
           : "교환품을 보내면 발송으로 돌아가요. 배송 완료 뒤 8일이 지나면 구매확정돼요"}
         footer={<div className="flex gap-2">
           <Button variant="ghost" onClick={() => setRet(null)}>닫기</Button>
@@ -316,7 +316,7 @@ export function Orders({ qs, initialFilter }: { qs: string; initialFilter?: Orde
             onClick={() => {
               if (!ret) return;
               if (ret.action === "reject") sendReturn(ret.o, { action: "reject", reply: reason }, "요청을 거절했어요. 주문자에게 알렸어요");
-              else if (ret.action === "returned") sendReturn(ret.o, { action: "returned", fee: fee.replace(/,/g, "") || 0, reply: reason }, "반품을 마쳤어요. 케어푸드가 환불해요");
+              else if (ret.action === "returned") sendReturn(ret.o, { action: "returned", fee: fee.replace(/,/g, "") || 0, reply: reason }, "반품을 마쳤어요. 오늘끼록이 환불해요");
               else sendReturn(ret.o, { action: "exchanged", carrier, tracking_number: tracking, reply: reason }, "교환품을 보냈어요. 주문자에게 알렸어요");
             }}>{ret?.action === "reject" ? "거절하기" : ret?.action === "returned" ? "반품 마치기" : "교환품 보내기"}</Button>
         </div>}>
@@ -378,7 +378,7 @@ export function Orders({ qs, initialFilter }: { qs: string; initialFilter?: Orde
         </div>
       </Sheet>
 
-      <Sheet open={!!canceling} onClose={() => setCanceling(null)} title="주문 취소하기" description="취소하면 케어푸드가 주문자에게 알리고 환불해요"
+      <Sheet open={!!canceling} onClose={() => setCanceling(null)} title="주문 취소하기" description="취소하면 오늘끼록이 주문자에게 알리고 환불해요"
         footer={<div className="flex gap-2">
           <Button variant="ghost" onClick={() => setCanceling(null)}>닫기</Button>
           <Button block variant="danger" loading={!!canceling && busy === canceling.order_id} disabled={!reason.trim()}

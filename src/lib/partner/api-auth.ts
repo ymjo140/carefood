@@ -34,7 +34,7 @@ export async function apiAuth(req: NextRequest): Promise<ApiContext | NextRespon
     .select("id, last_used_at, revoked_at, partners(id, slug, name, kind, status)").eq("key_hash", hashKey(m[1])).maybeSingle();
   if (error) return apiError(500, "server_error", "키를 확인하지 못했어요. 잠시 뒤 다시 시도해 주세요");
   if (!data || data.revoked_at || !data.partners) return apiError(401, "unauthorized", "쓸 수 없는 API 키예요");
-  if (data.partners.status === "paused") return apiError(403, "partner_paused", "업체 계정이 멈춰 있어요. 케어푸드에 문의해 주세요");
+  if (data.partners.status === "paused") return apiError(403, "partner_paused", "업체 계정이 멈춰 있어요. 오늘끼록에 문의해 주세요");
   try {
     const limited = await rateLimit(sb, req, `key:${data.id}`, "partner_api");
     if (limited) return apiError(429, "rate_limited", "요청이 너무 많아요. 키 하나에 1분 120번까지예요", undefined);

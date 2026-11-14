@@ -140,7 +140,7 @@ export function OrderList() {
                       </p>
                     ) : g.status === "canceled" && g.cancel_reason && (
                       <p className="text-label text-ink-2 mt-1.5">
-                        {g.canceled_by === "buyer" ? "직접 취소했어요" : g.canceled_by === "partner" ? "판매 업체가 취소했어요" : "케어푸드가 취소했어요"} · {g.cancel_reason}
+                        {g.canceled_by === "buyer" ? "직접 취소했어요" : g.canceled_by === "partner" ? "판매 업체가 취소했어요" : "오늘끼록이 취소했어요"} · {g.cancel_reason}
                       </p>
                     )}
                     {g.status === "accepted" && g.cancel_requested_at && (
@@ -158,7 +158,7 @@ export function OrderList() {
                       </p>
                     )}
                     {g.status === "delivered" && g.return?.status === "rejected" && (
-                      <p className="text-label text-ink mt-1.5">판매 업체가 {RETURN_TYPE_LABEL[g.return.type]} 요청을 거절했어요{g.return.reply && <> · {g.return.reply}</>}. 더 도움이 필요하면 케어푸드에 문의해 주세요</p>
+                      <p className="text-label text-ink mt-1.5">판매 업체가 {RETURN_TYPE_LABEL[g.return.type]} 요청을 거절했어요{g.return.reply && <> · {g.return.reply}</>}. 더 도움이 필요하면 오늘끼록에 문의해 주세요</p>
                     )}
                     {!unpaid && g.status === "shipped" && g.partner_id && (
                       <>
@@ -191,7 +191,7 @@ export function OrderList() {
               </div>
 
               {refundLeft > 0 && (
-                <p className="text-label text-ink mt-1">돌려받을 금액 <span className="num font-bold">{won(refundLeft)}</span> · 케어푸드가 결제한 수단으로 돌려드려요</p>
+                <p className="text-label text-ink mt-1">돌려받을 금액 <span className="num font-bold">{won(refundLeft)}</span> · 오늘끼록이 결제한 수단으로 돌려드려요</p>
               )}
               {refundLeft <= 0 && o.refunded_amount > 0 && (
                 <p className="text-label text-ink-2 mt-1"><span className="num">{won(o.refunded_amount)}</span>을 돌려드렸어요</p>
@@ -236,7 +236,7 @@ export function OrderList() {
 
       <ConfirmSheet open={!!confirm} onClose={() => setConfirm(null)} onConfirm={doConfirm} loading={busy}
         title="구매확정할까요?" confirmLabel="구매확정하기" tone="primary"
-        description={confirm ? `${confirm.group.seller} 주문이에요. 확정하면 판매 업체에 대금이 정산돼요.${confirm.group.return?.status === "requested" ? " 남긴 반품·교환 요청은 거둬요." : ""} 그 뒤 반품·교환은 케어푸드에 문의해 주세요` : ""} />
+        description={confirm ? `${confirm.group.seller} 주문이에요. 확정하면 판매 업체에 대금이 정산돼요.${confirm.group.return?.status === "requested" ? " 남긴 반품·교환 요청은 거둬요." : ""} 그 뒤 반품·교환은 오늘끼록에 문의해 주세요` : ""} />
     </>
   );
 }

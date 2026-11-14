@@ -9,7 +9,7 @@ export default function Footer() {
         {/* 상단: 로고 + 링크 그룹 */}
         <div className="flex flex-col sm:flex-row justify-between gap-6 mb-6">
           <div>
-            <span className="text-body font-bold text-ink">케어푸드</span>
+            <span className="text-body font-bold text-ink">오늘끼록</span>
             <p className="text-caption text-ink-2 mt-1">성분으로 찾는 내 몸에 맞는 식품</p>
           </div>
 

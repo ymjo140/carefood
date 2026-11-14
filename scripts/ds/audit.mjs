@@ -371,7 +371,7 @@ function renderReport(summary, results, list) {
 
   const totalsRows = typeOrder.map((k) => `<div class="tot ${summary.totals[k] ? (k === "touch-target" ? "warn" : "bad") : "ok"}"><b>${summary.totals[k]}</b><span>${esc(TYPES[k])}</span></div>`).join("");
 
-  return `<title>케어푸드 화면 검사</title>
+  return `<title>오늘끼록 화면 검사</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&family=Outfit:wght@500;700&display=swap" rel="stylesheet">
@@ -410,7 +410,7 @@ body.only-issues .page.clean{display:none}
 .howto{background:var(--sunken);border-radius:10px;padding:12px 16px;font-size:14px;color:var(--ink2);margin-top:24px}
 </style>
 <div class="wrap">
-  <h1>케어푸드 화면 검사</h1>
+  <h1>오늘끼록 화면 검사</h1>
   <p class="lead">${esc(new Date(summary.auditedAt).toLocaleString("ko-KR"))} · ${esc(summary.base)} · 페이지 ${summary.pages}개 × ${esc(summary.variants.join(" / "))} = 스크린샷 ${summary.screenshots}장 · ${summary.seconds}초${summary.ignored ? ` · 제외한 요청: <code>${esc(summary.ignored)}</code> (검사 환경 네트워크에서만 막힘)` : ""}</p>
   <div class="hero">
     <div><div class="big"><span>${summary.blocking}</span></div><div class="sub">고쳐야 할 문제 (터치 영역 경고 제외)</div></div>

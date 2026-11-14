@@ -31,6 +31,6 @@ export async function getPartnerContext(asSlug?: string | null): Promise<Partner
   const { data, error } = await sb.from("partner_members").select(`role, partners(${cols})`).eq("auth_user_id", user.id).limit(1).maybeSingle();
   if (error) return { error: NextResponse.json({ error: error.message }, { status: 500 }) };
   if (!data?.partners) return { error: NextResponse.json({ error: "입점 업체 계정이 아니에요", reason: "not_member" }, { status: 403 }), reason: "not_member" };
-  if (data.partners.status === "paused") return { error: NextResponse.json({ error: "업체 계정이 멈춰 있어요. 케어푸드에 문의해 주세요", reason: "paused" }, { status: 403 }) };
+  if (data.partners.status === "paused") return { error: NextResponse.json({ error: "업체 계정이 멈춰 있어요. 오늘끼록에 문의해 주세요", reason: "paused" }, { status: 403 }) };
   return { userId: user.id, email: user.email ?? null, partner: data.partners, role: data.role };
 }

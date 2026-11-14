@@ -5,7 +5,7 @@ import { canAct, getPartnerContext } from "@/lib/partner/auth";
 import { notReady } from "@/lib/partner/crm";
 
 /**
- * 정산 이의 — "다르게 보여요" (v3 7.7). 업체가 달 정산이나 충전금 내역 한 줄에 사유를 남기면 케어푸드가 확인해 답한다.
+ * 정산 이의 — "다르게 보여요" (v3 7.7). 업체가 달 정산이나 충전금 내역 한 줄에 사유를 남기면 오늘끼록이 확인해 답한다.
  * GET  → {ready, disputes}
  * POST {target: "month", month: "YYYY-MM", reason} · {target: "ledger", ledger_id, reason}
  */

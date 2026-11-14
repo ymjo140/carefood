@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
   try { form = await req.formData(); } catch { return NextResponse.json({ error: "파일을 받지 못했어요" }, { status: 400 }); }
   const file = form.get("file");
   if (!(file instanceof File)) return NextResponse.json({ error: "엑셀 파일을 골라 주세요" }, { status: 400 });
-  if (!/\.xlsx$/i.test(file.name)) return NextResponse.json({ error: "케어푸드 양식(.xlsx)으로 올려 주세요" }, { status: 400 });
+  if (!/\.xlsx$/i.test(file.name)) return NextResponse.json({ error: "오늘끼록 양식(.xlsx)으로 올려 주세요" }, { status: 400 });
   if (file.size > 5 * 1024 * 1024) return NextResponse.json({ error: "5MB 까지 올릴 수 있어요. 나눠서 올려 주세요" }, { status: 413 });
 
   let rows;

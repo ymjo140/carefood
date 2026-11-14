@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
   const note = String(form.get("note") || "").trim().slice(0, 500) || null;
   const file = form.get("file");
   if (!slug) return bad("업체를 골라 주세요");
-  if (!(file instanceof File) || !/\.xlsx$/i.test(file.name)) return bad("케어푸드 양식(.xlsx)으로 올려 주세요");
+  if (!(file instanceof File) || !/\.xlsx$/i.test(file.name)) return bad("오늘끼록 양식(.xlsx)으로 올려 주세요");
   if (file.size > 5 * 1024 * 1024) return bad("5MB 까지 올릴 수 있어요. 나눠서 올려 주세요", 413);
   const sb = createServiceRoleClient() as Sb;
   const { data: partner, error: pErr } = await sb.from("partners").select("id, kind").eq("slug", slug).maybeSingle();

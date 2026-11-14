@@ -24,7 +24,7 @@ export default function HomeTop() {
 
   return (
     <>
-      <h1 className="sr-only">케어푸드 — 성분으로 찾는 내 몸에 맞는 식품</h1>
+      <h1 className="sr-only">오늘끼록 — 성분으로 찾는 내 몸에 맞는 식품</h1>
 
       <Link href="/products?focus=1"
         className="flex items-center gap-2 h-12 px-4 rounded-md border border-line-strong bg-surface text-body text-ink-3 transition-colors hover:border-ink-3">

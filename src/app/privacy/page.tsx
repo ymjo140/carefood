@@ -3,7 +3,7 @@ import { Page } from "@/components/ui";
 import { ORDERING_ENABLED } from "@/lib/features";
 
 export const metadata: Metadata = {
-  title: "개인정보처리방침 | 케어푸드",
+  title: "개인정보처리방침 | 오늘끼록",
 };
 
 export default function PrivacyPage() {
@@ -17,7 +17,7 @@ export default function PrivacyPage() {
         <section>
           <h2 className="text-body font-bold text-ink mb-2">제1조 (목적)</h2>
           <p>
-            케어푸드(이하 &quot;회사&quot;)는 이용자의 개인정보를 중요시하며, 「개인정보 보호법」 등
+            오늘끼록(이하 &quot;회사&quot;)는 이용자의 개인정보를 중요시하며, 「개인정보 보호법」 등
             관련 법령을 준수합니다. 본 방침은 회사가 수집하는 개인정보의 항목, 수집 목적,
             보유·이용 기간 및 이용자의 권리에 대해 안내합니다.
           </p>
@@ -216,7 +216,7 @@ export default function PrivacyPage() {
           </ul>
           {ORDERING_ENABLED && (
             <>
-              <p className="mt-2">이용자가 케어푸드에서 상품을 주문하면서 동의한 경우, 배송을 위해 아래와 같이 판매 업체에 제공합니다.</p>
+              <p className="mt-2">이용자가 오늘끼록에서 상품을 주문하면서 동의한 경우, 배송을 위해 아래와 같이 판매 업체에 제공합니다.</p>
               <div className="overflow-x-auto mt-2">
               <table className="w-full text-caption border-collapse">
                 <thead>
@@ -232,11 +232,11 @@ export default function PrivacyPage() {
                     <td className="py-2 pr-3">주문한 상품의 판매 업체 (업체 이름은 주문 화면에 표시)</td>
                     <td className="py-2 pr-3">받는 분 이름, 연락처, 주소, 배송 메모, 주문 상품·수량</td>
                     <td className="py-2 pr-3">상품 배송, 주문 취소·교환·반품 처리</td>
-                    <td className="py-2 pr-3">배송이 끝나면 케어푸드의 업체 화면에서 가립니다. 업체는 전자상거래법에 따라 거래 기록을 5년간 보관합니다</td>
+                    <td className="py-2 pr-3">배송이 끝나면 오늘끼록의 업체 화면에서 가립니다. 업체는 전자상거래법에 따라 거래 기록을 5년간 보관합니다</td>
                   </tr>
                 </tbody>
               </table></div>
-              <p className="mt-2">동의하지 않을 수 있으며, 동의하지 않으면 케어푸드에서 주문할 수 없습니다. 판매처 링크로 이동해 사는 것은 동의와 관계없이 이용할 수 있습니다.</p>
+              <p className="mt-2">동의하지 않을 수 있으며, 동의하지 않으면 오늘끼록에서 주문할 수 없습니다. 판매처 링크로 이동해 사는 것은 동의와 관계없이 이용할 수 있습니다.</p>
             </>
           )}
           <p className="mt-2">

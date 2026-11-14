@@ -13,6 +13,7 @@ import { notifyPartners } from "@/lib/partner/notify";
 import { autoCloseLastMonth } from "@/lib/partner/settlement";
 import { AUTO_CONFIRM_DAYS, expireUnpaidOrders } from "@/lib/orders";
 import { asResult, selectAll, selectAllIn } from "@/lib/supabase/all";
+import { BRAND } from "@/lib/brand";
 
 /**
  * POST /api/push/run — 보낼 때가 된 알림을 보낸다. Supabase 예약 작업(pg_cron + pg_net, 30분마다)이 부른다.
@@ -212,7 +213,7 @@ export async function POST(req: NextRequest) {
           : { title: "저녁 기록", body: "오늘 저녁은 뭐 먹었어요? 적으면 오늘 합계를 바로 볼 수 있어요", url: "/diary", tag: "meal" });
       } else if (slot === "dinner") {
         // 2주 넘게 기록이 없으면 일주일에 한 번만
-        await send(user, "meal", `idle:${mondayOf(today)}`, { title: "케어푸드", body: "이번 주는 한 끼부터 다시 적어 볼까요? 기록하면 영양 합계를 바로 보여 드려요", url: "/diary", tag: "meal" });
+        await send(user, "meal", `idle:${mondayOf(today)}`, { title: BRAND, body: "이번 주는 한 끼부터 다시 적어 볼까요? 기록하면 영양 합계를 바로 보여 드려요", url: "/diary", tag: "meal" });
       }
     }
 

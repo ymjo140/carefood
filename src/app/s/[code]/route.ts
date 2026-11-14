@@ -25,9 +25,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
   if (isBot(request.headers.get("user-agent"))) {
     const { data: p } = await sb.from("community_profiles").select("nickname").eq("actor_id", link.owner).maybeSingle();
-    const title = `${p?.nickname ? `${p.nickname}님의 ` : ""}${KIND_TITLE[link.kind] || "케어푸드"} · 케어푸드`;
+    const title = `${p?.nickname ? `${p.nickname}님의 ` : ""}${KIND_TITLE[link.kind] || "오늘끼록"} · 오늘끼록`;
     const html = `<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>${esc(title)}</title>
-<meta property="og:title" content="${esc(title)}"><meta property="og:description" content="케어푸드에서 식단을 기록하고 같이 챌린지를 해요">
+<meta property="og:title" content="${esc(title)}"><meta property="og:description" content="오늘끼록에서 식단을 기록하고 같이 챌린지를 해요">
 <meta property="og:url" content="${esc(target.toString())}"><meta property="og:type" content="website">
 ${link.card_url ? `<meta property="og:image" content="${esc(link.card_url)}"><meta property="og:image:width" content="1080"><meta property="og:image:height" content="1920"><meta name="twitter:card" content="summary_large_image">` : ""}
 <meta http-equiv="refresh" content="0;url=${esc(target.toString())}"></head><body><a href="${esc(target.toString())}">${esc(title)}</a></body></html>`;

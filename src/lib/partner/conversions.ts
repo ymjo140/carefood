@@ -69,7 +69,7 @@ export async function ingestConversions(sb: Sb, partnerId: string, rows: { row: 
   const upserts = [];
   for (const g of good) {
     const c = clicks.get(g.click_id);
-    if (!c) { errors.push({ row: g.row, sku: g.order_no, field: "click_id", message: "케어푸드 링크에서 나온 클릭 번호가 아니에요" }); continue; }
+    if (!c) { errors.push({ row: g.row, sku: g.order_no, field: "click_id", message: "오늘끼록 링크에서 나온 클릭 번호가 아니에요" }); continue; }
     const gap = Date.parse(g.ordered_at) - Date.parse(c.created_at);
     // 주문 시각을 날짜만 적으면 그날 0시로 읽으므로 하루까지는 앞서도 받는다
     if (gap < -86400e3) { errors.push({ row: g.row, sku: g.order_no, field: "ordered_at", message: "주문 시각이 클릭보다 빨라요" }); continue; }

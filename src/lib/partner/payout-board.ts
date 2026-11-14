@@ -1,5 +1,5 @@
 /**
- * 정산 대시보드 — "다음 지급일에 얼마" · 이번 달 확정 · 확정 전 · 케어푸드에 낼 돈 → 실제 받을 돈,
+ * 정산 대시보드 — "다음 지급일에 얼마" · 이번 달 확정 · 확정 전 · 오늘끼록에 낼 돈 → 실제 받을 돈,
  * 결제 → 배송 → 확정 → 지급 흐름, 날짜별 장부(확정일 기준), 입금 대사. 서버 전용. 계산은 lib/partner/payout.ts 하나.
  */
 import { CONFIRM_DAYS, CONFIRM_WINDOW, PAY_DAY, dailyOf, kstDay, kstMonthOf, loadBundles, monthMs, payDate, type Bundle } from "./payout";
@@ -108,7 +108,7 @@ export async function buildMonthWorkbook(sb: Sb, partnerId: string, month: strin
   const sum = (k: "sales" | "discount" | "shipping" | "fee" | "payout") => rows.reduce((a, r) => a + r[k], 0);
 
   const wb = new ExcelJS.Workbook();
-  wb.creator = "케어푸드";
+  wb.creator = "오늘끼록";
   const money = "#,##0";
   const head = (ws: import("exceljs").Worksheet) => { ws.getRow(1).font = { bold: true }; ws.views = [{ state: "frozen", ySplit: 1 }]; };
 
@@ -125,8 +125,8 @@ export async function buildMonthWorkbook(sb: Sb, partnerId: string, month: strin
   add("업체 쿠폰 할인", -sum("discount"));
   add("배송비 (반품 배송비 포함)", sum("shipping"));
   add(`앱 주문 수수료${rate === null ? "" : ` (${rate}%)`}`, -sum("fee"));
-  add("앱 주문 대금 (케어푸드 → 업체)", sum("payout"));
-  add("구매 링크 수수료 (업체 → 케어푸드)", -link);
+  add("앱 주문 대금 (오늘끼록 → 업체)", sum("payout"));
+  add("구매 링크 수수료 (업체 → 오늘끼록)", -link);
   add("실제 받을 돈", sum("payout") - link);
   if (s) add("마감한 앱 주문 대금", orderPayout(s));
   if (s?.paid_amount !== null && s?.paid_amount !== undefined) add("실제 보낸 금액", s.paid_amount);

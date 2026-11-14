@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Notice, Page } from "@/components/ui";
 
 export const metadata: Metadata = {
-  title: "이용약관 | 케어푸드",
+  title: "이용약관 | 오늘끼록",
 };
 
 export default function TermsPage() {
@@ -16,7 +16,7 @@ export default function TermsPage() {
         <section>
           <h2 className="text-body font-bold text-ink mb-2">제1조 (목적)</h2>
           <p>
-            본 약관은 케어푸드(이하 &quot;회사&quot;)가 제공하는 식품 영양 정보 매칭 서비스(이하
+            본 약관은 오늘끼록(이하 &quot;회사&quot;)가 제공하는 식품 영양 정보 매칭 서비스(이하
             &quot;서비스&quot;)의 이용 조건 및 절차, 회사와 이용자 간의 권리·의무를 규정함을
             목적으로 합니다.
           </p>

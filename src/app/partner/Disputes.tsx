@@ -20,7 +20,7 @@ export function DisputeSheet({ qs, target, onClose, onSent }: { qs: string; targ
       const r = await fetch(`/api/partner/disputes?${qs}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(d.error);
-      toast.show("이의를 남겼어요. 케어푸드가 확인한 뒤 여기 답을 달아요");
+      toast.show("이의를 남겼어요. 오늘끼록이 확인한 뒤 여기 답을 달아요");
       setReason("");
       onSent();
       onClose();
@@ -73,7 +73,7 @@ export function DisputeList({ qs, refresh }: { qs: string; refresh: number }) {
                   <span className={`text-caption whitespace-nowrap ${d.status === "open" ? "text-ink-2" : "text-ink"}`}>{STATUS[d.status]} · {timeAgo(d.resolved_at || d.created_at)}</span>
                 </div>
                 <p className="text-label text-ink-2 mt-1 whitespace-pre-line">{d.reason}</p>
-                {d.reply && <p className="text-label text-ink mt-2 pl-3 border-l-2 border-line-strong whitespace-pre-line">케어푸드: {d.reply}</p>}
+                {d.reply && <p className="text-label text-ink mt-2 pl-3 border-l-2 border-line-strong whitespace-pre-line">오늘끼록: {d.reply}</p>}
               </li>
             ))}
           </ul>

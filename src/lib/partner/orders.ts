@@ -186,7 +186,7 @@ export async function updateFulfilment(sb: Sb, partner: Pick<Partner, "id">, ord
     patch.delivered_at = now;
   } else {
     if (from === "canceled") return { ok: true, order: current, changed: false };
-    if (from !== "new" && from !== "accepted") return { ok: false, code: "conflict", message: "발송한 뒤에는 취소할 수 없어요. 케어푸드에 문의해 주세요" };
+    if (from !== "new" && from !== "accepted") return { ok: false, code: "conflict", message: "발송한 뒤에는 취소할 수 없어요. 오늘끼록에 문의해 주세요" };
     // 주문자가 취소를 요청한 주문은 이유 없이 받아들일 수 있다
     const reason = String(input.reason ?? "").trim().slice(0, 200) || (current.cancel_requested_at ? "주문자 요청" : "");
     if (!reason) return { ok: false, code: "invalid", message: "취소 이유(reason)를 적어 주세요" };
@@ -284,7 +284,7 @@ async function notifyBuyer(sb: Sb, orderId: string, partnerId: string, to: Fulfi
     const more = current.lines.length > 1 ? ` 외 ${current.lines.length - 1}개` : "";
     await sendToUser(sb, subs as PushSub[], to === "shipped"
       ? { title: "주문한 상품을 보냈어요", body: `${p?.name || "판매 업체"}에서 ${first}${more}을(를) 보냈어요`, url: "/me/orders", tag: `order-${orderId}` }
-      : { title: "주문이 취소됐어요", body: `${p?.name || "판매 업체"}가 ${first}${more} 주문을 취소했어요. 환불은 케어푸드가 처리해요`, url: "/me/orders", tag: `order-${orderId}` });
+      : { title: "주문이 취소됐어요", body: `${p?.name || "판매 업체"}가 ${first}${more} 주문을 취소했어요. 환불은 오늘끼록이 처리해요`, url: "/me/orders", tag: `order-${orderId}` });
   } catch (e) { console.error("주문 알림을 보내지 못했어요:", (e as Error).message); }
 }
 

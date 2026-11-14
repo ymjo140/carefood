@@ -75,7 +75,7 @@ export default function VendorApplyPage() {
   return (
     <Page>
       <TextLink href="/" className="mb-3 min-h-11 pr-3"><Icon name="chevron-left" size={16} /> 홈</TextLink>
-      <PageHeader title="업체 입점 신청" description="건강 목표에 맞는 식품을 찾는 케어푸드 사용자에게 제품을 보여 줘요. 34만 개 식품과 같은 영양 기준으로 비교돼요" />
+      <PageHeader title="업체 입점 신청" description="건강 목표에 맞는 식품을 찾는 오늘끼록 사용자에게 제품을 보여 줘요. 34만 개 식품과 같은 영양 기준으로 비교돼요" />
 
       {/* 혜택 */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-8">

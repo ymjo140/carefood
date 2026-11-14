@@ -915,7 +915,7 @@ function StepResult({
     <div>
       {/* 머리 */}
       <div className="text-center mb-6">
-        <p className="text-caption font-bold text-brand-ink mb-1">케어푸드 맞춤 영양 분석</p>
+        <p className="text-caption font-bold text-brand-ink mb-1">오늘끼록 맞춤 영양 분석</p>
         <h1 className="text-title font-bold text-ink">나의 영양 분석 결과</h1>
         {hasBodyInfo && (
           <p className="text-label text-ink-2 mt-1">

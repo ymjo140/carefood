@@ -52,7 +52,7 @@ const SHIP_COLS: { key: string; label: string; width: number }[] = [
  */
 export async function buildShipWorkbook(orders: PartnerOrder[], opt: { withShipping: boolean; truncated?: boolean }): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
-  wb.creator = "케어푸드";
+  wb.creator = "오늘끼록";
   const carrierCodes = Object.keys(CARRIERS);
 
   // ① 출고 목록
@@ -114,7 +114,7 @@ export async function buildShipWorkbook(orders: PartnerOrder[], opt: { withShipp
 
   // ④ 안내
   const g = wb.addWorksheet("안내");
-  g.addRow(["케어푸드 출고 목록"]).font = { bold: true, size: 14 };
+  g.addRow(["오늘끼록 출고 목록"]).font = { bold: true, size: 14 };
   g.addRow([`보낼 주문(새 주문·접수) ${orders.length}건, 오래된 주문부터예요.${opt.truncated ? ` 한 번에 ${EXPORT_MAX}건까지라 나머지는 처리한 뒤 다시 받아 주세요.` : ""}`]);
   g.addRow(["송장 올리기: '출고 목록' 시트의 택배사·송장 번호 칸을 채워 그대로 올리면 그 주문이 발송 처리돼요. 2행(필드 키)과 주문 번호는 지우지 마세요."]);
   g.addRow(["택배사·송장 번호가 비어 있는 줄은 건너뛰어요. 직접 배송(direct)은 송장 번호를 비워 둬도 돼요."]);

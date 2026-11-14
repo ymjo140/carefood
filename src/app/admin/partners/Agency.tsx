@@ -12,7 +12,7 @@ const STATUS: Record<Upload["status"], string> = { waiting: "업체 확인 기�
 
 /**
  * 관리자 — 대행 연동 (v3 10.6). 업체가 보낸 상품 목록을 양식에 옮겨 적어 업체 대신 올린다.
- * 바로 반영하지 않는다 — 업체 화면 '케어푸드가 대신 올린 파일'에서 업체가 반영하기를 눌러야 들어간다.
+ * 바로 반영하지 않는다 — 업체 화면 '오늘끼록이 대신 올린 파일'에서 업체가 반영하기를 눌러야 들어간다.
  */
 export function AdminAgency({ partners }: { partners: { slug: string; name: string }[] }) {
   const toast = useToast();

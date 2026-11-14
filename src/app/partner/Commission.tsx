@@ -56,10 +56,10 @@ export function Settlement({ qs, readOnly = false }: { qs: string; readOnly?: bo
         ) : (
           <>
             <p className="text-label text-ink-2 mb-3">
-              케어푸드 구매 링크에는 <span className="num">cf_click</span> 번호가 붙어요. 그 번호로 들어온 주문을 올리면
+              오늘끼록 구매 링크에는 <span className="num">cf_click</span> 번호가 붙어요. 그 번호로 들어온 주문을 올리면
               클릭 뒤 <span className="num">{state.data.attribution_days}</span>일 안의 구매확정된 판매액에
               {state.data.commission_rate === null ? " 계약한 수수료율" : <> <span className="num">{state.data.commission_rate}</span>%</>}을 계산해요.
-              번호에는 고객을 알아볼 정보가 없어요. 달이 끝나면 케어푸드가 그 달을 마감하고, 마감한 금액으로 정산해요.
+              번호에는 고객을 알아볼 정보가 없어요. 달이 끝나면 오늘끼록이 그 달을 마감하고, 마감한 금액으로 정산해요.
             </p>
             {state.data.months.length === 0 ? (
               <EmptyState title="아직 클릭이나 주문이 없어요" description="제품이 앱에 보이고 구매 링크가 눌리면 여기 달별로 모여요" />
@@ -120,7 +120,7 @@ export function Settlement({ qs, readOnly = false }: { qs: string; readOnly?: bo
               </p>
             )}
             {state.data.months.some((m) => m.settlement && m.commission !== m.settlement.commission) && (
-              <p className="text-caption text-ink-2 mt-2">&lsquo;마감 뒤&rsquo;는 마감한 다음에 주문 상태가 바뀌어 달라진 금액이에요. 케어푸드가 확인해 다음 정산에 반영해요</p>
+              <p className="text-caption text-ink-2 mt-2">&lsquo;마감 뒤&rsquo;는 마감한 다음에 주문 상태가 바뀌어 달라진 금액이에요. 오늘끼록이 확인해 다음 정산에 반영해요</p>
             )}
 
           </>
@@ -160,8 +160,8 @@ export function LinkSalesUpload({ qs, readOnly = false }: { qs: string; readOnly
         action={<a href="/api/partner/template?kind=orders" className={buttonClass({ variant: "ghost", size: "sm" })}>양식 내려받기</a>} />
       <Card>
         <p className="text-label text-ink-2">
-          케어푸드 구매 링크(<span className="num">cf_click</span> 번호)로 들어와 내 몰에서 산 주문을 올려요. 구매확정된 판매액으로 구매 링크 수수료를 계산하고,
-          앱 안 주문은 케어푸드가 이미 알고 있어 올리지 않아도 돼요. API로도 보낼 수 있어요.
+          오늘끼록 구매 링크(<span className="num">cf_click</span> 번호)로 들어와 내 몰에서 산 주문을 올려요. 구매확정된 판매액으로 구매 링크 수수료를 계산하고,
+          앱 안 주문은 오늘끼록이 이미 알고 있어 올리지 않아도 돼요. API로도 보낼 수 있어요.
         </p>
         {readOnly ? <p className="text-label text-ink-2 mt-4">관리자 보기에서는 올릴 수 없어요</p> : (
           <div className="flex flex-wrap items-center gap-2 mt-4">
@@ -192,7 +192,7 @@ const KIND: Record<Ledger["kind"], string> = { topup: "충전", hold: "발송비
 
 /**
  * 고객층 충전금 — 발송비는 보낼 때 충전금에서 낸다 (11/13 결정). 결제(PG) 전에는 계좌이체로 충전하고,
- * 케어푸드가 입금을 확인하면 반영·세금계산서를 발행한다.
+ * 오늘끼록이 입금을 확인하면 반영·세금계산서를 발행한다.
  */
 export function Credits({ qs, onDispute }: { qs: string; onDispute?: (t: DisputeTarget) => void }) {
   const toast = useToast();
@@ -248,7 +248,7 @@ export function Credits({ qs, onDispute }: { qs: string; onDispute?: (t: Dispute
                   <Button variant="secondary" loading={busy} disabled={!amount} onClick={request}>충전 신청하기</Button>
                 </div>
               )}
-              <p className="text-caption text-ink-2 mt-3">1만~1,000만 원. 계좌이체로 입금하면 케어푸드가 확인한 뒤 잔액에 넣고 세금계산서를 보내 드려요</p>
+              <p className="text-caption text-ink-2 mt-3">1만~1,000만 원. 계좌이체로 입금하면 오늘끼록이 확인한 뒤 잔액에 넣고 세금계산서를 보내 드려요</p>
             </Card>
             {state.data.ledger.length > 0 && (
               <Card padding="none" className="overflow-x-auto mt-3">

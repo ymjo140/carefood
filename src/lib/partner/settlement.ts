@@ -1,8 +1,8 @@
 /**
  * 월별 정산 — 지난 달을 마감하면 그때의 숫자를 partner_settlements 에 적어 둔다. 서버 전용.
- *  · 구매 링크 수수료: 그 달에 주문되어 구매확정된 금액 × 받은 때의 수수료율 (업체 → 케어푸드)
+ *  · 구매 링크 수수료: 그 달에 주문되어 구매확정된 금액 × 받은 때의 수수료율 (업체 → 오늘끼록)
  *  · 앱 주문: 그 달에 구매확정된 업체 묶음의 판매액·배송비·업체 쿠폰 할인, (판매액 − 쿠폰 할인) × 앱 주문 수수료율
- *    (묶음마다 반올림 — lib/partner/payout.ts). 케어푸드가 받아 둔 돈에서 업체에 줄 돈 = 판매액 − 쿠폰 할인 + 배송비 − 수수료.
+ *    (묶음마다 반올림 — lib/partner/payout.ts). 오늘끼록이 받아 둔 돈에서 업체에 줄 돈 = 판매액 − 쿠폰 할인 + 배송비 − 수수료.
  *    구매확정 = 구매자가 누른 때 또는 배송 완료 + 8일. 지급은 다음 달 10일
  * 마감 뒤에 주문 상태가 바뀌면 지금 숫자와 마감 숫자가 달라진다 — 정산을 끝내기 전에는 다시 마감할 수 있다.
  */
@@ -140,7 +140,7 @@ export async function autoCloseLastMonth(sb: Sb, now = Date.now()): Promise<{ mo
 
 /**
  * 정산 끝 — 서로 줄 돈(구매 수수료·앱 주문 대금)을 주고받은 뒤. 마감한 달만.
- * paidAmount: 실제로 보낸 금액(케어푸드 → 업체가 +, 업체 → 케어푸드가 −). 적으면 업체 화면에서 계산과 맞춰 본다
+ * paidAmount: 실제로 보낸 금액(오늘끼록 → 업체가 +, 업체 → 오늘끼록이 −). 적으면 업체 화면에서 계산과 맞춰 본다
  */
 export async function markPaid(sb: Sb, partnerId: string, month: string, note: string | null, paidAmount: number | null = null): Promise<void> {
   if (paidAmount !== null && (!Number.isInteger(paidAmount) || Math.abs(paidAmount) > 1_000_000_000)) throw new Error("보낸 금액을 다시 확인해 주세요");

@@ -316,7 +316,7 @@ export async function buyerConfirm(sb: Sb, userId: string, orderId: string, part
 
 /**
  * 주문자 반품·교환 요청 — 내 주문의 한 판매 업체 묶음. 배송 완료 뒤 구매확정 전에만.
- * 요청하면 업체가 답할 때까지 구매확정(자동 포함)을 멈춘다. 거절된 묶음은 다시 요청할 수 없다(케어푸드 문의). 교환으로 다시 받은 뒤에는 다시 요청할 수 있다.
+ * 요청하면 업체가 답할 때까지 구매확정(자동 포함)을 멈춘다. 거절된 묶음은 다시 요청할 수 없다(오늘끼록 문의). 교환으로 다시 받은 뒤에는 다시 요청할 수 있다.
  */
 export async function buyerReturnRequest(sb: Sb, userId: string, orderId: string, partnerId: string, input: { type: unknown; reason: unknown; note: unknown }):
   Promise<{ ok: true } | { ok: false; code: "not_found" | "conflict" | "invalid"; message: string }> {
@@ -336,8 +336,8 @@ export async function buyerReturnRequest(sb: Sb, userId: string, orderId: string
   if (live.length === 0) return { ok: false, code: "not_found", message: "주문을 찾지 못했어요" };
   if (live.some((i) => returnOpen(i.return_status))) return { ok: true }; // 이미 요청함 — 두 번 눌러도 한 번
   if (live.some((i) => i.fulfil_status !== "delivered")) return { ok: false, code: "conflict", message: "받은 뒤에 반품·교환을 요청할 수 있어요" };
-  if (live.some((i) => i.return_status === "rejected")) return { ok: false, code: "conflict", message: "판매 업체가 거절한 주문이에요. 케어푸드에 문의해 주세요" };
-  if (live.some((i) => confirmedAt(i))) return { ok: false, code: "conflict", message: "구매확정한 주문은 케어푸드에 문의해 주세요" };
+  if (live.some((i) => i.return_status === "rejected")) return { ok: false, code: "conflict", message: "판매 업체가 거절한 주문이에요. 오늘끼록에 문의해 주세요" };
+  if (live.some((i) => confirmedAt(i))) return { ok: false, code: "conflict", message: "구매확정한 주문은 오늘끼록에 문의해 주세요" };
   const now = new Date().toISOString();
   // 읽은 그대로일 때만 — 그새 확정됐거나 다른 창에서 요청했으면 바꾸지 않는다
   const { data: done, error: uErr } = await sb.from("order_items").update({
@@ -361,7 +361,7 @@ export async function notifyReturn(sb: Sb, orderId: string, partnerName: string,
     const msg = {
       approved: { title: `${t} 요청을 받아들였어요`, body: `${partnerName}에서 상품을 회수할 거예요. 안내를 기다려 주세요` },
       rejected: { title: `${t} 요청이 거절됐어요`, body: `${partnerName}가 남긴 이유를 내 주문에서 볼 수 있어요. 오늘부터 ${AUTO_CONFIRM_DAYS}일 뒤 저절로 구매확정돼요` },
-      returned: { title: "반품을 마쳤어요", body: `${partnerName} 반품을 확인했어요. 환불은 케어푸드가 처리해요` },
+      returned: { title: "반품을 마쳤어요", body: `${partnerName} 반품을 확인했어요. 환불은 오늘끼록이 처리해요` },
       exchanged: { title: "교환 상품을 보냈어요", body: `${partnerName}에서 교환 상품을 보냈어요` },
     }[what];
     await sendToUser(sb, subs as PushSub[], { ...msg, url: "/me/orders", tag: `order-${orderId}` });

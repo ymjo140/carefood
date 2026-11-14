@@ -10,6 +10,7 @@
  * 넣는 것: 끼니·날짜·음식 이름·성분 숫자·연속 기록 일수·챌린지 해낸 날. 넣지 않는 것: 몸무게·건강 목표·질환 관련 값·효능 말.
  * 열량은 기본으로 빼고(숫자 경쟁이 되지 않게) 본인이 켜면 넣는다.
  */
+import { BRAND } from "@/lib/brand";
 
 export type DayMark = { date: string; state: "done" | "missed" | "today" | "future" | "before" };
 export type MealCardData = {
@@ -229,14 +230,14 @@ function drawSticker(ctx: Ctx, p: Palette, f: Fonts, d: CardData, o: CardOptions
     if (last.length > 7) dots(ctx, p, last.slice(7), L, y + 330, IW, Math.min(72, size));
   }
 
-  // 아래 띠 — 연속 기록 + 케어푸드
+  // 아래 띠 — 연속 기록 + 오늘끼록
   const fy = y + h - 44;
   font(ctx, f, 32, 700); ctx.fillStyle = p.brandInk;
   const streak = d.kind === "group_buy" || d.kind === "streak" ? null : d.streak;
   ctx.textAlign = "left";
   ctx.fillText(streak && streak > 1 ? `기록 ${streak}일째` : d.author || "", L, fy);
   ctx.textAlign = "right"; ctx.fillStyle = p.ink;
-  ctx.fillText("케어푸드", R, fy);
+  ctx.fillText(BRAND, R, fy);
   ctx.textAlign = "left";
   return h;
 }
@@ -251,7 +252,7 @@ function drawFooter(ctx: Ctx, p: Palette, f: Fonts, o: CardOptions, y: number) {
 function drawRecord(ctx: Ctx, p: Palette, f: Fonts, d: CardData, o: CardOptions) {
   ctx.fillStyle = p.canvas; ctx.fillRect(0, 0, W, H);
   const L = 90;
-  font(ctx, f, 44, 700); ctx.fillStyle = p.brandInk; ctx.fillText("케어푸드", L, 200);
+  font(ctx, f, 44, 700); ctx.fillStyle = p.brandInk; ctx.fillText(BRAND, L, 200);
   if (d.kind === "meal") {
     font(ctx, f, 52, 500); ctx.fillStyle = p.ink2; ctx.fillText(`${dayLabel(d.day)} ${d.meal_type ? MEAL_LABEL[d.meal_type] || "" : ""}`, L, 400);
     font(ctx, f, 88, 700); ctx.fillStyle = p.ink; ctx.fillText(d.meals === 3 ? "세 끼 다 기록했어요" : "오늘도 기록했어요", L, 510);
@@ -319,7 +320,7 @@ function drawPhoto(ctx: Ctx, p: Palette, f: Fonts, d: CardData, o: CardOptions, 
   const ph = 960, overlap = 140;
   const total = 70 + ph + sh - overlap;
   const top = Math.max(120, (H - total) / 2 - 20);
-  font(ctx, f, 40, 700); ctx.fillStyle = p.brandInk; ctx.fillText("케어푸드", 60, top);
+  font(ctx, f, 40, 700); ctx.fillStyle = p.brandInk; ctx.fillText(BRAND, 60, top);
   if (d.author) { font(ctx, f, 36, 500); ctx.fillStyle = p.ink2; ctx.textAlign = "right"; ctx.fillText(fit(ctx, d.author, 600), W - 60, top); ctx.textAlign = "left"; }
   coverImage(ctx, img, 60, top + 40, W - 120, ph, 40);
   drawSticker(ctx, p, f, d, o, (W - SW) / 2, top + 40 + ph - overlap);

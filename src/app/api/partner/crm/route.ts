@@ -140,7 +140,7 @@ export async function POST(req: NextRequest) {
     if (action === "request") {
       const { data: pa, error: pErr } = await sb.from("partners").select("crm_unit_price, status").eq("id", pid).single();
       if (pErr) return notReady(pErr) ? notReadyRes() : bad(pErr.message, 500);
-      if (pa.crm_unit_price === null || pa.crm_unit_price === undefined) return bad("발송 단가가 아직 정해지지 않았어요. 케어푸드에 문의해 주세요", 409);
+      if (pa.crm_unit_price === null || pa.crm_unit_price === undefined) return bad("발송 단가가 아직 정해지지 않았어요. 오늘끼록에 문의해 주세요", 409);
       if (pa.status !== "active") return bad("운영 중인 업체만 보낼 수 있어요", 409);
       const sendAt = Date.parse(String(b.send_at || ""));
       if (!Number.isFinite(sendAt) || sendAt < Date.now() + 2 * HOUR || sendAt > Date.now() + 30 * 24 * HOUR) return bad("보낼 시각은 2시간 뒤부터 30일 안으로 골라 주세요");

@@ -98,7 +98,7 @@ export default function ShareCardSheet({ target, open, onClose }: { target: Shar
       .then((r) => { if (!r.ok) console.error("공유 표시를 남기지 못했어요", r.status); })
       .catch((e) => console.error("공유 표시를 남기지 못했어요", e)); // ds-allow: 세기는 보조 — 공유는 이미 했다
   };
-  const fileName = `carefood-${card?.kind || "card"}-${style}.png`;
+  const fileName = `kkirok-${card?.kind || "card"}-${style}.png`;
 
   const copyLink = async (quiet = false) => {
     try {

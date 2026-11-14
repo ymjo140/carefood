@@ -38,7 +38,7 @@ export function Connect({ qs, onChanged, linkSales }: { qs: string; onChanged: (
           </Card>
           <Card>
             <p className="text-body font-bold text-ink">대행 연동 (유료)</p>
-            <p className="text-label text-ink-2 mt-1">표시사항 사진·상품 목록만 보내 주면 케어푸드가 옮겨 적어요. 제품 &gt; 올리기에서 미리보기를 보고 &lsquo;반영하기&rsquo;를 눌러야 들어가요</p>
+            <p className="text-label text-ink-2 mt-1">표시사항 사진·상품 목록만 보내 주면 오늘끼록이 옮겨 적어요. 제품 &gt; 올리기에서 미리보기를 보고 &lsquo;반영하기&rsquo;를 눌러야 들어가요</p>
           </Card>
         </div>
       </section>
@@ -56,7 +56,7 @@ export function Connect({ qs, onChanged, linkSales }: { qs: string; onChanged: (
   );
 }
 
-/** 제품 > 올리기 — 엑셀 올리기 · 케어푸드가 대신 올린 파일 · 예시 · 받은 기록 */
+/** 제품 > 올리기 — 엑셀 올리기 · 오늘끼록이 대신 올린 파일 · 예시 · 받은 기록 */
 export function ProductUpload({ qs, batches, isDemo = false, readOnly = false, onChanged }: {
   qs: string; batches: Batch[]; isDemo?: boolean; readOnly?: boolean; onChanged: () => void;
 }) {
@@ -96,8 +96,8 @@ export function ProductUpload({ qs, batches, isDemo = false, readOnly = false, o
           action={<a href="/api/partner/template" className={buttonClass({ variant: "ghost", size: "sm" })}>양식 내려받기</a>} />
         <Card className="mb-3">
           <p className="text-label text-ink-2">
-            케어푸드 양식(.xlsx)의 &lsquo;제품&rsquo; 시트에 한 줄에 제품 하나씩 적어 올려요. 가격·재고·링크만 바뀐 줄은 바로 반영되고,
-            새 제품과 영양·원재료·알레르기가 바뀐 줄은 케어푸드가 확인한 뒤 반영돼요. 자동으로 맞추려면 설정 &gt; 연동에서 피드·API를 연결해요.
+            오늘끼록 양식(.xlsx)의 &lsquo;제품&rsquo; 시트에 한 줄에 제품 하나씩 적어 올려요. 가격·재고·링크만 바뀐 줄은 바로 반영되고,
+            새 제품과 영양·원재료·알레르기가 바뀐 줄은 오늘끼록이 확인한 뒤 반영돼요. 자동으로 맞추려면 설정 &gt; 연동에서 피드·API를 연결해요.
           </p>
           {readOnly ? <p className="text-label text-ink-2 mt-4">관리자 보기에서는 올릴 수 없어요</p> : (
             <div className="flex flex-wrap items-center gap-2 mt-4">

@@ -29,7 +29,7 @@ type SettleMonth = {
   settlement: { commission: number; order_sales: number; order_shipping: number; order_discount?: number; order_fee: number; status: "closed" | "paid"; closed_at: string; paid_at: string | null; paid_amount?: number | null } | null;
 };
 const won = (n: number) => `${n.toLocaleString("ko-KR")}원`;
-/** 마감 숫자로 실제 오갈 돈 — 앱 주문 대금 − 구매 링크 수수료 (양수면 케어푸드 → 업체) */
+/** 마감 숫자로 실제 오갈 돈 — 앱 주문 대금 − 구매 링크 수수료 (양수면 오늘끼록 → 업체) */
 const orderNet = (s: NonNullable<SettleMonth["settlement"]>) => s.order_sales - (s.order_discount || 0) + s.order_shipping - s.order_fee - s.commission;
 
 const KIND_LABEL: Record<string, string> = { meal_service: "식단 서비스", brand: "식품 브랜드", mall: "유통·몰" };
@@ -282,7 +282,7 @@ function PartnerRow({ p, onDone, onFail, onSettled }: { p: Partner; onDone: (m: 
         <Button type="submit" size="sm" variant="secondary" loading={savingTerms} disabled={rate.trim() === "" || Number.isNaN(Number(rate)) || (orderRate.trim() !== "" && Number.isNaN(Number(orderRate)))}>조건 저장하기</Button>
       </form>
       <form onSubmit={addMember} className="flex flex-wrap gap-2 mt-3">
-        <Input type="email" aria-label="담당자 이메일" placeholder="담당자 이메일 (먼저 케어푸드에 가입)" value={email} onChange={(e) => setEmail(e.target.value)} className="flex-1 min-w-48" />
+        <Input type="email" aria-label="담당자 이메일" placeholder="담당자 이메일 (먼저 오늘끼록에 가입)" value={email} onChange={(e) => setEmail(e.target.value)} className="flex-1 min-w-48" />
         <Button type="submit" size="sm" variant="secondary" loading={busy} disabled={!email.includes("@")}>담당자 연결하기</Button>
       </form>
       <Sheet open={settling} onClose={() => setSettling(false)} title={`${p.name} 정산`} description="끝난 달을 마감하면 그때의 금액이 정산서로 남아요">

@@ -58,7 +58,7 @@ export default function Header() {
     <header className="sticky top-0 z-50 border-b border-line bg-canvas">
       <div className="mx-auto max-w-[1152px] h-14 flex items-center justify-between gap-4 pl-[max(1rem,env(safe-area-inset-left))] pr-[max(0.5rem,env(safe-area-inset-right))]">
         <Link href="/" className="shrink-0 inline-flex items-center h-11 text-body font-bold text-ink whitespace-nowrap">
-          케어푸드
+          오늘끼록
         </Link>
 
         {/* 넓은 화면 주 메뉴 — 휴대폰은 하단 탭 바 */}

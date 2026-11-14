@@ -55,7 +55,7 @@ export async function generateMetadata(
     title,
     description: `${title} — ${desc}. 영양 성분 분석, 가격 비교, 맛 평가를 확인하세요.`,
     openGraph: {
-      title: `${title} | 케어푸드`,
+      title: `${title} | 오늘끼록`,
       description: desc,
     },
   };
@@ -497,7 +497,7 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
           <div className="flex flex-col gap-1 mt-2 text-caption text-ink-2">
             {priceChecked && <p>{priceChecked} · 판매처에서 바뀌었을 수 있어요</p>}
             {sortedPrices.some((pp) => AFFILIATE_PLATFORMS.has(pp.platform)) && <p>{COUPANG_DISCLOSURE}</p>}
-            {sortedPrices.some((pp) => pp.is_partner) && <p>입점 업체 링크로 구매하면 케어푸드가 판매 수수료를 받을 수 있어요</p>}
+            {sortedPrices.some((pp) => pp.is_partner) && <p>입점 업체 링크로 구매하면 오늘끼록이 판매 수수료를 받을 수 있어요</p>}
           </div>
         </section>
       )}

@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
     return new Response(new Uint8Array(buf), {
       headers: {
         "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(`케어푸드_출고목록_${ctx.partner.slug}_${day}.xlsx`)}`,
+        "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(`오늘끼록_출고목록_${ctx.partner.slug}_${day}.xlsx`)}`,
         "Cache-Control": "no-store",
       },
     });

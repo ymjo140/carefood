@@ -80,7 +80,7 @@ export function Feed({ qs, onFetched }: { qs: string; onFetched: () => void }) {
           <>
             <Card>
               <p className="text-label text-ink-2">
-                엑셀 양식과 같은 칸의 CSV나 JSON을 주소 하나에 계속 올려 두면 케어푸드가 하루 두 번 가져가요.
+                엑셀 양식과 같은 칸의 CSV나 JSON을 주소 하나에 계속 올려 두면 오늘끼록이 하루 두 번 가져가요.
                 피드에는 지금 파는 제품을 모두 넣어 주세요. 피드에서 빠진 제품은 판매 종료로 내려요.
               </p>
               <form onSubmit={save} className="flex flex-wrap items-end gap-2 mt-4">

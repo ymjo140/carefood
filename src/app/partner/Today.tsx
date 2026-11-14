@@ -56,7 +56,7 @@ export function Today({ qs, go }: { qs: string; go: Go }) {
           <ol className="flex flex-col gap-4">
             {[
               { t: "제품 올리기", s: "양식에 한 줄에 제품 하나씩 적어 올려요. 제품 > 올리기", tab: "products" as Tab },
-              { t: "검수 기다리기", s: "영양·원재료를 케어푸드가 확인한 뒤 앱에 보여요", tab: "products" as Tab },
+              { t: "검수 기다리기", s: "영양·원재료를 오늘끼록이 확인한 뒤 앱에 보여요", tab: "products" as Tab },
               { t: "자동 연동 걸기", s: "피드·API를 권해요. 가격이 바뀌면 바로 반영돼요. 설정 > 연동", tab: "settings" as Tab },
             ].map((x, i) => (
               <li key={x.t} className="flex gap-3">

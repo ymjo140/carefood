@@ -67,7 +67,7 @@ function PartnerHome() {
     return (
       <Page width="narrow">
         <EmptyState className="mt-16" title="입점 업체 화면은 로그인해야 볼 수 있어요"
-          description="케어푸드에 연결된 담당자 계정으로 로그인해 주세요"
+          description="오늘끼록에 연결된 담당자 계정으로 로그인해 주세요"
           action={<LinkButton href="/login?returnTo=/partner" size="sm">로그인하기</LinkButton>} />
       </Page>
     );
@@ -76,7 +76,7 @@ function PartnerHome() {
     return (
       <Page width="narrow">
         <EmptyState className="mt-16" title="이 계정은 아직 입점 업체에 연결되지 않았어요"
-          description="입점을 신청하면 케어푸드가 확인한 뒤 이 계정을 업체에 연결해 드려요"
+          description="입점을 신청하면 오늘끼록이 확인한 뒤 이 계정을 업체에 연결해 드려요"
           action={<LinkButton href="/vendor/apply" size="sm" variant="secondary">입점 신청하기</LinkButton>} />
       </Page>
     );

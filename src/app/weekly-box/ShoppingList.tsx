@@ -109,7 +109,7 @@ export function ShoppingList({ open, onClose, counts }: { open: boolean; onClose
           <div className="flex flex-col gap-1 text-caption text-ink-2">
             {checkedLabel(allPrices) && <p>{checkedLabel(allPrices)} · 몰에서 바뀌었을 수 있어요</p>}
             {hasAffiliate && <p>{COUPANG_DISCLOSURE}</p>}
-            {hasPartner && <p>입점 업체 링크로 구매하면 케어푸드가 판매 수수료를 받을 수 있어요</p>}
+            {hasPartner && <p>입점 업체 링크로 구매하면 오늘끼록이 판매 수수료를 받을 수 있어요</p>}
           </div>
         </div>
       )}

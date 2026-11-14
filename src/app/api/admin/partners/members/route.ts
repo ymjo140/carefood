@@ -16,7 +16,7 @@ async function findUserByEmail(sb: Sb, email: string) {
   return null;
 }
 
-/** POST /api/admin/partners/members — {partner_id, email, role?} 업체 담당자 연결 (먼저 케어푸드에 가입해 있어야 한다) */
+/** POST /api/admin/partners/members — {partner_id, email, role?} 업체 담당자 연결 (먼저 오늘끼록에 가입해 있어야 한다) */
 export async function POST(req: NextRequest) {
   const denied = await adminOnly(); if (denied) return denied;
   const b = await req.json().catch(() => null);
@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
   const sb: Sb = createServiceRoleClient();
   let user;
   try { user = await findUserByEmail(sb, email); } catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: 500 }); }
-  if (!user) return NextResponse.json({ error: "이 이메일로 가입한 계정이 없어요. 담당자가 먼저 케어푸드에 가입해야 해요" }, { status: 404 });
+  if (!user) return NextResponse.json({ error: "이 이메일로 가입한 계정이 없어요. 담당자가 먼저 오늘끼록에 가입해야 해요" }, { status: 404 });
   const { error } = await sb.from("partner_members").upsert({
     partner_id: b.partner_id, auth_user_id: user.id, email, role: b.role === "owner" ? "owner" : "editor",
   }, { onConflict: "partner_id,auth_user_id" });

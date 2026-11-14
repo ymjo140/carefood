@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
     return new Response(exampleCsv(), {
       headers: {
         "Content-Type": "text/csv; charset=utf-8",
-        "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent("케어푸드_피드_예시.csv")}`,
+        "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent("오늘끼록_피드_예시.csv")}`,
         "Cache-Control": "public, max-age=3600",
       },
     });
@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
   const orders = kind === "orders";
   const example = kind === "example";
   const buf = orders ? await buildOrdersTemplate() : await buildTemplate(example ? excelSamples() : undefined);
-  const name = orders ? "케어푸드_주문내역_양식.xlsx" : example ? "케어푸드_입점제품_예시.xlsx" : "케어푸드_입점제품_양식.xlsx";
+  const name = orders ? "오늘끼록_주문내역_양식.xlsx" : example ? "오늘끼록_입점제품_예시.xlsx" : "오늘끼록_입점제품_양식.xlsx";
   return new Response(new Uint8Array(buf), {
     headers: {
       "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

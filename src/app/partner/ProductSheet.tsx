@@ -39,7 +39,7 @@ const DROPPED_HOW: Record<string, string> = {
   "판매 기간 밖": "판매 시작·종료일 밖이에요. 식단 서비스 칸의 날짜를 확인해 주세요",
 };
 const STATUS_LINE: Record<Detail["item"]["status"], string> = {
-  pending: "검수 중이에요 — 케어푸드가 확인하면 앱에 보여요",
+  pending: "검수 중이에요 — 오늘끼록이 확인하면 앱에 보여요",
   approved: "반영됐어요 — 앱에 보이고 있어요",
   rejected: "반려됐어요 — 아래 이유를 고쳐 다시 저장하면 다시 검수해요",
   discontinued: "판매 종료예요 — 앱에서 살 수 없어요",
@@ -87,7 +87,7 @@ export function ProductSheet({ qs, id, onClose, onSaved }: { qs: string; id: str
       if (!r.ok) throw new Error(j.error);
       setResult(j);
       if (j.error > 0) { toast.show("저장하지 못했어요. 빨간 칸을 고쳐 주세요", { tone: "danger" }); return; }
-      toast.show(j.review > 0 ? "저장했어요. 바뀐 내용을 케어푸드가 확인한 뒤 반영해요" : j.unchanged > 0 ? "바뀐 내용이 없어요" : done);
+      toast.show(j.review > 0 ? "저장했어요. 바뀐 내용을 오늘끼록이 확인한 뒤 반영해요" : j.unchanged > 0 ? "바뀐 내용이 없어요" : done);
       setEditing(false);
       onSaved();
       await load(id);
@@ -200,7 +200,7 @@ export function ProductSheet({ qs, id, onClose, onSaved }: { qs: string; id: str
           ))}
           {editing && (
             <p className="text-caption text-ink-2">
-              가격·재고·링크·배송만 바꾸면 바로 반영돼요. 이름·영양·원재료·알레르기·소개 문구를 바꾸면 케어푸드가 확인한 뒤 반영돼요.
+              가격·재고·링크·배송만 바꾸면 바로 반영돼요. 이름·영양·원재료·알레르기·소개 문구를 바꾸면 오늘끼록이 확인한 뒤 반영돼요.
               엑셀이나 피드로 다시 올리면 그 값이 이 화면에서 고친 값을 덮어요
             </p>
           )}

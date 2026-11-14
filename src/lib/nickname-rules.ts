@@ -9,7 +9,7 @@ export function makeNickname() {
   return `${ADJ[Math.floor(Math.random() * ADJ.length)]}${ANIMAL[Math.floor(Math.random() * ANIMAL.length)]}${Math.floor(Math.random() * 100)}`;
 }
 
-const RESERVED = /케어푸드|carefood|운영|관리자|관리팀|admin|공식|매니저|manager|staff|스태프|고객센터|상담원|익명/i;
+const RESERVED = /오늘끼록|끼록|케어푸드|carefood|kkirok|운영|관리자|관리팀|admin|공식|매니저|manager|staff|스태프|고객센터|상담원|익명/i;
 
 /** 문제가 없으면 null, 있으면 사용자에게 보일 이유 */
 export function nicknameProblem(v: string): string | null {

@@ -6,6 +6,7 @@ import SessionSync from "@/components/SessionSync";
 import ErrorReporter from "@/components/ErrorReporter";
 import { BottomNav, ToastProvider } from "@/components/ui";
 import "./globals.css";
+import { BRAND, BRAND_TAGLINE } from "@/lib/brand";
 
 const notoSansKR = Noto_Sans_KR({
   variable: "--font-noto-sans-kr",
@@ -34,34 +35,34 @@ const outfit = Outfit({
 export const metadata: Metadata = {
   metadataBase: new URL("https://carefood-iota.vercel.app"),
   title: {
-    default: "케어푸드 | 성분으로 찾는 내 몸에 맞는 식품",
-    template: "%s | 케어푸드",
+    default: `${BRAND} | ${BRAND_TAGLINE}`,
+    template: `%s | ${BRAND}`,
   },
   description:
     "34만 식품 영양 DB · 5개 건강식단 서비스 비교 · AI 맞춤 추천. 장건강·피부·체중관리·활력 — 매끼 달라지는 영양 최적 해를 풀어주는 식단 인텔리전스.",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "케어푸드",
+    title: BRAND,
   },
   other: {
     "mobile-web-app-capable": "yes",
   },
   keywords: [
-    "케어푸드", "건강식품", "영양성분", "식품매칭", "건강식단",
+    BRAND, "건강식품", "영양성분", "식품매칭", "건강식단",
     "그리팅", "윤식단", "디자인밀", "식단추천", "AI식단",
     "장건강식품", "다이어트식단", "고단백식품", "저당식품",
   ],
   openGraph: {
-    title: "케어푸드 | 성분으로 찾는 내 몸에 맞는 식품",
+    title: `${BRAND} | ${BRAND_TAGLINE}`,
     description: "34만 식품 영양 DB 기반 AI 맞춤 식단 인텔리전스 플랫폼",
     type: "website",
-    siteName: "케어푸드",
+    siteName: BRAND,
     locale: "ko_KR",
   },
   twitter: {
     card: "summary_large_image",
-    title: "케어푸드 | 성분으로 찾는 내 몸에 맞는 식품",
+    title: `${BRAND} | ${BRAND_TAGLINE}`,
     description: "34만 식품 영양 DB 기반 AI 맞춤 식단 인텔리전스 플랫폼",
   },
   robots: {

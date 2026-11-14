@@ -15,7 +15,7 @@ const needMark = (f: Field) => (f.need === "필수" ? " *" : f.need === "식단 
 /** samples: '제품' 시트 3행부터 채울 예시 줄 (예시 양식 내려받기 — 그대로 올리면 예시 제품이 들어간다) */
 export async function buildTemplate(samples?: Record<string, string>[]): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
-  wb.creator = "케어푸드";
+  wb.creator = "오늘끼록";
 
   // ── 제품 ──
   const ws = wb.addWorksheet(SHEET, { views: [{ state: "frozen", xSplit: 2, ySplit: 2 }] });
@@ -61,10 +61,10 @@ export async function buildTemplate(samples?: Record<string, string>[]): Promise
 
   // ── 안내 ──
   const guide = wb.addWorksheet("안내");
-  guide.addRow(["케어푸드 입점 제품 양식"]).font = { bold: true, size: 14 };
+  guide.addRow(["오늘끼록 입점 제품 양식"]).font = { bold: true, size: 14 };
   guide.addRow(["'제품' 시트 3행부터 한 줄에 제품 하나씩 적어요. 2행(회색 영문)은 지우지 마세요. * 칸은 꼭 채워요."]);
   guide.addRow(["영양 값은 포장 표시사항에 적힌 기준(100g·1회·포장 전체) 그대로 적고, 그 기준을 '영양성분 기준' 칸에 골라요."]);
-  guide.addRow(["가격·재고·링크만 바뀐 줄은 바로 반영되고, 새 제품과 영양·원재료·알레르기가 바뀐 줄은 케어푸드가 확인한 뒤 반영돼요."]);
+  guide.addRow(["가격·재고·링크만 바뀐 줄은 바로 반영되고, 새 제품과 영양·원재료·알레르기가 바뀐 줄은 오늘끼록이 확인한 뒤 반영돼요."]);
   guide.addRow([]);
   guide.addRow(["칸 이름", "필드 키", "필수", "설명", "예"]).font = { bold: true };
   for (const f of FIELDS) guide.addRow([f.label, f.key, f.need, f.help, f.example]);
@@ -93,14 +93,14 @@ const ORDER_SHEET = "주문";
 
 export async function buildOrdersTemplate(): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
-  wb.creator = "케어푸드";
+  wb.creator = "오늘끼록";
   const ws = wb.addWorksheet(ORDER_SHEET, { views: [{ state: "frozen", ySplit: 2 }] });
   ws.addRow(ORDER_FIELDS.map((f) => f.label)).font = { bold: true };
   ws.addRow(ORDER_FIELDS.map((f) => f.key)).font = { color: { argb: "FF8A8A8A" }, size: 9 };
   ws.columns = [{ width: 40 }, { width: 24 }, { width: 16 }, { width: 14 }, { width: 20 }];
   const guide = wb.addWorksheet("안내");
-  guide.addRow(["케어푸드 주문 내역 양식"]).font = { bold: true, size: 14 };
-  guide.addRow(["케어푸드 링크로 들어온 주문(주소에 cf_click 이 붙은 방문의 주문)을 '주문' 시트 3행부터 한 줄에 하나씩 적어요. 2행은 지우지 마세요."]);
+  guide.addRow(["오늘끼록 주문 내역 양식"]).font = { bold: true, size: 14 };
+  guide.addRow(["오늘끼록 링크로 들어온 주문(주소에 cf_click 이 붙은 방문의 주문)을 '주문' 시트 3행부터 한 줄에 하나씩 적어요. 2행은 지우지 마세요."]);
   guide.addRow(["수수료는 구매확정(confirmed) 금액에만 계산해요. 취소·반품은 같은 주문 번호로 상태만 바꿔 다시 올려 주세요."]);
   guide.addRow([]);
   guide.addRow(["칸", "필드 키", "설명", "예"]).font = { bold: true };
@@ -128,7 +128,7 @@ export async function readSheet(buf: ArrayBuffer, sheet: string, keyList: readon
     keys[col] = known.has(k) ? k : null;
     if (k && !known.has(k)) unknownKeys.push(k);
   });
-  if (!keys.some(Boolean)) throw new Error("2행에 필드 키가 없어요. 케어푸드 양식 파일에 적어 주세요");
+  if (!keys.some(Boolean)) throw new Error("2행에 필드 키가 없어요. 오늘끼록 양식 파일에 적어 주세요");
 
   const rows: SheetRow[] = [];
   for (let r = 3; r <= Math.min(ws.rowCount, maxRows + 2); r++) {

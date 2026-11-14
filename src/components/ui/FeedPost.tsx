@@ -211,7 +211,7 @@ export function PlanAttach({ title, dayKcal, avgKcal, avgProtein, className }: {
   );
 }
 
-/** 글에 붙은 제품 — 누르면 케어푸드 제품 페이지로 (판매처로 바로 보내지 않는다) */
+/** 글에 붙은 제품 — 누르면 오늘끼록 제품 페이지로 (판매처로 바로 보내지 않는다) */
 export function ProductTagLinks({ products, className }: { products?: { id: string; name: string }[] | null; className?: string }) {
   if (!products || products.length === 0) return null;
   return (

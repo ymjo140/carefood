@@ -133,7 +133,7 @@ export default function MealPlanActions({
       {/* ── 공유 ── */}
       <ShareButton
         title={`${authorName}의 식단`}
-        text="케어푸드에서 건강식단을 확인해보세요!"
+        text="오늘끼록에서 건강식단을 확인해보세요!"
         className={buttonClass({ variant: "ghost", block: true, className: "mb-4" })}
       >
         <Icon name="share" size={18} /> 이 식단 공유하기

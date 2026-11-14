@@ -107,7 +107,7 @@ export function NotificationSettings() {
         ) : device === "unsupported" ? (
           <Notice icon="info">이 브라우저는 알림을 지원하지 않아요. 크롬·엣지·사파리(홈 화면 앱)에서 켤 수 있어요</Notice>
         ) : device === "ios-install" ? (
-          <Notice icon="info" title="아이폰은 홈 화면 앱에서 켤 수 있어요">사파리 아래 공유 버튼 → ‘홈 화면에 추가’를 누르고, 홈 화면의 케어푸드를 열어 여기서 켜 주세요</Notice>
+          <Notice icon="info" title="아이폰은 홈 화면 앱에서 켤 수 있어요">사파리 아래 공유 버튼 → ‘홈 화면에 추가’를 누르고, 홈 화면의 오늘끼록을 열어 여기서 켜 주세요</Notice>
         ) : device === "denied" ? (
           <Notice tone="caution" title="브라우저에서 알림을 막아 두었어요">주소창 왼쪽 자물쇠(사이트 설정)에서 알림을 ‘허용’으로 바꾼 뒤 이 화면을 다시 열어 주세요</Notice>
         ) : on ? (

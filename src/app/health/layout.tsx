@@ -1,5 +1,5 @@
 export const metadata = {
-  title: "건강검진 정보 | 케어푸드",
+  title: "건강검진 정보 | 오늘끼록",
   description: "건강검진 수치를 입력하면 맞춤 영양 분석과 식품 추천을 받을 수 있어요.",
 };
 

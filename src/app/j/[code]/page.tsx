@@ -24,8 +24,8 @@ export async function generateMetadata({ params }: { params: Promise<{ code: str
   const image = card?.[0]?.card_url as string | undefined;
   return {
     title,
-    description: "케어푸드에서 식단을 기록하면 하루씩 채워져요. 가입 없이 바로 시작할 수 있어요",
-    openGraph: { title: `${title} | 케어푸드`, description: "식단을 기록하면 하루씩 채워져요", images: image ? [{ url: image, width: 1080, height: 1920 }] : undefined },
+    description: "오늘끼록에서 식단을 기록하면 하루씩 채워져요. 가입 없이 바로 시작할 수 있어요",
+    openGraph: { title: `${title} | 오늘끼록`, description: "식단을 기록하면 하루씩 채워져요", images: image ? [{ url: image, width: 1080, height: 1920 }] : undefined },
   };
 }
 

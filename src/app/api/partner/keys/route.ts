@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ keys: data || [], can_manage: ctx.role !== "editor", max: MAX_KEYS });
 }
 
-/** POST /api/partner/keys — {name} 키 만들기. 원문은 이 응답에서 한 번만 준다 (업체 관리자·케어푸드 관리자만) */
+/** POST /api/partner/keys — {name} 키 만들기. 원문은 이 응답에서 한 번만 준다 (업체 관리자·오늘끼록 관리자만) */
 export async function POST(req: NextRequest) {
   const limited = await limitRequest(req, "upload");
   if (limited) return limited;

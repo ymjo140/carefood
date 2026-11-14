@@ -1,5 +1,5 @@
 /**
- * 고객층(CRM) — 업체가 고른 조건으로 사람을 세고, 검수를 거쳐 케어푸드가 대신 보낸다. 서버 전용.
+ * 고객층(CRM) — 업체가 고른 조건으로 사람을 세고, 검수를 거쳐 오늘끼록이 대신 보낸다. 서버 전용.
  *
  * 지키는 것 (v3 7.5·8장, 11/13 결정)
  *   - 업체에는 조건·인원·합계만 준다. 인원·결과는 10명 미만이면 숫자를 주지 않는다.
@@ -235,7 +235,7 @@ export function previewOf(a: Audience, unitPrice: number | null) {
 export function checkMessage(title: string, body: string, terms?: ClaimTerm[] | null): { error?: string; hits: ClaimHit[] } {
   if (!title.trim() || title.length > 30) return { error: "제목은 1~30자로 적어 주세요", hits: [] };
   if (!body.trim() || body.length > 120) return { error: "본문은 1~120자로 적어 주세요", hits: [] };
-  if (/\(광고\)|수신\s*거부/.test(title + body)) return { error: "(광고) 표시와 받지 않는 방법은 케어푸드가 붙여요. 문구에서 빼 주세요", hits: [] };
+  if (/\(광고\)|수신\s*거부/.test(title + body)) return { error: "(광고) 표시와 받지 않는 방법은 오늘끼록이 붙여요. 문구에서 빼 주세요", hits: [] };
   return { hits: checkClaimsWith(terms, title, body) };
 }
 

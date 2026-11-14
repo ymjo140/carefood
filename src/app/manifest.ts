@@ -1,9 +1,10 @@
 import type { MetadataRoute } from "next";
+import { BRAND } from "@/lib/brand";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "케어푸드",
-    short_name: "케어푸드",
+    name: BRAND,
+    short_name: BRAND,
     description: "내 몸에 맞는 식품, 성분으로 찾다 — 34만 식품 영양 DB 기반 AI 맞춤 추천",
     start_url: "/",
     display: "standalone",
