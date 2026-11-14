@@ -3,10 +3,10 @@
 import { useCallback, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Button, Chip, Field, Icon, IconButton, Input, LinkButton, Notice, Sheet, SkeletonList, Textarea, Thumb, cn, useToast,
+  Button, Chip, Field, Icon, IconButton, Input, LinkButton, ListRow, Notice, Sheet, SkeletonList, Textarea, Thumb, cn, useToast,
 } from "@/components/ui";
 import { GROUP_DAYS, GROUP_MAX_PHOTOS, GROUP_STORY_MAX, GROUP_TARGET, PACK_OPTIONS, WISHES, type Wish } from "@/lib/group-buy";
-import { findHealthClaim } from "@/lib/health-claims";
+import { checkClaims } from "@/lib/partner/claims";
 import { usePhotoUploads } from "./usePhotoUploads";
 
 /**
@@ -31,32 +31,37 @@ export default function GroupBuyComposer({ open, onClose }: { open: boolean; onC
   const [wishes, setWishes] = useState<Wish[]>([]);
   const [sending, setSending] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // 늦게 온 응답이 새 결과를 덮지 않게 — 마지막 요청만 상태를 바꾼다
+  const searchSeq = useRef(0);
+  const checkSeq = useRef(0);
 
   const search = useCallback((q: string) => {
     if (timer.current) clearTimeout(timer.current);
     if (q.trim().length < 2) { setHits({ status: "idle", items: [] }); return; }
     timer.current = setTimeout(() => {
+      const n = ++searchSeq.current;
       setHits((h) => ({ ...h, status: "loading" }));
       fetch(`/api/products?q=${encodeURIComponent(q.trim())}&hasPrice=1&limit=5`)
         .then(async (r) => {
           const d = await r.json();
           if (!r.ok) throw new Error(d.error);
-          setHits({ status: "done", items: d.products || [] });
+          if (n === searchSeq.current) setHits({ status: "done", items: d.products || [] });
         })
-        .catch(() => setHits({ status: "error", items: [] }));
+        .catch(() => { if (n === searchSeq.current) setHits({ status: "error", items: [] }); });
     }, 300);
   }, []);
 
   const choose = (h: Hit) => {
+    const n = ++checkSeq.current;
     setPicked(h);
     setCheck({ status: "loading", records: 0, existing: null });
     fetch(`/api/community/group-buy/check?product_id=${h.id}`)
       .then(async (r) => {
         const d = await r.json();
         if (!r.ok) throw new Error(d.error);
-        setCheck({ status: "done", records: d.records || 0, existing: d.existing });
+        if (n === checkSeq.current) setCheck({ status: "done", records: d.records || 0, existing: d.existing });
       })
-      .catch(() => setCheck({ status: "error", records: 0, existing: null }));
+      .catch(() => { if (n === checkSeq.current) setCheck({ status: "error", records: 0, existing: null }); });
   };
 
   const reset = (posted: boolean) => {
@@ -66,7 +71,7 @@ export default function GroupBuyComposer({ open, onClose }: { open: boolean; onC
   };
   const close = () => { reset(false); onClose(); };
 
-  const claim = findHealthClaim(story);
+  const [claim] = checkClaims(story);
   const canPost = !!picked && check.status === "done" && !check.existing && !claim && !uploading && !sending;
 
   const submit = async () => {
@@ -109,7 +114,7 @@ export default function GroupBuyComposer({ open, onClose }: { open: boolean; onC
         {/* ── 사진 ── */}
         <div className="flex flex-col gap-2">
           <span className="text-label font-medium text-ink">사진</span>
-          <div className="grid grid-cols-4 gap-2">
+          {photos.length > 0 && <div className="grid grid-cols-4 gap-2">
             {photos.map((p, i) => (
               <div key={p.key} className="relative">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -119,13 +124,11 @@ export default function GroupBuyComposer({ open, onClose }: { open: boolean; onC
                 )}
               </div>
             ))}
-            {photos.length < GROUP_MAX_PHOTOS && (
-              <button type="button" disabled={uploading} onClick={() => fileRef.current?.click()}
-                className="press aspect-square w-full rounded-md border border-dashed border-line-strong bg-sunken flex flex-col items-center justify-center gap-1 text-caption text-ink-2 disabled:opacity-50">
-                <Icon name="camera" size={20} />
-                <span><span className="num">{photos.length}</span>/{GROUP_MAX_PHOTOS}</span>
-              </button>
-            )}
+          </div>}
+          <div>
+            <Chip disabled={photos.length >= GROUP_MAX_PHOTOS || uploading} onClick={() => fileRef.current?.click()}>
+              <Icon name="camera" size={16} />사진 추가 <span className="num">{photos.length}/{GROUP_MAX_PHOTOS}</span>
+            </Chip>
           </div>
           <input ref={fileRef} type="file" multiple accept="image/jpeg,image/png,image/webp,image/heic,image/heif" className="sr-only" tabIndex={-1} aria-hidden="true"
             name="group_buy_photo" onChange={(e) => pick(e.target.files)} />
@@ -171,16 +174,8 @@ export default function GroupBuyComposer({ open, onClose }: { open: boolean; onC
                 <ul className="flex flex-col divide-y divide-line rounded-md border border-line">
                   {hits.items.map((h) => (
                     <li key={h.id}>
-                      <button type="button" onClick={() => choose(h)}
-                        className="press w-full min-h-11 px-3 py-2 text-left flex items-center gap-3 hover:bg-sunken transition-colors">
-                        <Thumb src={h.image_url} size={40} />
-                        <span className="flex-1 min-w-0 flex flex-col">
-                          <span className="text-label text-ink line-clamp-1">{h.name}</span>
-                          <span className="text-caption text-ink-2 line-clamp-1">
-                            {h.manufacturer || "제조사 정보 없음"}{low(h) != null && <> · 지금 최저 <span className="num">{low(h)!.toLocaleString("ko-KR")}</span>원</>}
-                          </span>
-                        </span>
-                      </button>
+                      <ListRow onClick={() => choose(h)} leading={<Thumb src={h.image_url} size={40} />} title={h.name}
+                        meta={<>{h.manufacturer || "제조사 정보 없음"}{low(h) != null && <> · 지금 최저 <span className="num">{low(h)!.toLocaleString("ko-KR")}</span>원</>}</>} />
                     </li>
                   ))}
                 </ul>
@@ -191,7 +186,7 @@ export default function GroupBuyComposer({ open, onClose }: { open: boolean; onC
 
         {/* ── 이야기 ── */}
         <Field label="먹어 본 이야기"
-          error={claim ? `'${claim}' 같은 효능 표현은 올릴 수 없어요. 먹는 방법이나 맛으로 써 주세요` : undefined}
+          error={claim ? `'${claim.phrase}' 같은 표현은 올릴 수 없어요. ${claim.why}. 먹는 방법이나 맛으로 써 주세요` : undefined}
           hint={claim ? undefined : <span className="flex justify-between gap-2"><span>예: 점심에 데워서 샐러드랑 먹어요</span><span className="num">{story.length}/{GROUP_STORY_MAX}</span></span>}>
           <Textarea value={story} rows={2} maxLength={GROUP_STORY_MAX} name="group_buy_story" onChange={(e) => setStory(e.target.value)} />
         </Field>

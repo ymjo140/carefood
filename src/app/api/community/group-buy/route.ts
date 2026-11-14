@@ -4,7 +4,8 @@ import { createServiceRoleClient } from "@/lib/supabase/server";
 import { getActorId, noActor } from "@/lib/actor-server";
 import { GROUP_DAYS, GROUP_MAX_PHOTOS, GROUP_STORY_MAX, GROUP_TARGET, isWish } from "@/lib/group-buy";
 import { enrichGroupBuys, type GroupBuyRow } from "@/lib/group-buy-server";
-import { findHealthClaim } from "@/lib/health-claims";
+import { checkClaimsWith } from "@/lib/partner/claims";
+import { loadClaimTerms } from "@/lib/partner/claims-server";
 import { imagePrefix } from "@/lib/community-images";
 
 /**
@@ -81,8 +82,6 @@ export async function POST(request: NextRequest) {
 
   const story = typeof body.story === "string" ? body.story.trim() : "";
   if (story.length > GROUP_STORY_MAX) return NextResponse.json({ error: `이야기는 ${GROUP_STORY_MAX}자까지 쓸 수 있어요` }, { status: 400 });
-  const claim = findHealthClaim(story);
-  if (claim) return NextResponse.json({ error: `'${claim}' 같은 효능 표현은 올릴 수 없어요. 먹어 본 방법이나 맛으로 써 주세요`, claim }, { status: 400 });
 
   // 사진은 이 사람이 우리 저장소에 올린 것만
   const prefix = `${imagePrefix()}${creator_id}/`;
@@ -96,6 +95,10 @@ export async function POST(request: NextRequest) {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sb = createServiceRoleClient() as any;
+
+  // 효능 표현 — 업체 문구와 같은 금지 표현 사전 (관리자가 관리, lib/partner/claims)
+  const [claim] = checkClaimsWith(await loadClaimTerms(sb), story);
+  if (claim) return NextResponse.json({ error: `'${claim.phrase}' 같은 표현은 올릴 수 없어요. ${claim.why}. 먹는 방법이나 맛으로 써 주세요`, claim: claim.phrase }, { status: 400 });
 
   const { data: product, error: pErr } = await sb.from("products").select("id, name").eq("id", product_id).maybeSingle();
   if (pErr) return NextResponse.json({ error: pErr.message }, { status: 500 });
