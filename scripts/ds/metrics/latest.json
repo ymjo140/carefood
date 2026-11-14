@@ -1,6 +1,6 @@
 {
-  "measuredAt": "2026-11-14T09:48:47.746Z",
-  "files": 142,
+  "measuredAt": "2026-11-14T10:08:02.392Z",
+  "files": 143,
   "distinctColors": 2,
   "gradients": 2,
   "shadows": 1,
@@ -21,7 +21,7 @@
   "fontSizes": [
     [
       "ds:label",
-      425
+      426
     ],
     [
       "ds:caption",

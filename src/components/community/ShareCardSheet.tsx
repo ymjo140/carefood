@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Button, Icon, ShareCardPreview, ShareSteps, Sheet, Switch, Tabs, useToast } from "@/components/ui";
 import { hasPhoto, renderCard, type CardData, type CardStyle } from "@/lib/share-card";
+import { getOrCreateNickname } from "@/lib/nickname";
 
 /**
  * 인증 카드 만들기 — 내 식단·챌린지·공구를 9:16 카드로 그려 인스타 스토리에 올린다.
@@ -12,13 +13,15 @@ import { hasPhoto, renderCard, type CardData, type CardStyle } from "@/lib/share
  * 공유 링크: 카드를 다 그리면 그 그림과 함께 미리 만든다(공유 창은 누른 순간에만 열려 그때 서버를 기다릴 수 없다).
  *   모양을 바꾸면 같은 링크의 그림만 바꾼다. 실제로 공유·저장·복사를 눌렀을 때만 '공유함'으로 센다.
  *   챌린지 카드의 링크는 내 묶음 초대 화면(/j/<code>)으로 간다.
+ * 인증 카드(챌린지·연속 기록·하루 기록)는 '오늘끼록 스토리에도 올리기'로 피드 맨 위 스토리 줄에 올릴 수 있다
+ *   — 카드 그림을 내 사진으로 올리고, 숫자는 서버가 다시 계산해 글(cert)에 둔다. 한 번 열 때 한 번만.
  */
 /** day 의 id 는 날짜(YYYY-MM-DD) */
 export type ShareTarget = { kind: "meal" | "challenge" | "group_buy" | "day" | "streak"; id: string };
 
 const STYLE_LABEL: Record<CardStyle, string> = { photo: "사진", sticker: "스티커만", record: "기록" };
 
-export default function ShareCardSheet({ target, open, onClose }: { target: ShareTarget | null; open: boolean; onClose: () => void }) {
+export default function ShareCardSheet({ target, open, onClose, onPosted }: { target: ShareTarget | null; open: boolean; onClose: () => void; onPosted?: () => void }) {
   const toast = useToast();
   const [data, setData] = useState<{ status: "loading" | "error" | "done"; card: CardData | null; error?: string }>({ status: "loading", card: null });
   const [attempt, setAttempt] = useState(0);
@@ -27,6 +30,7 @@ export default function ShareCardSheet({ target, open, onClose }: { target: Shar
   const [img, setImg] = useState<{ blob: Blob; url: string } | null>(null);
   const [drawError, setDrawError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [story, setStory] = useState<"idle" | "posting" | "done">("idle");
   const [share, setShare] = useState<{ status: "idle" | "making" | "ready" | "error"; code?: string; error?: string }>({ status: "idle" });
   const seq = useRef(0);
   const linkSeq = useRef(0);
@@ -39,6 +43,7 @@ export default function ShareCardSheet({ target, open, onClose }: { target: Shar
     let alive = true;
     setData({ status: "loading", card: null });  
     setShare({ status: "idle" });
+    setStory("idle");
     codeRef.current = null;
     fetch(`/api/community/share-card?kind=${kind}&id=${tid}`)
       .then(async (r) => {
@@ -153,6 +158,32 @@ export default function ShareCardSheet({ target, open, onClose }: { target: Shar
     }
   };
 
+  /** 피드 스토리 줄에 올리기 — 카드 그림을 내 사진으로 올리고, 인증 글로 남긴다 */
+  const canStory = kind === "challenge" || kind === "streak" || kind === "day";
+  const postStory = async () => {
+    if (!img || !kind || !tid || story !== "idle") return;
+    setStory("posting");
+    try {
+      const fd = new FormData();
+      fd.append("file", new File([img.blob], fileName, { type: "image/png" }));
+      const u = await fetch("/api/community/upload", { method: "POST", body: fd });
+      const ud = await u.json().catch(() => ({}));
+      if (!u.ok || !ud.url) throw new Error(ud.error || "");
+      const r = await fetch("/api/community/feed", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image_urls: [ud.url], cert: { kind, id: tid }, author_nickname: getOrCreateNickname() }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || "");
+      setStory("done");
+      toast.show("스토리에 올렸어요. 피드 맨 위에서 볼 수 있어요");
+      onPosted?.();
+    } catch (e) {
+      setStory("idle");
+      toast.show((e as Error).message || "스토리에 올리지 못했어요. 다시 시도해 주세요", { tone: "danger" });
+    }
+  };
+
   const styles: CardStyle[] = card ? (hasPhoto(card) ? ["photo", "sticker", "record"] : ["record", "sticker"]) : ["photo"];
 
   return (
@@ -162,6 +193,11 @@ export default function ShareCardSheet({ target, open, onClose }: { target: Shar
           {style === "sticker"
             ? <Button block icon="copy" disabled={!img} onClick={copySticker}>스티커 복사하기</Button>
             : <Button block icon="share" disabled={!img} loading={busy} onClick={shareToInstagram}>인스타에 공유하기</Button>}
+          {canStory && style !== "sticker" && (
+            <Button block variant="secondary" icon={story === "done" ? "check" : "plus"} disabled={!img || story === "done"} loading={story === "posting"} onClick={postStory}>
+              {story === "done" ? "스토리에 올렸어요" : "오늘끼록 스토리에도 올리기"}
+            </Button>
+          )}
           <div className="flex gap-2">
             <Button block variant="secondary" icon="download" disabled={!img} onClick={save}>카드 저장하기</Button>
             <Button block variant="secondary" icon="link" onClick={() => copyLink()}>링크 복사하기</Button>

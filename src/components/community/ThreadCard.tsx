@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { IconButton, MealAttach, PhotoGrid, VideoClip, PlanAttach, PollAttach, PostAction, PostActions, ProductTagLinks, Sheet, ThreadItem, useToast } from "@/components/ui";
+import { IconButton, MealAttach, PhotoGrid, VideoClip, PlanAttach, PollAttach, PostAction, PostActions, ProductTagLinks, Sheet, ThreadItem, useToast, CertAttach, type CertView } from "@/components/ui";
 import { isTopic } from "@/lib/community-topics";
 import { pollRemaining, type PollView } from "@/lib/community-poll";
 import PostMenu, { type MenuDone } from "./PostMenu";
@@ -34,6 +34,8 @@ export type FeedPostData = {
   preview_comments?: { author_nickname: string; content: string }[];
   /** 협업 중인 업체의 제품을 붙인 글 — 글 맨 앞에 협찬 표시 (추천·보증 심사지침) */
   sponsor?: { partner_name?: string } | null;
+  /** 인증 글(챌린지·연속 기록·하루 기록) — 카드 그림이 사진으로 붙고, 해낸 숫자와 같이 하기 */
+  cert?: CertView | null;
 };
 
 /**
@@ -110,6 +112,7 @@ export default function ThreadCard({ post, onLike, onCopy, onReply, onMenuDone, 
           note={pollRemaining(poll.closes_at, poll.closed)} reveal={!!post.is_mine} busy={voting} onVote={vote} />
       )}
       {post.video_url && post.video_poster && <VideoClip url={post.video_url} poster={post.video_poster} label={`${alt} 영상`} autoplay={detail} />}
+      {post.cert && <CertAttach cert={post.cert} />}
       <PhotoGrid urls={photos} alt={alt} onOpen={detail ? setViewing : undefined} />
       {detail && photos.length > 0 && (
         <Sheet open={viewing != null} onClose={() => setViewing(null)} size="lg"

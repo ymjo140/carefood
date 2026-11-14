@@ -87,7 +87,7 @@
 | 영양 | `MacroGrid` `MacroStat` `MacroInline` `ProgressBar` `Stat` `Kcal` `Price` |
 | 그래프(대시보드) | 하루별 추이 `TrendChart` · 가로 막대 `BarList` · 빈틈 그림 `GapChart` — 축 하나, 이번 값 강조색·비교 회색 점선 |
 | 끼니 | `MealTag` `MealSlot` `mealMeta()` |
-| 커뮤니티 글 | `PostAuthor` `PostActions` `PostAction` `PostTags` · 댓글 한 줄 `CommentItem` |
+| 커뮤니티 글 | `PostAuthor` `PostActions` `PostAction` `PostTags` · 댓글 한 줄 `CommentItem` · 챌린지·연속 기록 인증 `CertAttach` (`certLine` 한 줄) |
 | 공구 조건 | 구성 목록(보기·고르기) `OfferOptionList` · 수량 `QtyStepper` |
 | 숏폼(식단·공구 사진·영상) | `ReelRow` `ReelTile` `ReelAddTile` `ReelSkeleton` · 보기 화면 위쪽 `ReelMedia` · 영상 `VideoClip` · 글쓰기에 붙인 영상 `VideoAttach` |
 | 스토리 보기(꽉 찬 화면) | `StoryFrame` `StoryProgress` `StoryHeader` `StoryMedia` `StorySticker` `StoryCaption` `StoryAction` `StoryReply` — 바탕 `media`(두 테마 같은 값) |

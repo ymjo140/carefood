@@ -6,17 +6,21 @@ import ThreadCard, { type FeedPostData } from "@/components/community/ThreadCard
 import PostComposer, { type Attach, type ComposerPreset } from "@/components/community/PostComposer";
 import ChallengeEntry from "@/components/community/ChallengeEntry";
 import GroupBuyComposer from "@/components/community/GroupBuyComposer";
+import ShareCardSheet, { type ShareTarget } from "@/components/community/ShareCardSheet";
+import CertPickSheet from "@/components/community/CertPickSheet";
+import { todayKst } from "@/lib/day";
 import {
   Button, Chip, ChipRow, EmptyState, Icon, ListRow, Page, PageHeader, ReelAddTile, ReelRow, ReelSkeleton, ReelTile, SectionHeader, Sheet,
-  SkeletonPost, Spinner, Tabs, mealMeta, useToast,
+  SkeletonPost, Spinner, Tabs, mealMeta, certLine, CERT_LABEL, type CertView, useToast,
 } from "@/components/ui";
 import { COMMUNITY_TOPICS } from "@/lib/community-topics";
 import { getOrCreateNickname, setNickname } from "@/lib/nickname";
 
 /**
- * 피드 (쓰레드형) — 맨 위 스토리 줄(식단·공구를 종류 표시 없이 섞어서, 맨 앞 칸이 글쓰기 입구)
- * ds-wiring-drop: /group-buy — 공구 목록 입구는 탭 바의 공구 탭이 맡는다 → 챌린지 한 줄 → 보기(추천·팔로잉·모임·내 글) → 줄로 나눈 글 목록
- * 숏폼 줄: 사진이 붙은 식단 글 + 관심 모으는 공구 (/api/community/reels). 칸을 누르면 스토리 보기(/stories)로 — 게시물은 거기서 ↗
+ * 피드 (쓰레드형) — 맨 위 스토리 줄(맨 앞 칸이 올리기 입구) → 챌린지 한 줄 → 보기(추천·팔로잉·모임·내 글) → 줄로 나눈 글 목록
+ * 스토리 줄: 사람들이 올린 식단 · 챌린지·연속 기록 인증 · 모으는 공구를 종류 표시 없이 섞어서 (/api/community/reels). 칸을 누르면 스토리 보기(/stories)로 — 게시물은 거기서 ↗
+ * 올리기: 끼니 · 저장한 식단 · 글 · 챌린지 인증 · 연속 기록 인증 · 공구 만들기
+ * ds-wiring-drop: /group-buy — 공구 목록 입구는 탭 바의 공구 탭이 맡는다
  * ds-wiring-drop: /api/community/follow — 팔로우는 글 상세에서 (목록의 카드마다 있던 채운 버튼을 뺌)
  * 글마다 ··· 메뉴: 숨기기·차단·신고·(내 글) 지우기 → 목록에서 바로 뺀다
  */
@@ -24,6 +28,7 @@ type Tab = "recommend" | "following" | "topic" | "mine";
 
 type Reel =
   | { kind: "meal"; id: string; image: string | null; author: string; seconds: number | null; meal_type: string | null; kcal: number | null; protein_g: number | null; text: string }
+  | { kind: "cert"; id: string; image: string | null; author: string; seconds: number | null; cert: CertView; text: string }
   | { kind: "group_buy"; id: string; image: string | null; author: string; seconds: number | null; product_name: string; current_count: number; target_count: number; pct: number | null; days_left: number | null };
 
 const TABS: { value: Tab; label: string }[] = [
@@ -47,6 +52,8 @@ export default function CommunityPage() {
   const [reelTry, setReelTry] = useState(0);
   const [picker, setPicker] = useState(false);
   const [groupOpen, setGroupOpen] = useState(false);
+  const [certPick, setCertPick] = useState(false);
+  const [cert, setCert] = useState<ShareTarget | null>(null);
   const toast = useToast();
   const sentinelRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
@@ -180,6 +187,9 @@ export default function CommunityPage() {
               line={r.pct
                 ? <><span className="num font-bold">{r.pct}%</span> · <span className="num">{r.current_count}/{r.target_count}</span>명</>
                 : <>알림 <span className="num font-bold">{r.current_count}</span>/{r.target_count}명</>} />
+          ) : r.kind === "cert" ? (
+            <ReelTile key={`c-${r.id}`} href={`/stories?at=cert-${r.id}`} image={r.image} author={r.author} seconds={r.seconds}
+              label={`${r.author}의 ${CERT_LABEL[r.cert.kind]}`} line={certLine(r.cert)} />
           ) : (
             <ReelTile key={`m-${r.id}`} href={`/stories?at=meal-${r.id}`} image={r.image} author={r.author} seconds={r.seconds}
               label={`${r.author}의 식단${r.seconds != null ? ` 영상 ${r.seconds}초` : ""}${r.text ? `: ${r.text}` : ""}`}
@@ -255,10 +265,14 @@ export default function CommunityPage() {
           <ListRow onClick={() => pick("meal")} leading={<Icon name="notebook" size={20} className="text-ink-2" />} title="오늘 먹은 끼니" meta="기록한 끼니에 사진·영상·한 줄을 붙여요" />
           <ListRow onClick={() => pick("plan")} leading={<Icon name="calendar" size={20} className="text-ink-2" />} title="저장한 식단" meta="며칠 치 식단을 나눠요" />
           <ListRow onClick={() => pick(null)} leading={<Icon name="edit" size={20} className="text-ink-2" />} title="글 · 투표" meta="사진·제품 태그·투표를 붙일 수 있어요" />
+          <ListRow onClick={() => { setPicker(false); setCertPick(true); }} leading={<Icon name="flag" size={20} className="text-ink-2" />} title="챌린지 인증" meta="하고 있는 챌린지의 해낸 날을 카드로 올려요" />
+          <ListRow onClick={() => { setPicker(false); setCert({ kind: "streak", id: todayKst() }); }} leading={<Icon name="check" size={20} className="text-ink-2" />} title="연속 기록 인증" meta="며칠째 이어서 기록했는지 카드로 올려요" />
           <ListRow onClick={() => pick("group")} leading={<Icon name="users" size={20} className="text-ink-2" />} title="공구 만들기" meta="자주 먹는 제품을 사진·영상과 함께 올려 함께 살 사람을 모아요" />
         </div>
       </Sheet>
       <GroupBuyComposer open={groupOpen} onClose={() => setGroupOpen(false)} />
+      <CertPickSheet open={certPick} onClose={() => setCertPick(false)} onPick={(id) => { setCertPick(false); setCert({ kind: "challenge", id }); }} />
+      <ShareCardSheet target={cert} open={!!cert} onClose={() => setCert(null)} onPosted={() => setReelTry((n) => n + 1)} />
 
       <PostComposer
         isOpen={composer.open}

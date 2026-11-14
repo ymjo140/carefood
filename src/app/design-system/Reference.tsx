@@ -6,7 +6,7 @@ import {
   Input, KakaoButton, Kcal, LinkButton, ListRow, MacroGrid, MacroInline, MealSlot, MealTag, Notice, Estimate, HowCounted, AsOf, CodeBlock, TrendChart, BarList, GapChart, Page, PageHeader, Price,
   ProgressBar, SearchField, SectionHeader, Select, Sheet, Spinner, Stat, Steps, Tabs, Textarea, TextLink, TextButton, Thumb, ProductImage,
   Avatar, useToast, cn, type BadgeTone,
-  BottomNavItems, SkeletonList, FoodEntryForm, DragArea, DragGhost, DragHandle, useDragItem, useDropTarget, type DragData, ChoiceCard, ChoiceList, LinkTabs, RatingStars, RatingInput, ScaleInput, QuickRating, PostAuthor, PostAction, PostActions, PostTags, ThreadItem, MealAttach, PlanAttach, ProductTagLinks, PhotoGrid, PollAttach, DayDots, Switch,
+  BottomNavItems, SkeletonList, FoodEntryForm, DragArea, DragGhost, DragHandle, useDragItem, useDropTarget, type DragData, ChoiceCard, ChoiceList, LinkTabs, RatingStars, RatingInput, ScaleInput, QuickRating, PostAuthor, PostAction, PostActions, PostTags, ThreadItem, MealAttach, PlanAttach, CertAttach, ProductTagLinks, PhotoGrid, PollAttach, DayDots, Switch,
   ReelRow, ReelTile, ReelAddTile, ReelSkeleton, ReelMedia, CommentItem, VideoAttach, OfferOptionList, QtyStepper, UnitInput, RangeInput, Checkbox, FilePick,
   MemberProgressRow, AvatarStack, StoryFrame, StoryProgress, StoryHeader, StoryMedia, StorySticker, StoryCaption, StoryAction, StoryReply, ShareCardPreview, ShareSteps,
 } from "@/components/ui";
@@ -764,7 +764,7 @@ export default function Reference({ status }: { status: DsStatus }) {
               <PostAction icon="copy" label="따라하기" count={4} onClick={() => toast.show("식단 리스트에 담았어요")} />
             </PostActions>
           </Demo>
-          <Demo label="쓰레드형 글 — 카드 없이 줄로 · 끼니/일주일 식단/제품 첨부 · 답글 미리보기" code="<ThreadItem reply> <MealAttach/> <PlanAttach/> <ProductTagLinks/> <PostActions variant='thread'>" className="px-4 py-0">
+          <Demo label="쓰레드형 글 — 카드 없이 줄로 · 끼니/일주일 식단/인증/제품 첨부 · 답글 미리보기" code="<ThreadItem reply> <MealAttach/> <PlanAttach/> <CertAttach/> <ProductTagLinks/> <PostActions variant='thread'>" className="px-4 py-0">
             <ThreadItem nickname="지민" topic="저염 식단"
               reply={{ nickname: "하늘", content: "드레싱 반만 쓰는 거 저도 해 볼게요", more: 5 }}
               actions={
@@ -780,6 +780,10 @@ export default function Reference({ status }: { status: DsStatus }) {
             </ThreadItem>
             <ThreadItem nickname="유나" topic="고단백">
               <PlanAttach title="이번 주 식단" dayKcal={[1600, 1500, 1700, 1600, 1600, 1900, 1400]} avgKcal={1614} avgProtein={104} />
+            </ThreadItem>
+            <ThreadItem nickname="하늘">
+              <CertAttach cert={{ kind: "challenge", title: "7일 단백질 60g 채우기", done: 5, total_days: 7, url: "#community" }} />
+              <CertAttach cert={{ kind: "streak", streak: 12, url: "#community" }} />
             </ThreadItem>
             <ThreadItem nickname="서준" topic="도시락">
               <p className="text-body text-ink">이번 주 도시락 네 개</p>

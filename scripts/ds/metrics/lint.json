@@ -1,6 +1,6 @@
 {
-  "checkedAt": "2026-11-14T09:48:47.932Z",
-  "files": 180,
+  "checkedAt": "2026-11-14T10:08:02.571Z",
+  "files": 181,
   "total": 0,
   "warnTotal": 0,
   "allowedCount": 68,
@@ -174,7 +174,7 @@
     },
     {
       "file": "src/app/community/page.tsx",
-      "line": 60,
+      "line": 67,
       "rule": "silent-catch",
       "level": "warn",
       "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
@@ -183,7 +183,7 @@
     },
     {
       "file": "src/app/community/page.tsx",
-      "line": 130,
+      "line": 137,
       "rule": "silent-catch",
       "level": "warn",
       "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",

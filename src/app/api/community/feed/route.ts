@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { cardFor, cardIdOk, certOf } from "@/lib/share-card-server";
 import { sponsorFor } from "@/lib/partner/collabs";
 import { connection } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
@@ -308,6 +309,16 @@ export async function POST(request: NextRequest) {
     if (limited) return limited;
     // 이름은 서버에 둔 이 사람의 이름 (보낸 이름은 처음 한 번만 — lib/community-profile.ts)
     const author_nickname = await ensureNickname(sb, user_id, body.author_nickname);
+    // 인증(챌린지·연속 기록·하루 기록) 스토리 — 카드 그림을 붙이고, 숫자는 서버가 다시 계산한 것만 둔다
+    let cert = null;
+    if (body.cert) {
+      const ck = String(body.cert.kind || ""), cid = String(body.cert.id || "");
+      if (!["challenge", "streak", "day"].includes(ck) || !cardIdOk(ck, cid)) return NextResponse.json({ error: "인증할 것을 골라 주세요" }, { status: 400 });
+      if (!image_url) return NextResponse.json({ error: "인증 카드 그림을 붙여 주세요" }, { status: 400 });
+      const r = await cardFor(sb, user_id, ck, cid);
+      if ("error" in r) return NextResponse.json({ error: r.error }, { status: r.status });
+      cert = certOf(r.card);
+    }
     // 협업 중인 업체의 제품을 붙였으면 글 맨 앞에 "협찬 · 업체" (추천·보증 심사지침 — lib/partner/collabs.ts)
     const sponsor = await sponsorFor(sb, user_id, product_ids);
 
@@ -325,6 +336,7 @@ export async function POST(request: NextRequest) {
         ...(video || {}),
         poll,
         tags,
+        cert,
         author_nickname,
         sponsor,
         // 건강 관심사·목표·나이대는 글에 붙이지 않는다 (마이페이지에서 나만 본다)

@@ -186,6 +186,37 @@ export function MealAttach({ mealType, foods, total, label, className }: {
   );
 }
 
+/** 인증 글(챌린지·연속 기록·하루 기록)의 요약 — 서버가 계산한 숫자만 (lib/share-card-server certOf) */
+export type CertView =
+  | { kind: "challenge"; title: string; done: number; total_days: number; goal?: number | null; url: string }
+  | { kind: "streak"; streak: number; url: string }
+  | { kind: "day"; meals: number; url: string };
+
+/** 인증 한 줄 — 스토리 칸·스토리 보기·글 카드가 같은 문구를 쓴다 */
+export function certLine(c: CertView): ReactNode {
+  if (c.kind === "challenge") return <>{c.title} · <span className="num font-bold">{c.done}</span>/<span className="num">{c.total_days}</span>일</>;
+  if (c.kind === "streak") return <><span className="num font-bold">{c.streak}</span>일째 기록</>;
+  return c.meals >= 3 ? "오늘 세 끼 다 기록" : <>오늘 <span className="num font-bold">{c.meals}</span>끼 기록</>;
+}
+export const CERT_LABEL: Record<CertView["kind"], string> = { challenge: "챌린지 인증", streak: "연속 기록", day: "하루 기록" };
+
+/** 글에 붙은 인증 — 무엇을 해냈는지 한 줄 + 같이 하기 (초대 링크가 없으면 글자만) */
+export function CertAttach({ cert, className }: { cert: CertView; className?: string }) {
+  const join = cert.url && cert.url !== "/";
+  return (
+    <div className={cn("rounded-md bg-sunken px-3 py-2.5 flex items-center gap-3", className)}>
+      <Icon name="flag" size={18} className="text-brand-ink shrink-0" />
+      <span className="flex-1 min-w-0 flex flex-col">
+        <span className="text-caption text-ink-2">{CERT_LABEL[cert.kind]}</span>
+        <span className="text-label text-ink truncate">{certLine(cert)}</span>
+      </span>
+      {join && (
+        <Link href={cert.url} className="press shrink-0 h-11 inline-flex items-center px-1 text-label font-bold text-brand-ink">같이 하기</Link>
+      )}
+    </div>
+  );
+}
+
 /** 글에 붙은 일주일 식단 — 요일별 칼로리 · 하루 평균 */
 export function PlanAttach({ title, dayKcal, avgKcal, avgProtein, className }: {
   title: string; dayKcal: (number | null)[]; avgKcal?: number | null; avgProtein?: number | null; className?: string;
