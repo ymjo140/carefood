@@ -25,7 +25,7 @@ export async function GET() {
   const sb = createServiceRoleClient() as Sb;
   try {
     const [prefs, t, access] = await Promise.all([prefsOf(sb, actor), loadTodayMood(sb, actor), loadAccess(sb, actor)]);
-    const state = await loadBuddyState(sb, actor, t);
+    const state = await loadBuddyState(sb, actor, t, access);
     return NextResponse.json({
       on: prefs.kind !== "none", mood: t.state.mood, streak: t.streak, meals: t.meals, ...state, access, plans: PLANS,
     });

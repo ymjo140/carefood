@@ -45,13 +45,17 @@ async function challengeToday(sb: Sb, actor: string, today: string, mine: DiaryR
   return { done, together: plan.some((a) => a.user === actor && a.key.endsWith(`:${today}`)) };
 }
 
-export type TodayMood = { today: string; facts: MascotFacts; state: MascotState; streak: number; meals: number; lastFood: string | null };
+export type TodayMood = {
+  today: string; facts: MascotFacts; state: MascotState; streak: number; meals: number; lastFood: string | null;
+  /** 오늘 합계와 내 목표 (숫자 체크·다음 끼니용) — 목표가 없으면 열량 2,000 · 단백질 80 · 나트륨 2,000 (식단 기록 화면과 같은 기본값) */
+  totals: { kcal: number; protein: number; sodium: number }; goals: { kcal: number; protein: number; sodium: number };
+};
 
 export async function loadTodayMood(sb: Sb, actor: string): Promise<TodayMood> {
   const today = todayKst();
   const [diary, goal, everRes, lastRes] = await Promise.all([
     selectAll<DiaryRow>(() => sb.from("meal_diary").select(DIARY_COLS).eq("user_id", actor).gte("date", addDays(today, -60)).lte("date", today), "id"),
-    sb.from("daily_nutrition_goals").select("daily_calories").eq("user_id", actor).maybeSingle(),
+    sb.from("daily_nutrition_goals").select("daily_calories, daily_protein_g, max_sodium_mg").eq("user_id", actor).maybeSingle(),
     sb.from("meal_diary").select("id").eq("user_id", actor).limit(1),
     sb.from("meal_diary").select("food_name").eq("user_id", actor).eq("date", today).order("created_at", { ascending: false }).limit(1),
   ]);
@@ -74,7 +78,12 @@ export async function loadTodayMood(sb: Sb, actor: string): Promise<TodayMood> {
   // 캐릭터를 고르면 표정·삐지기는 늘 켜짐 (끄려면 '캐릭터 없이')
   const state = moodOf(facts, { sulk: true, moods: true });
   const last = ((lastRes.data || []) as { food_name: string | null }[])[0];
-  return { today, facts, state, streak, meals: facts.todayMeals, lastFood: last?.food_name ?? null };
+  const sum = (f: "protein_g" | "sodium_mg") => todayRows.reduce((a, r) => a + (Number(r[f]) || 0), 0);
+  return {
+    today, facts, state, streak, meals: facts.todayMeals, lastFood: last?.food_name ?? null,
+    totals: { kcal: facts.todayKcal, protein: Math.round(sum("protein_g")), sodium: Math.round(sum("sodium_mg")) },
+    goals: { kcal: facts.goalKcal, protein: Number(goal.data?.daily_protein_g) || 80, sodium: Number(goal.data?.max_sodium_mg) || 2000 },
+  };
 }
 
 type PrefRow = { mascot: string; mascot_sulk: boolean; mascot_moods: boolean; simple_mode: boolean };

@@ -10,6 +10,7 @@ import { addDays, kstHour, monthDay, todayKst, weekday } from "@/lib/day";
 import { defaultServingG } from "@/lib/serving";
 import { PLAN_DAYS, cellFoods, planMealKey, readDraftGrid, weekdayKey, type PlanFood, type PlanGrid } from "@/lib/weekly-plan";
 import { NextMeal, pickNextMeal, type NextCandidate } from "./NextMeal";
+import type { Menu } from "@/lib/menu-pick";
 import DayCardPrompt from "@/components/community/DayCardPrompt";
 import PushPrompt from "@/components/PushPrompt";
 import { MascotBanner } from "@/components/community/MascotBanner";
@@ -500,6 +501,22 @@ export default function DiaryPage() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ date, meal_type: meal, product_id: c.id, food_name: c.name, serving_multiplier: 1 }), // 양은 서버가 정한다 (lib/serving.ts)
+    }).catch(() => null); // ds-allow: 네트워크 실패는 바로 아래 !res?.ok 에서 알림
+    if (!res?.ok) { toast.show("기록하지 못했어요. 다시 시도해 주세요", { tone: "danger" }); return; }
+    toast.show("식단에 기록했어요");
+    fetchDiary();
+    loadWeeklyTrend();
+  };
+
+  /** 다음 끼니 추천의 일반 메뉴를 그 끼니에 기록 (대표 1인분 그대로) */
+  const logMenuToMeal = async (m: Menu, meal: string) => {
+    const res = await fetch("/api/diary", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        date, meal_type: meal, food_name: m.name, serving_g: m.serving_size_g || 100, serving_multiplier: 1,
+        calories: m.calories, protein_g: m.protein_g, carbs_g: m.carbs_g, fat_g: m.fat_g, sodium_mg: m.sodium_mg, sugar_g: m.sugar_g,
+      }),
     }).catch(() => null); // ds-allow: 네트워크 실패는 바로 아래 !res?.ok 에서 알림
     if (!res?.ok) { toast.show("기록하지 못했어요. 다시 시도해 주세요", { tone: "danger" }); return; }
     toast.show("식단에 기록했어요");
@@ -1111,6 +1128,7 @@ export default function DiaryPage() {
             meal={meal} mainLeft={mainLeft}
             exclude={allEntries.map((e) => e.product_id).filter((x): x is string => !!x)}
             onLog={logToMeal}
+            onLogMenu={logMenuToMeal}
             version={allEntries.length}
           />
         );

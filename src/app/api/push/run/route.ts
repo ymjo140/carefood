@@ -18,6 +18,12 @@ import { BRAND } from "@/lib/brand";
 import { loadGroupAlerts } from "@/lib/challenge-alerts";
 import { loadFamilyAlerts } from "@/lib/family-alerts";
 import { KKIROK_WHO, MASCOT_PUSH_HOUR, buddyWho, planMascotPush } from "@/lib/mascot-push";
+import { DAILY_CAP, planPreMeal, preSlotOf, sentTodayCount } from "@/lib/premeal-push";
+import { buddyName, seedOf } from "@/lib/buddy";
+import { loadAccessMany } from "@/lib/subscription";
+import { hasPerk } from "@/lib/plans";
+import { ALLERGEN_KEYWORDS } from "@/lib/recommend/constants";
+import type { Menu } from "@/lib/menu-pick";
 
 /**
  * POST /api/push/run — 보낼 때가 된 알림을 보낸다. Supabase 예약 작업(pg_cron + pg_net, 30분마다)이 부른다.
@@ -251,6 +257,44 @@ export async function POST(req: NextRequest) {
     } catch (e) { console.error("캐릭터 알림을 만들지 못했어요:", (e as Error).message); }
   }
 
+  // ── 먹기 전 알림: 점심 전 11시대 · 저녁 전 17시대, 같이 다니는 캐릭터가 메뉴 하나 (lib/premeal-push.ts) ──
+  const pre = preSlotOf(hour);
+  if (pre) {
+    try {
+      const cand = users.filter((u) => {
+        const p = prefsBy.get(u);
+        return (p ? p.meals : true) && p?.mascot !== "none" && (diaryBy.get(u) || []).length > 0;
+      });
+      const buddies = await selectAllIn<{ user_id: string; ingredient: string; personality: string }>(cand, 200,
+        (p) => sb.from("buddies").select("user_id, ingredient, personality").in("user_id", p).eq("active", true), "user_id");
+      if (buddies.length) {
+        const ids = buddies.map((b) => b.user_id);
+        const [goalRows, profRows, foodsRes, accessBy] = await Promise.all([
+          selectAllIn<{ user_id: string; daily_calories: number | null; daily_protein_g: number | null; max_sodium_mg: number | null }>(ids, 200,
+            (p) => sb.from("daily_nutrition_goals").select("user_id, daily_calories, daily_protein_g, max_sodium_mg").in("user_id", p), "user_id"),
+          selectAllIn<{ user_id: string; allergies: string[] | null }>(ids, 200, (p) => sb.from("user_profiles").select("user_id, allergies").in("user_id", p), "user_id"),
+          sb.from("common_foods").select("id, name, category, serving_desc, serving_size_g, calories, protein_g, carbs_g, fat_g, sodium_mg, sugar_g"),
+          loadAccessMany(sb, ids),
+        ]);
+        if (foodsRes.error) throw new Error(foodsRes.error.message);
+        const goalBy = new Map(goalRows.map((g) => [g.user_id, g]));
+        const allergyBy = new Map(profRows.map((p) => [p.user_id, (p.allergies || []).flatMap((a) => ALLERGEN_KEYWORDS[a] || [])]));
+        for (const b of buddies) {
+          const u = b.user_id;
+          if (!subsBy.has(u)) continue;
+          const g = goalBy.get(u);
+          const plan = planPreMeal({
+            slot: pre, today, rows: diaryBy.get(u) || [],
+            goals: { kcal: Number(g?.daily_calories) || 2000, protein: Number(g?.daily_protein_g) || 80, sodium: Number(g?.max_sodium_mg) || 2000 },
+            foods: (foodsRes.data || []) as Menu[], avoid: allergyBy.get(u) || [], name: buddyName(b.ingredient, b.personality),
+            sentToday: sentTodayCount(logged, u, today), seed: seedOf(u, today, pre), recs: hasPerk(accessBy.get(u)!, "recs"),
+          });
+          if (plan) await send(u, "meal", plan.key, plan.payload);
+        }
+      }
+    } catch (e) { console.error("먹기 전 알림을 만들지 못했어요:", (e as Error).message); }
+  }
+
   for (const user of users) {
     const prefs = prefsBy.get(user) || { user_id: user, meals: true, weekly: true, community: true, challenge: true, community_pushed_at: null };
     const rows = diaryBy.get(user) || [];
@@ -264,7 +308,8 @@ export async function POST(req: NextRequest) {
         logged.add(`${user}|meal|${today}:dinner`); // 같은 저녁에 끼니 알림까지 보내지 않는다
       }
     }
-    if (slot && prefs.meals && !todayRows.some((r) => r.meal_type === slot)) {
+    // 캐릭터·끼니 알림은 하루 3개까지 (먹기 전 알림·삐짐 알림과 같이 센다 — lib/premeal-push.ts)
+    if (slot && prefs.meals && !todayRows.some((r) => r.meal_type === slot) && sentTodayCount(logged, user, today) < DAILY_CAP) {
       const recent = rows.length > 0;
       // 기록이 끊긴 사람에게는 이번 주에 새로 저장한 식단일 때만 (오래된 식단으로 매일 두 번 보내지 않게)
       const saved = planBy.get(user);

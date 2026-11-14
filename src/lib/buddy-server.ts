@@ -9,6 +9,8 @@ import {
 } from "@/lib/buddy";
 import { buddyLine, situationOf } from "@/lib/buddy-lines";
 import type { TodayMood } from "@/lib/mascot-facts";
+import { checkLines } from "@/lib/buddy-check";
+import { hasPerk, type Access } from "@/lib/plans";
 
 type Sb = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
@@ -49,7 +51,7 @@ async function daysTogether(sb: Sb, actor: string, since: string) {
   return new Set(rows.map((r) => r.date)).size;
 }
 
-export async function loadBuddyState(sb: Sb, actor: string, t: TodayMood) {
+export async function loadBuddyState(sb: Sb, actor: string, t: TodayMood, access: Access) {
   await grantWraps(sb, actor, t);
   const [bRes, wRes] = await Promise.all([
     sb.from("buddies").select(BUDDY_COLS).eq("user_id", actor).order("hatched_at", { ascending: true }).limit(100),
@@ -72,6 +74,8 @@ export async function loadBuddyState(sb: Sb, actor: string, t: TodayMood) {
     collection: buddies.map(view),
     wraps: ((wRes.data || []) as WrapRow[]).map((w) => ({ id: w.id, kind: w.kind, key: w.key })),
     days, stage: stageOf(days), situation, line,
+    // 기록 직후 숫자 체크 — 오늘 기록이 있고 구독 기능(check)이 있을 때만 (체험 기간엔 모두)
+    check: active && t.facts.todayRecords > 0 && hasPerk(access, "check") ? checkLines(t.totals, t.goals) : null,
   };
 }
 
