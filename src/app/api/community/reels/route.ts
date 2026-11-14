@@ -25,7 +25,7 @@ export async function GET() {
   try {
     const filters = await viewerFilters(sb, actor);
     const [posts, gbs] = await Promise.all([
-      sb.from("community_feed").select("id, user_id, author_nickname, image_urls, meal_type, meal_data, content, created_at")
+      sb.from("community_feed").select("id, user_id, author_nickname, image_urls, meal_type, meal_data, content, created_at, sponsor")
         .eq("is_active", true).eq("hidden_by_reports", false).gte("created_at", since)
         .not("image_urls", "eq", "{}").order("created_at", { ascending: false }).limit(LIMIT * 2),
       sb.from("group_buys").select("*").eq("status", "recruiting").gt("expires_at", new Date().toISOString())
@@ -36,13 +36,14 @@ export async function GET() {
 
     const meals = ((posts.data || []) as {
       id: string; user_id: string; author_nickname: string | null; image_urls: string[] | null; meal_type: string | null;
-      meal_data: { total?: Total } | null; content: string | null; created_at: string;
+      meal_data: { total?: Total } | null; content: string | null; created_at: string; sponsor: { partner_name?: string } | null;
     }[])
       .filter((p) => !filters.blocked.has(p.user_id) && !filters.hidden.has(p.id) && (p.image_urls || []).length > 0)
       .map((p) => ({
         kind: "meal" as const, id: p.id, image: p.image_urls![0], author: p.author_nickname || "익명", created_at: p.created_at,
         meal_type: p.meal_type, kcal: p.meal_data?.total?.calories ?? null, protein_g: p.meal_data?.total?.protein_g ?? null,
-        text: (p.content || "").slice(0, 40),
+        // 협업 글은 첫 부분에 협찬 표시 (lib/partner/collabs.ts sponsorFor)
+        text: `${p.sponsor ? `협찬 · ${p.sponsor.partner_name || "입점 업체"} — ` : ""}${p.content || ""}`.slice(0, 40),
       }));
 
     const groups = (await enrichGroupBuys(sb, ((gbs.data || []) as GroupBuyRow[]).filter((g) => !filters.blocked.has(g.creator_id))))

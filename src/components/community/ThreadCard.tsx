@@ -31,6 +31,8 @@ export type FeedPostData = {
   is_mine?: boolean;
   created_at: string;
   preview_comments?: { author_nickname: string; content: string }[];
+  /** 협업 중인 업체의 제품을 붙인 글 — 글 맨 앞에 협찬 표시 (추천·보증 심사지침) */
+  sponsor?: { partner_name?: string } | null;
 };
 
 /**
@@ -100,6 +102,7 @@ export default function ThreadCard({ post, onLike, onCopy, onReply, onMenuDone, 
         </PostActions>
       }
     >
+      {post.sponsor && <p className="text-label font-bold text-ink">협찬 · {post.sponsor.partner_name || "입점 업체"}와 협업한 글이에요</p>}
       {post.content && <p className={detail ? "text-body text-ink whitespace-pre-line" : "text-body text-ink whitespace-pre-line line-clamp-6"}>{post.content}</p>}
       {poll && (
         <PollAttach options={poll.options} counts={poll.counts} myChoice={poll.my_choice} closed={poll.closed}

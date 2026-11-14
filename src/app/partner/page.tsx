@@ -11,7 +11,7 @@ import { TAB_LABEL, isTab, tabsFor, type Tab } from "@/lib/partner/tabs";
 import { ORDERING_ENABLED } from "@/lib/features";
 import { Commission } from "./Commission";
 import { Report } from "./Report";
-import { Demand } from "./Demand";
+import { DemandTab } from "./DemandTab";
 import { Orders } from "./Orders";
 import { Today } from "./Today";
 import { CustomersTab } from "./Customers";
@@ -135,7 +135,7 @@ function PartnerHome() {
       {current === "orders" && <Orders qs={qs} />}
       {current === "report" && <Report qs={qs} onMakeSegment={(goal) => go("segments", { goal })} />}
       {current === "segments" && <CustomersTab qs={qs} go={go} prefill={prefill} />}
-      {current === "demand" && <Demand qs={qs} onMakeSegment={(need) => go("segments", { need })} />}
+      {current === "demand" && <DemandTab qs={qs} onMakeSegment={(need) => go("segments", { need })} />}
       {current === "commission" && <Commission qs={qs} readOnly={!!as} />}
       {current === "connect" && <Connect qs={qs} batches={batches} isDemo={!!partner.is_demo} readOnly={!!me.data.read_only} onChanged={() => { loadMe(); setItems({ status: "loading" }); }} onReport={() => go("commission")} />}
 

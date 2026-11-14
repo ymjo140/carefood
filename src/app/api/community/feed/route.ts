@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { sponsorFor } from "@/lib/partner/collabs";
 import { connection } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { getActorId, noActor } from "@/lib/actor-server";
@@ -301,6 +302,8 @@ export async function POST(request: NextRequest) {
     if (limited) return limited;
     // 이름은 서버에 둔 이 사람의 이름 (보낸 이름은 처음 한 번만 — lib/community-profile.ts)
     const author_nickname = await ensureNickname(sb, user_id, body.author_nickname);
+    // 협업 중인 업체의 제품을 붙였으면 글 맨 앞에 "협찬 · 업체" (추천·보증 심사지침 — lib/partner/collabs.ts)
+    const sponsor = await sponsorFor(sb, user_id, product_ids);
 
     const { data, error } = await sb
       .from("community_feed")
@@ -316,6 +319,7 @@ export async function POST(request: NextRequest) {
         poll,
         tags,
         author_nickname,
+        sponsor,
         // 건강 관심사·목표·나이대는 글에 붙이지 않는다 (마이페이지에서 나만 본다)
         author_age_group: null,
         author_concerns: [],

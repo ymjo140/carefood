@@ -1,10 +1,37 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Badge, Button, Card, EmptyState, ListRow, SkeletonList } from "@/components/ui";
+import { Badge, Button, Card, EmptyState, Field, Input, ListRow, SkeletonList, useToast } from "@/components/ui";
 
 type C = { id: string; partner: string; name: string; text: string; expires_at: string; used_at: string | null; discount: number; status: "active" | "expired" | "used" | "revoked" };
 const LABEL: Record<C["status"], string> = { active: "쓸 수 있어요", expired: "기간이 끝났어요", used: "썼어요", revoked: "쓸 수 없어요" };
+
+/** 협업 코드 넣기 — 넣으면 그 업체 쿠폰을 받고 목록을 다시 불러온다 */
+function CodeForm({ onDone }: { onDone: () => void }) {
+  const toast = useToast();
+  const [code, setCode] = useState("");
+  const [busy, setBusy] = useState(false);
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      const r = await fetch("/api/me/coupons", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code }) });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error);
+      toast.show(d.already ? `이미 받은 쿠폰이에요 — ${d.partner} ${d.name}` : `${d.partner} ${d.name} 쿠폰을 받았어요`);
+      setCode("");
+      onDone();
+    } catch (e2) {
+      toast.show(`${(e2 as Error).message || "코드를 쓰지 못했어요. 다시 시도해 주세요"}`, { tone: "danger" });
+    } finally { setBusy(false); }
+  };
+  return (
+    <form onSubmit={submit} className="flex items-end gap-2 mb-4">
+      <Field label="협업 코드" className="flex-1"><Input value={code} maxLength={8} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="CF로 시작하는 8자리" /></Field>
+      <Button type="submit" variant="secondary" loading={busy} disabled={code.length < 8}>받기</Button>
+    </form>
+  );
+}
 
 /** 내 쿠폰함 — 쓸 수 있는 것 먼저 */
 export function CouponList() {
@@ -19,14 +46,17 @@ export function CouponList() {
   }, []);
   useEffect(() => { load(); }, [load]); // eslint-disable-line react-hooks/set-state-in-effect -- 불러온 뒤에 상태를 바꾼다
 
-  if (state.status === "loading") return <SkeletonList rows={3} thumb={false} />;
+  const reload = () => load();
+  if (state.status === "loading") return <><CodeForm onDone={reload} /><SkeletonList rows={3} thumb={false} /></>;
   if (state.status === "error" || !state.list) return (
     <EmptyState title="쿠폰함을 불러오지 못했어요" description={state.error}
       action={<Button size="sm" variant="secondary" icon="refresh" onClick={() => { setState({ status: "loading" }); load(); }}>다시 불러오기</Button>} />
   );
-  if (state.list.length === 0) return <EmptyState title="받은 쿠폰이 없어요" description="입점 업체 제품을 앱에서 주문하면 업체가 감사·재구매 쿠폰을 줄 수 있어요" />;
+  if (state.list.length === 0) return <><CodeForm onDone={reload} /><EmptyState title="받은 쿠폰이 없어요" description="입점 업체 제품을 앱에서 주문하면 업체가 감사·재구매 쿠폰을 줄 수 있어요. 협업 코드가 있으면 위에 넣어요" /></>;
   const list = [...state.list].sort((a, b) => Number(b.status === "active") - Number(a.status === "active"));
   return (
+    <>
+    <CodeForm onDone={reload} />
     <Card padding="none">
       <ul className="divide-y divide-line">
         {list.map((c) => (
@@ -38,5 +68,6 @@ export function CouponList() {
         ))}
       </ul>
     </Card>
+    </>
   );
 }
