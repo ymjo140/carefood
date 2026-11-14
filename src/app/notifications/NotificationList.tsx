@@ -5,9 +5,11 @@ import Link from "next/link";
 import { Button, Card, EmptyState, Icon, LinkButton, SkeletonList, cn, type IconName } from "@/components/ui";
 import { timeAgo } from "@/components/ui/FeedPost";
 
-type Item = { id: string; type: "comment" | "reply" | "like" | "follow" | "ad" | "consent"; at: string; who: string; count?: number; text?: string; post_id?: string; post_excerpt?: string; user_id?: string; url?: string };
+type Item = { id: string; type: "comment" | "reply" | "like" | "follow" | "gb_question" | "gb_answer" | "gb_reached" | "gb_requested" | "ad" | "consent"; at: string; who: string; count?: number; text?: string; post_id?: string; post_excerpt?: string; user_id?: string; url?: string };
 
-const ICON: Record<Item["type"], IconName> = { comment: "message", reply: "message", like: "heart", follow: "user", ad: "tag", consent: "bell" };
+const ICON: Record<Item["type"], IconName> = {
+  comment: "message", reply: "message", like: "heart", follow: "user", gb_question: "message", gb_answer: "message", gb_reached: "users", gb_requested: "bell", ad: "tag", consent: "bell",
+};
 
 export function NotificationList() {
   const [state, setState] = useState<{ status: "loading" | "error" | "done"; items: Item[] }>({ status: "loading", items: [] });
@@ -66,6 +68,10 @@ export function NotificationList() {
                 {n.type === "reply" && <><b className="font-bold">{n.who}</b> 님이 내 답글에 답글을 남겼어요</>}
                 {n.type === "like" && <>내 글을 <b className="num font-bold">{n.count}</b>명이 좋아해요</>}
                 {n.type === "follow" && <><b className="font-bold">{n.who}</b> 님이 나를 팔로우했어요</>}
+                {n.type === "gb_question" && <><b className="font-bold">{n.who}</b> 님이 내 공구에 질문을 남겼어요</>}
+                {n.type === "gb_answer" && <><b className="font-bold">{n.who}</b> 님이 내 질문에 답했어요</>}
+                {n.type === "gb_reached" && <>알림 받는 공구에 <b className="num font-bold">{n.count}</b>명이 모였어요</>}
+                {n.type === "gb_requested" && <>알림 받는 공구를 판매처에 요청했어요. 판매가 열리면 알려 드려요</>}
                 {n.type === "ad" && <>(광고) <b className="font-bold">{n.who}</b> 소식이에요</>}
                 {n.type === "consent" && <>업체 소식(광고) 받기 동의를 확인해 주세요</>}
               </span>

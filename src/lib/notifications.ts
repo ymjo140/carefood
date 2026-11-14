@@ -3,11 +3,14 @@ import { viewerFilters } from "@/lib/community-safety";
 /**
  * 내 소식 — 따로 저장하지 않고 커뮤니티 기록에서 만든다 (알림 화면 · 웹 푸시가 같이 쓴다)
  *   - 내 글에 남긴 답글 (다른 사람) · 내 답글에 달린 답글 · 내 글의 좋아요(글마다 묶음) · 나를 팔로우함
+ *   - 공구: 내가 만든 공구에 온 질문 · 내 질문에 달린 답 · 내가 알림 받는 공구(만든 것 포함)가 목표 인원에 닿음 · 판매처에 요청함
  *   차단한 사람의 소식은 뺀다. 실패하면 throw.
  */
 export type NotificationItem = {
-  id: string; type: "comment" | "reply" | "like" | "follow"; at: string; who: string;
+  id: string; type: "comment" | "reply" | "like" | "follow" | "gb_question" | "gb_answer" | "gb_reached" | "gb_requested"; at: string; who: string;
   count?: number; text?: string; post_id?: string; post_excerpt?: string; user_id?: string;
+  /** 글이 아닌 곳으로 가는 소식 (공구) */
+  url?: string;
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -77,8 +80,67 @@ export async function buildNotifications(sb: any, actor: string): Promise<Notifi
   }
   for (const f of followers.filter((x) => !blocked.has(x.follower_id))) items.push({ id: `f-${f.id}`, type: "follow", at: f.created_at, who: names.get(f.follower_id) || "누군가", user_id: names.has(f.follower_id) ? f.follower_id : undefined });
 
+  items.push(...(await groupBuyNotifications(sb, actor, blocked)));
+
   items.sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
   return items;
+}
+
+/** 공구 소식 — 최근 30일. 차단한 사람의 질문·답은 뺀다 */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function groupBuyNotifications(sb: any, actor: string, blocked: Set<string>): Promise<NotificationItem[]> {
+  const since = new Date(Date.now() - 30 * 86400e3).toISOString();
+  const [hosted, joined, myQ] = await Promise.all([
+    sb.from("group_buys").select("id, product_name").eq("creator_id", actor).gte("created_at", new Date(Date.now() - 90 * 86400e3).toISOString()).limit(50),
+    sb.from("group_buy_participants").select("group_buy_id").eq("user_id", actor).limit(200),
+    sb.from("group_buy_comments").select("id").eq("user_id", actor).is("parent_id", null).eq("is_active", true).gte("created_at", since).limit(100),
+  ]);
+  for (const r of [hosted, joined, myQ]) if (r.error) throw new Error(r.error.message);
+  const hostedIds = ((hosted.data || []) as { id: string }[]).map((g) => g.id);
+  const joinedIds = ((joined.data || []) as { group_buy_id: string }[]).map((p) => p.group_buy_id);
+  const myQIds = ((myQ.data || []) as { id: string }[]).map((c) => c.id);
+
+  const [qs, ans, reached] = await Promise.all([
+    hostedIds.length
+      ? sb.from("group_buy_comments").select("id, group_buy_id, user_id, author_nickname, content, created_at")
+          .in("group_buy_id", hostedIds).is("parent_id", null).neq("user_id", actor).eq("is_active", true).gte("created_at", since)
+          .order("created_at", { ascending: false }).limit(30)
+      : { data: [] },
+    myQIds.length
+      ? sb.from("group_buy_comments").select("id, group_buy_id, user_id, author_nickname, content, created_at")
+          .in("parent_id", myQIds).neq("user_id", actor).eq("is_active", true).order("created_at", { ascending: false }).limit(30)
+      : { data: [] },
+    joinedIds.length
+      ? sb.from("group_buys").select("id, product_name, target_count, reached_at, requested_at").in("id", joinedIds.slice(0, 200)).gte("reached_at", since)
+      : { data: [] },
+  ]);
+  for (const r of [qs, ans, reached]) if (r.error) throw new Error(r.error.message);
+
+  // 공구 이름 (질문·답에 붙일)
+  const gbIds = [...new Set([...(qs.data || []), ...(ans.data || [])].map((c: { group_buy_id: string }) => c.group_buy_id))];
+  const names = new Map<string, string>(((hosted.data || []) as { id: string; product_name: string }[]).map((g) => [g.id, g.product_name]));
+  const missing = gbIds.filter((id) => !names.has(id));
+  if (missing.length) {
+    const { data, error } = await sb.from("group_buys").select("id, product_name").in("id", missing);
+    if (error) throw new Error(error.message);
+    for (const g of (data || []) as { id: string; product_name: string }[]) names.set(g.id, g.product_name);
+  }
+
+  type C = { id: string; group_buy_id: string; user_id: string; author_nickname: string | null; content: string; created_at: string };
+  const out: NotificationItem[] = [];
+  for (const c of (qs.data || []) as C[]) {
+    if (blocked.has(c.user_id)) continue;
+    out.push({ id: `gq-${c.id}`, type: "gb_question", at: c.created_at, who: c.author_nickname || "누군가", text: c.content.slice(0, 60), post_excerpt: names.get(c.group_buy_id), url: `/group-buy/${c.group_buy_id}` });
+  }
+  for (const c of (ans.data || []) as C[]) {
+    if (blocked.has(c.user_id)) continue;
+    out.push({ id: `ga-${c.id}`, type: "gb_answer", at: c.created_at, who: c.author_nickname || "누군가", text: c.content.slice(0, 60), post_excerpt: names.get(c.group_buy_id), url: `/group-buy/${c.group_buy_id}` });
+  }
+  for (const g of (reached.data || []) as { id: string; product_name: string; target_count: number; reached_at: string; requested_at: string | null }[]) {
+    out.push({ id: `gr-${g.id}`, type: "gb_reached", at: g.reached_at, who: "", count: g.target_count, post_excerpt: g.product_name, url: `/group-buy/${g.id}` });
+    if (g.requested_at) out.push({ id: `gq2-${g.id}`, type: "gb_requested", at: g.requested_at, who: "", post_excerpt: g.product_name, url: `/group-buy/${g.id}` });
+  }
+  return out;
 }
 
 /**

@@ -7,10 +7,11 @@ import { enrichGroupBuys, type GroupBuyRow } from "@/lib/group-buy-server";
 import { checkClaimsWith } from "@/lib/partner/claims";
 import { loadClaimTerms } from "@/lib/partner/claims-server";
 import { imagePrefix } from "@/lib/community-images";
+import { rateLimit } from "@/lib/rate-limit";
 
 /**
  * GET /api/community/group-buy — 공구 목록
- *   ?status=recruiting(기본)|achieved|all   ?mine=1 내가 관심 표시·참여한 것만   ?concern=
+ *   ?status=recruiting(기본)|achieved|all   ?mine=1 내가 관심 표시·참여한 것만   ?concern=   ?product_id= 이 제품의 공구만 (제품 상세)
  *   응답: group_buys(+ 지금 최저가·대표 사진·진행자 이름·진행자 기록 횟수 — lib/group-buy-server), mine_ids(그중 내가 표시한 것), total
  *   모집 중은 마감(expires_at)이 지난 것을 뺀다.
  * POST /api/community/group-buy — 공구 만들기 (만든 사람은 자동으로 관심 표시)
@@ -52,6 +53,8 @@ export async function GET(request: NextRequest) {
   if (status === "recruiting" && !mine) query = query.or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`);
   if (mine) query = query.in("id", mineAll);
   if (concern) query = query.eq("concern", concern);
+  const productId = searchParams.get("product_id");
+  if (productId && /^[0-9a-f-]{36}$/i.test(productId)) query = query.eq("product_id", productId);
 
   const from = (page - 1) * limit;
   query = query.range(from, from + limit - 1);
@@ -99,6 +102,9 @@ export async function POST(request: NextRequest) {
   // 효능 표현 — 업체 문구와 같은 금지 표현 사전 (관리자가 관리, lib/partner/claims)
   const [claim] = checkClaimsWith(await loadClaimTerms(sb), story);
   if (claim) return NextResponse.json({ error: `'${claim.phrase}' 같은 표현은 올릴 수 없어요. ${claim.why}. 먹는 방법이나 맛으로 써 주세요`, claim: claim.phrase }, { status: 400 });
+
+  const limited = await rateLimit(sb, request, creator_id, "post");
+  if (limited) return limited;
 
   const { data: product, error: pErr } = await sb.from("products").select("id, name").eq("id", product_id).maybeSingle();
   if (pErr) return NextResponse.json({ error: pErr.message }, { status: 500 });

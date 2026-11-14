@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Button, Chip, Field, Icon, IconButton, Input, LinkButton, ListRow, Notice, Sheet, SkeletonList, Textarea, Thumb, cn, useToast,
@@ -14,10 +14,15 @@ import { usePhotoUploads } from "./usePhotoUploads";
  * 제품을 고르면: 내가 최근 30일 기록한 횟수(글에 '써 본 사람'으로 붙음) · 같은 제품 공구가 모집 중이면 그쪽으로.
  * 목표 인원은 정해져 있다(GROUP_TARGET) — 모이면 판매처에 공구를 요청한다. 판매가 열리기 전엔 관심만 모은다.
  */
+export type GroupBuyProduct = { id: string; name: string; manufacturer?: string | null; image_url?: string | null; product_prices?: { price: number }[] };
 type Hit = { id: string; name: string; manufacturer?: string | null; image_url?: string | null; product_prices?: { price: number }[] };
 type Check = { status: "idle" | "loading" | "error" | "done"; records: number; existing: { id: string; current_count: number } | null };
 
-export default function GroupBuyComposer({ open, onClose }: { open: boolean; onClose: () => void }) {
+export default function GroupBuyComposer({ open, onClose, initialProduct }: {
+  open: boolean; onClose: () => void;
+  /** 제품 상세에서 열면 그 제품을 고른 채로 시작 */
+  initialProduct?: GroupBuyProduct | null;
+}) {
   const toast = useToast();
   const router = useRouter();
   const { photos, fileRef, pick, drop, clear, uploading, urls } = usePhotoUploads(GROUP_MAX_PHOTOS);
@@ -33,7 +38,6 @@ export default function GroupBuyComposer({ open, onClose }: { open: boolean; onC
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // 늦게 온 응답이 새 결과를 덮지 않게 — 마지막 요청만 상태를 바꾼다
   const searchSeq = useRef(0);
-  const checkSeq = useRef(0);
 
   const search = useCallback((q: string) => {
     if (timer.current) clearTimeout(timer.current);
@@ -51,18 +55,30 @@ export default function GroupBuyComposer({ open, onClose }: { open: boolean; onC
     }, 300);
   }, []);
 
-  const choose = (h: Hit) => {
-    const n = ++checkSeq.current;
-    setPicked(h);
-    setCheck({ status: "loading", records: 0, existing: null });
-    fetch(`/api/community/group-buy/check?product_id=${h.id}`)
+  const choose = (h: Hit) => setPicked(h);
+
+  // 제품을 고르면 내 기록 횟수 · 같은 제품 공구 확인 (제품을 바꾸면 앞 응답은 버린다)
+  const pickedId = picked?.id ?? null;
+  useEffect(() => {
+    if (!pickedId) return;
+    let alive = true;
+    setCheck({ status: "loading", records: 0, existing: null }); // eslint-disable-line react-hooks/set-state-in-effect -- 고른 제품이 바뀔 때마다 확인
+    fetch(`/api/community/group-buy/check?product_id=${pickedId}`)
       .then(async (r) => {
         const d = await r.json();
         if (!r.ok) throw new Error(d.error);
-        if (n === checkSeq.current) setCheck({ status: "done", records: d.records || 0, existing: d.existing });
+        if (alive) setCheck({ status: "done", records: d.records || 0, existing: d.existing });
       })
-      .catch(() => { if (n === checkSeq.current) setCheck({ status: "error", records: 0, existing: null }); });
-  };
+      .catch(() => { if (alive) setCheck({ status: "error", records: 0, existing: null }); });
+    return () => { alive = false; };
+  }, [pickedId]);
+
+  // 열 때 미리 고른 제품이 있으면 그 제품으로 시작 (그리는 중에 상태를 맞춘다)
+  const [lastOpen, setLastOpen] = useState(false);
+  if (open !== lastOpen) {
+    setLastOpen(open);
+    if (open && initialProduct && !picked) setPicked(initialProduct);
+  }
 
   const reset = (posted: boolean) => {
     setQuery(""); setHits({ status: "idle", items: [] }); setPicked(null); setCheck({ status: "idle", records: 0, existing: null });

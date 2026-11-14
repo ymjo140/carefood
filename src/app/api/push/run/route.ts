@@ -216,9 +216,14 @@ export async function POST(req: NextRequest) {
       if (fresh.length) {
         const top = fresh[0];
         const line = top.type === "comment" ? `${top.who} 님이 내 글에 답글을 남겼어요`
-          : top.type === "reply" ? `${top.who} 님이 내 답글에 답글을 남겼어요` : `${top.who} 님이 나를 팔로우했어요`;
+          : top.type === "reply" ? `${top.who} 님이 내 답글에 답글을 남겼어요`
+          : top.type === "gb_question" ? `${top.who} 님이 내 공구에 질문을 남겼어요`
+          : top.type === "gb_answer" ? `${top.who} 님이 내 질문에 답했어요`
+          : top.type === "gb_reached" ? `${top.post_excerpt || "공구"}에 ${top.count}명이 모였어요`
+          : top.type === "gb_requested" ? `${top.post_excerpt || "공구"}를 판매처에 요청했어요`
+          : `${top.who} 님이 나를 팔로우했어요`;
         const payload: PushPayload = fresh.length === 1
-          ? { title: "새 소식", body: top.text ? `${line}: “${top.text}”` : line, url: top.post_id ? `/community/${top.post_id}` : top.user_id ? `/community/u/${encodeURIComponent(top.user_id)}` : "/notifications", tag: "community" }
+          ? { title: "새 소식", body: top.text ? `${line}: “${top.text}”` : line, url: top.url ? top.url : top.post_id ? `/community/${top.post_id}` : top.user_id ? `/community/u/${encodeURIComponent(top.user_id)}` : "/notifications", tag: "community" }
           : { title: `새 소식 ${fresh.length}개`, body: `${line} 외 ${fresh.length - 1}개`, url: "/notifications", tag: "community" };
         const ok = await send(user, "community", top.at, payload);
         if (ok && !dry) await sb.from("notification_prefs").upsert({ user_id: user, community_pushed_at: top.at }, { onConflict: "user_id" });

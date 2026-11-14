@@ -1,6 +1,6 @@
 {
-  "measuredAt": "2026-11-14T02:45:21.813Z",
-  "files": 106,
+  "measuredAt": "2026-11-14T03:16:10.066Z",
+  "files": 111,
   "distinctColors": 2,
   "gradients": 2,
   "shadows": 1,
@@ -21,15 +21,15 @@
   "fontSizes": [
     [
       "ds:label",
-      317
+      335
     ],
     [
       "ds:caption",
-      277
+      285
     ],
     [
       "ds:body",
-      98
+      99
     ],
     [
       "ds:title",
@@ -43,7 +43,7 @@
   "radii": [
     [
       "md",
-      43
+      42
     ],
     [
       "lg",
@@ -85,6 +85,13 @@
       {
         "colors": 0,
         "inline": 1
+      }
+    ],
+    [
+      "src/app/admin/group-buys/page.tsx",
+      {
+        "colors": 0,
+        "inline": 0
       }
     ],
     [
@@ -130,6 +137,13 @@
       }
     ],
     [
+      "src/app/admin/partners/Agency.tsx",
+      {
+        "colors": 0,
+        "inline": 0
+      }
+    ],
+    [
       "src/app/admin/partners/ClaimTerms.tsx",
       {
         "colors": 0,
@@ -145,20 +159,6 @@
     ],
     [
       "src/app/admin/partners/Disputes.tsx",
-      {
-        "colors": 0,
-        "inline": 0
-      }
-    ],
-    [
-      "src/app/admin/partners/page.tsx",
-      {
-        "colors": 0,
-        "inline": 0
-      }
-    ],
-    [
-      "src/app/admin/reports/page.tsx",
       {
         "colors": 0,
         "inline": 0

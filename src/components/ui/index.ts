@@ -31,3 +31,4 @@ export { DayDots, type DayDot } from "./Challenge";
 export { Switch } from "./Switch";
 export { ReelRow, ReelTile, ReelAddTile, ReelSkeleton } from "./Reel";
 export { ReelMedia } from "./ReelMedia";
+export { CommentItem } from "./Comment";

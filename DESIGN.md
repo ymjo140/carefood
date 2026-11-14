@@ -85,7 +85,7 @@
 | 입력 | `Field` `Input` `Textarea` `Select` `SearchField`, `.ds-range`, `.ds-check`, `RatingInput` `ScaleInput` · 한 번 누르는 맛 평가 `QuickRating` |
 | 영양 | `MacroGrid` `MacroStat` `MacroInline` `ProgressBar` `Stat` `Kcal` `Price` |
 | 끼니 | `MealTag` `MealSlot` `mealMeta()` |
-| 커뮤니티 글 | `PostAuthor` `PostActions` `PostAction` `PostTags` |
+| 커뮤니티 글 | `PostAuthor` `PostActions` `PostAction` `PostTags` · 댓글 한 줄 `CommentItem` |
 | 숏폼(식단·공구 사진) | `ReelRow` `ReelTile` `ReelAddTile` `ReelSkeleton` · 보기 화면 위쪽 `ReelMedia` |
 | 안내 / 추정 표시 / 비어 있음 / 불러오는 중 | `Notice` / `Estimate` / `EmptyState` / `Skeleton` `SkeletonList` `SkeletonPost` (`Spinner` 는 버튼·작은 칸에만) |
 | 겹침 | `Sheet` `ConfirmSheet` `useToast()` |

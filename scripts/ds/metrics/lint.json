@@ -1,6 +1,6 @@
 {
-  "checkedAt": "2026-11-14T02:45:21.973Z",
-  "files": 136,
+  "checkedAt": "2026-11-14T03:16:10.262Z",
+  "files": 142,
   "total": 0,
   "warnTotal": 0,
   "allowedCount": 63,
@@ -462,7 +462,7 @@
     },
     {
       "file": "src/app/notifications/NotificationList.tsx",
-      "line": 30,
+      "line": 32,
       "rule": "silent-catch",
       "level": "warn",
       "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",

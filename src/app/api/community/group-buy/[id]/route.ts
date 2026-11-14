@@ -6,7 +6,7 @@ import { enrichGroupBuys, type GroupBuyRow } from "@/lib/group-buy-server";
 
 /**
  * GET /api/community/group-buy/[id] — 공구 하나 (숏폼 보기 화면)
- *   응답: group_buy (+ 지금 최저가·대표 사진·진행자 이름·진행자 기록 횟수·단백질·열량), marked(내가 관심 표시했는지), is_host
+ *   응답: group_buy (+ 지금 최저가·대표 사진·진행자 이름·진행자 기록 횟수·단백질·열량·좋아요·질문 수), marked(알림 받는지), liked, is_host
  */
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   await connection();
@@ -21,15 +21,18 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   if (!row) return NextResponse.json({ error: "공구를 찾지 못했어요" }, { status: 404 });
 
-  let marked = false;
+  let marked = false, liked = false;
   if (actor) {
-    const { data: p, error: mErr } = await sb.from("group_buy_participants").select("id").eq("group_buy_id", id).eq("user_id", actor).maybeSingle();
-    if (mErr) return NextResponse.json({ error: mErr.message }, { status: 500 });
-    marked = !!p;
+    const [m, l] = await Promise.all([
+      sb.from("group_buy_participants").select("id").eq("group_buy_id", id).eq("user_id", actor).maybeSingle(),
+      sb.from("group_buy_likes").select("user_id").eq("group_buy_id", id).eq("user_id", actor).maybeSingle(),
+    ]);
+    if (m.error || l.error) return NextResponse.json({ error: (m.error || l.error).message }, { status: 500 });
+    marked = !!m.data; liked = !!l.data;
   }
 
   let gb;
   try { [gb] = await enrichGroupBuys(sb, [row as GroupBuyRow]); } catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: 500 }); }
   const { creator_id, ...rest } = gb;
-  return NextResponse.json({ group_buy: { ...rest, is_host: !!actor && creator_id === actor }, marked });
+  return NextResponse.json({ group_buy: { ...rest, is_host: !!actor && creator_id === actor }, marked, liked });
 }

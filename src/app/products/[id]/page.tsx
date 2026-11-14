@@ -12,6 +12,7 @@ import FavoriteButton from "@/components/FavoriteButton";
 import TrackableLink from "@/components/TrackableLink";
 import { checkedLabel, packLabel, usablePrices } from "@/lib/prices";
 import AllergenWarning from "@/components/AllergenWarning";
+import ProductGroupBuy from "@/components/ProductGroupBuy";
 import {
   Page, SectionHeader, Card, Badge, Icon, MacroStat, Stat, EmptyState, Estimate, Notice, Thumb, Price,
   TextLink, buttonClass, cn, BottomBar,
@@ -499,6 +500,11 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
             {sortedPrices.some((pp) => pp.is_partner) && <p>입점 업체 링크로 구매하면 케어푸드가 판매 수수료를 받을 수 있어요</p>}
           </div>
         </section>
+      )}
+
+      {/* ── 공구 — 모집 중이면 그 공구로, 없으면 이 제품으로 만들기 ── */}
+      {sortedPrices.length > 0 && (
+        <ProductGroupBuy product={{ id: product.id, name: product.name, manufacturer: product.manufacturer, image_url: imageUrl ?? null, product_prices: [{ price: bestPrice?.price ?? 0 }] }} />
       )}
 
       {/* ── 출처 ── (ingredients_raw 칸에는 원재료가 아니라 자료를 낸 기관 이름이 들어 있다 — 예: 식품의약품안전처)
