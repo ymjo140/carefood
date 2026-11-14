@@ -13,6 +13,7 @@ import { AdminDisputes } from "./Disputes";
 import { AdminAgency } from "./Agency";
 import { AdminPayouts } from "./Payouts";
 import { STANDARD_RATES } from "@/lib/partner/rates";
+import { AdminApplications, type PartnerPrefill } from "./Applications";
 
 type Partner = {
   id: string; slug: string; name: string; kind: string; status: "onboarding" | "active" | "paused"; contact_email: string | null;
@@ -54,6 +55,8 @@ export default function AdminPartnersPage() {
   const [partners, setPartners] = useState<Load<Partner[]>>({ status: "loading", data: [] });
   const [queue, setQueue] = useState<Load<ReviewItem[]>>({ status: "loading", data: [] });
   const [payTick, setPayTick] = useState(0); // 업체별 정산에서 마감·정산 끝을 누르면 지급 대기도 다시
+  const [appTick, setAppTick] = useState(0); // 신청으로 업체를 만들면 입점 신청도 다시
+  const [prefill, setPrefill] = useState<PartnerPrefill | null>(null);
 
   const loadPartners = useCallback(async () => {
     try { setPartners({ status: "done", data: (await api<{ partners: Partner[] }>("/api/admin/partners")).partners }); }
@@ -72,6 +75,8 @@ export default function AdminPartnersPage() {
     <Page width="wide">
       <LinkTabs items={ADMIN_TABS} current="/admin/partners" label="관리자 메뉴" className="mb-6" />
       <PageHeader title="입점 업체" description="업체가 올린 제품을 확인해 반영하고, 업체와 담당자 계정을 관리해요" />
+
+      <AdminApplications refresh={appTick} onMake={(p) => { setPrefill(p); document.getElementById("new-partner")?.scrollIntoView({ behavior: "smooth", block: "center" }); }} />
 
       <SectionHeader title="검수 대기" action={queue.status === "done" ? <span className="text-caption text-ink-2"><span className="num">{queue.data.length}</span>개</span> : undefined} />
       {queue.status === "loading" ? <SkeletonList rows={3} thumb={false} />
@@ -93,7 +98,7 @@ export default function AdminPartnersPage() {
       <AdminAgency partners={partners.data || []} />
 
       <SectionHeader title="업체" className="mt-10" />
-      <NewPartner onDone={(m) => { toast.show(m); loadPartners(); }} onFail={fail} />
+      <NewPartner key={prefill?.application_id || "new"} prefill={prefill} onDone={(m) => { toast.show(m); loadPartners(); if (prefill) { setPrefill(null); setAppTick((t) => t + 1); } }} onFail={fail} />
       {partners.status === "loading" ? <SkeletonList rows={3} thumb={false} />
         : partners.status === "error" ? (
           <EmptyState title="업체 목록을 불러오지 못했어요" description={partners.error}
@@ -201,20 +206,28 @@ function ReviewCard({ item, onDone, onFail }: { item: ReviewItem; onDone: (m: st
 }
 
 /* ── 업체 만들기 ── */
-function NewPartner({ onDone, onFail }: { onDone: (m: string) => void; onFail: (w: string, e: unknown) => void }) {
-  const [f, setF] = useState({ name: "", slug: "", kind: "meal_service", contact_email: "" });
+function NewPartner({ prefill, onDone, onFail }: { prefill: PartnerPrefill | null; onDone: (m: string) => void; onFail: (w: string, e: unknown) => void }) {
+  const blank = { name: "", slug: "", kind: "meal_service", contact_email: "" };
+  const [f, setF] = useState(prefill ? { name: prefill.name, slug: prefill.slug, kind: KIND_LABEL[prefill.kind] ? prefill.kind : "meal_service", contact_email: prefill.contact_email } : blank);
   const [busy, setBusy] = useState(false);
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
     try {
       await api("/api/admin/partners", post(f));
-      setF({ name: "", slug: "", kind: "meal_service", contact_email: "" });
-      onDone(`${f.name}을(를) 만들었어요`);
+      // 신청으로 만든 업체면 그 신청을 '업체로 만듦' 으로 닫는다 — 업체는 이미 만들었으니 실패는 따로 알린다
+      if (prefill) {
+        await api("/api/admin/partners/applications", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: prefill.application_id, status: "approved", note: `업체 ${f.slug} 로 만들었어요` }) })
+          .catch((err) => onFail("업체는 만들었지만 신청을 '업체로 만듦'으로 바꾸", err));
+      }
+      setF(blank);
+      onDone(`${f.name}을(를) 만들었어요. 기본 수수료 앱 주문 ${STANDARD_RATES.order}% · 구매 링크 ${STANDARD_RATES.link}%예요`);
     } catch (err) { onFail("업체를 만들", err); } finally { setBusy(false); }
   };
   return (
     <Card tone="sunken">
+      <div id="new-partner" />
+      {prefill && <p className="text-label text-ink mb-3">입점 신청 <b className="font-bold">{prefill.name}</b>으로 채웠어요. 영문 이름을 확인하고 만들어 주세요</p>}
       <form onSubmit={submit} className="grid grid-cols-1 sm:grid-cols-5 gap-3 items-end">
         <Field label="업체 이름"><Input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} placeholder="그리팅" required /></Field>
         {/* 도움말을 칸 아래에 두면 이 칸만 높아져 줄이 어긋난다 — 라벨에 함께 */}

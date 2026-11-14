@@ -9,12 +9,13 @@
  *    판매·수수료 없이 배송비 칸에만 더하는 묶음(kind "return_fee")으로 센다 — 주문 수에는 넣지 않는다.
  */
 import { selectAll } from "@/lib/supabase/all";
+import { PAY_DAY_OF_MONTH } from "./rates";
 
 type Sb = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 const DAY = 86400e3;
 const KST = 9 * 3600e3;
 export const CONFIRM_DAYS = 8;
-export const PAY_DAY = 10;
+export const PAY_DAY = PAY_DAY_OF_MONTH; // 입점 신청 화면 안내와 같은 값 (lib/partner/rates.ts)
 
 export const kstDay = (t: number) => new Date(t + KST).toISOString().slice(0, 10);
 export const kstMonthOf = (t: number) => new Date(t + KST).toISOString().slice(0, 7);
