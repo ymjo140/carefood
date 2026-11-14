@@ -18,6 +18,7 @@ type Sb = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
 import { DEMO_SKU_PREFIX, DEMO_USER_PREFIX } from "./demo-ids";
 import { selectAll } from "@/lib/supabase/all";
+import { closeMonth, markPaid, orderPayout, previousMonth } from "./settlement";
 export { DEMO_SKU_PREFIX, DEMO_USER_PREFIX };
 
 const DAY = 86400e3;
@@ -103,6 +104,16 @@ const CUSTOMERS: [number, number, number][] = [
   [1, 45, 0], [1, 72, 0], [1, 101, 0], // 한 번 사고 뜸한
   [3, 75, 20], [2, 104, 30], // 뜸해지는
   [3, 133, 18], [4, 168, 14], // 떠난
+  // 테스트 매장 — 석 달 장사한 것처럼 손님을 더 (고정 난수라 다시 채워도 같다)
+  ...(() => {
+    const r = rng(1117);
+    return Array.from({ length: 42 }, (): [number, number, number] => {
+      const kind = r();
+      if (kind < 0.45) return [1, 1 + Math.floor(r() * 85), 0];
+      if (kind < 0.8) return [2 + Math.floor(r() * 2), 1 + Math.floor(r() * 30), 12 + Math.floor(r() * 16)];
+      return [4 + Math.floor(r() * 4), 1 + Math.floor(r() * 12), 8 + Math.floor(r() * 8)];
+    });
+  })(),
 ];
 
 type Prod = { sku: string; name: string; price: number; meal: string };
@@ -118,6 +129,7 @@ export async function seedDemoOrders(sb: Sb, partner: Partner) {
   const items: Record<string, unknown>[] = [];
   let n = 0;
   let couponOrder: { id: string; user: string } | null = null; // 예시 쿠폰을 쓴 주문 하나
+  const meta: { id: string; ago: number; fulfil: string; at: number; subtotal: number; fee: number }[] = [];
   CUSTOMERS.forEach(([count, lastAgo, gap], ci) => {
     const user = `${DEMO_USER_PREFIX}${partner.slug}-${String(ci + 1).padStart(2, "0")}`;
     // 이 고객이 주로 사는 제품 1~2개 + 가끔 다른 것
@@ -140,6 +152,7 @@ export async function seedDemoOrders(sb: Sb, partner: Partner) {
       // 다시 산 고객 하나는 마지막 주문에 예시 쿠폰(3,000원)을 썼다
       const discount = ci === 4 && k === 0 && !canceled && subtotal >= 15000 ? 3000 : 0;
       if (discount) couponOrder = { id, user };
+      meta.push({ id, ago, fulfil, at, subtotal, fee });
       orders.push({
         id, user_id: user, status: fulfil === "delivered" ? "delivered" : fulfil === "canceled" ? "cancelled" : "paid",
         total_items: rows.length, total_price: subtotal, shipping_fee: fee, shipping_fees: { [partner.id]: fee },
@@ -148,7 +161,8 @@ export async function seedDemoOrders(sb: Sb, partner: Partner) {
         third_party_consent_at: new Date(at - 60e3).toISOString(), is_demo: true,
         shipping: { name: `예시 고객 ${ci + 1}`, phone: "01000000000", postal_code: null, address1: "서울특별시 예시구 예시로 1", address2: null, note: null },
         delivery_preference: { note: null }, weekly_box_snapshot: [],
-        refund_amount: canceled ? subtotal + fee : 0,
+        refund_amount: canceled ? subtotal + fee : 0, refunded_amount: canceled ? subtotal + fee : 0,
+        refunded_at: canceled ? new Date(at + DAY).toISOString() : null, refund_note: canceled ? "예시 환불" : null,
       });
       for (const r of rows) {
         items.push({
@@ -164,10 +178,37 @@ export async function seedDemoOrders(sb: Sb, partner: Partner) {
           cancel_request_reason: cancelAsk ? "주소를 잘못 적었어요" : null,
           canceled_by: canceled ? "buyer" : null, canceled_at: canceled ? new Date(at + 3600e3).toISOString() : null,
           cancel_reason: canceled ? "단순 변심" : null,
+          // 배송 완료는 대부분 업체가, 가끔 택배 조회로 · 발송 중은 택배 조회 상태
+          delivered_by: fulfil === "delivered" ? (n % 4 === 0 ? "tracking" : "partner") : null,
+          tracking_status: fulfil === "shipped" ? (ago <= 4 ? "IN_TRANSIT" : "OUT_FOR_DELIVERY") : fulfil === "delivered" ? "DELIVERED" : null,
+          tracking_checked_at: fulfil === "shipped" ? new Date(now - 2 * 3600e3).toISOString() : null,
+          // 구매자가 받고 바로 확정한 것도 있다 (나머지는 배송 완료 8일 뒤 저절로)
+          confirmed_at: fulfil === "delivered" && n % 3 === 0 && at + 4 * DAY < now ? new Date(at + 4 * DAY).toISOString() : null,
+          confirm_by: fulfil === "delivered" && n % 3 === 0 && at + 4 * DAY < now ? "buyer" : null,
         });
       }
     }
   });
+  // ── 반품·교환 — 받은 지 8일 안의 주문에 요청 하나·회수 중 교환 하나, 한두 달 전 주문에 마음이 바뀐 반품(반품 배송비) 하나
+  const RET = { return_type: null, return_reason: null, return_note: null, return_requested_at: null, return_resolved_at: null, return_reply: null, return_fee: null, return_status: null };
+  for (const it of items) Object.assign(it, RET); // 여러 줄을 한 번에 넣을 때는 줄마다 칸이 같아야 한다
+  const recent = meta.filter((m) => m.fulfil === "delivered" && m.ago >= 4 && m.ago <= 9);
+  const old = meta.find((m) => m.fulfil === "delivered" && m.ago >= 35 && m.ago <= 60);
+  const setLines = (id: string, patch: Record<string, unknown>) => { for (const it of items) if (it.order_id === id) Object.assign(it, patch); };
+  if (recent[0]) setLines(recent[0].id, { confirmed_at: null, confirm_by: null, return_status: "requested", return_type: "return", return_reason: "damaged",
+    return_note: "포장이 터져서 국물이 샜어요", return_requested_at: new Date(now - 8 * 3600e3).toISOString() });
+  if (recent[1]) setLines(recent[1].id, { confirmed_at: null, confirm_by: null, return_status: "approved", return_type: "exchange", return_reason: "wrong",
+    return_note: "연어 대신 닭가슴살이 왔어요", return_requested_at: new Date(now - 30 * 3600e3).toISOString() });
+  if (old) {
+    const resolved = old.at + 6 * DAY;
+    setLines(old.id, { confirmed_at: null, confirm_by: null, fulfil_status: "canceled", canceled_by: "partner", canceled_at: new Date(resolved).toISOString(),
+      cancel_reason: "반품 · 마음이 바뀌었어요", return_status: "returned", return_type: "return", return_reason: "change_mind",
+      return_note: null, return_requested_at: new Date(old.at + 3 * DAY).toISOString(), return_resolved_at: new Date(resolved).toISOString(),
+      return_reply: "회수한 상품을 확인했어요", return_fee: 4000 });
+    const o = orders.find((x) => x.id === old.id)!;
+    const back = old.subtotal + old.fee - 4000;
+    Object.assign(o, { status: "cancelled", refund_amount: back, refunded_amount: back, refunded_at: new Date(resolved + DAY).toISOString(), refund_note: "예시 환불" });
+  }
   for (let i = 0; i < orders.length; i += 200) {
     const { error } = await sb.from("orders").insert(orders.slice(i, i + 200));
     if (error) throw new Error(`예시 주문을 만들지 못했어요: ${error.message}`);
@@ -212,8 +253,14 @@ async function seedDemoCoupons(sb: Sb, partner: Partner, used: { id: string; use
   if (fErr) throw new Error(fErr.message);
 }
 
-/** 이 업체의 예시 주문만 지운다 (주문 제품은 같이 지워진다) */
+/** 이 업체의 예시 주문만 지운다 (주문 제품은 같이 지워진다). 테스트 업체의 정산 기록도 예시라 같이 지운다 */
 export async function clearDemoOrders(sb: Sb, partnerId: string) {
+  const { data: pt, error: pErr } = await sb.from("partners").select("is_demo").eq("id", partnerId).single();
+  if (pErr) throw new Error(pErr.message);
+  if (pt?.is_demo) {
+    const { error } = await sb.from("partner_settlements").delete().eq("partner_id", partnerId);
+    if (error) throw new Error(error.message);
+  }
   const data = await selectAll<{ order_id: string }>(() => sb.from("order_items").select("order_id, orders!inner(is_demo)").eq("partner_id", partnerId).eq("orders.is_demo", true), "id");
   const ids = [...new Set(data.map((r) => r.order_id))];
   for (let i = 0; i < ids.length; i += 200) {
@@ -246,7 +293,46 @@ export async function seedDemo(sb: Sb, partner: Partner, userId: string | null):
   if (aErr) throw new Error(aErr.message);
   const o = await seedDemoOrders(sb, partner);
   await seedDemoCreators(sb, partner);
+  await seedDemoStore(sb, partner);
   return { excel, api, agency_id: up.id, ...o };
+}
+
+/**
+ * 테스트 매장 — 석 달 장사한 가게처럼: 제품 원가·과세 구분, 업체 정보(비어 있을 때만), 지난 석 달 정산(마감·정산 끝, 한 달은 입금 차이).
+ * 정산 숫자는 실제 마감 함수(closeMonth)로 센다 — 화면·엑셀과 같은 계산.
+ */
+export async function seedDemoStore(sb: Sb, partner: Partner) {
+  const COST: Record<string, [number, "taxable" | "exempt"]> = {
+    "EX-001": [3100, "taxable"], "EX-002": [4300, "taxable"], "EX-003": [2400, "taxable"], "EX-004": [3000, "taxable"], "EX-005": [1700, "taxable"], "EX-006": [4600, "exempt"],
+  };
+  for (const [sku, [cost, tax]] of Object.entries(COST)) {
+    const { error } = await sb.from("partner_items").update({ unit_cost: cost, tax_type: tax }).eq("partner_id", partner.id).eq("partner_sku", sku);
+    if (error) throw new Error(error.message);
+  }
+  // 업체 정보 — 이미 적어 둔 칸은 그대로 둔다
+  const { data: p, error: pErr } = await sb.from("partners").select("business_number, tax_email, bank_account, contact_email").eq("id", partner.id).single();
+  if (pErr) throw new Error(pErr.message);
+  const fill: Record<string, string> = {};
+  if (!p.business_number) fill.business_number = "123-45-67890";
+  if (!p.tax_email) fill.tax_email = `tax@${partner.slug}.example`;
+  if (!p.contact_email) fill.contact_email = `ops@${partner.slug}.example`;
+  if (!p.bank_account) Object.assign(fill, { bank_name: "예시은행", bank_holder: partner.name, bank_account: "00012345678901" });
+  if (Object.keys(fill).length) {
+    const { error } = await sb.from("partners").update(fill).eq("id", partner.id);
+    if (error) throw new Error(error.message);
+  }
+  // 지난 석 달 정산 — 석 달 전·두 달 전은 정산 끝(두 달 전은 1,000원 덜 보내 입금 대사에 보이게), 지난 달은 마감만(다음 지급 대기)
+  const { error: dErr } = await sb.from("partner_settlements").delete().eq("partner_id", partner.id);
+  if (dErr) throw new Error(dErr.message);
+  let m = previousMonth();
+  const months = [m];
+  for (let i = 0; i < 2; i++) { m = previousMonth(Date.parse(`${m}-15T00:00:00+09:00`)); months.unshift(m); }
+  for (const [i, month] of months.entries()) {
+    const st = await closeMonth(sb, partner.id, month, null);
+    if (!st || i === 2) continue;
+    const net = orderPayout(st) - st.commission;
+    await markPaid(sb, partner.id, month, "예시 입금", i === 1 ? net - 1000 : net);
+  }
 }
 
 /** 예시 크리에이터 3명(협업 제안 받기 켬, 테스트 업체에만 보임) + 협업 하나(받음·코드) + 제안 하나(답 기다림) + 코드로 받은 쿠폰 하나 */

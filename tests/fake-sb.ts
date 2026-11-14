@@ -42,6 +42,12 @@ class Builder {
   gte(c: string, v: any) { this.filters.push((r) => get(r, c) != null && get(r, c) >= v); return this; } // eslint-disable-line @typescript-eslint/no-explicit-any
   lt(c: string, v: any) { this.filters.push((r) => get(r, c) != null && get(r, c) < v); return this; } // eslint-disable-line @typescript-eslint/no-explicit-any
   lte(c: string, v: any) { this.filters.push((r) => get(r, c) != null && get(r, c) <= v); return this; } // eslint-disable-line @typescript-eslint/no-explicit-any
+  /** like 'abc%' (앞부분 같음)·'%abc'·'%abc%' 만 */
+  like(c: string, pat: string) {
+    const re = new RegExp("^" + pat.split("%").map((x) => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join(".*") + "$");
+    this.filters.push((r) => re.test(String(get(r, c) ?? "")));
+    return this;
+  }
   is(c: string, v: null) { this.desc.push(`is ${c}`); this.filters.push((r) => (get(r, c) ?? null) === v); return this; }
   not(c: string, op: string, v: unknown) {
     if (op === "is") this.filters.push((r) => (get(r, c) ?? null) !== v);
