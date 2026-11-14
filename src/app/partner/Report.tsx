@@ -7,15 +7,18 @@ type Product = { product_id: string; name: string; sku: string; impressions: num
 type Data = {
   days: number; products: Product[];
   totals: { impressions: number; views: number; clicks: number; diary: number; favorites: number; plans: number } | null;
-  audience: { people: number | null; goals?: { label: string; share: number }[]; hidden?: number } | null;
+  placements?: { key: string; label: string; count: number }[];
+  audience: {
+    people: number | null; goals?: Share[]; hidden?: number; tastes?: Share[]; tastes_hidden?: number;
+    meals?: Share[]; meals_hidden?: number; meal_people?: number | null;
+  } | null;
   /** 업체가 보고한 구매확정 수 — 보고가 한 번도 없으면 null */
   purchases?: number | null;
 };
+type Share = { key: string; label: string; share: number };
 type Days = "7" | "28" | "90";
 const n = (v: number) => v.toLocaleString("ko-KR");
 const pct = (a: number, b: number) => (b > 0 ? `${Math.round((a / b) * 100)}%` : "—");
-/** 목표 이름 → 고객층 조건 키 (lib/partner/report.ts GOAL_LABELS 와 lib/partner/crm.ts CRM_GOALS) */
-const GOAL_KEY: Record<string, string> = { "체중 관리": "weight_loss", "근력": "muscle", "균형 식단": "balanced", "활력": "energy", "장 건강": "gut_health", "피부": "skin" };
 
 /** 성과 — 내 제품을 본·누른·기록한 수와, 그 사람들의 목표 분포(통계만) */
 export function Report({ qs, onMakeSegment }: { qs: string; onMakeSegment?: (goal: string) => void }) {
@@ -77,6 +80,24 @@ export function Report({ qs, onMakeSegment }: { qs: string; onMakeSegment?: (goa
               </p>
             </Card>
 
+            <h3 className="text-label font-bold text-ink mt-8 mb-2">어디에 보였나</h3>
+            {!d.placements?.length ? (
+              <p className="text-label text-ink-2">아직 노출이 쌓이지 않았어요</p>
+            ) : (
+              <Card padding="none">
+                <ul className="divide-y divide-line">
+                  {d.placements.map((pl) => (
+                    <li key={pl.key} className="flex items-center justify-between gap-3 px-4 py-3">
+                      <span className="text-label text-ink">{pl.label}</span>
+                      <span className="text-label text-ink-2 whitespace-nowrap">
+                        <span className="num font-bold text-ink">{n(pl.count)}</span>회 · <span className="num">{pct(pl.count, d.placements!.reduce((t, x) => t + x.count, 0))}</span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </Card>
+            )}
+
             <h3 className="text-label font-bold text-ink mt-8 mb-2">제품별</h3>
             <Card padding="none" className="overflow-x-auto">
               <table className="w-full text-label">
@@ -109,27 +130,20 @@ export function Report({ qs, onMakeSegment }: { qs: string; onMakeSegment?: (goa
               </table>
             </Card>
 
-            <h3 className="text-label font-bold text-ink mt-8 mb-2">이 제품들을 본 사람들의 목표</h3>
+            <h3 className="text-label font-bold text-ink mt-8 mb-2">이 제품들을 본 사람들</h3>
             {!d.audience || d.audience.people === null ? (
               <EmptyState title="아직 보여 드릴 만큼 모이지 않았어요" description="누구인지 짐작할 수 없도록, 본 사람이 10명 이상일 때부터 비율로만 보여 드려요" />
             ) : (
               <Card>
-                <p className="text-caption text-ink-2 mb-3">약 <span className="num">{n(d.audience.people)}</span>명 기준 · 한 사람이 여러 목표를 고를 수 있어요</p>
-                {(d.audience.goals || []).length === 0 ? (
-                  <p className="text-label text-ink-2">10명 이상 모인 목표가 아직 없어요</p>
-                ) : (
-                  <ul className="flex flex-col gap-3">
-                    {(d.audience.goals || []).map((g) => (
-                      <li key={g.label}>
-                        <div className="flex justify-between text-label mb-1"><span className="text-ink">{g.label}</span><span className="num text-ink-2">{g.share}%</span></div>
-                        <ProgressBar value={g.share} label={`${g.label} ${g.share}%`} />
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                {!!d.audience.hidden && <p className="text-caption text-ink-2 mt-3">10명 미만인 목표 <span className="num">{d.audience.hidden}</span>개는 가렸어요</p>}
-                {onMakeSegment && d.audience.goals?.[0] && GOAL_KEY[d.audience.goals[0].label] && (
-                  <Button size="sm" variant="secondary" className="mt-4" onClick={() => onMakeSegment(GOAL_KEY[d.audience!.goals![0].label])}>
+                <p className="text-caption text-ink-2 mb-4">본·누른·기록한 약 <span className="num">{n(d.audience.people)}</span>명 기준 · 한 사람이 여러 칸에 들 수 있어요</p>
+                <div className="grid gap-6 sm:grid-cols-3">
+                  <ShareList title="고른 목표" rows={d.audience.goals || []} hidden={d.audience.hidden || 0} />
+                  <ShareList title="입맛" rows={d.audience.tastes || []} hidden={d.audience.tastes_hidden || 0} />
+                  <ShareList title="식단 기록에 넣은 끼니" rows={d.audience.meals || []} hidden={d.audience.meals_hidden || 0}
+                    note={d.audience.meal_people ? `기록한 약 ${n(d.audience.meal_people)}명 기준` : "기록한 사람이 10명이 안 돼요"} />
+                </div>
+                {onMakeSegment && d.audience.goals?.[0] && (
+                  <Button size="sm" variant="secondary" className="mt-6" onClick={() => onMakeSegment(d.audience!.goals![0].key)}>
                     &lsquo;{d.audience.goals[0].label}&rsquo; 목표인 사람으로 고객층 만들기
                   </Button>
                 )}
@@ -138,5 +152,28 @@ export function Report({ qs, onMakeSegment }: { qs: string; onMakeSegment?: (goa
           </>
         )}
     </section>
+  );
+}
+
+/** 비율 목록 — 10명 미만 칸은 가린 개수만 */
+function ShareList({ title, rows, hidden, note }: { title: string; rows: Share[]; hidden: number; note?: string }) {
+  return (
+    <div className="min-w-0">
+      <p className="text-label font-medium text-ink mb-1">{title}</p>
+      {note && <p className="text-caption text-ink-2 mb-2">{note}</p>}
+      {rows.length === 0 ? (
+        <p className="text-label text-ink-2">10명 이상 모인 칸이 아직 없어요</p>
+      ) : (
+        <ul className="flex flex-col gap-3 mt-2">
+          {rows.map((g) => (
+            <li key={g.key}>
+              <div className="flex justify-between text-label mb-1"><span className="text-ink">{g.label}</span><span className="num text-ink-2">{g.share}%</span></div>
+              <ProgressBar value={g.share} label={`${g.label} ${g.share}%`} />
+            </li>
+          ))}
+        </ul>
+      )}
+      {hidden > 0 && <p className="text-caption text-ink-2 mt-2">10명 미만인 칸 <span className="num">{hidden}</span>개는 가렸어요</p>}
+    </div>
   );
 }

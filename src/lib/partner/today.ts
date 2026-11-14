@@ -82,7 +82,8 @@ export async function buildToday(sb: Sb, partner: { id: string; kind: string; na
   const productIds = approved.map((a) => a.product_id!);
   let groupBuy: { title: string; current: number; target: number } | null = null;
   if (productIds.length) {
-    const { data, error } = await sb.from("group_buys").select("title, current_count, target_count").in("product_id", productIds.slice(0, 300)).eq("status", "recruiting").limit(50);
+    const { data, error } = await sb.from("group_buys").select("title, current_count, target_count").in("product_id", productIds.slice(0, 300)).eq("status", "recruiting")
+      .or(`expires_at.is.null,expires_at.gt.${new Date(now).toISOString()}`).limit(50); // 마감 지난 공구는 뺀다
     if (error) throw new Error(error.message);
     const half = ((data || []) as { title: string; current_count: number; target_count: number }[])
       .filter((g) => g.target_count > 0 && g.current_count * 2 >= g.target_count).sort((a, b) => b.current_count - a.current_count)[0];

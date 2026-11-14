@@ -3,13 +3,24 @@
  * 개인 단위 정보는 내보내지 않는다. 목표 분포는 사람이 10명 이상일 때만, 10명 미만인 칸은 가린다. 질환 관련 값은 쓰지 않는다.
  */
 import { cellFoods, type PlanGrid } from "@/lib/weekly-plan";
+import { CRM_GOALS, goalsOf } from "./crm";
 
 type Sb = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 /** 이 수보다 적은 사람 수는 숫자를 주지 않는다 (누구인지 짐작할 수 없게) */
 const MIN_PEOPLE = 10;
-const GOAL_LABELS: Record<string, string> = {
-  gut_health: "장 건강", skin: "피부", weight: "체중 관리", weight_loss: "체중 관리", energy: "활력", balanced: "균형 식단", muscle: "근력",
+const GOAL_LABEL = new Map<string, string>(CRM_GOALS.map((g) => [g.key, g.label]));
+/** 노출 자리 (lib/impressions.ts Placement) */
+export const PLACEMENT_LABEL: Record<string, string> = {
+  home_reco: "홈 · 맞춤 추천", home_cold: "홈 · 처음 온 사람 추천", onboarding_preview: "가입 직후 미리보기",
+  product_list: "탐색 · 검색 목록", weekly_fill: "식단 리스트 채우기",
 };
+const MEAL_LABEL: Record<string, string> = { breakfast: "아침", lunch: "점심", dinner: "저녁", snack: "간식" };
+/** 10명 이상인 칸만 비율로 — 나머지는 개수만 알린다 */
+function shares(tally: Map<string, Set<string>>, base: number, label: (k: string) => string | undefined) {
+  const rows = [...tally.entries()].map(([k, set]) => ({ key: k, label: label(k), n: set.size })).filter((r) => r.label);
+  const shown = rows.filter((r) => r.n >= MIN_PEOPLE).sort((a, b) => b.n - a.n);
+  return { rows: shown.map((r) => ({ key: r.key, label: r.label as string, share: Math.round((r.n / base) * 100) })), hidden: rows.length - shown.length };
+}
 
 async function inChunks<T>(ids: string[], run: (part: string[]) => Promise<{ data: T[] | null; error: { message: string } | null }>): Promise<T[]> {
   const out: T[] = [];
@@ -27,16 +38,17 @@ export async function buildReport(sb: Sb, items: ReportItem[], days: number) {
   const since = new Date(Date.now() - days * 86400e3).toISOString();
   const sinceDay = new Date(Date.now() + 9 * 3600e3 - days * 86400e3).toISOString().slice(0, 10);
   const ids: string[] = [...new Set(items.map((i) => i.product_id))];
-  if (ids.length === 0) return { days, products: [], totals: null, audience: null };
+  if (ids.length === 0) return { days, products: [], totals: null, placements: [], audience: null };
 
   type Ev = { product_id: string; user_id: string | null };
+  type Diary = Ev & { meal_type: string | null };
   const [views, clicks, diary, favs, reviews, imps, plans] = await Promise.all([
     inChunks<Ev>(ids, (p) => sb.from("user_interactions").select("product_id, user_id").eq("action", "view").in("product_id", p).gte("created_at", since).limit(50000)),
     inChunks<Ev>(ids, (p) => sb.from("product_clicks").select("product_id, user_id").in("product_id", p).gte("created_at", since).limit(50000)),
-    inChunks<Ev>(ids, (p) => sb.from("meal_diary").select("product_id, user_id").in("product_id", p).gte("date", sinceDay).limit(50000)),
+    inChunks<Diary>(ids, (p) => sb.from("meal_diary").select("product_id, user_id, meal_type").in("product_id", p).gte("date", sinceDay).limit(50000)),
     inChunks<Ev>(ids, (p) => sb.from("user_favorites").select("product_id, user_id").in("product_id", p).gte("created_at", since).limit(50000)),
     inChunks<{ product_id: string; rating: number | null }>(ids, (p) => sb.from("product_reviews").select("product_id, rating").in("product_id", p).limit(50000)),
-    inChunks<{ product_id: string; count: number }>(ids, (p) => sb.from("product_impressions").select("product_id, count").in("product_id", p).gte("day", sinceDay).limit(50000)),
+    inChunks<{ product_id: string; count: number; placement: string }>(ids, (p) => sb.from("product_impressions").select("product_id, count, placement").in("product_id", p).gte("day", sinceDay).limit(50000)),
     sb.from("saved_meal_plans").select("user_id, grid").eq("is_active", true).gte("updated_at", since).limit(2000),
   ]);
   if (plans.error) throw new Error(plans.error.message);
@@ -49,7 +61,13 @@ export async function buildReport(sb: Sb, items: ReportItem[], days: number) {
     for (const r of rows) { const b = by.get(r.product_id); if (b) { b[key]++; if (r.user_id) people.add(r.user_id); } }
   };
   count(views, "views"); count(clicks, "clicks"); count(diary, "diary"); count(favs, "favorites");
-  for (const r of imps) { const b = by.get(r.product_id); if (b) b.impressions += r.count; }
+  const place = new Map<string, number>();
+  for (const r of imps) {
+    const b = by.get(r.product_id);
+    if (b) { b.impressions += r.count; place.set(r.placement, (place.get(r.placement) || 0) + r.count); }
+  }
+  // 노출은 사람이 아니라 횟수라 가리지 않는다
+  const placements = [...place.entries()].map(([key, count]) => ({ key, label: PLACEMENT_LABEL[key] || "그 밖의 자리", count })).sort((a, b) => b.count - a.count);
   for (const r of reviews) { const b = by.get(r.product_id); if (b && r.rating) { b.rating_sum += r.rating; b.rating_n++; } }
   for (const pl of (plans.data || []) as { user_id: string | null; grid: PlanGrid | null }[]) {
     for (const day of Object.values(pl.grid || {})) for (const cell of Object.values(day || {})) {
@@ -65,21 +83,49 @@ export async function buildReport(sb: Sb, items: ReportItem[], days: number) {
       impressions: b.impressions, views: b.views, clicks: b.clicks, diary: b.diary, favorites: b.favorites, plans: b.plans,
       rating: b.rating_n ? Math.round((b.rating_sum / b.rating_n) * 10) / 10 : null, rating_n: b.rating_n,
     };
-  }).sort((a, b) => (b.views + b.clicks * 3 + b.diary * 2) - (a.views + a.clicks * 3 + a.diary * 2)).slice(0, 100);
+  }).sort((a, b) => (b.views + b.clicks * 3 + b.diary * 2) - (a.views + a.clicks * 3 + a.diary * 2));
+  // 합계는 모든 제품으로 — 표에는 앞의 100개만 보낸다
   const totals = products.reduce((t, p) => ({
     impressions: t.impressions + p.impressions, views: t.views + p.views, clicks: t.clicks + p.clicks, diary: t.diary + p.diary, favorites: t.favorites + p.favorites, plans: t.plans + p.plans,
   }), { impressions: 0, views: 0, clicks: 0, diary: 0, favorites: 0, plans: 0 });
 
-  // 본·누른·기록한 사람들의 목표 — 10명 이상일 때만, 칸도 10명 이상만
-  let audience: { people: number; goals: { label: string; share: number }[]; hidden: number } | { people: null } = { people: null };
+  // 본·누른·기록한 사람들의 목표·입맛·끼니 — 사람이 10명 이상일 때만, 칸도 10명 이상만 (질환 관심은 쓰지 않는다)
+  type Audience = {
+    people: number;
+    goals: { key: string; label: string; share: number }[]; hidden: number;
+    tastes: { key: string; label: string; share: number }[]; tastes_hidden: number;
+    meals: { key: string; label: string; share: number }[]; meals_hidden: number; meal_people: number | null;
+  };
+  let audience: Audience | { people: null } = { people: null };
   if (people.size >= MIN_PEOPLE) {
-    const profs = await inChunks<{ concerns: string[] | null }>([...people], (p) => sb.from("user_profiles").select("concerns").in("user_id", p));
-    const tally = new Map<string, number>();
-    for (const pr of profs) for (const label of new Set((pr.concerns || []).map((c) => GOAL_LABELS[c]).filter(Boolean))) tally.set(label, (tally.get(label) || 0) + 1);
-    const shown = [...tally.entries()].filter(([, n]) => n >= MIN_PEOPLE).sort((a, b) => b[1] - a[1]);
-    audience = profs.length >= MIN_PEOPLE
-      ? { people: Math.floor(profs.length / 10) * 10, goals: shown.map(([label, n]) => ({ label, share: Math.round((n / profs.length) * 100) })), hidden: tally.size - shown.length }
-      : { people: null };
+    type P = { user_id: string; goals: string[] | null; concerns: string[] | null; taste_salty: number | null; taste_sweet: number | null; taste_spicy: number | null; taste_fatty: number | null };
+    const profs = await inChunks<P>([...people], (p) => sb.from("user_profiles").select("user_id, goals, concerns, taste_salty, taste_sweet, taste_spicy, taste_fatty").in("user_id", p));
+    if (profs.length >= MIN_PEOPLE) {
+      const goalTally = new Map<string, Set<string>>();
+      const tasteTally = new Map<string, Set<string>>();
+      const add = (m: Map<string, Set<string>>, k: string, u: string) => { if (!m.has(k)) m.set(k, new Set()); m.get(k)!.add(u); };
+      for (const pr of profs) {
+        for (const g of goalsOf(pr)) if (GOAL_LABEL.has(g)) add(goalTally, g, pr.user_id);
+        // 맛 단계 1~10 — 3 이하는 덜, 8 이상은 더 찾는 편
+        if (pr.taste_salty !== null && pr.taste_salty <= 3) add(tasteTally, "less_salty", pr.user_id);
+        if (pr.taste_sweet !== null && pr.taste_sweet <= 3) add(tasteTally, "less_sweet", pr.user_id);
+        if (pr.taste_spicy !== null && pr.taste_spicy >= 8) add(tasteTally, "spicy", pr.user_id);
+        if (pr.taste_fatty !== null && pr.taste_fatty <= 3) add(tasteTally, "less_fatty", pr.user_id);
+      }
+      const TASTE: Record<string, string> = { less_salty: "싱겁게 먹는 편", less_sweet: "덜 달게 먹는 편", spicy: "맵게 먹는 편", less_fatty: "담백하게 먹는 편" };
+      const g = shares(goalTally, profs.length, (k) => GOAL_LABEL.get(k));
+      const t = shares(tasteTally, profs.length, (k) => TASTE[k]);
+      // 끼니 — 내 제품을 식단 기록에 넣은 사람 기준
+      const mealTally = new Map<string, Set<string>>();
+      const diaryPeople = new Set<string>();
+      for (const r of diary) if (r.user_id && r.meal_type) { diaryPeople.add(r.user_id); if (!mealTally.has(r.meal_type)) mealTally.set(r.meal_type, new Set()); mealTally.get(r.meal_type)!.add(r.user_id); }
+      const m = diaryPeople.size >= MIN_PEOPLE ? shares(mealTally, diaryPeople.size, (k) => MEAL_LABEL[k]) : { rows: [], hidden: mealTally.size };
+      audience = {
+        people: Math.floor(profs.length / 10) * 10,
+        goals: g.rows, hidden: g.hidden, tastes: t.rows, tastes_hidden: t.hidden,
+        meals: m.rows, meals_hidden: m.hidden, meal_people: diaryPeople.size >= MIN_PEOPLE ? Math.floor(diaryPeople.size / 10) * 10 : null,
+      };
+    }
   }
-  return { days, products, totals, audience };
+  return { days, products: products.slice(0, 100), totals, placements, audience };
 }

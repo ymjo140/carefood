@@ -1,7 +1,8 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { Button, Card, LinkButton, Notice, SectionHeader, buttonClass, timeAgo, useToast } from "@/components/ui";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Button, Card, EmptyState, Icon, LinkButton, Notice, SectionHeader, Skeleton, buttonClass, timeAgo, useToast } from "@/components/ui";
+import type { ConnectStatus } from "@/lib/partner/connect-status";
 import { Feed } from "./Feed";
 import { ApiKeys } from "./ApiKeys";
 
@@ -15,11 +16,12 @@ type RowError = { row: number; sku?: string; field?: string; message: string };
  * 연동 — 내 정보가 최신인가. 세 방식을 나란히 두고 피드·API를 권한다 (v3 7.8).
  * 엑셀 올리기는 제품 탭에서 여기로 옮겼다 — 가격·재고 갱신이 연동의 일이라서.
  */
-export function Connect({ qs, batches, onChanged }: { qs: string; batches: Batch[]; onChanged: () => void }) {
+export function Connect({ qs, batches, onChanged, onReport }: { qs: string; batches: Batch[]; onChanged: () => void; onReport?: () => void }) {
   const toast = useToast();
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [result, setResult] = useState<Batch | null>(null);
+  const [tick, setTick] = useState(0); // 올리기·피드 가져오기 뒤에 연동 상태를 다시 불러온다
   const fileRef = useRef<HTMLInputElement>(null);
   const last = result || batches[0] || null;
 
@@ -40,6 +42,7 @@ export function Connect({ qs, batches, onChanged }: { qs: string; batches: Batch
       if (fileRef.current) fileRef.current.value = "";
       toast.show(`${d.rows}줄을 올렸어요`);
       onChanged();
+      setTick((t) => t + 1);
     } catch (e) {
       toast.show(`올리지 못했어요. ${(e as Error).message || "다시 시도해 주세요"}`, { tone: "danger" });
     } finally { setUploading(false); }
@@ -47,6 +50,8 @@ export function Connect({ qs, batches, onChanged }: { qs: string; batches: Batch
 
   return (
     <div className="flex flex-col gap-10">
+      <Status qs={qs} refresh={tick} onReport={onReport} />
+
       <section>
         <SectionHeader title="연동 방식" />
         <div className="grid gap-3 sm:grid-cols-3">
@@ -65,7 +70,7 @@ export function Connect({ qs, batches, onChanged }: { qs: string; batches: Batch
         </div>
       </section>
 
-      <Feed qs={qs} onFetched={onChanged} />
+      <Feed qs={qs} onFetched={() => { onChanged(); setTick((t) => t + 1); }} />
       <ApiKeys qs={qs} />
 
       <section>
@@ -123,5 +128,89 @@ function BatchResult({ batch, fresh }: { batch: Batch; fresh: boolean }) {
         </div>
       )}
     </Notice>
+  );
+}
+
+const VIA: Record<string, string> = { excel: "엑셀", feed: "피드", api: "API" };
+const n = (v: number) => v.toLocaleString("ko-KR");
+
+/** 연동 상태 — 마지막 수신 · 오래된 가격 · 구매 확정 보고. 문제가 있는 줄에는 경고 아이콘과 할 일 */
+function Status({ qs, refresh, onReport }: { qs: string; refresh: number; onReport?: () => void }) {
+  const [state, setState] = useState<{ status: "loading" | "error" | "done"; data?: ConnectStatus; error?: string }>({ status: "loading" });
+  const load = useCallback(async () => {
+    try {
+      const r = await fetch(`/api/partner/status?${qs}`);
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error);
+      setState({ status: "done", data: j });
+    } catch (e) { setState({ status: "error", error: (e as Error).message || "불러오지 못했어요" }); }
+  }, [qs]);
+  useEffect(() => { load(); }, [load, refresh]); // eslint-disable-line react-hooks/set-state-in-effect -- 불러온 뒤에 상태를 바꾼다
+
+  const d = state.data;
+  return (
+    <section>
+      <SectionHeader title="연동 상태" />
+      {state.status === "loading" ? (
+        <Card padding="none"><div className="flex flex-col gap-4 p-4">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-10 w-full" />)}</div></Card>
+      ) : state.status === "error" || !d ? (
+        <EmptyState title="연동 상태를 불러오지 못했어요" description={state.error}
+          action={<Button size="sm" variant="secondary" icon="refresh" onClick={() => { setState({ status: "loading" }); load(); }}>다시 불러오기</Button>} />
+      ) : (
+        <Card padding="none">
+          <ul className="divide-y divide-line">
+            <Row
+              title="마지막으로 받은 정보"
+              problem={(!!d.last && d.last.failed > 0) || (!!d.feed?.active && d.feed.status === "failed")}
+              detail={!d.last ? "아직 받은 정보가 없어요. 아래에서 방식을 골라 제품을 올려 주세요" : (
+                <>
+                  {timeAgo(d.last.at)} · {VIA[d.last.via] || d.last.via} · <span className="num">{n(d.last.rows)}</span>줄
+                  {d.last.failed > 0 && <> 중 반려 <span className="num">{n(d.last.failed)}</span>줄 — 아래 결과에서 고칠 칸을 볼 수 있어요</>}
+                  {d.feed?.active && d.feed.status === "failed" && <> · 피드를 <span className="num">{d.feed.failures}</span>번 연속 가져오지 못했어요</>}
+                </>
+              )}
+            />
+            <Row
+              title="가격 확인"
+              problem={d.prices.stale60 > 0}
+              detail={d.prices.total === 0 ? "판매 중인 가격이 아직 없어요" : (
+                <>
+                  판매 중 가격 <span className="num">{n(d.prices.total)}</span>개
+                  {d.prices.stale60 > 0 && <> · 60일 넘어 감춰진 가격 <span className="num">{n(d.prices.stale60)}</span>개</>}
+                  {d.prices.stale50 > 0 && <> · 곧 감춰질 가격(50일 넘음) <span className="num">{n(d.prices.stale50)}</span>개</>}
+                  {d.prices.stale60 === 0 && d.prices.stale50 === 0 && <> · 모두 50일 안에 확인했어요</>}
+                </>
+              )}
+            />
+            <Row
+              title="구매 확정 보고"
+              problem={d.reports.clicks_28 > 0 && (d.reports.gap_days === null || d.reports.gap_days > 3)}
+              detail={
+                <>
+                  {d.reports.last_at ? <>마지막 보고 {timeAgo(d.reports.last_at)}</> : "아직 보고가 없어요"}
+                  {" · "}지난 28일 구매 링크 클릭 <span className="num">{n(d.reports.clicks_28)}</span>번 · 보고 <span className="num">{n(d.reports.reports_28)}</span>건
+                </>
+              }
+              action={onReport && d.reports.clicks_28 > 0 ? <Button size="sm" variant="secondary" onClick={onReport}>주문 올리기</Button> : null}
+            />
+          </ul>
+        </Card>
+      )}
+    </section>
+  );
+}
+
+function Row({ title, detail, problem, action }: { title: string; detail: React.ReactNode; problem?: boolean | null; action?: React.ReactNode }) {
+  return (
+    <li className="flex flex-wrap items-start gap-3 px-4 py-3">
+      <div className="min-w-0 flex-1">
+        <p className="flex items-center gap-1.5 text-label font-medium text-ink">
+          {problem && <Icon name="alert" size={16} className="text-danger shrink-0" aria-label="확인이 필요해요" />}
+          {title}
+        </p>
+        <p className="text-label text-ink-2 mt-0.5">{detail}</p>
+      </div>
+      {action}
+    </li>
   );
 }
