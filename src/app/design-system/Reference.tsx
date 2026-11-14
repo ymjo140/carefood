@@ -7,6 +7,7 @@ import {
   ProgressBar, SearchField, SectionHeader, Select, Sheet, Spinner, Stat, Steps, Tabs, Textarea, TextLink, TextButton, Thumb, ProductImage,
   Avatar, useToast, cn, type BadgeTone,
   BottomNavItems, SkeletonList, FoodEntryForm, DragArea, DragGhost, DragHandle, useDragItem, useDropTarget, type DragData, ChoiceCard, ChoiceList, LinkTabs, RatingStars, RatingInput, ScaleInput, QuickRating, PostAuthor, PostAction, PostActions, PostTags, ThreadItem, MealAttach, PlanAttach, ProductTagLinks, PhotoGrid, PollAttach, DayDots, Switch,
+  ReelRow, ReelTile, ReelAddTile, ReelSkeleton, ReelMedia,
 } from "@/components/ui";
 
 // 서버(UTC)와 브라우저 시간대가 달라도 같은 글자가 나오도록 한국 시간으로 고정
@@ -107,6 +108,8 @@ const COLOR_GROUPS: { title: string; note?: string; items: ColorSpec[] }[] = [
     items: [
       { token: "highlight", usage: "형광펜 — 한 화면 핵심 숫자 하나", kind: "fill" },
       { token: "scrim", usage: "시트 뒤 어둡게 가리는 막", kind: "deco" },
+      { token: "media-scrim", usage: "사진·영상 위 글자 띠 (숏폼 칸·보기 화면)", kind: "deco" },
+      { token: "on-media", usage: "사진 위 띠 안의 글자 · 아이콘", on: "media-scrim" },
     ],
   },
 ];
@@ -133,6 +136,8 @@ const BG: Record<string, string> = {
   "sodium": "bg-sodium",
   "highlight": "bg-highlight",
   "scrim": "bg-scrim",
+  "media-scrim": "bg-media-scrim",
+  "on-media": "bg-on-media",
 };
 const TX: Record<string, string> = {
   "canvas": "text-canvas",
@@ -156,6 +161,8 @@ const TX: Record<string, string> = {
   "sodium": "text-sodium",
   "highlight": "text-highlight",
   "scrim": "text-scrim",
+  "media-scrim": "text-media-scrim",
+  "on-media": "text-on-media",
 };
 const ALL_TOKENS = COLOR_GROUPS.flatMap((g) => g.items.map((i) => i.token));
 
@@ -778,6 +785,32 @@ export default function Reference({ status }: { status: DsStatus }) {
             <div className="flex flex-col gap-2">
               <DayDots days={(["done", "done", "missed", "done", "today", "future", "future"] as const).map((state, i) => ({ date: `d${i}`, state }))} />
               <p className="text-label text-ink"><span className="num">7</span>일 중 <span className="num font-bold text-brand-ink">3</span>일 해냈어요</p>
+            </div>
+          </Demo>
+          <Demo label="숏폼 줄 — 피드 맨 위 '오늘의 식단 · 공구'. 맨 앞 칸이 글쓰기 입구 하나, 사진 위 글자는 아래 띠(media-scrim) 한 곳" code="<ReelRow><ReelAddTile /><ReelTile tag author line /></ReelRow>">
+            <div className="overflow-hidden px-4">
+              <ReelRow label="숏폼 줄 예시">
+                <ReelAddTile onClick={() => {}} sub="식단 · 공구" />
+                <ReelTile href="#" tag="공구" author="민지" label="민지의 공구: 닭가슴살 현미 볶음밥, 23명 모임"
+                  line={<>알림 <span className="num font-bold">23</span>/30명</>} />
+                <ReelTile href="#" tag="식단" author="준호" label="준호의 식단"
+                  line={<>단백질 <span className="num font-bold">38</span>g 점심</>} />
+                <ReelSkeleton count={1} />
+              </ReelRow>
+            </div>
+          </Demo>
+          <Demo label="숏폼 보기 위쪽 — 사진을 옆으로 넘기고, 위 띠에 몇 번째 · 올린 사람 · 닫기" code="<ReelMedia urls header closeHref />">
+            <div className="overflow-hidden px-4 pt-5 max-w-sm">
+              <ReelMedia urls={[]} alt="예시 공구" closeHref="#"
+                header={
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <Avatar name="민지" size="sm" />
+                    <div className="min-w-0">
+                      <p className="text-label font-bold truncate">민지 <span className="font-regular">· 공구 진행 · 2일 전</span></p>
+                      <p className="text-caption flex items-center gap-1"><Icon name="check" size={14} />최근 30일 이 제품을 <span className="num font-bold">12</span>번 기록했어요</p>
+                    </div>
+                  </div>
+                } />
             </div>
           </Demo>
         </div>

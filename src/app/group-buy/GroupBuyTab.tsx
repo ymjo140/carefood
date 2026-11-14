@@ -1,28 +1,32 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
-  Button, Card, EmptyState, Field, Icon, Input, Notice, PageHeader, ProgressBar, Select, Sheet, SkeletonList, Tabs, Thumb, useToast,
+  Button, Card, EmptyState, Notice, PageHeader, ProgressBar, SkeletonList, Tabs, Thumb, useToast,
 } from "@/components/ui";
+import GroupBuyComposer from "@/components/community/GroupBuyComposer";
 import { GROUP_BUY_ENABLED } from "@/lib/features";
+import { groupBuyWords } from "@/lib/group-buy";
 import { checkedLabel } from "@/lib/prices";
 
 /**
  * 공구 탭
  * - 잠금(GROUP_BUY_ENABLED 꺼짐, 지금): 관심만 모은다. 가격은 '지금 최저가'만 보여 주고 공구가를 약속하지 않는다.
  * - 열림(켜짐): 공구가·참여 인원·참여하기. 결제 흐름을 붙인 뒤에 켠다 (src/lib/features.ts)
+ * 만들기는 components/community/GroupBuyComposer (사진·이야기·사람당 묶음·바라는 것)
+ * ds-wiring-drop: group_buy_target — 목표 인원은 진행자가 고르지 않고 GROUP_TARGET 으로 정한다
  */
 type GroupBuy = {
   id: string; product_id: string | null; product_name: string; title: string | null;
   target_count: number; current_count: number; target_price: number | null;
   status: string; expires_at: string | null; lowest_price: number | null; lowest_checked_at: string | null; image_url: string | null;
+  host_nickname: string; host_records: number;
 };
 type View = "open" | "mine";
 
 const OPEN = GROUP_BUY_ENABLED;
-const WORD = OPEN ? { mark: "참여하기", marked: "참여했어요", done: "참여했어요", undo: "참여를 취소했어요", fail: "참여하지 못했어요" }
-  : { mark: "관심 있어요", marked: "관심 표시함", done: "관심 표시했어요", undo: "관심을 거뒀어요", fail: "관심 표시하지 못했어요" };
+const WORD = groupBuyWords(OPEN);
 
 function daysLeft(expires: string | null) {
   if (!expires) return null;
@@ -71,17 +75,17 @@ export function GroupBuyTab() {
       }));
       toast.show(marked ? WORD.undo : WORD.done);
     } catch {
-      toast.show(`${marked ? "거두지 못했어요" : WORD.fail}. 다시 시도해 주세요`, { tone: "danger" });
+      toast.show(`${marked ? WORD.undoFail : WORD.fail}. 다시 시도해 주세요`, { tone: "danger" });
     } finally { setBusy(null); }
   };
 
-  // 비어 있을 땐 빈 화면의 '제안하기' 하나만 둔다
+  // 비어 있을 땐 빈 화면의 '공구 만들기' 하나만 둔다
   const emptyOpen = view === "open" && state.status === "done" && state.items.length === 0;
 
   return (
     <>
       <PageHeader title="공구"
-        actions={emptyOpen ? undefined : <Button variant="secondary" size="sm" icon="plus" onClick={() => setSuggestOpen(true)}>제안하기</Button>} />
+        actions={emptyOpen ? undefined : <Button variant="secondary" size="sm" icon="plus" onClick={() => setSuggestOpen(true)}>공구 만들기</Button>} />
 
       {!OPEN && (
         <Notice icon="lock" className="mb-4">
@@ -104,8 +108,8 @@ export function GroupBuyTab() {
       {state.status === "done" && state.items.length === 0 && (
         view === "open" ? (
           <EmptyState className="mt-4" title="지금 관심을 모으는 공구가 없어요"
-            description="자주 사는 제품을 묶음으로 사고 싶다면 먼저 제안해 보세요"
-            action={<Button variant="secondary" size="sm" icon="plus" onClick={() => setSuggestOpen(true)}>제안하기</Button>} />
+            description="자주 먹는 제품을 사진과 함께 올려 함께 살 사람을 모아 보세요"
+            action={<Button variant="secondary" size="sm" icon="plus" onClick={() => setSuggestOpen(true)}>공구 만들기</Button>} />
         ) : (
           <EmptyState className="mt-4" title={OPEN ? "아직 참여한 공구가 없어요" : "아직 관심 표시한 공구가 없어요"}
             description="관심 모으는 공구에서 마음에 드는 걸 골라 보세요"
@@ -126,11 +130,10 @@ export function GroupBuyTab() {
                 <div className="flex gap-3">
                   <Thumb src={gb.image_url} size={56} />
                   <div className="min-w-0 flex flex-col gap-0.5">
-                    {gb.product_id ? (
-                      <Link href={`/products/${gb.product_id}`} className="text-body font-medium text-ink line-clamp-2 hover:underline">{gb.product_name}</Link>
-                    ) : (
-                      <p className="text-body font-medium text-ink line-clamp-2">{gb.product_name}</p>
-                    )}
+                    <Link href={`/group-buy/${gb.id}`} className="text-body font-medium text-ink line-clamp-2 hover:underline">{gb.product_name}</Link>
+                    <p className="text-caption text-ink-2">
+                      {gb.host_nickname}{gb.host_records > 0 && <> · 최근 30일 <span className="num">{gb.host_records}</span>번 기록</>}
+                    </p>
                     {OPEN && gb.target_price ? (
                       <p className="text-label text-ink">
                         공구가 <span className="num font-bold">{gb.target_price.toLocaleString("ko-KR")}</span>원
@@ -145,7 +148,7 @@ export function GroupBuyTab() {
                     )}
                   </div>
                 </div>
-                <ProgressBar value={gb.current_count} max={gb.target_count} label={OPEN ? "참여 인원" : "관심 인원"} />
+                <ProgressBar value={gb.current_count} max={gb.target_count} label={OPEN ? "참여 인원" : "알림 받는 사람"} />
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-label text-ink-2">
                     <span className="num font-bold text-ink">{gb.current_count}</span> / <span className="num">{gb.target_count}</span>명
@@ -162,104 +165,7 @@ export function GroupBuyTab() {
         </ul>
       )}
 
-      <SuggestSheet open={suggestOpen} onClose={() => setSuggestOpen(false)}
-        onDone={() => { setSuggestOpen(false); setView("open"); setAttempt((n) => n + 1); }} />
+      <GroupBuyComposer open={suggestOpen} onClose={() => setSuggestOpen(false)} />
     </>
-  );
-}
-
-/* ───── 제안하기 시트 ───── */
-type Hit = { id: string; name: string };
-
-function SuggestSheet({ open, onClose, onDone }: { open: boolean; onClose: () => void; onDone: () => void }) {
-  const toast = useToast();
-  const [query, setQuery] = useState("");
-  const [hits, setHits] = useState<{ status: "idle" | "loading" | "error" | "done"; items: Hit[] }>({ status: "idle", items: [] });
-  const [picked, setPicked] = useState<Hit | null>(null);
-  const [count, setCount] = useState("30");
-  const [sending, setSending] = useState(false);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const search = useCallback((q: string) => {
-    if (timer.current) clearTimeout(timer.current);
-    if (q.trim().length < 2) { setHits({ status: "idle", items: [] }); return; }
-    timer.current = setTimeout(() => {
-      setHits((h) => ({ ...h, status: "loading" }));
-      fetch(`/api/products?q=${encodeURIComponent(q.trim())}&hasPrice=1&limit=5&sort=name`)
-        .then(async (r) => {
-          const d = await r.json();
-          if (!r.ok) throw new Error(d.error);
-          setHits({ status: "done", items: (d.products || []).map((p: Hit) => ({ id: p.id, name: p.name })) });
-        })
-        .catch(() => setHits({ status: "error", items: [] }));
-    }, 300);
-  }, []);
-
-  const reset = () => { setQuery(""); setHits({ status: "idle", items: [] }); setPicked(null); setCount("30"); };
-
-  const submit = async () => {
-    if (!picked) return;
-    setSending(true);
-    try {
-      const res = await fetch("/api/community/group-buy", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ product_id: picked.id, product_name: picked.name, target_count: Number(count) }),
-      });
-      const d = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(d.error);
-      toast.show("공구를 제안했어요. 14일 동안 관심을 모아요");
-      reset();
-      onDone();
-    } catch {
-      toast.show("제안하지 못했어요. 다시 시도해 주세요", { tone: "danger" });
-    } finally { setSending(false); }
-  };
-
-  return (
-    <Sheet open={open} onClose={() => { reset(); onClose(); }} title="공구 제안하기"
-      description={GROUP_BUY_ENABLED ? "제품을 고르면 함께 살 사람을 모아요" : "판매가 열리기 전엔 관심만 모아요. 가격은 약속하지 않아요"}
-      footer={
-        <>
-          <Button variant="secondary" block onClick={() => { reset(); onClose(); }}>취소</Button>
-          <Button block disabled={!picked} loading={sending} onClick={submit}>제안하기</Button>
-        </>
-      }>
-      <div className="flex flex-col gap-4">
-        {picked ? (
-          <div className="flex items-center justify-between gap-3 rounded-md bg-sunken px-3 py-2.5">
-            <p className="text-label font-medium text-ink min-w-0 line-clamp-2">{picked.name}</p>
-            <Button size="sm" variant="ghost" onClick={() => setPicked(null)}>바꾸기</Button>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-2">
-            <Field label="어떤 제품을 함께 살까요">
-              <Input value={query} placeholder="제품 이름 (예: 현미밥, 닭가슴살)" name="group_buy_product"
-                onChange={(e) => { setQuery(e.target.value); search(e.target.value); }} />
-            </Field>
-            {hits.status === "loading" && <SkeletonList rows={2} thumb={false} />}
-            {hits.status === "error" && <p className="text-caption text-danger">제품을 찾지 못했어요. 다시 입력해 주세요</p>}
-            {hits.status === "done" && hits.items.length === 0 && <p className="text-caption text-ink-2">맞는 제품이 없어요. 다른 이름으로 찾아보세요</p>}
-            {hits.status === "done" && hits.items.length > 0 && (
-              <ul className="flex flex-col divide-y divide-line rounded-md border border-line">
-                {hits.items.map((h) => (
-                  <li key={h.id}>
-                    <button type="button" onClick={() => setPicked(h)}
-                      className="press w-full min-h-11 px-3 py-2 text-left text-label text-ink flex items-center justify-between gap-2 hover:bg-sunken transition-colors">
-                      <span className="min-w-0 line-clamp-1">{h.name}</span>
-                      <Icon name="plus" size={16} className="text-ink-2 shrink-0" />
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        )}
-        <Field label="몇 명 모을까요">
-          <Select value={count} name="group_buy_target" onChange={(e) => setCount(e.target.value)}>
-            {["10", "20", "30", "50"].map((n) => <option key={n} value={n}>{n}명</option>)}
-          </Select>
-        </Field>
-      </div>
-    </Sheet>
   );
 }

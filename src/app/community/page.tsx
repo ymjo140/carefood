@@ -2,20 +2,28 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import ThreadCard, { type FeedPostData } from "@/components/community/ThreadCard";
 import PostComposer, { type Attach, type ComposerPreset } from "@/components/community/PostComposer";
 import ChallengeEntry from "@/components/community/ChallengeEntry";
-import { Avatar, Button, Chip, ChipRow, EmptyState, Icon, Page, PageHeader, SkeletonPost, Spinner, Tabs, useToast } from "@/components/ui";
+import GroupBuyComposer from "@/components/community/GroupBuyComposer";
+import {
+  Button, Chip, ChipRow, EmptyState, Icon, ListRow, Page, PageHeader, ReelAddTile, ReelRow, ReelSkeleton, ReelTile, SectionHeader, Sheet,
+  SkeletonPost, Spinner, Tabs, TextLink, mealMeta, useToast,
+} from "@/components/ui";
 import { COMMUNITY_TOPICS } from "@/lib/community-topics";
 import { getOrCreateNickname, setNickname } from "@/lib/nickname";
 
 /**
- * 피드 (쓰레드형) — 맨 위 바로 쓰기 줄 → 챌린지 한 줄 → 보기(추천·팔로잉·모임·내 글) → 줄로 나눈 글 목록
+ * 피드 (쓰레드형) — 맨 위 숏폼 줄(오늘의 식단 · 공구, 맨 앞 칸이 글쓰기 입구) → 챌린지 한 줄 → 보기(추천·팔로잉·모임·내 글) → 줄로 나눈 글 목록
+ * 숏폼 줄: 사진이 붙은 식단 글 + 관심 모으는 공구 (/api/community/reels). 공구 칸은 공구 보기(/group-buy/[id])로
  * ds-wiring-drop: /api/community/follow — 팔로우는 글 상세에서 (목록의 카드마다 있던 채운 버튼을 뺌)
  * 글마다 ··· 메뉴: 숨기기·차단·신고·(내 글) 지우기 → 목록에서 바로 뺀다
  */
 type Tab = "recommend" | "following" | "topic" | "mine";
+
+type Reel =
+  | { kind: "meal"; id: string; image: string | null; author: string; meal_type: string | null; kcal: number | null; protein_g: number | null; text: string }
+  | { kind: "group_buy"; id: string; image: string | null; author: string; product_name: string; current_count: number; target_count: number };
 
 const TABS: { value: Tab; label: string }[] = [
   { value: "recommend", label: "추천" },
@@ -34,6 +42,10 @@ export default function CommunityPage() {
   const [hasMore, setHasMore] = useState(false);
   const [composer, setComposer] = useState<{ open: boolean; attach: Attach | null; preset?: ComposerPreset | null }>({ open: false, attach: null });
   const [nickname, setNick] = useState("");
+  const [reels, setReels] = useState<{ status: "loading" | "error" | "done"; items: Reel[] }>({ status: "loading", items: [] });
+  const [reelTry, setReelTry] = useState(0);
+  const [picker, setPicker] = useState(false);
+  const [groupOpen, setGroupOpen] = useState(false);
   const toast = useToast();
   const sentinelRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
@@ -56,6 +68,20 @@ export default function CommunityPage() {
     }
     /* eslint-enable react-hooks/set-state-in-effect */
   }, []);
+
+  /* ─── 숏폼 줄 ─── */
+  useEffect(() => {
+    let alive = true;
+    setReels((r) => ({ ...r, status: "loading" })); // eslint-disable-line react-hooks/set-state-in-effect -- 다시 불러오기
+    fetch("/api/community/reels")
+      .then(async (r) => {
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error);
+        if (alive) setReels({ status: "done", items: d.items || [] });
+      })
+      .catch(() => { if (alive) setReels((r) => ({ ...r, status: "error" })); });
+    return () => { alive = false; };
+  }, [reelTry]);
 
   /* ─── 불러오기 ─── */
   const fetchFeed = useCallback(async (pg = 1, append = false) => {
@@ -124,6 +150,10 @@ export default function CommunityPage() {
   };
 
   const openComposer = (attach: Attach | null = null) => setComposer({ open: true, attach });
+  const pick = (what: Attach | null | "group") => {
+    setPicker(false);
+    if (what === "group") setGroupOpen(true); else openComposer(what);
+  };
 
   const empty = {
     recommend: { title: "아직 글이 없어요", description: "첫 번째로 오늘 식단을 나눠 보세요" },
@@ -136,24 +166,35 @@ export default function CommunityPage() {
     <Page width="narrow">
       <PageHeader title="피드" />
 
-      {/* ── 바로 쓰기 ── */}
-      <section aria-label="바로 쓰기" className="flex gap-3 pb-4 border-b border-line">
-        <Avatar name={nickname || "나"} />
-        <div className="flex-1 min-w-0 flex flex-col gap-2.5">
-          <button type="button" onClick={() => openComposer(null)}
-            className="text-left min-h-10 text-body text-ink-3 hover:text-ink-2 transition-colors">
-            오늘 뭐 먹었는지 나눠 보세요
-          </button>
-          <ChipRow>
-            <Chip size="sm" onClick={() => openComposer("meal")}><Icon name="notebook" size={14} />기록한 끼니</Chip>
-            <Chip size="sm" onClick={() => openComposer("plan")}><Icon name="calendar" size={14} />저장한 식단</Chip>
-            <Chip size="sm" onClick={() => openComposer("product")}><Icon name="tag" size={14} />제품 태그</Chip>
-            <Chip size="sm" onClick={() => openComposer("poll")}><Icon name="poll" size={14} />투표</Chip>
-            <Link href="/group-buy" className="press inline-flex items-center justify-center gap-1 rounded-full border whitespace-nowrap shrink-0 h-8 px-3 text-caption border-line bg-surface text-ink-2 font-medium hover:border-line-strong hover:text-ink">
-              <Icon name="users" size={14} />공구 제안
-            </Link>
-          </ChipRow>
-        </div>
+      {/* ── 숏폼 줄: 오늘의 식단 · 공구 ── */}
+      <section aria-label="오늘의 식단 · 공구" className="pb-4 border-b border-line">
+        <SectionHeader title="오늘의 식단 · 공구" action={<TextLink href="/group-buy">공구 모두 보기</TextLink>} />
+        <ReelRow label="오늘의 식단과 공구">
+          <ReelAddTile onClick={() => setPicker(true)} sub="식단 · 공구" />
+          {reels.status === "loading" && <ReelSkeleton count={3} />}
+          {reels.status === "done" && reels.items.map((r) => r.kind === "group_buy" ? (
+            <ReelTile key={`g-${r.id}`} href={`/group-buy/${r.id}`} image={r.image} tag="공구" author={r.author}
+              label={`${r.author}의 공구: ${r.product_name}, ${r.current_count}명 모임`}
+              line={<>알림 <span className="num font-bold">{r.current_count}</span>/{r.target_count}명</>} />
+          ) : (
+            <ReelTile key={`m-${r.id}`} href={`/community/${r.id}`} image={r.image} tag="식단" author={r.author}
+              label={`${r.author}의 식단${r.text ? `: ${r.text}` : ""}`}
+              line={r.protein_g != null
+                ? <>단백질 <span className="num font-bold">{Math.round(r.protein_g)}</span>g {r.meal_type ? mealMeta(r.meal_type).label : ""}</>
+                : r.kcal != null
+                  ? <><span className="num font-bold">{Math.round(r.kcal)}</span>kcal {r.meal_type ? mealMeta(r.meal_type).label : ""}</>
+                  : r.text || "오늘의 식단"} />
+          ))}
+        </ReelRow>
+        {reels.status === "error" && (
+          <div className="mt-2 flex items-center gap-2 text-caption text-danger">
+            사진 줄을 불러오지 못했어요
+            <Button size="sm" variant="ghost" icon="refresh" onClick={() => setReelTry((n) => n + 1)}>다시 불러오기</Button>
+          </div>
+        )}
+        {reels.status === "done" && reels.items.length === 0 && (
+          <p className="mt-2 text-caption text-ink-2">아직 올라온 사진이 없어요. 오늘 먹은 걸 사진과 함께 올려 보세요</p>
+        )}
       </section>
 
       {/* ── 챌린지 ── */}
@@ -204,13 +245,24 @@ export default function CommunityPage() {
         )}
       </div>
 
+      {/* ── 올리기: 무엇을 올릴지 ── */}
+      <Sheet open={picker} onClose={() => setPicker(false)} title="올리기" size="sm">
+        <div className="flex flex-col gap-1">
+          <ListRow onClick={() => pick("meal")} leading={<Icon name="notebook" size={20} className="text-ink-2" />} title="오늘 먹은 끼니" meta="기록한 끼니에 사진·한 줄을 붙여요" />
+          <ListRow onClick={() => pick("plan")} leading={<Icon name="calendar" size={20} className="text-ink-2" />} title="저장한 식단" meta="며칠 치 식단을 나눠요" />
+          <ListRow onClick={() => pick(null)} leading={<Icon name="edit" size={20} className="text-ink-2" />} title="글 · 투표" meta="사진·제품 태그·투표를 붙일 수 있어요" />
+          <ListRow onClick={() => pick("group")} leading={<Icon name="users" size={20} className="text-ink-2" />} title="공구 만들기" meta="자주 먹는 제품을 사진과 함께 올려 함께 살 사람을 모아요" />
+        </div>
+      </Sheet>
+      <GroupBuyComposer open={groupOpen} onClose={() => setGroupOpen(false)} />
+
       <PostComposer
         isOpen={composer.open}
         initialAttach={composer.attach}
         preset={composer.preset}
         nickname={nickname || "익명"}
         onClose={() => setComposer({ open: false, attach: null })}
-        onPosted={() => { if (tab !== "recommend" && tab !== "mine") setTab("recommend"); else fetchFeed(1, false); }}
+        onPosted={() => { setReelTry((n) => n + 1); if (tab !== "recommend" && tab !== "mine") setTab("recommend"); else fetchFeed(1, false); }}
       />
     </Page>
   );

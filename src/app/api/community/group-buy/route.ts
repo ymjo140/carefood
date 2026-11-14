@@ -2,14 +2,19 @@ import { NextRequest, NextResponse } from "next/server";
 import { connection } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { getActorId, noActor } from "@/lib/actor-server";
-import { GROUP_BUY_ENABLED } from "@/lib/features";
+import { GROUP_DAYS, GROUP_MAX_PHOTOS, GROUP_STORY_MAX, GROUP_TARGET, isWish } from "@/lib/group-buy";
+import { enrichGroupBuys, type GroupBuyRow } from "@/lib/group-buy-server";
+import { findHealthClaim } from "@/lib/health-claims";
+import { imagePrefix } from "@/lib/community-images";
 
 /**
  * GET /api/community/group-buy — 공구 목록
  *   ?status=recruiting(기본)|achieved|all   ?mine=1 내가 관심 표시·참여한 것만   ?concern=
- *   응답: group_buys(+ lowest_price·lowest_checked_at: 연결된 제품의 지금 최저가), mine_ids(그중 내가 표시한 것), total
+ *   응답: group_buys(+ 지금 최저가·대표 사진·진행자 이름·진행자 기록 횟수 — lib/group-buy-server), mine_ids(그중 내가 표시한 것), total
  *   모집 중은 마감(expires_at)이 지난 것을 뺀다.
- * POST /api/community/group-buy — 공구 제안 (만든 사람은 자동으로 관심 표시)
+ * POST /api/community/group-buy — 공구 만들기 (만든 사람은 자동으로 관심 표시)
+ *   { product_id, story, image_urls[≤4], pack_size, wishes[] } — 같은 제품 공구가 모집 중이면 409 + existing_id
+ *   목표 인원은 GROUP_TARGET 으로 정해져 있다 (진행자가 고르지 않음)
  */
 
 export async function GET(request: NextRequest) {
@@ -52,28 +57,12 @@ export async function GET(request: NextRequest) {
 
   const { data: groupBuys, count, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  const list = (groupBuys || []) as { id: string; product_id: string | null }[];
-
-  // 연결된 제품의 지금 최저가 (가격 비교와 같은 뷰)
-  const pids = [...new Set(list.map((g) => g.product_id).filter(Boolean))] as string[];
-  const lowest: Record<string, { price: number; checked: string | null; image: string | null }> = {};
-  if (pids.length) {
-    const { data: prices, error: prErr } = await sb.from("v_all_prices").select("product_id, price, last_crawled_at, image_url").in("product_id", pids);
-    if (prErr) return NextResponse.json({ error: prErr.message }, { status: 500 });
-    for (const p of (prices || []) as { product_id: string; price: number; last_crawled_at: string | null; image_url: string | null }[]) {
-      const cur = lowest[p.product_id];
-      if (!cur || p.price < cur.price) lowest[p.product_id] = { price: p.price, checked: p.last_crawled_at, image: p.image_url || cur?.image || null };
-    }
-  }
+  let list;
+  try { list = await enrichGroupBuys(sb, (groupBuys || []) as GroupBuyRow[]); } catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: 500 }); }
 
   const mineSet = new Set(mineAll);
   return NextResponse.json({
-    group_buys: list.map((g) => ({
-      ...g,
-      lowest_price: g.product_id ? lowest[g.product_id]?.price ?? null : null,
-      lowest_checked_at: g.product_id ? lowest[g.product_id]?.checked ?? null : null,
-      image_url: g.product_id ? lowest[g.product_id]?.image ?? null : null,
-    })),
+    group_buys: list.map(({ creator_id, ...g }) => ({ ...g, is_host: !!actor && creator_id === actor })),
     mine_ids: list.filter((g) => mineSet.has(g.id)).map((g) => g.id),
     total: count || 0,
     page,
@@ -81,60 +70,66 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  try {
-    const body = await request.json();
-    const { product_id, concern, title, description, source_plan_id } = body;
-    const creator_id = await getActorId();
-    if (!creator_id) return noActor();
+  const creator_id = await getActorId();
+  if (!creator_id) return noActor();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let body: any;
+  try { body = await request.json(); } catch { return NextResponse.json({ error: "잘못된 요청이에요" }, { status: 400 }); }
 
-    const product_name = typeof body.product_name === "string" ? body.product_name.trim().slice(0, 80) : "";
-    const target_count = Math.round(Number(body.target_count));
-    if (!product_name || !Number.isFinite(target_count) || target_count < 5 || target_count > 200) {
-      return NextResponse.json({ error: "제품 이름과 모을 인원(5~200명)을 넣어 주세요" }, { status: 400 });
-    }
-    // 판매를 열기 전엔 가격을 약속하지 않는다 — 사용자가 보낸 가격은 받지 않음 (src/lib/features.ts)
-    const original_price = GROUP_BUY_ENABLED ? Number(body.original_price) || null : null;
-    const target_price = GROUP_BUY_ENABLED ? Number(body.target_price) || null : null;
+  const product_id = typeof body.product_id === "string" && /^[0-9a-f-]{36}$/i.test(body.product_id) ? body.product_id : null;
+  if (!product_id) return NextResponse.json({ error: "공구할 제품을 골라 주세요" }, { status: 400 });
 
-    const discountRate = original_price && target_price
-      ? Math.round((1 - target_price / original_price) * 100) / 100
-      : null;
+  const story = typeof body.story === "string" ? body.story.trim() : "";
+  if (story.length > GROUP_STORY_MAX) return NextResponse.json({ error: `이야기는 ${GROUP_STORY_MAX}자까지 쓸 수 있어요` }, { status: 400 });
+  const claim = findHealthClaim(story);
+  if (claim) return NextResponse.json({ error: `'${claim}' 같은 효능 표현은 올릴 수 없어요. 먹어 본 방법이나 맛으로 써 주세요`, claim }, { status: 400 });
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const sb = createServiceRoleClient() as any;
+  // 사진은 이 사람이 우리 저장소에 올린 것만
+  const prefix = `${imagePrefix()}${creator_id}/`;
+  const rawImages: unknown[] = Array.isArray(body.image_urls) ? body.image_urls : [];
+  const image_urls = [...new Set(rawImages.filter((u): u is string => typeof u === "string" && u.startsWith(prefix) && !u.includes("..")))].slice(0, GROUP_MAX_PHOTOS);
 
-    const { data: groupBuy, error } = await sb
-      .from("group_buys")
-      .insert({
-        creator_id,
-        title: title || `${product_name} 공구`,
-        description: description || null,
-        product_id: product_id || null,
-        product_name,
-        original_price: original_price || null,
-        target_price: target_price || null,
-        discount_rate: discountRate,
-        target_count,
-        current_count: 1, // 생성자 자동 참여
-        concern: concern || null,
-        status: "recruiting",
-        expires_at: new Date(Date.now() + 14 * 24 * 3600 * 1000).toISOString(), // 14일 동안 모은다
-        source_plan_id: source_plan_id || null,
-      })
-      .select()
-      .single();
+  const pack = Math.round(Number(body.pack_size));
+  const pack_size = Number.isFinite(pack) && pack >= 1 && pack <= 100 ? pack : null;
+  const rawWishes: unknown[] = Array.isArray(body.wishes) ? body.wishes : [];
+  const wishes = [...new Set(rawWishes.filter(isWish))];
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sb = createServiceRoleClient() as any;
 
-    // 생성자 자동 참여
-    const { error: jErr } = await sb.from("group_buy_participants").insert({
-      group_buy_id: groupBuy.id,
-      user_id: creator_id,
-    });
-    if (jErr) return NextResponse.json({ error: jErr.message }, { status: 500 });
+  const { data: product, error: pErr } = await sb.from("products").select("id, name").eq("id", product_id).maybeSingle();
+  if (pErr) return NextResponse.json({ error: pErr.message }, { status: 500 });
+  if (!product) return NextResponse.json({ error: "제품을 찾지 못했어요" }, { status: 404 });
 
-    return NextResponse.json({ group_buy: groupBuy });
-  } catch {
-    return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
-  }
+  // 같은 제품 공구가 모집 중이면 관심을 나누지 않게 그쪽으로 보낸다
+  const { data: open, error: oErr } = await sb.from("group_buys").select("id, current_count")
+    .eq("product_id", product_id).eq("status", "recruiting").gt("expires_at", new Date().toISOString()).limit(1).maybeSingle();
+  if (oErr) return NextResponse.json({ error: oErr.message }, { status: 500 });
+  if (open) return NextResponse.json({ error: "이 제품은 이미 관심을 모으고 있어요", existing_id: open.id, current_count: open.current_count }, { status: 409 });
+
+  const { data: groupBuy, error } = await sb
+    .from("group_buys")
+    .insert({
+      creator_id,
+      title: `${product.name} 공구`,
+      description: story || null,
+      product_id,
+      product_name: product.name,
+      image_urls,
+      pack_size,
+      wishes,
+      target_count: GROUP_TARGET,
+      current_count: 1, // 만든 사람은 자동으로 관심 표시
+      concern: typeof body.concern === "string" ? body.concern.slice(0, 40) : null,
+      status: "recruiting",
+      expires_at: new Date(Date.now() + GROUP_DAYS * 24 * 3600 * 1000).toISOString(),
+    })
+    .select("id")
+    .single();
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  const { error: jErr } = await sb.from("group_buy_participants").insert({ group_buy_id: groupBuy.id, user_id: creator_id });
+  if (jErr) return NextResponse.json({ error: jErr.message }, { status: 500 });
+
+  return NextResponse.json({ group_buy: { id: groupBuy.id } });
 }
