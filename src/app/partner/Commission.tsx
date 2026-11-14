@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button, Card, EmptyState, Field, Input, Notice, SectionHeader, SkeletonList, TextButton, buttonClass, useToast } from "@/components/ui";
 import { DisputeList, DisputeSheet, type DisputeTarget } from "./Disputes";
+import { Payout } from "./Payout";
 
 /** 표 줄 안의 '다르게 보여요' — 줄마다 있어 눈에 덜 띄게 글자 버튼으로 */
 function DisputeButton({ onClick }: { onClick: () => void }) {
@@ -21,7 +22,7 @@ type Result = { rows: number; saved: number; error: number; errors: RowError[] }
 
 const won = (n: number) => `${n.toLocaleString("ko-KR")}원`;
 
-/** 정산 — 달별 클릭·주문·수수료, 마감·입금 상태, 주문 내역 올리기 */
+/** 정산 — 위: 대시보드(다음 지급일 받을 돈·흐름·날짜별 장부, Payout) · 아래: 달별 클릭·주문·수수료, 마감·입금 상태, 주문 내역 올리기 */
 export function Commission({ qs, readOnly = false }: { qs: string; readOnly?: boolean }) {
   const toast = useToast();
   const [dispute, setDispute] = useState<DisputeTarget | null>(null);
@@ -63,8 +64,13 @@ export function Commission({ qs, readOnly = false }: { qs: string; readOnly?: bo
 
   const appOrders = !!state.data?.months.some((m) => m.order_sales > 0 || (m.settlement?.order_sales || 0) > 0);
   return (
+    <>
     <section>
-      <SectionHeader title="정산"
+      <SectionHeader title="정산" />
+      <Payout qs={qs} onDispute={readOnly ? undefined : setDispute} />
+    </section>
+    <section className="mt-10">
+      <SectionHeader title="달별 정산"
         action={<a href="/api/partner/template?kind=orders" className={buttonClass({ variant: "ghost", size: "sm" })}>주문 양식 내려받기</a>} />
       {state.status === "loading" ? <SkeletonList rows={2} thumb={false} />
         : state.status === "error" || !state.data ? (
@@ -132,8 +138,8 @@ export function Commission({ qs, readOnly = false }: { qs: string; readOnly?: bo
             )}
             {appOrders && (
               <p className="text-caption text-ink-2 mt-2">
-                앱 주문은 배송 완료된 달에 판매액 + 배송비 − 수수료
-                {state.data.order_commission_rate !== null && <>(<span className="num">{state.data.order_commission_rate}</span>%)</>}를 드려요
+                앱 주문은 구매확정된 달에 판매액 − 쿠폰 할인 + 배송비 − 수수료
+                {state.data.order_commission_rate !== null && <>(<span className="num">{state.data.order_commission_rate}</span>%)</>}를 모아 다음 달 10일에 드려요
               </p>
             )}
             {state.data.months.some((m) => m.settlement && m.commission !== m.settlement.commission) && (
@@ -168,6 +174,7 @@ export function Commission({ qs, readOnly = false }: { qs: string; readOnly?: bo
       <DisputeList qs={qs} refresh={disputeTick} />
       <DisputeSheet qs={qs} target={dispute} onClose={() => setDispute(null)} onSent={() => setDisputeTick((t) => t + 1)} />
     </section>
+    </>
   );
 }
 

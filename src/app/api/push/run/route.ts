@@ -9,7 +9,7 @@ import { isWeekPlan, plannedMeal, type PlanGrid } from "@/lib/weekly-plan";
 import { runDueCampaigns } from "@/lib/partner/crm";
 import { runConsentNotices } from "@/lib/consent-notice";
 import { runFlows } from "@/lib/partner/flows";
-import { expireUnpaidOrders } from "@/lib/orders";
+import { AUTO_CONFIRM_DAYS, expireUnpaidOrders } from "@/lib/orders";
 
 /**
  * POST /api/push/run — 보낼 때가 된 알림을 보낸다. Supabase 예약 작업(pg_cron + pg_net, 30분마다)이 부른다.
@@ -80,6 +80,11 @@ export async function POST(req: NextRequest) {
     // 결제하지 않고 60분이 지난 주문 닫기 — 재고·쿠폰을 돌려준다
     try { await expireUnpaidOrders(sbAds); }
     catch (e) { console.error("결제하지 않은 주문을 닫지 못했어요:", (e as Error).message); }
+    // 배송 완료 8일이 지난 앱 주문 구매확정 — 정산 계산은 돌기 전에도 같은 규칙으로 본다(lib/partner/payout.ts)
+    try {
+      const { error } = await sbAds.rpc("order_auto_confirm", { p_days: AUTO_CONFIRM_DAYS });
+      if (error) throw new Error(error.message);
+    } catch (e) { console.error("구매확정을 돌리지 못했어요:", (e as Error).message); }
     // 업체 자동 알림 — 밤에는 야간 동의자만 고른다(lib/partner/flows.ts)
     try { flows = await runFlows(sbAds, userPusher(sbAds)); }
     catch (e) { console.error("업체 자동 알림을 돌리지 못했어요:", (e as Error).message); }

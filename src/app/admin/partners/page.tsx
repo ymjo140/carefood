@@ -25,9 +25,11 @@ type ReviewItem = {
 type Load<T> = { status: "loading" | "error" | "done"; data: T; error?: string };
 type SettleMonth = {
   month: string; clicks: number; orders: number; confirmed_amount: number; commission: number; order_sales: number; order_shipping: number; order_discount?: number; order_fee: number; open: boolean;
-  settlement: { commission: number; order_sales: number; order_shipping: number; order_discount?: number; order_fee: number; status: "closed" | "paid"; closed_at: string; paid_at: string | null } | null;
+  settlement: { commission: number; order_sales: number; order_shipping: number; order_discount?: number; order_fee: number; status: "closed" | "paid"; closed_at: string; paid_at: string | null; paid_amount?: number | null } | null;
 };
 const won = (n: number) => `${n.toLocaleString("ko-KR")}원`;
+/** 마감 숫자로 실제 오갈 돈 — 앱 주문 대금 − 구매 링크 수수료 (양수면 케어푸드 → 업체) */
+const orderNet = (s: NonNullable<SettleMonth["settlement"]>) => s.order_sales - (s.order_discount || 0) + s.order_shipping - s.order_fee - s.commission;
 
 const KIND_LABEL: Record<string, string> = { meal_service: "식단 서비스", brand: "식품 브랜드", mall: "유통·몰" };
 const STATUS_LABEL: Record<Partner["status"], string> = { onboarding: "준비 중", active: "운영 중", paused: "멈춤" };
@@ -292,6 +294,7 @@ function Settlements({ partnerId, onFail }: { partnerId: string; onFail: (w: str
   const toast = useToast();
   const [state, setState] = useState<Load<SettleMonth[]>>({ status: "loading", data: [] });
   const [busy, setBusy] = useState<string | null>(null);
+  const [paid, setPaid] = useState<Record<string, string>>({});
   const load = useCallback(async () => {
     try { setState({ status: "done", data: (await api<{ months: SettleMonth[] }>(`/api/admin/partners/settlements?partner_id=${partnerId}`)).months }); }
     catch (e) { setState({ status: "error", data: [], error: (e as Error).message }); }
@@ -301,7 +304,8 @@ function Settlements({ partnerId, onFail }: { partnerId: string; onFail: (w: str
   const act = async (month: string, action: "close" | "paid") => {
     setBusy(month);
     try {
-      await api("/api/admin/partners/settlements", post({ partner_id: partnerId, month, action }));
+      const amt = (paid[month] || "").replace(/[^\d-]/g, "");
+      await api("/api/admin/partners/settlements", post({ partner_id: partnerId, month, action, ...(action === "paid" && amt ? { paid_amount: Number(amt) } : {}) }));
       toast.show(action === "close" ? `${month} 정산을 마감했어요` : `${month} 정산을 끝냈어요`);
       await load();
     } catch (e) { onFail(action === "close" ? "마감" : "정산을 끝내", e); } finally { setBusy(null); }
@@ -331,10 +335,12 @@ function Settlements({ partnerId, onFail }: { partnerId: string; onFail: (w: str
                 {(s ? s.order_sales : m.order_sales) > 0 && <> · 앱 주문 판매 <span className="num">{won((s || m).order_sales)}</span>{((s || m).order_discount || 0) > 0 && <> − 쿠폰 <span className="num">{won((s || m).order_discount || 0)}</span></>} + 배송비 <span className="num">{won((s || m).order_shipping)}</span> − 수수료 <span className="num">{won((s || m).order_fee)}</span></>}
               </p>
             </div>
-            {s?.status === "paid" ? <Badge tone="positive">정산 끝</Badge>
+            {s?.status === "paid" ? <span className="flex items-center gap-2">{s.paid_amount !== null && s.paid_amount !== undefined && <span className={`text-caption ${s.paid_amount === orderNet(s) ? "text-ink-2" : "text-danger"}`}>보낸 금액 <span className="num">{won(s.paid_amount)}</span>{s.paid_amount !== orderNet(s) && <> · 계산과 <span className="num">{won(s.paid_amount - orderNet(s))}</span> 차이</>}</span>}<Badge tone="positive">정산 끝</Badge></span>
               : m.open ? <span className="text-label text-ink-2">집계 중</span>
               : s ? (
-                <div className="flex gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Input aria-label={`${m.month} 실제 보낸 금액`} inputMode="numeric" className="num w-40" placeholder={`보낸 금액 ${(orderNet(s)).toLocaleString("ko-KR")}`}
+                    value={paid[m.month] || ""} onChange={(e) => setPaid({ ...paid, [m.month]: e.target.value.replace(/[^\d,-]/g, "") })} />
                   <Button size="sm" variant="ghost" loading={busy === m.month} onClick={() => act(m.month, "close")}>다시 마감하기</Button>
                   <Button size="sm" variant="secondary" disabled={busy === m.month} onClick={() => act(m.month, "paid")}>정산 끝내기</Button>
                 </div>

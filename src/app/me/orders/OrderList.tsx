@@ -1,12 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Badge, Button, Card, CardActions, EmptyState, Field, Input, LinkButton, Price, Sheet, SkeletonList, timeAgo, useToast } from "@/components/ui";
+import { Badge, Button, Card, CardActions, ConfirmSheet, EmptyState, Field, Input, LinkButton, Price, Sheet, SkeletonList, timeAgo, useToast } from "@/components/ui";
 import { BUYER_LABEL, CARRIERS } from "@/lib/order-status";
-import type { BuyerOrder, OrderGroup } from "@/lib/orders";
+import { AUTO_CONFIRM_DAYS, type BuyerOrder, type OrderGroup } from "@/lib/orders";
 
 const DAY: Record<string, string> = { mon: "월", tue: "화", wed: "수", thu: "목", fri: "금", sat: "토", sun: "일" };
 const won = (n: number) => `${n.toLocaleString("ko-KR")}원`;
+const md = (iso: string) => new Date(iso).toLocaleDateString("ko-KR", { month: "long", day: "numeric", timeZone: "Asia/Seoul" });
+const autoDay = (delivered: string) => md(new Date(Date.parse(delivered) + AUTO_CONFIRM_DAYS * 86400e3).toISOString());
 type Target = { order: BuyerOrder; group: OrderGroup | null };
 
 /** 내 주문 — 주문마다 판매 업체 묶음별 진행·송장·취소, 환불 */
@@ -16,6 +18,7 @@ export function OrderList() {
   const [target, setTarget] = useState<Target | null>(null);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
+  const [confirm, setConfirm] = useState<{ order: BuyerOrder; group: OrderGroup } | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -42,6 +45,21 @@ export function OrderList() {
       await load();
     } catch (e) {
       toast.show((e as Error).message || "취소하지 못했어요. 다시 시도해 주세요", { tone: "danger" });
+    } finally { setBusy(false); }
+  };
+
+  const doConfirm = async () => {
+    if (!confirm) return;
+    setBusy(true);
+    try {
+      const r = await fetch(`/api/orders/${confirm.order.id}/confirm`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ partner_id: confirm.group.partner_id }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error);
+      toast.show(`${confirm.group.seller} 주문을 구매확정했어요`);
+      setConfirm(null);
+      await load();
+    } catch (e) {
+      toast.show((e as Error).message || "구매확정하지 못했어요. 다시 시도해 주세요", { tone: "danger" });
     } finally { setBusy(false); }
   };
 
@@ -107,6 +125,14 @@ export function OrderList() {
                     {(g.status === "shipped" || g.status === "delivered") && g.cancel_requested_at && (
                       <p className="text-label text-ink-2 mt-1.5">취소를 요청했지만 판매 업체가 이미 보냈어요. 반품은 케어푸드에 문의해 주세요</p>
                     )}
+                    {!unpaid && g.status === "delivered" && g.partner_id && (g.confirmed_at ? (
+                      <p className="text-label text-ink-2 mt-1.5">{md(g.confirmed_at)}에 구매확정했어요</p>
+                    ) : (
+                      <>
+                        <p className="text-caption text-ink-2 mt-1.5">받은 상품에 문제가 없으면 구매확정해 주세요. {g.delivered_at ? <>{autoDay(g.delivered_at)}에 저절로 확정돼요</> : <>배송 완료 {AUTO_CONFIRM_DAYS}일 뒤 저절로 확정돼요</>}</p>
+                        <Button size="sm" variant="ghost" className="mt-1 -ml-3" onClick={() => setConfirm({ order: o, group: g })}>구매확정하기</Button>
+                      </>
+                    ))}
                     {!unpaid && (g.status === "new" || (g.status === "accepted" && !g.cancel_requested_at)) && (
                       <Button size="sm" variant="ghost" className="mt-1 -ml-3" onClick={() => { setReason(""); setTarget({ order: o, group: g }); }}>
                         {g.status === "new" ? "이 업체 주문 취소하기" : "취소 요청하기"}
@@ -142,6 +168,10 @@ export function OrderList() {
           <Input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={200} placeholder="예: 날짜를 잘못 골랐어요" />
         </Field>
       </Sheet>
+
+      <ConfirmSheet open={!!confirm} onClose={() => setConfirm(null)} onConfirm={doConfirm} loading={busy}
+        title="구매확정할까요?" confirmLabel="구매확정하기" tone="primary"
+        description={confirm ? `${confirm.group.seller} 주문이에요. 확정하면 판매 업체에 대금이 정산돼요. 그 뒤 반품·교환은 케어푸드에 문의해 주세요` : ""} />
     </>
   );
 }
