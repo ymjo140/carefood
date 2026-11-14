@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { BottomBar, Button, Card, ChoiceCard, EmptyState, Mascot, MASCOTS, Skeleton, Switch, useToast } from "@/components/ui";
+import { BottomBar, Button, Card, ChoiceCard, EmptyState, Mascot, MASCOTS, Skeleton, useToast } from "@/components/ui";
 import type { MascotMood } from "@/components/ui";
 import { lineOf, type MascotPrefs } from "@/lib/mascot";
 
 /**
- * 캐릭터 고르기 — 끼록이·람이·끼냥이·캐릭터 없이 + 말 거는 방식(삐지기·배불러요/걱정돼요 표정) + 간단 모드.
+ * 캐릭터 고르기 — 끼록이·람이·끼냥이·캐릭터 없이. 캐릭터를 고르면 표정·삐지기가 함께 켜지고, 끄려면 '캐릭터 없이'.
  * 위 미리 보기는 지금 내 기록으로 정해진 표정 (/api/me/mascot). 저장하기를 눌러야 바뀐다.
  */
 type Data = { prefs: MascotPrefs; mood: MascotMood; welcome_back: boolean; streak: number; meals: number };
@@ -73,16 +73,6 @@ export function CharacterSettings() {
             title={<span className="flex flex-col items-center gap-1"><span aria-hidden="true" className="size-14 rounded-md bg-sunken flex items-center justify-center text-title font-bold text-ink-2">가</span>캐릭터 없이</span>}
             description="글자로만 담백하게" />
         </div>
-      </section>
-
-      <section className="flex flex-col" aria-labelledby="talk-h">
-        <h2 id="talk-h" className="text-body font-bold text-ink mb-1">캐릭터가 말 거는 방식</h2>
-        <Switch checked={draft.sulk} onChange={(v) => setDraft({ ...draft, sulk: v })} label="기록 안 한 날 삐지기"
-          description="어제 기록이 없으면 삐지고, 한 끼 적으면 바로 풀려요 · 광고 알림에 동의했으면 낮 12시에 한 번 알려요" />
-        <Switch checked={draft.moods} onChange={(v) => setDraft({ ...draft, moods: v })} label="배불러요·걱정돼요 표정"
-          description="끄면 기록했어요·기다려요 표정만 나와요 · 몸 크기는 바뀌지 않아요" />
-        <Switch checked={draft.simple} onChange={(v) => setDraft({ ...draft, simple: v, kind: v ? "none" : draft.kind === "none" ? "kkirok" : draft.kind })} label="간단 모드"
-          description="캐릭터 없이 담백하게 · 가족 초대로 가입하면 켜진 채로 시작해요" />
       </section>
 
       <BottomBar>

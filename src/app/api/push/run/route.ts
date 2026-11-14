@@ -232,7 +232,7 @@ export async function POST(req: NextRequest) {
   // ── 캐릭터 삐짐 (광고 — 광고 동의자에게만, 낮 12시대) (lib/mascot-push.ts) ──
   if (hour === MASCOT_PUSH_HOUR) {
     try {
-      const want = users.filter((u) => { const p = prefsBy.get(u); return p?.mascot_sulk !== false && p?.simple_mode !== true && p?.mascot !== "none"; });
+      const want = users.filter((u) => { const p = prefsBy.get(u); return p?.mascot !== "none"; });
       const ads = await selectAllIn<{ user_id: string }>(want, 200, (p) => sb.from("marketing_consents").select("user_id").in("user_id", p).eq("ads", true), "user_id");
       for (const { user_id: u } of ads) {
         const rows = diaryBy.get(u) || [];

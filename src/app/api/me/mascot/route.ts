@@ -11,7 +11,7 @@ import { selectAll } from "@/lib/supabase/all";
 
 /**
  * GET  /api/me/mascot — 내 캐릭터 설정 + 지금 표정·한 줄 (내 기록으로만 정한다, 다른 사람에게 보이지 않는다)
- * PATCH { kind?, sulk?, moods?, simple? } — 캐릭터 고르기 · 삐지기 · 배불러요·걱정돼요 표정 · 간단 모드
+ * PATCH { kind } — 캐릭터 고르기 (끼록이·람이·끼냥이·캐릭터 없이)
  * 규칙은 lib/mascot.ts
  */
 type Sb = any; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -87,7 +87,8 @@ export async function GET() {
       past: [1, 2, 3].map((i) => { const rs = byDay.get(addDays(today, -i)) || []; return { records: rs.length, kcal: kcal(rs) }; }),
       ever: (everRes.data || []).length > 0, doneToday: ch.done, togetherToday: ch.together, streak,
     };
-    const state = moodOf(facts, prefs);
+    // 캐릭터를 고르면 표정·삐지기는 늘 켜짐 (끄려면 '캐릭터 없이')
+    const state = moodOf(facts, { sulk: true, moods: true });
     const kind = prefs.kind === "none" ? null : prefs.kind;
     return NextResponse.json({
       prefs, mood: state.mood, welcome_back: state.welcomeBack, streak, meals: facts.todayMeals,
