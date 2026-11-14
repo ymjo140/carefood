@@ -5,6 +5,7 @@ import { Button, Card, Chip, ConfirmSheet, DayDots, EmptyState, Sheet, SkeletonL
 import ShareCardSheet from "@/components/community/ShareCardSheet";
 import ChallengeCreateSheet from "@/components/community/ChallengeCreateSheet";
 import { getOrCreateNickname } from "@/lib/nickname";
+import { todayKst } from "@/lib/day";
 import { METRIC_META, metricValue, type ChallengeMetric, type DayState } from "@/lib/challenges";
 
 /**
@@ -144,7 +145,9 @@ export function ChallengeList() {
                     )}
                     {!run.finished && (
                       <p className="text-label text-ink-2">
-                        {run.today_value == null
+                        {run.group && run.group.start_on > todayKst()
+                          ? <><span className="num">{Number(run.group.start_on.slice(5, 7))}</span>월 <span className="num">{Number(run.group.start_on.slice(8, 10))}</span>일에 시작해요 · 그 전에 친구를 불러 보세요</>
+                          : run.today_value == null
                           ? <>오늘 아직 기록이 없어요 · <TextLink href="/diary">기록하기</TextLink></>
                           : <>오늘 지금까지 {m.label} <span className="num font-bold text-ink">{metricValue(c.metric, run.today_value)}</span>
                               {" "}· 기준 <span className="num">{metricValue(c.metric, c.target)}</span> {m.max ? "이하" : "이상"}</>}
