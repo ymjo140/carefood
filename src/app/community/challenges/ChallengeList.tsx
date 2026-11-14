@@ -39,18 +39,19 @@ export function ChallengeList() {
     return () => { alive = false; };
   }, [attempt]);
 
-  const join = async (c: Item, when: Start = "today") => {
+  /** invite: 친구랑 날짜 정해 시작 — 묶음을 열고 바로 초대 카드 */
+  const join = async (c: Item, when: Start = "today", invite = false) => {
     setBusy(c.id);
     try {
       const r = await fetch("/api/community/challenges", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ challenge_id: c.id, start: when }) });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(d.error || "");
       if (d.challenge) setState((s) => ({ ...s, items: s.items.map((x) => (x.id === c.id ? d.challenge : x)) }));
-      if (when === "today") toast.show(c.me ? "오늘부터 다시 시작했어요" : "참여했어요. 오늘부터 식단을 기록하면 하루씩 채워져요");
+      if (!invite) toast.show(c.me ? "오늘부터 다시 시작했어요" : "참여했어요. 오늘부터 식단을 기록하면 하루씩 채워져요");
       else {
         // 날짜를 정해 연 묶음 — 바로 초대 카드
         setPlanning(null);
-        toast.show(`${START_LABEL[when]} 같이 시작하는 묶음을 열었어요. 친구에게 링크를 보내 주세요`);
+        toast.show(`${when === "today" ? "오늘부터" : START_LABEL[when]} 같이 하는 묶음을 열었어요. 친구에게 링크를 보내 주세요`);
         setCard(c.id);
       }
     } catch (e) {
@@ -160,7 +161,7 @@ export function ChallengeList() {
       {/* 친구랑 날짜 정해 시작 — 그날 시작하는 묶음을 열고 초대 카드 */}
       <Sheet open={!!planning} onClose={() => setPlanning(null)} title={planning ? `${planning.title} 같이 시작하기` : ""} size="sm"
         description="고른 날 모두 같이 시작해요. 열고 나면 인스타·카톡으로 보낼 초대 카드가 떠요"
-        footer={<Button block loading={!!planning && busy === planning.id} onClick={() => planning && join(planning, start)}>묶음 열고 초대하기</Button>}>
+        footer={<Button block loading={!!planning && busy === planning.id} onClick={() => planning && join(planning, start, true)}>묶음 열고 초대하기</Button>}>
         <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="시작일">
           {(["today", "tomorrow", "monday"] as const).map((k) => (
             <Chip key={k} role="radio" aria-checked={start === k} selected={start === k} onClick={() => setStart(k)}>{START_LABEL[k]}</Chip>
