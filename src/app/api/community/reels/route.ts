@@ -4,6 +4,7 @@ import { createServiceRoleClient } from "@/lib/supabase/server";
 import { getActorId } from "@/lib/actor-server";
 import { viewerFilters } from "@/lib/community-safety";
 import { enrichGroupBuys, type GroupBuyRow } from "@/lib/group-buy-server";
+import { bestOption, discountOf, readOffer } from "@/lib/group-buy";
 
 /**
  * GET /api/community/reels — 피드 맨 위 '오늘의 식단 · 공구' 줄
@@ -52,6 +53,9 @@ export async function GET() {
         kind: "group_buy" as const, id: g.id, image: g.image_url, author: g.host_nickname, created_at: g.created_at,
         product_name: g.product_name, current_count: g.current_count || 0, target_count: g.target_count,
         seconds: g.video_url ? Number(g.video_seconds) || null : null,
+        // 조건표가 있으면 가장 많이 깎은 구성의 할인율 · 마감까지 남은 날
+        pct: (() => { const b = bestOption(readOffer(g.offer)); const p = b ? discountOf(b, g.lowest_unit_price) : null; return p != null && p > 0 ? p : null; })(),
+        days_left: g.expires_at ? Math.max(0, Math.ceil((Date.parse(g.expires_at) - Date.now()) / 86400e3)) : null,
       }));
 
     const items = [...meals, ...groups].sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, LIMIT);

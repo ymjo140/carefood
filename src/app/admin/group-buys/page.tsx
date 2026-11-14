@@ -5,7 +5,7 @@ import Link from "next/link";
 import {
   Badge, Button, Card, EmptyState, Field, Input, LinkTabs, ADMIN_TABS, Page, PageHeader, Sheet, SkeletonList, Tabs, Thumb, timeAgo, useToast,
 } from "@/components/ui";
-import { wishLabel } from "@/lib/group-buy";
+import { giftLabel, offerRows, readOffer, shippingLabel, wishLabel } from "@/lib/group-buy";
 
 /**
  * 관리자 · 공구 — 관심이 목표 인원에 닿은 공구를 판매처에 요청하고 표시한다.
@@ -17,6 +17,7 @@ type GB = {
   id: string; product_id: string | null; product_name: string; image_url: string | null; host_nickname: string; host_records: number;
   current_count: number | null; target_count: number; pack_size: number | null; wishes: string[]; comment_count: number; like_count: number;
   lowest_price: number | null; expires_at: string | null; reached_at: string | null; requested_at: string | null; request_note: string | null;
+  offer: unknown; lowest_unit_price: number | null; demand: { option: number; people: number; sets: number }[];
 };
 
 export default function AdminGroupBuysPage() {
@@ -78,7 +79,8 @@ export default function AdminGroupBuysPage() {
       {state.status === "done" && state.items.length > 0 && (
         <ul className="grid gap-3 md:grid-cols-2">
           {state.items.map((g) => {
-            const wish = wishLabel(g.wishes);
+            const offer = readOffer(g.offer);
+            const wish = offer ? null : wishLabel(g.wishes);
             const count = g.current_count || 0;
             return (
               <li key={g.id}>
@@ -94,11 +96,29 @@ export default function AdminGroupBuysPage() {
                   </div>
                   <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-label">
                     <div><dt className="text-caption text-ink-2">알림 받는 사람</dt><dd className="text-ink"><span className="num font-bold">{count}</span> / <span className="num">{g.target_count}</span>명</dd></div>
-                    <div><dt className="text-caption text-ink-2">모두 합친 양</dt><dd className="text-ink">{g.pack_size ? <><span className="num font-bold">{(count * g.pack_size).toLocaleString("ko-KR")}</span>팩 <span className="text-ink-2">(사람당 <span className="num">{g.pack_size}</span>)</span></> : "정하지 않음"}</dd></div>
+                    <div><dt className="text-caption text-ink-2">모두 합친 양</dt><dd className="text-ink">{offer
+                      ? <><span className="num font-bold">{offerRows(offer, null).reduce((n, r, i) => n + (g.demand.find((x) => x.option === i)?.sets ?? 0) * offer.options[i].packs, 0).toLocaleString("ko-KR")}</span>개</>
+                      : g.pack_size ? <><span className="num font-bold">{(count * g.pack_size).toLocaleString("ko-KR")}</span>팩 <span className="text-ink-2">(사람당 <span className="num">{g.pack_size}</span>)</span></> : "정하지 않음"}</dd></div>
                     <div><dt className="text-caption text-ink-2">지금 최저</dt><dd className="text-ink">{g.lowest_price != null ? <><span className="num">{g.lowest_price.toLocaleString("ko-KR")}</span>원</> : "가격 없음"}</dd></div>
                     <div><dt className="text-caption text-ink-2">질문 · 좋아요</dt><dd className="text-ink"><span className="num">{g.comment_count}</span> · <span className="num">{g.like_count}</span></dd></div>
                   </dl>
                   {wish && <p className="text-label text-ink-2">바라는 것: <span className="text-ink">{wish}</span></p>}
+                  {offer && (
+                    <div className="flex flex-col gap-1.5 text-label">
+                      <p className="text-caption text-ink-2">진행자 조건 · {shippingLabel(offer.shipping)}{giftLabel(offer.gift) ? ` · ${giftLabel(offer.gift)}` : ""}{offer.per_person_max ? ` · 1인 최대 ${offer.per_person_max}세트` : ""}</p>
+                      <ul className="flex flex-col divide-y divide-line rounded-md border border-line">
+                        {offerRows(offer, g.lowest_unit_price).map((r, i) => {
+                          const d = g.demand.find((x) => x.option === i);
+                          return (
+                            <li key={i} className="flex items-center justify-between gap-3 px-3 py-2">
+                              <span className="min-w-0 text-ink">{r.title} <span className="num">{r.price.toLocaleString("ko-KR")}</span>원{r.pct != null && r.pct > 0 && <span className="text-brand-ink"> · <span className="num">{r.pct}</span>%</span>}</span>
+                              <span className="shrink-0 whitespace-nowrap text-ink-2"><span className="num font-bold text-ink">{d?.people ?? 0}</span>명 · <span className="num font-bold text-ink">{d?.sets ?? 0}</span>세트</span>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+                  )}
                   <div className="mt-auto flex items-center justify-between gap-3">
                     <p className="text-caption text-ink-2">
                       {g.reached_at ? <>목표에 닿음 · {timeAgo(g.reached_at)}</> : g.expires_at ? <>마감 {new Date(g.expires_at).toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul" })}</> : null}

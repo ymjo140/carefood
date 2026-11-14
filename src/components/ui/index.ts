@@ -9,7 +9,7 @@ export { Button, LinkButton, IconButton, IconLink, TextLink, TextButton, buttonC
 export { Badge, type BadgeTone } from "./Badge";
 export { Chip, ChipRow } from "./Chip";
 export { Card, CardActions, CardButton } from "./Card";
-export { Input, Textarea, Select, Field, SearchField } from "./Field";
+export { Input, Textarea, Select, Field, SearchField, UnitInput, RangeInput } from "./Field";
 export { Tabs, type TabItem } from "./Tabs";
 export { Sheet, ConfirmSheet } from "./Sheet";
 export { ToastProvider, useToast } from "./Toast";
@@ -32,3 +32,4 @@ export { Switch } from "./Switch";
 export { ReelRow, ReelTile, ReelAddTile, ReelSkeleton, clock } from "./Reel";
 export { ReelMedia, VideoClip, VideoAttach } from "./ReelMedia";
 export { CommentItem } from "./Comment";
+export { OfferOptionList, QtyStepper, type OfferRow } from "./Offer";

@@ -8,6 +8,7 @@ import { enrichGroupBuys, type GroupBuyRow } from "@/lib/group-buy-server";
  * GET  /api/admin/group-buys?view=reached|open — 관리자: 공구
  *   reached: 관심이 목표 인원에 닿은 공구(요청 전 먼저) — 판매처에 요청할 것
  *   open: 지금 관심을 모으는 공구 (마감 안 지난 것, 많이 모인 순)
+ *   공구마다 조건표(offer)와 구성별 수요 demand [{ option, people, sets }]
  * POST /api/admin/group-buys { id, note? } — 판매처에 요청했어요 (requested_at). 알림 받는 사람에게 소식이 간다
  */
 export async function GET(request: NextRequest) {
@@ -25,7 +26,25 @@ export async function GET(request: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   try {
     const list = await enrichGroupBuys(sb, (data || []) as GroupBuyRow[]);
-    return NextResponse.json({ group_buys: list.map(({ creator_id, ...g }) => { void creator_id; return g; }) });
+    // 구성별 수요 — 알림 받는 사람이 고른 구성·수량 (판매처에 보낼 숫자)
+    const ids = list.map((g) => g.id);
+    const demand = new Map<string, Map<number, { people: number; sets: number }>>();
+    if (ids.length) {
+      const { data: parts, error: pErr } = await sb.from("group_buy_participants").select("group_buy_id, option, qty").in("group_buy_id", ids).not("option", "is", null).limit(20000);
+      if (pErr) throw new Error(pErr.message);
+      for (const p of (parts || []) as { group_buy_id: string; option: number; qty: number }[]) {
+        const m = demand.get(p.group_buy_id) || demand.set(p.group_buy_id, new Map()).get(p.group_buy_id)!;
+        const cur = m.get(p.option) || { people: 0, sets: 0 };
+        m.set(p.option, { people: cur.people + 1, sets: cur.sets + (p.qty || 1) });
+      }
+    }
+    return NextResponse.json({
+      group_buys: list.map(({ creator_id, ...g }) => {
+        void creator_id;
+        const d = demand.get(g.id);
+        return { ...g, demand: d ? [...d.entries()].map(([option, v]) => ({ option, ...v })).sort((a, b) => a.option - b.option) : [] };
+      }),
+    });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });
   }

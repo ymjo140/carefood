@@ -23,7 +23,7 @@ type Tab = "recommend" | "following" | "topic" | "mine";
 
 type Reel =
   | { kind: "meal"; id: string; image: string | null; author: string; seconds: number | null; meal_type: string | null; kcal: number | null; protein_g: number | null; text: string }
-  | { kind: "group_buy"; id: string; image: string | null; author: string; seconds: number | null; product_name: string; current_count: number; target_count: number };
+  | { kind: "group_buy"; id: string; image: string | null; author: string; seconds: number | null; product_name: string; current_count: number; target_count: number; pct: number | null; days_left: number | null };
 
 const TABS: { value: Tab; label: string }[] = [
   { value: "recommend", label: "추천" },
@@ -173,9 +173,10 @@ export default function CommunityPage() {
           <ReelAddTile onClick={() => setPicker(true)} sub="식단 · 공구" />
           {reels.status === "loading" && <ReelSkeleton count={3} />}
           {reels.status === "done" && reels.items.map((r) => r.kind === "group_buy" ? (
-            <ReelTile key={`g-${r.id}`} href={`/group-buy/${r.id}`} image={r.image} tag="공구" author={r.author} seconds={r.seconds}
-              label={`${r.author}의 공구: ${r.product_name}, ${r.current_count}명 모임`}
-              line={<>알림 <span className="num font-bold">{r.current_count}</span>/{r.target_count}명</>} />
+            <ReelTile key={`g-${r.id}`} href={`/group-buy/${r.id}`} image={r.image} author={r.author} seconds={r.seconds}
+              tag={r.days_left != null ? (r.days_left === 0 ? "공구 오늘 마감" : `공구 D-${r.days_left}`) : "공구"}
+              label={`${r.author}의 공구: ${r.product_name}${r.pct ? `, ${r.pct}% 할인 희망` : ""}, ${r.current_count}명 모임`}
+              line={<>{r.pct ? <><span className="num font-bold">{r.pct}%</span> · </> : null}알림 <span className="num font-bold">{r.current_count}</span>/{r.target_count}명</>} />
           ) : (
             <ReelTile key={`m-${r.id}`} href={`/community/${r.id}`} image={r.image} tag="식단" author={r.author} seconds={r.seconds}
               label={`${r.author}의 식단${r.text ? `: ${r.text}` : ""}`}

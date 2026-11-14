@@ -82,10 +82,11 @@
 | 보기 전환 | `Tabs` (pill: 화면 위쪽 / line: 카드·시트 안) · 페이지 이동 탭 `LinkTabs` |
 | 묶음 | `Card` `CardActions` |
 | 목록 한 줄 | `ListRow` + `Thumb` / `Avatar` |
-| 입력 | `Field` `Input` `Textarea` `Select` `SearchField`, `.ds-range`, `.ds-check`, `RatingInput` `ScaleInput` · 한 번 누르는 맛 평가 `QuickRating` |
+| 입력 | `Field` `Input` `Textarea` `Select` `SearchField` · 숫자+단위 `UnitInput` · 슬라이더 `RangeInput`(.ds-range), `.ds-check`, `RatingInput` `ScaleInput` · 한 번 누르는 맛 평가 `QuickRating` |
 | 영양 | `MacroGrid` `MacroStat` `MacroInline` `ProgressBar` `Stat` `Kcal` `Price` |
 | 끼니 | `MealTag` `MealSlot` `mealMeta()` |
 | 커뮤니티 글 | `PostAuthor` `PostActions` `PostAction` `PostTags` · 댓글 한 줄 `CommentItem` |
+| 공구 조건 | 구성 목록(보기·고르기) `OfferOptionList` · 수량 `QtyStepper` |
 | 숏폼(식단·공구 사진·영상) | `ReelRow` `ReelTile` `ReelAddTile` `ReelSkeleton` · 보기 화면 위쪽 `ReelMedia` · 영상 `VideoClip` · 글쓰기에 붙인 영상 `VideoAttach` |
 | 안내 / 추정 표시 / 비어 있음 / 불러오는 중 | `Notice` / `Estimate` / `EmptyState` / `Skeleton` `SkeletonList` `SkeletonPost` (`Spinner` 는 버튼·작은 칸에만) |
 | 겹침 | `Sheet` `ConfirmSheet` `useToast()` |

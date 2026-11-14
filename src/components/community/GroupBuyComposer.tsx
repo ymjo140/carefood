@@ -5,19 +5,26 @@ import { useRouter } from "next/navigation";
 import {
   Button, Chip, Field, Icon, IconButton, Input, LinkButton, ListRow, Notice, Sheet, VideoAttach, SkeletonList, Textarea, Thumb, cn, useToast,
 } from "@/components/ui";
-import { GROUP_DAYS, GROUP_MAX_PHOTOS, GROUP_STORY_MAX, GROUP_TARGET, PACK_OPTIONS, WISHES, type Wish } from "@/lib/group-buy";
+import { GROUP_DAYS, GROUP_MAX_PHOTOS, GROUP_STORY_MAX, GROUP_TARGET, parseOffer } from "@/lib/group-buy";
 import { checkClaims } from "@/lib/partner/claims";
 import { usePhotoUploads } from "./usePhotoUploads";
 import { useVideoUpload } from "./useVideoUpload";
+import { OfferEditor, draftToOffer, newOption, type OfferDraft } from "./OfferEditor";
 
 /**
  * 공구 만들기 — 인플루언서 공구처럼 써 본 사람이 사진·이야기와 함께 연다.
  * 제품을 고르면: 내가 최근 30일 기록한 횟수(글에 '써 본 사람'으로 붙음) · 같은 제품 공구가 모집 중이면 그쪽으로.
- * 목표 인원은 정해져 있다(GROUP_TARGET) — 모이면 판매처에 공구를 요청한다. 판매가 열리기 전엔 관심만 모은다.
+ * 조건표(OfferEditor): 구성·희망 공구가(지금 최저 1개 값보다 낮게)·배송·증정·1인 최대·목표 인원·기간을 진행자가 숫자로 정한다.
+ * 목표 인원이 모이면 판매처에 공구를 요청한다. 판매가 열리기 전엔 관심만 모은다.
  */
 export type GroupBuyProduct = { id: string; name: string; manufacturer?: string | null; image_url?: string | null; product_prices?: { price: number }[] };
 type Hit = { id: string; name: string; manufacturer?: string | null; image_url?: string | null; product_prices?: { price: number }[] };
-type Check = { status: "idle" | "loading" | "error" | "done"; records: number; existing: { id: string; current_count: number } | null };
+type Check = {
+  status: "idle" | "loading" | "error" | "done"; records: number; existing: { id: string; current_count: number } | null;
+  lowest: { unit: number; checked: string | null } | null;
+};
+const NO_CHECK: Check = { status: "idle", records: 0, existing: null, lowest: null };
+const emptyDraft = (): OfferDraft => ({ options: [], ship: "free", fee: "3000", over: "30000", gift: "none", giftN: "", giftItem: "", perMax: "", target: GROUP_TARGET, days: GROUP_DAYS });
 
 export default function GroupBuyComposer({ open, onClose, initialProduct }: {
   open: boolean; onClose: () => void;
@@ -32,10 +39,9 @@ export default function GroupBuyComposer({ open, onClose, initialProduct }: {
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<{ status: "idle" | "loading" | "error" | "done"; items: Hit[] }>({ status: "idle", items: [] });
   const [picked, setPicked] = useState<Hit | null>(null);
-  const [check, setCheck] = useState<Check>({ status: "idle", records: 0, existing: null });
+  const [check, setCheck] = useState<Check>(NO_CHECK);
+  const [draft, setDraft] = useState<OfferDraft>(emptyDraft);
   const [story, setStory] = useState("");
-  const [pack, setPack] = useState<number>(10);
-  const [wishes, setWishes] = useState<Wish[]>([]);
   const [sending, setSending] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // 늦게 온 응답이 새 결과를 덮지 않게 — 마지막 요청만 상태를 바꾼다
@@ -64,14 +70,18 @@ export default function GroupBuyComposer({ open, onClose, initialProduct }: {
   useEffect(() => {
     if (!pickedId) return;
     let alive = true;
-    setCheck({ status: "loading", records: 0, existing: null }); // eslint-disable-line react-hooks/set-state-in-effect -- 고른 제품이 바뀔 때마다 확인
+    setCheck({ ...NO_CHECK, status: "loading" }); // eslint-disable-line react-hooks/set-state-in-effect -- 고른 제품이 바뀔 때마다 확인
     fetch(`/api/community/group-buy/check?product_id=${pickedId}`)
       .then(async (r) => {
         const d = await r.json();
         if (!r.ok) throw new Error(d.error);
-        if (alive) setCheck({ status: "done", records: d.records || 0, existing: d.existing });
+        if (!alive) return;
+        const lowest = d.lowest_unit && d.lowest_unit.unit > 0 ? d.lowest_unit : null;
+        setCheck({ status: "done", records: d.records || 0, existing: d.existing, lowest });
+        // 제품이 바뀌면 조건표를 그 제품의 최저가로 다시 시작 (10개 묶음 · 15% 할인)
+        setDraft((cur) => ({ ...cur, options: [newOption(10, lowest?.unit ?? null)] }));
       })
-      .catch(() => { if (alive) setCheck({ status: "error", records: 0, existing: null }); });
+      .catch(() => { if (alive) setCheck({ ...NO_CHECK, status: "error" }); });
     return () => { alive = false; };
   }, [pickedId]);
 
@@ -83,15 +93,17 @@ export default function GroupBuyComposer({ open, onClose, initialProduct }: {
   }
 
   const reset = (posted: boolean) => {
-    setQuery(""); setHits({ status: "idle", items: [] }); setPicked(null); setCheck({ status: "idle", records: 0, existing: null });
-    setStory(""); setPack(10); setWishes([]);
+    setQuery(""); setHits({ status: "idle", items: [] }); setPicked(null); setCheck(NO_CHECK);
+    setStory(""); setDraft(emptyDraft());
     clear(posted);
     vClear(posted);
   };
   const close = () => { reset(false); onClose(); };
 
   const [claim] = checkClaims(story);
-  const canPost = !!picked && check.status === "done" && !check.existing && !claim && !uploading && !vBusy && !sending;
+  const offerError = draft.options.length ? parseOffer(draftToOffer(draft), check.lowest?.unit ?? null).error : null;
+  const giftClaim = draft.gift === "first" ? checkClaims(draft.giftItem)[0] : undefined;
+  const canPost = !!picked && check.status === "done" && !check.existing && !claim && !giftClaim && !offerError && draft.options.length > 0 && !uploading && !vBusy && !sending;
 
   const submit = async () => {
     if (!picked || !canPost) return;
@@ -99,7 +111,10 @@ export default function GroupBuyComposer({ open, onClose, initialProduct }: {
     try {
       const res = await fetch("/api/community/group-buy", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ product_id: picked.id, story: story.trim(), image_urls: urls, video: video, pack_size: pack, wishes }),
+        body: JSON.stringify({
+          product_id: picked.id, story: story.trim(), image_urls: urls, video,
+          offer: draftToOffer(draft), target_count: draft.target, days: draft.days,
+        }),
       });
       const d = await res.json().catch(() => ({}));
       if (res.status === 409 && d.existing_id) {
@@ -107,7 +122,7 @@ export default function GroupBuyComposer({ open, onClose, initialProduct }: {
         throw new Error(d.error);
       }
       if (!res.ok) throw new Error(d.error);
-      toast.show(`공구를 만들었어요. ${GROUP_DAYS}일 동안 관심을 모아요`);
+      toast.show(`공구를 만들었어요. ${draft.days}일 동안 관심을 모아요`);
       reset(true);
       onClose();
       router.push(`/group-buy/${d.group_buy.id}`);
@@ -116,12 +131,11 @@ export default function GroupBuyComposer({ open, onClose, initialProduct }: {
     } finally { setSending(false); }
   };
 
-  const toggleWish = (w: Wish) => setWishes((cur) => (cur.includes(w) ? cur.filter((x) => x !== w) : [...cur, w]));
   const low = (h: Hit) => h.product_prices?.find((p) => p.price > 0)?.price ?? null;
 
   return (
     <Sheet open={open} onClose={close} title="공구 만들기" size="lg"
-      description={`판매가 열리기 전엔 관심만 모아요. ${GROUP_TARGET}명이 모이면 판매처에 공구를 요청해요`}
+      description={`판매가 열리기 전엔 관심만 모아요. ${draft.target}명이 모이면 이 조건으로 판매처에 공구를 요청해요`}
       footer={
         <>
           <Button variant="secondary" block onClick={close}>취소</Button>
@@ -177,7 +191,7 @@ export default function GroupBuyComposer({ open, onClose, initialProduct }: {
                     <p className="text-caption text-ink-2">최근 30일 기록이 없어요. 기록하면 &apos;써 본 사람&apos; 표시가 붙어요</p>
                   ))}
                 </div>
-                <Button size="sm" variant="ghost" onClick={() => { setPicked(null); setCheck({ status: "idle", records: 0, existing: null }); }}>바꾸기</Button>
+                <Button size="sm" variant="ghost" onClick={() => { setPicked(null); setCheck(NO_CHECK); setDraft(emptyDraft()); }}>바꾸기</Button>
               </div>
               {check.existing && (
                 <Notice icon="users" title="이 제품은 이미 관심을 모으고 있어요">
@@ -216,25 +230,14 @@ export default function GroupBuyComposer({ open, onClose, initialProduct }: {
           <Textarea value={story} rows={2} maxLength={GROUP_STORY_MAX} name="group_buy_story" onChange={(e) => setStory(e.target.value)} />
         </Field>
 
-        {/* ── 한 사람이 살 양 ── */}
-        <div className="flex flex-col gap-2" role="radiogroup" aria-label="한 사람이 살 양">
-          <span className="text-label font-medium text-ink">한 사람이 살 양</span>
-          <div className="flex flex-wrap gap-2">
-            {PACK_OPTIONS.map((o) => (
-              <Chip key={o.value} role="radio" aria-checked={pack === o.value} selected={pack === o.value} onClick={() => setPack(o.value)}>{o.label}</Chip>
-            ))}
+        {/* ── 조건표 — 제품을 고르고 최저가를 확인한 뒤 ── */}
+        {picked && check.status === "done" && !check.existing && (
+          <div className="flex flex-col gap-3 border-t border-line pt-5">
+            <Notice icon="info">진행자가 바라는 조건이에요. 판매처가 정하면 바뀔 수 있어요</Notice>
+            <OfferEditor draft={draft} onChange={setDraft} lowestUnit={check.lowest?.unit ?? null} lowestChecked={check.lowest?.checked}
+              error={offerError || (giftClaim ? `증정품에 '${giftClaim.phrase}' 같은 표현은 쓸 수 없어요` : null)} />
           </div>
-        </div>
-
-        {/* ── 바라는 것 ── */}
-        <div className="flex flex-col gap-2">
-          <span className="text-label font-medium text-ink">바라는 것 <span className="font-regular text-ink-2">· 여러 개 골라요 · 약속한 가격이 아니에요</span></span>
-          <div className="flex flex-wrap gap-2">
-            {(Object.keys(WISHES) as Wish[]).map((w) => (
-              <Chip key={w} aria-pressed={wishes.includes(w)} selected={wishes.includes(w)} onClick={() => toggleWish(w)}>{WISHES[w]}</Chip>
-            ))}
-          </div>
-        </div>
+        )}
       </div>
     </Sheet>
   );

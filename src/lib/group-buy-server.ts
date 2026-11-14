@@ -13,6 +13,7 @@ export type GroupBuyRow = {
   id: string; creator_id: string; product_id: string | null; product_name: string; title: string | null;
   description: string | null; image_urls?: string[] | null; pack_size?: number | null; wishes?: string[] | null;
   video_url?: string | null; video_poster?: string | null; video_seconds?: number | null;
+  offer?: unknown; days?: number | null;
   target_count: number; current_count: number | null; target_price: number | null;
   status: string; expires_at: string | null; created_at: string;
 };
@@ -23,7 +24,7 @@ export async function enrichGroupBuys(sb: Sb, list: GroupBuyRow[]) {
   const since = addDays(todayKst(), -30);
 
   const [prices, prods, names, diary] = await Promise.all([
-    pids.length ? sb.from("v_all_prices").select("product_id, price, last_crawled_at, image_url").in("product_id", pids) : { data: [] },
+    pids.length ? sb.from("v_all_prices").select("product_id, price, unit_price, last_crawled_at, image_url").in("product_id", pids) : { data: [] },
     pids.length ? sb.from("products").select("id, image_url, protein_g, calories").in("id", pids) : { data: [] },
     hosts.length ? sb.from("community_profiles").select("actor_id, nickname").in("actor_id", hosts) : { data: [] },
     pids.length && hosts.length
@@ -33,9 +34,14 @@ export async function enrichGroupBuys(sb: Sb, list: GroupBuyRow[]) {
   for (const r of [prices, prods, names, diary]) if (r.error) throw new Error(r.error.message);
 
   const lowest = new Map<string, { price: number; checked: string | null; image: string | null }>();
-  for (const p of (prices.data || []) as { product_id: string; price: number; last_crawled_at: string | null; image_url: string | null }[]) {
+  const lowUnit = new Map<string, { unit: number; checked: string | null }>();
+  for (const p of (prices.data || []) as { product_id: string; price: number; unit_price: number | null; last_crawled_at: string | null; image_url: string | null }[]) {
+    if (!(p.price > 0)) continue;
     const cur = lowest.get(p.product_id);
     if (!cur || p.price < cur.price) lowest.set(p.product_id, { price: p.price, checked: p.last_crawled_at, image: p.image_url || cur?.image || null });
+    const unit = p.unit_price && p.unit_price > 0 ? p.unit_price : p.price;
+    const cu = lowUnit.get(p.product_id);
+    if (!cu || unit < cu.unit) lowUnit.set(p.product_id, { unit, checked: p.last_crawled_at });
   }
   const prod = new Map<string, { image_url: string | null; protein_g: number | null; calories: number | null }>(
     ((prods.data || []) as { id: string; image_url: string | null; protein_g: number | null; calories: number | null }[]).map((p) => [p.id, p]),
@@ -56,6 +62,9 @@ export async function enrichGroupBuys(sb: Sb, list: GroupBuyRow[]) {
       wishes: g.wishes || [],
       lowest_price: low?.price ?? null,
       lowest_checked_at: low?.checked ?? null,
+      /** 지금 최저 1개 값 (묶음 상품은 나눠서) — 조건표 할인율의 기준 */
+      lowest_unit_price: g.product_id ? lowUnit.get(g.product_id)?.unit ?? null : null,
+      lowest_unit_checked_at: g.product_id ? lowUnit.get(g.product_id)?.checked ?? null : null,
       image_url: g.video_poster || g.image_urls?.[0] || low?.image || p?.image_url || null,
       product_image: low?.image || p?.image_url || null,
       host_nickname: nick.get(g.creator_id) || "익명",
@@ -64,4 +73,17 @@ export async function enrichGroupBuys(sb: Sb, list: GroupBuyRow[]) {
       calories: p?.calories ?? null,
     };
   });
+}
+
+/** 제품 하나의 지금 최저 1개 값 — 공구 만들기 검사·확인용 */
+export async function lowestUnitPrice(sb: Sb, productId: string): Promise<{ unit: number; checked: string | null } | null> {
+  const { data, error } = await sb.from("v_all_prices").select("price, unit_price, last_crawled_at").eq("product_id", productId);
+  if (error) throw new Error(error.message);
+  let best: { unit: number; checked: string | null } | null = null;
+  for (const p of (data || []) as { price: number; unit_price: number | null; last_crawled_at: string | null }[]) {
+    if (!(p.price > 0)) continue;
+    const unit = p.unit_price && p.unit_price > 0 ? p.unit_price : p.price;
+    if (!best || unit < best.unit) best = { unit, checked: p.last_crawled_at };
+  }
+  return best;
 }

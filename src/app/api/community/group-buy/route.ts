@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { connection } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { getActorId, noActor } from "@/lib/actor-server";
-import { GROUP_DAYS, GROUP_MAX_PHOTOS, GROUP_STORY_MAX, GROUP_TARGET, isWish } from "@/lib/group-buy";
-import { enrichGroupBuys, type GroupBuyRow } from "@/lib/group-buy-server";
+import { DAY_OPTIONS, GROUP_DAYS, GROUP_MAX_PHOTOS, GROUP_STORY_MAX, GROUP_TARGET, GROUP_TARGET_MAX, GROUP_TARGET_MIN, parseOffer } from "@/lib/group-buy";
+import { enrichGroupBuys, lowestUnitPrice, type GroupBuyRow } from "@/lib/group-buy-server";
 import { checkClaimsWith } from "@/lib/partner/claims";
 import { loadClaimTerms } from "@/lib/partner/claims-server";
 import { imagePrefix } from "@/lib/community-images";
@@ -16,8 +16,9 @@ import { rateLimit } from "@/lib/rate-limit";
  *   응답: group_buys(+ 지금 최저가·대표 사진·진행자 이름·진행자 기록 횟수 — lib/group-buy-server), mine_ids(그중 내가 표시한 것), total
  *   모집 중은 마감(expires_at)이 지난 것을 뺀다.
  * POST /api/community/group-buy — 공구 만들기 (만든 사람은 자동으로 관심 표시)
- *   { product_id, story, image_urls[≤4], video?{url,poster,seconds}, pack_size, wishes[] } — 같은 제품 공구가 모집 중이면 409 + existing_id
- *   목표 인원은 GROUP_TARGET 으로 정해져 있다 (진행자가 고르지 않음)
+ *   { product_id, story, image_urls[≤4], video?{url,poster,seconds}, offer, target_count, days } — 같은 제품 공구가 모집 중이면 409 + existing_id
+ *   offer: 조건표 (구성·희망 공구가·배송·증정·1인 최대) — lib/group-buy parseOffer 로 검사. 공구가는 지금 최저 1개 값보다 낮아야 한다
+ *   target_count 10~100 · days 7·14·21·30
  */
 
 export async function GET(request: NextRequest) {
@@ -97,10 +98,10 @@ export async function POST(request: NextRequest) {
     ? { video_url: body.video.url as string, video_poster: body.video.poster as string, video_seconds: Math.min(30, Math.max(0, Number(body.video.seconds) || 0)) }
     : {};
 
-  const pack = Math.round(Number(body.pack_size));
-  const pack_size = Number.isFinite(pack) && pack >= 1 && pack <= 100 ? pack : null;
-  const rawWishes: unknown[] = Array.isArray(body.wishes) ? body.wishes : [];
-  const wishes = [...new Set(rawWishes.filter(isWish))];
+  const target = Math.round(Number(body.target_count ?? GROUP_TARGET));
+  if (!(target >= GROUP_TARGET_MIN && target <= GROUP_TARGET_MAX)) return NextResponse.json({ error: `목표 인원은 ${GROUP_TARGET_MIN}~${GROUP_TARGET_MAX}명으로 정해 주세요` }, { status: 400 });
+  const days = Number(body.days ?? GROUP_DAYS);
+  if (!(DAY_OPTIONS as readonly number[]).includes(days)) return NextResponse.json({ error: "모으는 기간은 7·14·21·30일 중에서 골라 주세요" }, { status: 400 });
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sb = createServiceRoleClient() as any;
@@ -122,6 +123,16 @@ export async function POST(request: NextRequest) {
   if (oErr) return NextResponse.json({ error: oErr.message }, { status: 500 });
   if (open) return NextResponse.json({ error: "이 제품은 이미 관심을 모으고 있어요", existing_id: open.id, current_count: open.current_count }, { status: 409 });
 
+  // 조건표 — 지금 최저 1개 값과 비교해 말이 안 되는 숫자는 막는다
+  let low;
+  try { low = await lowestUnitPrice(sb, product_id); } catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: 500 }); }
+  const { offer, error: offerErr } = parseOffer(body.offer, low?.unit ?? null);
+  if (!offer) return NextResponse.json({ error: offerErr }, { status: 400 });
+  if (offer.gift.type === "first") {
+    const [g] = checkClaimsWith(await loadClaimTerms(sb), offer.gift.item);
+    if (g) return NextResponse.json({ error: `증정품에 '${g.phrase}' 같은 표현은 쓸 수 없어요` }, { status: 400 });
+  }
+
   const { data: groupBuy, error } = await sb
     .from("group_buys")
     .insert({
@@ -132,19 +143,20 @@ export async function POST(request: NextRequest) {
       product_name: product.name,
       image_urls,
       ...video,
-      pack_size,
-      wishes,
-      target_count: GROUP_TARGET,
+      offer,
+      days,
+      pack_size: offer.options[0].packs,
+      target_count: target,
       current_count: 1, // 만든 사람은 자동으로 관심 표시
       concern: typeof body.concern === "string" ? body.concern.slice(0, 40) : null,
       status: "recruiting",
-      expires_at: new Date(Date.now() + GROUP_DAYS * 24 * 3600 * 1000).toISOString(),
+      expires_at: new Date(Date.now() + days * 24 * 3600 * 1000).toISOString(),
     })
     .select("id")
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  const { error: jErr } = await sb.from("group_buy_participants").insert({ group_buy_id: groupBuy.id, user_id: creator_id });
+  const { error: jErr } = await sb.from("group_buy_participants").insert({ group_buy_id: groupBuy.id, user_id: creator_id, option: 0, qty: 1 });
   if (jErr) return NextResponse.json({ error: jErr.message }, { status: 500 });
 
   return NextResponse.json({ group_buy: { id: groupBuy.id } });

@@ -7,7 +7,7 @@ import {
   ProgressBar, SearchField, SectionHeader, Select, Sheet, Spinner, Stat, Steps, Tabs, Textarea, TextLink, TextButton, Thumb, ProductImage,
   Avatar, useToast, cn, type BadgeTone,
   BottomNavItems, SkeletonList, FoodEntryForm, DragArea, DragGhost, DragHandle, useDragItem, useDropTarget, type DragData, ChoiceCard, ChoiceList, LinkTabs, RatingStars, RatingInput, ScaleInput, QuickRating, PostAuthor, PostAction, PostActions, PostTags, ThreadItem, MealAttach, PlanAttach, ProductTagLinks, PhotoGrid, PollAttach, DayDots, Switch,
-  ReelRow, ReelTile, ReelAddTile, ReelSkeleton, ReelMedia, CommentItem, VideoAttach,
+  ReelRow, ReelTile, ReelAddTile, ReelSkeleton, ReelMedia, CommentItem, VideoAttach, OfferOptionList, QtyStepper, UnitInput, RangeInput,
 } from "@/components/ui";
 
 // 서버(UTC)와 브라우저 시간대가 달라도 같은 글자가 나오도록 한국 시간으로 고정
@@ -805,6 +805,9 @@ export default function Reference({ status }: { status: DsStatus }) {
               <VideoAttach status="processing" video={null} onRemove={() => {}} />
             </div>
           </Demo>
+          <Demo label="공구 구성 목록 — 묶음 · 공구가 · 1개 값 · 할인율(강조색 글자) · 배송비 포함. onChange 를 주면 하나 고르기, 고른 줄은 brand-soft" code="<OfferOptionList rows value onChange /> · <QtyStepper value max onChange />">
+            <OfferDemo />
+          </Demo>
           <Demo label="댓글 한 줄 — 공구 질문·진행자 답. 한 단계 답은 nested, 이어지면 세로선" code="<CommentItem nickname badge createdAt content onReply onDelete />">
             <div className="flex flex-col">
               <CommentItem nickname="서연" timeLabel="2시간 전" content="한 팩 양이 얼마나 돼요?" line onReply={() => {}} />
@@ -1131,6 +1134,32 @@ function SwitchDemo() {
     <div className="flex flex-col divide-y divide-line">
       <Switch label="끼니 기록 알림" description="점심 1시·저녁 8시가 지나도 그 끼니 기록이 없을 때" checked={a} onChange={setA} />
       <Switch label="주간 요약" description="월요일 아침, 지난주 기록한 날 수와 하루 평균" checked={b} onChange={setB} />
+    </div>
+  );
+}
+
+function OfferDemo() {
+  const [pick, setPick] = useState<number | null>(1);
+  const [qty, setQty] = useState(2);
+  const [packs, setPacks] = useState("10");
+  const [target, setTarget] = useState(30);
+  const rows = [
+    { title: "5개 묶음", price: 21500, unit: 4300, pct: 7, total: 24500 },
+    { title: "10개 묶음", price: 39000, unit: 3900, pct: 15, total: 39000 },
+  ];
+  return (
+    <div className="flex flex-col gap-4">
+      <OfferOptionList rows={rows} value={pick} onChange={setPick} />
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-label text-ink">수량</span>
+        <QtyStepper value={qty} max={5} onChange={setQty} unit="세트" />
+      </div>
+      <div className="flex items-end gap-3">
+        <Field label="묶음 (UnitInput)" className="w-28"><UnitInput unit="개" value={packs} onChange={(e) => setPacks(e.target.value.replace(/[^0-9]/g, ""))} /></Field>
+        <Field label={<>목표 인원 <span className="num">{target}</span>명 (RangeInput)</>} className="flex-1">
+          <RangeInput min={10} max={100} step={5} value={target} onChange={(e) => setTarget(Number(e.target.value))} aria-label="목표 인원" />
+        </Field>
+      </div>
     </div>
   );
 }

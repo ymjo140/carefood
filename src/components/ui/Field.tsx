@@ -17,6 +17,26 @@ export function Select({ className, children, ...rest }: SelectHTMLAttributes<HT
   return <select className={cn(control, "h-11 pr-8", className)} {...rest}>{children}</select>;
 }
 
+/**
+ * 숫자 + 단위 입력 — "10 팩", "39,000 원", "20 %". 휴대폰에서 숫자 자판이 뜬다.
+ * 값은 글자로 주고받는다(비워 둘 수 있게). 단위는 칸 안 오른쪽에 붙는다.
+ */
+export const UnitInput = forwardRef<HTMLInputElement, Omit<InputHTMLAttributes<HTMLInputElement>, "type"> & { unit: string }>(
+  function UnitInput({ unit, className, ...rest }, ref) {
+    return (
+      <span className={cn("relative flex items-center", className)}>
+        <input ref={ref} type="text" inputMode="numeric" className={cn(control, "h-11 num text-right pr-9")} {...rest} />
+        <span className="pointer-events-none absolute right-3 text-label text-ink-2">{unit}</span>
+      </span>
+    );
+  },
+);
+
+/** 슬라이더 — 디자인 시스템의 .ds-range (목표 인원·맛 단계처럼 범위 안에서 고르는 숫자) */
+export function RangeInput({ className, ...rest }: Omit<InputHTMLAttributes<HTMLInputElement>, "type">) {
+  return <input type="range" className={cn("ds-range", className)} {...rest} />;
+}
+
 /** 라벨 + 입력 + 도움말 묶음 */
 export function Field({ label, hint, error, children, className }: {
   label?: ReactNode; hint?: ReactNode; error?: ReactNode; children: ReactNode; className?: string;

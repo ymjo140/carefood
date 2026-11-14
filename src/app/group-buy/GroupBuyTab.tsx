@@ -3,25 +3,26 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
-  Button, Card, EmptyState, Notice, PageHeader, ProgressBar, SkeletonList, Tabs, Thumb, useToast,
+  Button, Card, EmptyState, LinkButton, Notice, PageHeader, ProgressBar, SkeletonList, Tabs, Thumb, useToast,
 } from "@/components/ui";
 import GroupBuyComposer from "@/components/community/GroupBuyComposer";
 import { GROUP_BUY_ENABLED } from "@/lib/features";
-import { groupBuyWords } from "@/lib/group-buy";
+import { bestOption, discountOf, groupBuyWords, readOffer, unitOf } from "@/lib/group-buy";
 import { checkedLabel } from "@/lib/prices";
 
 /**
  * 공구 탭
  * - 잠금(GROUP_BUY_ENABLED 꺼짐, 지금): 관심만 모은다. 가격은 '지금 최저가'만 보여 주고 공구가를 약속하지 않는다.
  * - 열림(켜짐): 공구가·참여 인원·참여하기. 결제 흐름을 붙인 뒤에 켠다 (src/lib/features.ts)
- * 만들기는 components/community/GroupBuyComposer (사진·이야기·사람당 묶음·바라는 것)
- * ds-wiring-drop: group_buy_target — 목표 인원은 진행자가 고르지 않고 GROUP_TARGET 으로 정한다
+ * 만들기는 components/community/GroupBuyComposer (사진·영상·이야기·조건표)
+ * 카드: 조건표가 있으면 가장 많이 깎은 구성의 할인율 · 1개 값 · D-day (인스타 공구 모음처럼). 알림 받기는 구성을 골라야 해서 공구 보기로 보낸다
+ * ds-wiring-drop: group_buy_target — 목표 인원은 공구 만들기의 조건표에서 정한다
  */
 type GroupBuy = {
   id: string; product_id: string | null; product_name: string; title: string | null;
   target_count: number; current_count: number; target_price: number | null;
   status: string; expires_at: string | null; lowest_price: number | null; lowest_checked_at: string | null; image_url: string | null;
-  host_nickname: string; host_records: number;
+  host_nickname: string; host_records: number; offer: unknown; lowest_unit_price: number | null;
 };
 type View = "open" | "mine";
 
@@ -125,6 +126,9 @@ export function GroupBuyTab() {
             const checked = gb.lowest_checked_at ? checkedLabel([{ last_crawled_at: gb.lowest_checked_at }])?.replace("확인한 가격", "확인") : null;
             const saving = gb.target_price && gb.lowest_price && gb.lowest_price > gb.target_price
               ? Math.round((1 - gb.target_price / gb.lowest_price) * 100) : null;
+            const offer = readOffer(gb.offer);
+            const best = bestOption(offer);
+            const pct = best ? discountOf(best, gb.lowest_unit_price) : null;
             return (
               <li key={gb.id} className="flex flex-col gap-2.5 py-4 border-b border-line">
                 <div className="flex gap-3">
@@ -134,7 +138,13 @@ export function GroupBuyTab() {
                     <p className="text-caption text-ink-2">
                       {gb.host_nickname}{gb.host_records > 0 && <> · 최근 30일 <span className="num">{gb.host_records}</span>번 기록</>}
                     </p>
-                    {OPEN && gb.target_price ? (
+                    {best ? (
+                      <p className="text-label text-ink">
+                        {pct != null && pct > 0 && <span className="num font-bold text-brand-ink">{pct}% </span>}
+                        <span className="num font-bold">{best.price.toLocaleString("ko-KR")}</span>원
+                        <span className="text-caption text-ink-2"> · {best.packs}개 묶음 · 1개 <span className="num">{unitOf(best).toLocaleString("ko-KR")}</span>원 · 진행자 희망가</span>
+                      </p>
+                    ) : OPEN && gb.target_price ? (
                       <p className="text-label text-ink">
                         공구가 <span className="num font-bold">{gb.target_price.toLocaleString("ko-KR")}</span>원
                         {saving != null && <span className="text-caption text-ink-2"> · 지금 최저보다 <span className="num">{saving}</span>% 싸요</span>}
@@ -152,12 +162,19 @@ export function GroupBuyTab() {
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-label text-ink-2">
                     <span className="num font-bold text-ink">{gb.current_count}</span> / <span className="num">{gb.target_count}</span>명
-                    {left != null && <> · {left === 0 ? "오늘 마감" : <><span className="num">{left}</span>일 남음</>}</>}
+                    {left != null && <> · {left === 0 ? "오늘 마감" : <>D-<span className="num">{left}</span></>}</>}
                   </p>
-                  <Button size="sm" variant="secondary" aria-pressed={marked} loading={busy === gb.id} disabled={!!busy}
-                    icon={marked ? "check" : undefined} onClick={() => toggle(gb)}>
-                    {marked ? WORD.marked : WORD.mark}
-                  </Button>
+                  {offer ? (
+                    // 구성·수량을 골라야 해서 공구 보기에서 받는다
+                    <LinkButton href={`/group-buy/${gb.id}`} size="sm" variant="secondary" icon={marked ? "check" : undefined}>
+                      {marked ? WORD.marked : "구성 고르기"}
+                    </LinkButton>
+                  ) : (
+                    <Button size="sm" variant="secondary" aria-pressed={marked} loading={busy === gb.id} disabled={!!busy}
+                      icon={marked ? "check" : undefined} onClick={() => toggle(gb)}>
+                      {marked ? WORD.marked : WORD.mark}
+                    </Button>
+                  )}
                 </div>
               </li>
             );

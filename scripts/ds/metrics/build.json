@@ -1,7 +1,7 @@
 {
-  "builtAt": "2026-11-14T03:39:45.246Z",
-  "sha": "e976fcf157d89e667e5814abfcdbcbf1e3d08099",
-  "message": "수요 탭: 만들 제품 추천 + 커뮤니티 협업(동의한 사람·제안·전용 코드·협찬 표시) (v3 10.5) (#11)",
-  "branch": "HEAD",
+  "builtAt": "2026-11-14T04:07:19.776Z",
+  "sha": "53a21e6e0964cef94bd89a3cfdfefe04a41fdc77",
+  "message": "예시 채우기: 한 번에 넣는 줄의 칸을 맞춤 (빠진 칸이 null 로 들어가 쿠폰 상태 제약에 걸리던 것) (#12)",
+  "branch": "main",
   "env": "local"
 }

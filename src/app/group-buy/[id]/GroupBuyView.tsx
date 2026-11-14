@@ -3,11 +3,12 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import {
-  Avatar, BottomBar, Button, EmptyState, Icon, LinkButton, ListRow, Notice, Page, PostAction, PostActions, ProgressBar, ReelMedia, Skeleton, Thumb, timeAgo, useToast,
+  Avatar, BottomBar, Button, EmptyState, Icon, LinkButton, ListRow, Notice, OfferOptionList, Page, PostAction, PostActions, ProgressBar, QtyStepper,
+  ReelMedia, SectionHeader, Sheet, Skeleton, TextButton, Thumb, timeAgo, useToast,
 } from "@/components/ui";
 import { Questions, type QuestionsHandle } from "./Questions";
 import { GROUP_BUY_ENABLED } from "@/lib/features";
-import { groupBuyWords, wishLabel } from "@/lib/group-buy";
+import { giftLabel, groupBuyWords, offerRows, readOffer, shippingLabel, wishLabel, PER_PERSON_MAX } from "@/lib/group-buy";
 
 /**
  * 공구 보기 — 숏폼 줄·공구 목록에서 들어온다. 인플루언서 공구 글처럼 진행자 사진이 위, 정보가 아래.
@@ -20,7 +21,9 @@ type GroupBuy = {
   target_count: number; current_count: number | null; status: string; expires_at: string | null; created_at: string;
   lowest_price: number | null; product_image: string | null; host_nickname: string; host_records: number; protein_g: number | null; calories: number | null;
   like_count: number; comment_count: number; reached_at: string | null; requested_at: string | null; is_host: boolean;
+  offer: unknown; lowest_unit_price: number | null;
 };
+type Choice = { option: number | null; qty: number };
 
 const OPEN = GROUP_BUY_ENABLED;
 
@@ -33,7 +36,11 @@ const WORD = groupBuyWords(OPEN);
 export default function GroupBuyView() {
   const { id } = useParams<{ id: string }>();
   const toast = useToast();
-  const [state, setState] = useState<{ status: "loading" | "error" | "missing" | "done"; gb: GroupBuy | null; marked: boolean; liked: boolean }>({ status: "loading", gb: null, marked: false, liked: false });
+  const [state, setState] = useState<{ status: "loading" | "error" | "missing" | "done"; gb: GroupBuy | null; marked: boolean; liked: boolean; choice: Choice | null }>({ status: "loading", gb: null, marked: false, liked: false, choice: null });
+  // 알림 받기 시트 — 구성·수량 고르기 (조건표가 있는 공구)
+  const [picking, setPicking] = useState(false);
+  const [pickOpt, setPickOpt] = useState<number | null>(null);
+  const [pickQty, setPickQty] = useState(1);
   const [liking, setLiking] = useState(false);
   const questions = useRef<QuestionsHandle>(null);
   const [attempt, setAttempt] = useState(0);
@@ -45,9 +52,9 @@ export default function GroupBuyView() {
     fetch(`/api/community/group-buy/${id}`)
       .then(async (r) => {
         const d = await r.json().catch(() => ({}));
-        if (r.status === 404) { if (alive) setState({ status: "missing", gb: null, marked: false, liked: false }); return; }
+        if (r.status === 404) { if (alive) setState({ status: "missing", gb: null, marked: false, liked: false, choice: null }); return; }
         if (!r.ok) throw new Error(d.error);
-        if (alive) setState({ status: "done", gb: d.group_buy, marked: !!d.marked, liked: !!d.liked });
+        if (alive) setState({ status: "done", gb: d.group_buy, marked: !!d.marked, liked: !!d.liked, choice: d.choice ?? null });
       })
       .catch(() => { if (alive) setState((s) => ({ ...s, status: "error" })); });
     return () => { alive = false; };
@@ -55,24 +62,38 @@ export default function GroupBuyView() {
 
   const gb = state.gb;
 
-  const toggle = async () => {
+  const offer = gb ? readOffer(gb.offer) : null;
+
+  /** 켜기(구성·수량과 함께)·바꾸기·끄기 — on=false 면 끄기 */
+  const mark = async (on: boolean, choice?: Choice) => {
     if (!gb) return;
-    const marked = state.marked;
+    const wasMarked = state.marked;
     setBusy(true);
     try {
       const res = await fetch("/api/community/group-buy/join", {
-        method: marked ? "DELETE" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ group_buy_id: gb.id }),
+        method: on ? "POST" : "DELETE", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ group_buy_id: gb.id, option: choice?.option ?? undefined, qty: choice?.qty ?? undefined }),
       });
       const d = await res.json().catch(() => ({}));
-      if (!res.ok && !d.already) throw new Error(d.error);
+      if (!res.ok) throw new Error(d.error);
       setState((s) => ({
-        ...s, marked: !marked,
+        ...s, marked: on, choice: on ? choice ?? { option: null, qty: 1 } : null,
         gb: s.gb && typeof d.current_count === "number" ? { ...s.gb, current_count: d.current_count } : s.gb,
       }));
-      toast.show(marked ? WORD.undo : WORD.done);
-    } catch {
-      toast.show(`${marked ? WORD.undoFail : WORD.fail}. 다시 시도해 주세요`, { tone: "danger" });
+      setPicking(false);
+      toast.show(!on ? WORD.undo : d.changed === "choice" ? "고른 구성을 바꿨어요" : WORD.done);
+    } catch (e) {
+      const msg = e instanceof Error && e.message ? e.message : null;
+      toast.show(msg || `${!on ? WORD.undoFail : wasMarked ? "바꾸지 못했어요" : WORD.fail}. 다시 시도해 주세요`, { tone: "danger" });
     } finally { setBusy(false); }
+  };
+
+  /** 주 버튼 — 조건표가 있으면 구성·수량 시트, 없으면(예전 공구) 바로 켜고 끄기 */
+  const onMain = () => {
+    if (!offer) { mark(!state.marked); return; }
+    setPickOpt(state.choice?.option ?? (offer.options.length === 1 ? 0 : null));
+    setPickQty(state.choice?.qty ?? 1);
+    setPicking(true);
   };
 
   const like = async () => {
@@ -136,7 +157,10 @@ export default function GroupBuyView() {
   const count = gb.current_count || 0;
   const left = daysLeft(gb.expires_at);
   const closed = gb.status !== "recruiting" || left === 0;
-  const wish = wishLabel(gb.wishes);
+  const wish = offer ? null : wishLabel(gb.wishes);
+  const rows = offer ? offerRows(offer, gb.lowest_unit_price) : [];
+  const gift = offer ? giftLabel(offer.gift) : null;
+  const maxQty = offer?.per_person_max || PER_PERSON_MAX;
 
   return (
     <Page width="narrow">
@@ -186,11 +210,26 @@ export default function GroupBuyView() {
           <ProgressBar value={count} max={gb.target_count} label={OPEN ? "참여 인원" : "알림 받는 사람"} />
           <p className="text-caption text-ink-2">
             {gb.requested_at ? "판매처에 공구를 요청했어요" : gb.reached_at ? "목표 인원이 모였어요. 판매처에 요청할 차례예요" : `${gb.target_count}명이 모이면 판매처에 공구를 요청해요`}
-            {gb.pack_size ? <> · 모두 합쳐 <span className="num">{(count * gb.pack_size).toLocaleString("ko-KR")}</span>팩</> : null}
+            {!offer && gb.pack_size ? <> · 모두 합쳐 <span className="num">{(count * gb.pack_size).toLocaleString("ko-KR")}</span>팩</> : null}
           </p>
         </div>
 
-        {(gb.pack_size || wish) && (
+        {offer && (
+          <section aria-label="공구 조건" className="flex flex-col gap-2">
+            <SectionHeader title="공구 조건" description="진행자가 바라는 조건이에요. 판매처가 정하면 바뀔 수 있어요" />
+            <OfferOptionList rows={rows} />
+            <dl className="flex flex-col gap-1.5 text-label">
+              <div className="flex gap-4"><dt className="w-20 shrink-0 text-ink-2">배송</dt><dd className="min-w-0 text-ink">{shippingLabel(offer.shipping)}</dd></div>
+              {gift && <div className="flex gap-4"><dt className="w-20 shrink-0 text-ink-2">증정</dt><dd className="min-w-0 text-ink">{gift}</dd></div>}
+              {offer.per_person_max && <div className="flex gap-4"><dt className="w-20 shrink-0 text-ink-2">1인 최대</dt><dd className="min-w-0 text-ink"><span className="num">{offer.per_person_max}</span>세트</dd></div>}
+            </dl>
+            {state.marked && state.choice?.option != null && rows[state.choice.option] && (
+              <p className="text-label text-ink-2">내가 고른 것: <span className="text-ink">{rows[state.choice.option].title} × <span className="num">{state.choice.qty}</span>세트</span></p>
+            )}
+          </section>
+        )}
+
+        {!offer && (gb.pack_size || wish) && (
           <dl className="flex flex-col gap-1.5 text-label">
             {gb.pack_size ? <div className="flex gap-4"><dt className="w-16 shrink-0 text-ink-2">사람당</dt><dd className="min-w-0 text-ink"><span className="num">{gb.pack_size}</span>팩 묶음</dd></div> : null}
             {wish && <div className="flex gap-4"><dt className="w-16 shrink-0 text-ink-2">바라는 것</dt><dd className="min-w-0 text-ink">{wish} <span className="text-ink-2">· 약속한 가격이 아니에요</span></dd></div>}
@@ -206,11 +245,31 @@ export default function GroupBuyView() {
       </div>
 
       <BottomBar>
-        <Button block disabled={closed} loading={busy} variant={state.marked ? "secondary" : "primary"}
-          icon={state.marked ? "check" : "bell"} aria-pressed={state.marked} onClick={toggle}>
-          {closed ? "마감된 공구예요" : state.marked ? WORD.marked : WORD.mark}
+        <Button block disabled={closed} loading={busy && !picking} variant={state.marked ? "secondary" : "primary"}
+          icon={state.marked ? "check" : "bell"} aria-pressed={state.marked} onClick={onMain}>
+          {closed ? "마감된 공구예요" : state.marked ? (offer ? `${WORD.marked} · 바꾸기` : WORD.marked) : WORD.mark}
         </Button>
       </BottomBar>
+
+      {/* ── 알림 받기: 구성·수량 고르기 ── */}
+      {offer && (
+        <Sheet open={picking} onClose={() => setPicking(false)} title={state.marked ? "고른 구성 바꾸기" : WORD.mark}
+          description="판매가 열리면 고른 구성으로 알려 드려요. 판매처에 보여 줄 수요로도 쓰여요"
+          footer={<Button block disabled={pickOpt == null} loading={busy} onClick={() => mark(true, { option: pickOpt, qty: pickQty })}>
+            {state.marked ? "바꾸기" : "알림 받기"}
+          </Button>}>
+          <div className="flex flex-col gap-5">
+            <OfferOptionList rows={rows} value={pickOpt} onChange={setPickOpt} label="구성 고르기" />
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-label font-medium text-ink">수량 <span className="font-regular text-ink-2">· 최대 <span className="num">{maxQty}</span>세트</span></span>
+              <QtyStepper value={pickQty} max={maxQty} onChange={setPickQty} unit="세트" />
+            </div>
+            {state.marked && (
+              <TextButton className="self-start" disabled={busy} onClick={() => mark(false)}>알림 끄기</TextButton>
+            )}
+          </div>
+        </Sheet>
+      )}
     </Page>
   );
 }
