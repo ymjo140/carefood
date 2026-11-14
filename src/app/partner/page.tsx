@@ -129,7 +129,7 @@ function PartnerHome() {
       {current === "segments" && <Segments qs={qs} go={go} prefill={prefill} />}
       {current === "demand" && <Demand qs={qs} onMakeSegment={(need) => go("segments", { need })} />}
       {current === "commission" && <Commission qs={qs} />}
-      {current === "connect" && <Connect qs={qs} batches={batches} onChanged={() => { loadMe(); setItems({ status: "loading" }); }} />}
+      {current === "connect" && <Connect qs={qs} batches={batches} onChanged={() => { loadMe(); setItems({ status: "loading" }); }} onReport={() => go("commission")} />}
 
       {current === "products" && (
         <section>

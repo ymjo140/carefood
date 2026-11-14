@@ -147,7 +147,7 @@ async function behaviorSet(sb: Sb, partnerId: string, b: NonNullable<Conditions[
  * concerns 의 energy 는 근육·균형만 고른 사람에게도 채워 넣은 값이라 빼고, 근육·균형은 되짚을 수 없어 맞추지 않는다
  * (프로필을 다시 저장하면 goals 가 생긴다).
  */
-function goalsOf(p: { goals: string[] | null; concerns: string[] | null }): string[] {
+export function goalsOf(p: { goals: string[] | null; concerns: string[] | null }): string[] {
   if (Array.isArray(p.goals)) return p.goals;
   return (p.concerns || []).filter((g) => g !== "energy").map((g) => (g === "weight" ? "weight_loss" : g));
 }
