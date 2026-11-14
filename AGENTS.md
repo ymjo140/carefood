@@ -18,6 +18,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - 데이터 영역은 불러오는 중·비어 있음·실패·채워짐 네 상태. 오류를 삼키지 않는다.
 - 버튼은 동작("저장하기"), 완료 알림은 과거형("저장했어요"), 해요체 하나.
 - 끝나면 `npm run ds:lint` 오류 0, `npm run ds:wiring -- --base=<고치기 전 커밋>` 실패 0.
+- 돈·상태 계산(정산·구매확정·환불·반품·쿠폰·마감·주문 상태)을 고치면 `npm test` 통과 — 규칙이 바뀌면 `tests/` 의 시험도 같이 고친다. 시험은 가짜 DB(`tests/fake-sb.ts`, 1,000줄 한도까지 흉내)로 돈다.
 
 ## 코드 리뷰 (쓰고 나서 스스로, 올리기 전에)
 
