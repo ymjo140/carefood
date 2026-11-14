@@ -37,7 +37,7 @@
   - 상태: `positive`(완료·적합) `danger`(경고·오류) — **글자·아이콘으로만**, 바탕 알약·색 상자 없음. 주의는 색 대신 경고 아이콘.
   - 영양소: `protein` `carbs` `fat` `sodium` — 데이터 색. **숫자·막대·점에만**, 바탕에는 쓰지 않는다.
   - 끼니는 색 없이 글자로.
-  - 사진 위 글자: `media-scrim`(어두운 띠) + `on-media`(흰 글자) — 숏폼 칸·보기 화면의 사진 위에만. 두 테마에 같은 값.
+  - 사진 위 글자: `media-scrim`(어두운 띠) + `on-media`(흰 글자) — 숏폼 칸·보기 화면의 사진 위에만. 두 테마에 같은 값. 스토리 보기 바탕은 `media`.
   - Tailwind 기본 팔레트(`bg-blue-500`, `text-white`)와 지운 토큰(`*-soft`, `caution`, `meal-*`)은 칠해지지 않는다.
 - **글자 5종**: `text-caption`(12) `text-label`(14) `text-body`(16) `text-title`(20) `text-display`(32)
 - **굵기 3종**: `font-regular` `font-medium` `font-bold`
@@ -89,6 +89,9 @@
 | 커뮤니티 글 | `PostAuthor` `PostActions` `PostAction` `PostTags` · 댓글 한 줄 `CommentItem` |
 | 공구 조건 | 구성 목록(보기·고르기) `OfferOptionList` · 수량 `QtyStepper` |
 | 숏폼(식단·공구 사진·영상) | `ReelRow` `ReelTile` `ReelAddTile` `ReelSkeleton` · 보기 화면 위쪽 `ReelMedia` · 영상 `VideoClip` · 글쓰기에 붙인 영상 `VideoAttach` |
+| 스토리 보기(꽉 찬 화면) | `StoryFrame` `StoryProgress` `StoryHeader` `StoryMedia` `StorySticker` `StoryCaption` `StoryAction` `StoryReply` — 바탕 `media`(두 테마 같은 값) |
+| 인증 카드 | 미리 보기 `ShareCardPreview` · 공유 순서 `ShareSteps` (그림은 `lib/share-card`) |
+| 챌린지 같이 하기 | 날짜 점 `DayDots`(size sm, before) · 진행표 한 줄 `MemberProgressRow` · 겹친 아바타 `AvatarStack` |
 | 안내 / 추정 표시 / 비어 있음 / 불러오는 중 | `Notice` / `Estimate` / `EmptyState` / `Skeleton` `SkeletonList` `SkeletonPost` (`Spinner` 는 버튼·작은 칸에만) |
 | 겹침 | `Sheet` `ConfirmSheet` `useToast()` |
 | 하단 | `BottomNav`(레이아웃에 한 번) · 주 행동 줄 `BottomBar`(있으면 탭 바가 물러남) · 떠 있는 버튼은 `above-nav` |

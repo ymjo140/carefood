@@ -6,7 +6,7 @@
 import { addDays } from "./day";
 
 export type ChallengeMetric = "sodium_max" | "protein_min" | "sugar_max" | "meals_min" | "kcal_max";
-export type DayState = "done" | "missed" | "today" | "future";
+export type DayState = "done" | "missed" | "today" | "future" | "before";
 
 export type DiaryRow = { date: string; meal_type: string | null; calories: number | null; protein_g: number | null; sugar_g: number | null; sodium_mg: number | null };
 
@@ -38,32 +38,51 @@ export type RunProgress = {
   ends_on: string;
   finished: boolean;
   done_count: number;
+  /** 성공 기준 — 이 날 수를 채우면 해낸 챌린지 (늦게 들어오면 줄어든다) */
+  goal: number;
+  reached: boolean;
   days: { date: string; state: DayState; value: number | null }[];
   today_value: number | null;
 };
 
+/** '…이하' 규칙은 두 끼 이상 기록한 날만 해낸 날로 본다 (간식 하나만 적고 넘기지 않게) */
+export const MIN_MEALS_FOR_MAX = 2;
+const mealCount = (rows: DiaryRow[]) => new Set(rows.map((r) => r.meal_type).filter(Boolean)).size;
+
 /**
  * 한 번 도전한 기간의 날마다 상태.
+ * from: 기간 첫날(묶음 시작일). startedOn 이 그보다 늦으면(늦게 들어옴) 그 앞 날은 'before' — 못 한 날로 세지 않는다.
  * 오늘: '…이상' 규칙은 채우면 바로 해낸 날, '…이하' 규칙은 하루가 끝나야 알 수 있어 '오늘'로 둔다.
  */
-export function runProgress(metric: ChallengeMetric, target: number, days: number, startedOn: string, rows: DiaryRow[], today: string): RunProgress {
+export function runProgress(metric: ChallengeMetric, target: number, days: number, startedOn: string, rows: DiaryRow[], today: string,
+  opts: { from?: string; goal?: number | null } = {}): RunProgress {
+  const from = opts.from && opts.from < startedOn ? opts.from : startedOn;
   const byDay = new Map<string, DiaryRow[]>();
   for (const r of rows) byDay.set(r.date, [...(byDay.get(r.date) || []), r]);
-  const endsOn = addDays(startedOn, days - 1);
+  const endsOn = addDays(from, days - 1);
+  const max = METRIC_META[metric].max;
+  const ok = (dayRows: DiaryRow[], value: number | null) => meets(metric, target, value) && (!max || mealCount(dayRows) >= MIN_MEALS_FOR_MAX);
   const list = Array.from({ length: days }, (_, i) => {
-    const date = addDays(startedOn, i);
-    const value = dayValue(metric, byDay.get(date) || []);
+    const date = addDays(from, i);
+    const dayRows = byDay.get(date) || [];
+    const value = dayValue(metric, dayRows);
     let state: DayState;
-    if (date > today) state = "future";
-    else if (date === today) state = !METRIC_META[metric].max && meets(metric, target, value) ? "done" : "today";
-    else state = meets(metric, target, value) ? "done" : "missed";
+    if (date < startedOn) state = "before";
+    else if (date > today) state = "future";
+    else if (date === today) state = !max && ok(dayRows, value) ? "done" : "today";
+    else state = ok(dayRows, value) ? "done" : "missed";
     return { date, state, value };
   });
+  const counted = list.filter((d) => d.state !== "before").length;
+  const goal = Math.max(1, Math.min(counted, opts.goal ?? Math.ceil(counted * 0.7)));
+  const done = list.filter((d) => d.state === "done").length;
   return {
     started_on: startedOn,
     ends_on: endsOn,
     finished: today > endsOn,
-    done_count: list.filter((d) => d.state === "done").length,
+    done_count: done,
+    goal,
+    reached: done >= goal,
     days: list,
     today_value: list.find((d) => d.date === today)?.value ?? null,
   };

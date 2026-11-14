@@ -9,7 +9,7 @@ import { createServiceRoleClient } from "@/lib/supabase/server";
 
 type Sb = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 export type RateAction = "post" | "comment" | "like" | "report" | "upload" | "copy"
-  | "diary" | "review" | "track" | "plan" | "favorite" | "recommend" | "photo" | "error" | "push" | "partner_api";
+  | "diary" | "review" | "track" | "plan" | "favorite" | "recommend" | "photo" | "error" | "push" | "partner_api" | "share" | "challenge";
 
 /** [기간(초), 같은 사람, 같은 연결] — 같은 연결은 집·회사 와이파이처럼 여럿이 함께 쓸 수 있어 넉넉히 */
 const LIMITS: Record<RateAction, [number, number, number][]> = {
@@ -31,6 +31,9 @@ const LIMITS: Record<RateAction, [number, number, number][]> = {
   push: [[600, 20, 60]],
   // 입점 업체 API — 키 하나에 1분 120번 (연결 기준은 쓰지 않는다: 업체 서버 한 대가 여러 키를 쓸 수 있다)
   partner_api: [[60, 120, 1_000_000]],
+  // 인증 카드 공유 링크(그림 올리기 포함) · 챌린지 참여·묶음·응원
+  share: [[600, 30, 100], [86_400, 150, 500]],
+  challenge: [[600, 30, 100]],
 };
 
 async function ipHash(request: NextRequest): Promise<string> {

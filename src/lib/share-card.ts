@@ -11,14 +11,16 @@
  * 열량은 기본으로 빼고(숫자 경쟁이 되지 않게) 본인이 켜면 넣는다.
  */
 
-export type DayMark = { date: string; state: "done" | "missed" | "today" | "future" };
+export type DayMark = { date: string; state: "done" | "missed" | "today" | "future" | "before" };
 export type MealCardData = {
   kind: "meal"; author: string | null; url: string; photo: string | null; meal_type: string | null; day: string;
   foods: string[]; food_count: number; total: { calories: number; protein_g: number; carbs_g: number; fat_g: number } | null; streak: number;
+  /** 하루 카드(meal_type "day")일 때 기록한 끼니 수 (아침·점심·저녁) */
+  meals?: number;
 };
 export type ChallengeCardData = {
-  kind: "challenge"; author: string | null; url: string; title: string; rule: string; total_days: number; done: number; finished: boolean;
-  days: DayMark[]; streak: number;
+  kind: "challenge"; author: string | null; url: string; title: string; rule: string; total_days: number; done: number; goal?: number; finished: boolean;
+  days: DayMark[]; streak: number; people?: number;
 };
 export type GroupBuyCardData = {
   kind: "group_buy"; author: string | null; url: string; photo: string | null; product_name: string;
@@ -29,7 +31,7 @@ export type CardStyle = "photo" | "sticker" | "record";
 export type CardOptions = { style: CardStyle; showKcal: boolean; site: string };
 
 const W = 1080, H = 1920;
-const MEAL_LABEL: Record<string, string> = { breakfast: "아침", lunch: "점심", dinner: "저녁", snack: "간식" };
+const MEAL_LABEL: Record<string, string> = { breakfast: "아침", lunch: "점심", dinner: "저녁", snack: "간식", day: "하루" };
 const WEEK = ["일", "월", "화", "수", "목", "금", "토"];
 
 type Palette = Record<"canvas" | "surface" | "sunken" | "line" | "ink" | "ink2" | "brand" | "brandInk" | "onBrand" | "protein" | "carbs" | "fat" | "highlight", string>;
@@ -132,6 +134,7 @@ function dots(ctx: Ctx, p: Palette, days: DayMark[], x: number, y: number, w: nu
     ctx.beginPath();
     ctx.arc(cx, y + size / 2, size / 2 - 3, 0, Math.PI * 2);
     if (d.state === "done") { ctx.fillStyle = p.brand; ctx.fill(); }
+    else if (d.state === "before") { /* 늦게 들어오기 전 — 빈 칸 */ }
     else if (d.state === "future") { ctx.fillStyle = p.sunken; ctx.fill(); }
     else { ctx.lineWidth = 5; ctx.strokeStyle = d.state === "today" ? p.brand : p.line; ctx.stroke(); }
     if (d.state === "done") {
@@ -186,7 +189,7 @@ function drawSticker(ctx: Ctx, p: Palette, f: Fonts, d: CardData, o: CardOptions
   }
 
   if (d.kind === "challenge") {
-    font(ctx, f, 34, 500); ctx.fillStyle = p.ink2; ctx.fillText(fit(ctx, "챌린지", IW), L, y + 84);
+    font(ctx, f, 34, 500); ctx.fillStyle = p.ink2; ctx.fillText(fit(ctx, d.people && d.people > 1 ? `챌린지 · 함께 ${d.people}명` : "챌린지", IW), L, y + 84);
     font(ctx, f, 46, 700); ctx.fillStyle = p.ink;
     ctx.fillText(fit(ctx, d.title, IW), L, y + 148);
     const end = numUnit(ctx, f, L, y + 270, String(d.done), `/${d.total_days}일`, 112, p.brandInk, p.ink2);
@@ -238,7 +241,7 @@ function drawRecord(ctx: Ctx, p: Palette, f: Fonts, d: CardData, o: CardOptions)
   font(ctx, f, 44, 700); ctx.fillStyle = p.brandInk; ctx.fillText("케어푸드", L, 200);
   if (d.kind === "meal") {
     font(ctx, f, 52, 500); ctx.fillStyle = p.ink2; ctx.fillText(`${dayLabel(d.day)} ${d.meal_type ? MEAL_LABEL[d.meal_type] || "" : ""}`, L, 400);
-    font(ctx, f, 88, 700); ctx.fillStyle = p.ink; ctx.fillText("오늘도 기록했어요", L, 510);
+    font(ctx, f, 88, 700); ctx.fillStyle = p.ink; ctx.fillText(d.meals === 3 ? "세 끼 다 기록했어요" : "오늘도 기록했어요", L, 510);
     if (d.total) {
       // 핵심 숫자 하나에 형광펜
       font(ctx, f, 300, 700, true);
@@ -262,7 +265,7 @@ function drawRecord(ctx: Ctx, p: Palette, f: Fonts, d: CardData, o: CardOptions)
     if (d.streak > 1) { font(ctx, f, 64, 700); ctx.fillStyle = p.brandInk; ctx.fillText(`기록 ${d.streak}일째`, L, 1640); }
   }
   if (d.kind === "challenge") {
-    font(ctx, f, 52, 500); ctx.fillStyle = p.ink2; ctx.fillText("챌린지", L, 400);
+    font(ctx, f, 52, 500); ctx.fillStyle = p.ink2; ctx.fillText(d.people && d.people > 1 ? `챌린지 · 함께 ${d.people}명` : "챌린지", L, 400);
     font(ctx, f, 76, 700); ctx.fillStyle = p.ink;
     wrap(ctx, d.title, W - L * 2, 2).forEach((line, i) => ctx.fillText(line, L, 500 + i * 96));
     font(ctx, f, 300, 700, true);

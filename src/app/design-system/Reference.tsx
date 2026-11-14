@@ -8,7 +8,7 @@ import {
   Avatar, useToast, cn, type BadgeTone,
   BottomNavItems, SkeletonList, FoodEntryForm, DragArea, DragGhost, DragHandle, useDragItem, useDropTarget, type DragData, ChoiceCard, ChoiceList, LinkTabs, RatingStars, RatingInput, ScaleInput, QuickRating, PostAuthor, PostAction, PostActions, PostTags, ThreadItem, MealAttach, PlanAttach, ProductTagLinks, PhotoGrid, PollAttach, DayDots, Switch,
   ReelRow, ReelTile, ReelAddTile, ReelSkeleton, ReelMedia, CommentItem, VideoAttach, OfferOptionList, QtyStepper, UnitInput, RangeInput, Checkbox, FilePick,
-  StoryFrame, StoryProgress, StoryHeader, StoryMedia, StorySticker, StoryCaption, StoryAction, StoryReply, ShareCardPreview, ShareSteps,
+  MemberProgressRow, AvatarStack, StoryFrame, StoryProgress, StoryHeader, StoryMedia, StorySticker, StoryCaption, StoryAction, StoryReply, ShareCardPreview, ShareSteps,
 } from "@/components/ui";
 
 // 서버(UTC)와 브라우저 시간대가 달라도 같은 글자가 나오도록 한국 시간으로 고정
@@ -790,6 +790,18 @@ export default function Reference({ status }: { status: DsStatus }) {
             <div className="flex flex-col gap-2">
               <DayDots days={(["done", "done", "missed", "done", "today", "future", "future"] as const).map((state, i) => ({ date: `d${i}`, state }))} />
               <p className="text-label text-ink"><span className="num">7</span>일 중 <span className="num font-bold text-brand-ink">3</span>일 해냈어요</p>
+            </div>
+          </Demo>
+          <Demo label="같이 하기 진행표 한 줄 — 아바타 · 닉네임(나·연 사람) · 작은 날짜 점(늦게 들어온 앞 날은 빈 칸) · 해낸 날/목표 · 응원. 성분 숫자는 없음" code="<MemberProgressRow name days done goal action /> · <AvatarStack names />">
+            <div className="flex flex-col gap-3 max-w-md">
+              <ul className="flex flex-col divide-y divide-line">
+                <MemberProgressRow name="민지" me days={(["done", "done", "missed", "done", "today", "future", "future"] as const).map((state, i) => ({ date: `m${i}`, state }))} done={3} goal={5} />
+                <MemberProgressRow name="서연" host days={(["done", "done", "done", "done", "done", "future", "future"] as const).map((state, i) => ({ date: `s${i}`, state }))} done={5} goal={5} reached
+                  action={<IconButton icon="heart" size="sm" label="서연님 응원하기" />} />
+                <MemberProgressRow name="준호" days={(["before", "before", "done", "missed", "today", "future", "future"] as const).map((state, i) => ({ date: `j${i}`, state }))} done={1} goal={4}
+                  action={<IconButton icon="heart" size="sm" active label="준호님을 오늘 응원했어요" />} />
+              </ul>
+              <span className="flex items-center gap-2 text-label text-ink"><AvatarStack names={["민지", "서연", "준호", "하늘", "다인", "유나", "지호"]} /><span className="num font-bold">7</span>명</span>
             </div>
           </Demo>
           <Demo label="숏폼 줄 — 피드 맨 위 '오늘의 식단 · 공구'. 맨 앞 칸이 글쓰기 입구 하나, 사진 위 글자는 아래 띠(media-scrim) 한 곳" code="<ReelRow><ReelAddTile /><ReelTile tag author line /></ReelRow>">

@@ -10,6 +10,7 @@ import { addDays, kstHour, monthDay, todayKst, weekday } from "@/lib/day";
 import { defaultServingG } from "@/lib/serving";
 import { PLAN_DAYS, cellFoods, planMealKey, readDraftGrid, weekdayKey, type PlanFood, type PlanGrid } from "@/lib/weekly-plan";
 import { NextMeal, pickNextMeal, type NextCandidate } from "./NextMeal";
+import DayCardPrompt from "@/components/community/DayCardPrompt";
 import PushPrompt from "@/components/PushPrompt";
 
 /* ── 타입 ── */
@@ -1080,6 +1081,12 @@ export default function DiaryPage() {
           targets={{ protein: goalProtein, carbs: 300, fat: 65, sodium: maxSodium }}
         />
       </Card>
+
+      {/* ━━ 기록이 있으면 하루 한 번: 오늘 인증 카드 ━━ */}
+      {isToday && data && allEntries.length > 0 && (
+        <DayCardPrompt className="mb-6" date={date}
+          meals={["breakfast", "lunch", "dinner"].filter((m) => (data.byMeal[m] || []).length > 0).length} />
+      )}
 
       {/* ━━ 첫 기록 뒤 한 번: 알림 켜기 ━━ */}
       {isToday && allEntries.length > 0 && <PushPrompt className="mt-3" />}
