@@ -14,7 +14,7 @@ type Board = {
   flow: { preparing: Stage; shipping: Stage; delivered: Stage; confirmed: Stage; paid: Stage };
   daily: Day[]; mismatches: { month: string; expected: number; paid: number }[];
 };
-type DayDetail = { rate: number | null; rows: { order: string; paid_day: string; delivered_day: string | null; confirmed_day: string; confirm_by: "buyer" | "auto" | null; lines: { name: string; qty: number; amount: number }[]; sales: number; discount: number; shipping: number; fee: number; payout: number }[] };
+type DayDetail = { rate: number | null; rows: { order: string; paid_day: string; delivered_day: string | null; confirmed_day: string; confirm_by: "buyer" | "auto" | "return" | null; kind?: "order" | "return_fee"; lines: { name: string; qty: number; amount: number }[]; sales: number; discount: number; shipping: number; fee: number; payout: number }[] };
 
 const n = (v: number) => v.toLocaleString("ko-KR");
 const won = (v: number) => `${v < 0 ? "−" : ""}${n(Math.abs(v))}원`;
@@ -96,7 +96,7 @@ export function Payout({ qs, onDispute }: { qs: string; onDispute?: (t: DisputeT
         </div>
         <HowCounted className="mt-3">
           앱 주문 대금은 구매확정된 달에 모아 다음 달 {d.pay_day}일에 드려요. 구매확정은 구매자가 &lsquo;구매확정하기&rsquo;를 누른 때, 아니면 배송 완료 {d.confirm_days}일 뒤예요.
-          받을 돈 = 판매액 − 업체 쿠폰 할인 + 배송비 − 앱 주문 수수료{d.rates.order !== null && <>(<span className="num">{d.rates.order}</span>%, 주문마다 원 단위 반올림)</>} − 구매 링크 수수료.
+          받을 돈 = 판매액 − 업체 쿠폰 할인 + 배송비(마음이 바뀐 반품의 반품 배송비 포함) − 앱 주문 수수료{d.rates.order !== null && <>(<span className="num">{d.rates.order}</span>%, 주문마다 원 단위 반올림)</>} − 구매 링크 수수료.
           마감한 달은 마감한 숫자로 보여요
         </HowCounted>
       </section>
@@ -187,17 +187,21 @@ export function Payout({ qs, onDispute }: { qs: string; onDispute?: (t: DisputeT
           : day?.data && (
             <ul className="flex flex-col divide-y divide-line">
               {day.data.rows.map((r) => (
-                <li key={r.order} className="py-3">
+                <li key={`${r.order}-${r.kind || "order"}`} className="py-3">
                   <div className="flex items-baseline justify-between gap-3">
                     <span className="text-label font-medium text-ink">주문 <span className="num">{r.order}</span></span>
                     <span className="num text-label font-bold text-ink whitespace-nowrap">{won(r.payout)}</span>
                   </div>
                   <p className="text-caption text-ink-2 mt-0.5">
-                    결제 {md(r.paid_day)}{r.delivered_day && <> · 배송 완료 {md(r.delivered_day)}</>} · {r.confirm_by === "buyer" ? "구매자가 확정" : `${d.confirm_days}일 지나 자동 확정`}
+                    {r.kind === "return_fee"
+                      ? <>결제 {md(r.paid_day)} · 반품을 마친 날 정산 · 주문자 환불에서 뺀 반품 배송비</>
+                      : <>결제 {md(r.paid_day)}{r.delivered_day && <> · 배송 완료 {md(r.delivered_day)}</>} · {r.confirm_by === "buyer" ? "구매자가 확정" : `${d.confirm_days}일 지나 자동 확정`}</>}
                   </p>
-                  <p className="text-caption text-ink mt-1">{r.lines.map((l) => `${l.name} × ${l.qty}`).join(", ")}</p>
+                  {r.kind === "return_fee"
+                    ? <p className="text-caption text-ink mt-1">{r.lines.map((l) => l.name.replace(/^반품 배송비 · /, "")).join(", ")}</p>
+                    : <p className="text-caption text-ink mt-1">{r.lines.map((l) => `${l.name} × ${l.qty}`).join(", ")}</p>}
                   <p className="text-caption text-ink-2 mt-0.5 num">
-                    판매 {n(r.sales)}{r.discount > 0 && <> − 쿠폰 {n(r.discount)}</>} + 배송비 {n(r.shipping)} − 수수료 {n(r.fee)}
+                    {r.kind === "return_fee" ? <>반품 배송비 {n(r.shipping)}</> : <>판매 {n(r.sales)}{r.discount > 0 && <> − 쿠폰 {n(r.discount)}</>} + 배송비 {n(r.shipping)} − 수수료 {n(r.fee)}</>}
                   </p>
                 </li>
               ))}
