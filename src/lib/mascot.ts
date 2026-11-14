@@ -21,7 +21,7 @@ export type MascotFacts = {
   goalKcal: number;
   /** 어제부터 거꾸로 하루씩 — 그날 기록 수와 열량 (최소 3일) */
   past: { records: number; kcal: number }[];
-  /** 기록을 한 번이라도 한 적이 있나 (처음 온 사람은 삐지지 않는다) */
+  /** 오늘 전에 기록을 한 번이라도 한 적이 있나 (처음 온 사람은 삐지지 않고, 첫 기록에 '돌아왔다'고 하지 않는다) */
   ever: boolean;
   doneToday: boolean;
   togetherToday: boolean;
@@ -35,7 +35,7 @@ export function moodOf(f: MascotFacts, p: Pick<MascotPrefs, "sulk" | "moods">): 
   const missed = (n: number) => f.past.length >= n && f.past.slice(0, n).every((d) => d.records === 0);
   const lowDays = f.past.length >= 3 && f.past.slice(0, 3).every((d) => d.records > 0 && d.kcal < f.goalKcal * 0.7);
   if (f.todayRecords > 0) {
-    const welcomeBack = missed(3);
+    const welcomeBack = f.ever && missed(3);
     if (f.togetherToday) return { mood: "together", welcomeBack };
     if (f.doneToday) return { mood: "done", welcomeBack };
     if (p.moods && f.todayMeals >= 2 && f.todayKcal > f.goalKcal * 1.1) return { mood: "full", welcomeBack };

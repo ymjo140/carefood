@@ -104,3 +104,16 @@ describe("먹기 전 알림", () => {
     expect(sentTodayCount(logged, "u1", T)).toBe(3);
   });
 });
+
+describe("메뉴 고르기 — 운영에서 찾은 것", () => {
+  const withRice = [...FOODS, M("쌀밥", "한식", 310, 5, 5)];
+  it("단백질이 거의 없는 곁들이는 메뉴(쌀밥)는 한 끼로 권하지 않는다", () => {
+    for (let s = 0; s < 10; s++) expect(pickMenus(withRice, { ...budget, sodium: 33, protein: 31 }, 2, s).map((m) => m.name)).not.toContain("쌀밥");
+  });
+  it("나트륨 안에 드는 메뉴가 모자라면 나트륨이 적은 순으로 채운다", () => {
+    const got = pickMenus(withRice, { ...budget, sodium: 33 }, 2, 0);
+    expect(got).toHaveLength(2);
+    const allNa = withRice.filter((f) => (f.protein_g ?? 0) >= 8 && ["한식", "양식", "일식", "분식", "편의점", "중식", "패스트푸드"].includes(f.category)).map((f) => f.sodium_mg ?? 0).sort((a, b) => a - b);
+    for (const m of got) expect(m.sodium_mg ?? 0).toBeLessThanOrEqual(allNa[2]);
+  });
+});

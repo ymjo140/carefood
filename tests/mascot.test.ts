@@ -29,6 +29,8 @@ describe("표정 고르기", () => {
     const back = moodOf({ ...three, todayRecords: 1, todayMeals: 1, todayKcal: 400 }, on);
     expect(back).toEqual({ mood: "logged", welcomeBack: true });
     expect(lineOf("kkirok", back, { streak: 1, meals: 1 })).toContain("반가워요");
+    // 오늘이 첫 기록인 사람(오늘 전 기록 없음)에게는 '돌아왔다'고 하지 않는다 — 운영에서 찾음 (11/15)
+    expect(moodOf({ ...three, ever: false, todayRecords: 1, todayMeals: 1, todayKcal: 400 }, on)).toEqual({ mood: "logged", welcomeBack: false });
   });
   it("삐지기를 끄면 기다려요 · 처음 온 사람은 삐지지 않는다", () => {
     const one = { ...base, past: [{ records: 0, kcal: 0 }, ...base.past.slice(1)] };

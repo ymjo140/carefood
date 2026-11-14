@@ -56,7 +56,7 @@ export async function loadTodayMood(sb: Sb, actor: string): Promise<TodayMood> {
   const [diary, goal, everRes, lastRes] = await Promise.all([
     selectAll<DiaryRow>(() => sb.from("meal_diary").select(DIARY_COLS).eq("user_id", actor).gte("date", addDays(today, -60)).lte("date", today), "id"),
     sb.from("daily_nutrition_goals").select("daily_calories, daily_protein_g, max_sodium_mg").eq("user_id", actor).maybeSingle(),
-    sb.from("meal_diary").select("id").eq("user_id", actor).limit(1),
+    sb.from("meal_diary").select("id").eq("user_id", actor).lt("date", today).limit(1), // 오늘 전 기록 — 첫 기록에 '돌아왔다'고 하지 않게
     sb.from("meal_diary").select("food_name").eq("user_id", actor).eq("date", today).order("created_at", { ascending: false }).limit(1),
   ]);
   if (goal.error) throw new Error(goal.error.message);

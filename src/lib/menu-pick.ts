@@ -35,21 +35,28 @@ export function pickMenus(foods: Menu[], b: Budget, n = 2, seed = 0): Menu[] {
   const cats = b.meal === "snack" ? SNACK_CATS : MEAL_CATS;
   const minKcal = b.meal === "snack" ? 60 : 200;
   const maxKcal = Math.max(minKcal + 50, b.kcal * 1.1);
-  const ok = foods.filter((f) =>
+  // 한 끼로 권하려면 단백질 8g 이상 — 밥 한 공기 같은 곁들이는 메뉴는 빼고(없으면 그대로)
+  const fits = foods.filter((f) =>
     cats.has(f.category) &&
     (f.calories || 0) >= minKcal && (f.calories || 0) <= maxKcal &&
     !b.avoid.some((w) => w && f.name.includes(w)));
-  // 나트륨이 남았으면 그 안에서만, 다 썼으면 가장 적은 쪽으로
-  const pool = b.sodium > 0 ? ok.filter((f) => (f.sodium_mg || 0) <= b.sodium) : ok;
-  const scored = (pool.length ? pool : ok).map((f) => {
-    const kcal = f.calories || 1, p = f.protein_g || 0, na = f.sodium_mg || 0;
+  const meaty = b.meal === "snack" ? fits : fits.filter((f) => (f.protein_g || 0) >= 8);
+  const ok = meaty.length ? meaty : fits;
+  const score = (f: Menu) => {
+    const kcal = f.calories || 1, p = f.protein_g || 0;
     const fill = b.protein > 0 ? Math.min(1, p / b.protein) : 0;
-    return { f, score: fill * 2 + (p * 4) / kcal - (b.sodium > 0 ? 0 : na / 2000) };
-  }).sort((a, z) => z.score - a.score || a.f.name.localeCompare(z.f.name));
+    return fill * 2 + (p * 4) / kcal;
+  };
+  const byScore = (a: Menu, z: Menu) => score(z) - score(a) || a.name.localeCompare(z.name);
+  // 남은 나트륨 안에 드는 것 먼저(점수순), 모자라면 나트륨이 적은 순으로 채운다
+  const under = ok.filter((f) => (f.sodium_mg || 0) <= b.sodium).sort(byScore);
+  const over = ok.filter((f) => (f.sodium_mg || 0) > b.sodium).sort((a, z) => (a.sodium_mg || 0) - (z.sodium_mg || 0) || byScore(a, z));
+  const scored = [...under, ...over].map((f) => ({ f }));
   // 위쪽 6개 안에서 날마다 시작점을 돌린다 — 매일 같은 메뉴만 나오지 않게
-  const top = scored.slice(0, 6);
+  // 나트륨 안에 드는 것이 n개 이상이면 그 안에서만 돌린다 (넘는 것이 위로 올라오지 않게)
+  const top = scored.slice(0, Math.max(n, Math.min(6, under.length)));
   const start = top.length ? seedOf(seed) % top.length : 0;
-  const ordered = [...top.slice(start), ...top.slice(0, start), ...scored.slice(6)];
+  const ordered = [...top.slice(start), ...top.slice(0, start), ...scored.slice(top.length)];
   const out: Menu[] = [];
   const usedCats = new Set<string>();
   for (const { f } of ordered) {
