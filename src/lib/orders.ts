@@ -253,8 +253,10 @@ export async function markRefunded(sb: Sb, orderId: string, note: string | null)
 }
 
 /**
- * 구매자 구매확정 — 내 주문의 한 판매 업체 묶음. 살아 있는 줄이 모두 배송 완료여야 하고, 배송 완료 8일 전까지만 직접 누를 수 있다
- * (그 뒤는 저절로 확정된 것으로 본다 — 정산 달이 바뀌지 않게). 조건부 update 로 두 번 눌러도 한 번만.
+ * 구매자 구매확정 — 내 주문의 한 판매 업체 묶음. 보낸 뒤(발송·배송 완료)면 누를 수 있다.
+ *  · 발송 상태에서 누르면 받았다는 뜻 — 배송 완료와 구매확정을 함께 적는다 (업체가 배송 완료를 깜빡해도 정산이 멈추지 않게)
+ *  · 배송 완료 8일이 지난 줄은 이미 저절로 확정된 것으로 본다 — 정산 달이 바뀌지 않게 직접 확정하지 않는다
+ * 조건부 update 로 두 번 눌러도 한 번만.
  */
 export async function buyerConfirm(sb: Sb, userId: string, orderId: string, partnerId: string): Promise<{ ok: true } | { ok: false; code: "not_found" | "conflict"; message: string }> {
   if (!UUID.test(orderId) || !UUID.test(partnerId)) return { ok: false, code: "not_found", message: "주문을 찾지 못했어요" };
@@ -265,12 +267,17 @@ export async function buyerConfirm(sb: Sb, userId: string, orderId: string, part
   if (iErr) throw new Error(iErr.message);
   const live = ((items || []) as Pick<ItemRow, "fulfil_status" | "delivered_at" | "confirmed_at">[]).filter((i) => i.fulfil_status !== "canceled");
   if (live.length === 0) return { ok: false, code: "not_found", message: "주문을 찾지 못했어요" };
-  if (live.some((i) => i.fulfil_status !== "delivered")) return { ok: false, code: "conflict", message: "배송 완료된 뒤에 구매확정할 수 있어요" };
+  if (live.some((i) => i.fulfil_status !== "delivered" && i.fulfil_status !== "shipped")) return { ok: false, code: "conflict", message: "판매 업체가 보낸 뒤에 구매확정할 수 있어요" };
   if (live.every((i) => confirmedAt(i))) return { ok: false, code: "conflict", message: "이미 구매확정됐어요" };
-  const now = new Date();
-  const { error: uErr } = await sb.from("order_items").update({ confirmed_at: now.toISOString(), confirm_by: "buyer" })
-    .eq("order_id", orderId).eq("partner_id", partnerId).eq("fulfil_status", "delivered").is("confirmed_at", null)
-    .gt("delivered_at", new Date(now.getTime() - AUTO_CONFIRM_DAYS * 86400e3).toISOString());
-  if (uErr) throw new Error(uErr.message);
+  const now = new Date().toISOString();
+  const [a, b] = await Promise.all([
+    sb.from("order_items").update({ fulfil_status: "delivered", delivered_at: now, confirmed_at: now, confirm_by: "buyer" })
+      .eq("order_id", orderId).eq("partner_id", partnerId).eq("fulfil_status", "shipped"),
+    sb.from("order_items").update({ confirmed_at: now, confirm_by: "buyer" })
+      .eq("order_id", orderId).eq("partner_id", partnerId).eq("fulfil_status", "delivered").is("confirmed_at", null)
+      .gt("delivered_at", new Date(Date.now() - AUTO_CONFIRM_DAYS * 86400e3).toISOString()),
+  ]);
+  for (const r of [a, b]) if (r.error) throw new Error(r.error.message);
+  await syncOrderStatus(sb, orderId);
   return { ok: true };
 }

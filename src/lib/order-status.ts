@@ -44,3 +44,9 @@ export function sellerShipping(lines: ShipLine[]): { fee: number; subtotal: numb
   const free_over = overs.length ? Math.min(...overs) : null;
   return { fee: free_over !== null && subtotal >= free_over ? 0 : fee, subtotal, free_over };
 }
+
+/** 배송 완료로 바꿀 수 있는 때 — 발송하고 12시간 뒤(직접 배송은 1시간 뒤). 배송 완료가 구매확정 8일의 시작점이라 너무 이르게 누를 수 없게 (화면·서버가 같이 쓴다) */
+export function deliverableAt(o: { shipped_at: string | null; carrier: string | null }): number | null {
+  if (!o.shipped_at) return null;
+  return Date.parse(o.shipped_at) + (o.carrier === "direct" ? 1 : 12) * 3600e3;
+}

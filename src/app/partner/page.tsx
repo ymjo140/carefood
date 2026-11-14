@@ -7,12 +7,13 @@ import {
   SkeletonList, Tabs, timeAgo,
 } from "@/components/ui";
 import { REVIEW_LABELS } from "@/lib/partner/schema";
+import { isStage, type Stage } from "@/lib/partner/customer-stages";
 import { TAB_LABEL, isTab, tabsFor, type Tab } from "@/lib/partner/tabs";
 import { ORDERING_ENABLED } from "@/lib/features";
 import { Commission } from "./Commission";
 import { Report } from "./Report";
 import { DemandTab } from "./DemandTab";
-import { Orders } from "./Orders";
+import { Orders, type OrderFilter } from "./Orders";
 import { Today } from "./Today";
 import { CustomersTab } from "./Customers";
 import { Connect, type Batch } from "./Connect";
@@ -48,6 +49,9 @@ function PartnerHome() {
   const [filter, setFilter] = useState<Filter>("all");
   const [view, setView] = useState<Tab>(() => { const t = sp.get("tab"); return isTab(t) ? t : "today"; });
   const [prefill, setPrefill] = useState<{ need?: string; goal?: string } | null>(null);
+  // 오늘의 할 일에서 들어올 때 — 주문 상태·고객 단계를 고른 채로 연다
+  const [orderFilter, setOrderFilter] = useState<OrderFilter | undefined>(undefined);
+  const [customerStage, setCustomerStage] = useState<Stage | null>(null);
   const [openItem, setOpenItem] = useState<string | null>(null);
   // 판매·출고가 먼저 — 매일 보는 것. 제품 관리는 올리기·검수·고치기 (반려·검수 중으로 들어오면 제품 관리로)
   const [productView, setProductView] = useState<"info" | "board">("board");
@@ -81,6 +85,8 @@ function PartnerHome() {
   const go = useCallback((tab: Tab, opts?: { filter?: string; need?: string; goal?: string }) => {
     if (tab === "products" && opts?.filter && ["pending", "approved", "rejected", "discontinued"].includes(opts.filter)) { setFilter(opts.filter as Filter); setItems({ status: "loading" }); setProductView("info"); }
     if (tab === "segments" && (opts?.need || opts?.goal)) setPrefill({ need: opts.need, goal: opts.goal });
+    if (tab === "orders") setOrderFilter(opts?.filter && ["new", "accepted", "shipped", "done"].includes(opts.filter) ? opts.filter as OrderFilter : undefined);
+    if (tab === "segments") setCustomerStage(isStage(opts?.filter) ? opts.filter : null);
     setView(tab);
     const next = new URLSearchParams(sp.toString());
     next.set("tab", tab);
@@ -133,9 +139,9 @@ function PartnerHome() {
         items={tabs.map((t) => ({ value: t, label: TAB_LABEL[t], count: t === "products" ? counts.rejected || 0 : undefined }))} />
 
       {current === "today" && <Today qs={qs} go={go} />}
-      {current === "orders" && <Orders qs={qs} />}
+      {current === "orders" && <Orders key={orderFilter || "new"} qs={qs} initialFilter={orderFilter} />}
       {current === "report" && <Report qs={qs} onMakeSegment={(goal) => go("segments", { goal })} />}
-      {current === "segments" && <CustomersTab qs={qs} go={go} prefill={prefill} />}
+      {current === "segments" && <CustomersTab key={customerStage || "all"} qs={qs} go={go} prefill={prefill} initialStage={customerStage} />}
       {current === "demand" && <DemandTab qs={qs} onMakeSegment={(need) => go("segments", { need })} />}
       {current === "commission" && <Commission qs={qs} readOnly={!!as} />}
       {current === "connect" && <Connect qs={qs} batches={batches} isDemo={!!partner.is_demo} readOnly={!!me.data.read_only} onChanged={() => { loadMe(); setItems({ status: "loading" }); }} onReport={() => go("commission")} />}
