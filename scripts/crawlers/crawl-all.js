@@ -155,44 +155,36 @@ async function crawlSixmeal(page) {
 }
 
 // ── 풀무원 디자인밀 ──
+// 상품 카드(.product-card) 하나에서 이름(.product-title)·판매가·주소(카드의 onclick 안 idx)를 같이 읽는다.
+// 예전에는 화면의 아무 덩어리에서 "이름처럼 보이는 줄"과 "그 안의 첫 링크"를 짝지어, 여러 상품이 든 덩어리에서
+// 이름은 A, 링크는 B 로 엇갈렸다(데일리 프로틴 플랜 → 레몬생강차, 11/15). 고른 뒤에는 scripts/verify/service_links.py 로 대조한다.
 async function crawlDesignmeal(page) {
   console.log("\n═══ 디자인밀 ═══");
   const products = [];
 
   try {
-    await page.goto("https://dm.pulmuone.com/category/all", { waitUntil: "domcontentloaded", timeout: 20000 });
+    await page.goto("https://dm.pulmuone.com/product/productList.do?cid=51000001", { waitUntil: "domcontentloaded", timeout: 20000 });
     await sleep(3000);
 
     // 스크롤
-    for (let i = 0; i < 10; i++) {
-      await page.evaluate(() => window.scrollBy(0, 600));
-      await sleep(500);
+    for (let i = 0; i < 15; i++) {
+      await page.evaluate(() => window.scrollBy(0, 1500));
+      await sleep(400);
     }
 
     const items = await page.evaluate(() => {
-      const results = [];
-      const els = document.querySelectorAll("[class*=product], [class*=item], [class*=card], li");
-
-      for (const el of els) {
-        const text = el.innerText?.trim() || "";
-        const lines = text.split("\n").filter(l => l.trim());
-        const img = el.querySelector("img")?.src;
-        const link = el.querySelector("a")?.href;
-
-        // 제품 카드 패턴: 이름 + 가격
-        if (lines.length >= 2 && lines.length < 10) {
-          const name = lines.find(l => l.length > 3 && l.length < 80 && !l.match(/^\d/) && !l.match(/원$/) && !l.match(/^[%\d]/));
-          const priceLine = lines.find(l => l.match(/[\d,]+원/) || l.match(/^\d{1,3}(,\d{3})+$/));
-
-          if (name && (priceLine || img)) {
-            const price = priceLine ? parseInt(priceLine.replace(/[^0-9]/g, "")) : null;
-            if (!results.find(r => r.name === name)) {
-              results.push({ name, price, image_url: img, product_url: link });
-            }
-          }
-        }
-      }
-      return results;
+      return [...document.querySelectorAll(".product-card")].map((card) => {
+        const name = card.querySelector(".product-title")?.innerText.trim() || "";
+        const onclick = [...card.querySelectorAll("[onclick]")].map((e) => e.getAttribute("onclick")).join(" ");
+        const idx = (onclick.match(/idx=(\d+)/) || [])[1];
+        const prices = (card.innerText.match(/[\d,]+원/g) || []).map((p) => parseInt(p.replace(/[^0-9]/g, "")));
+        return {
+          name,
+          price: prices.length ? prices[prices.length - 1] : null, // 할인가가 있으면 마지막이 판매가
+          image_url: card.querySelector("img")?.src || null,
+          product_url: idx ? `https://dm.pulmuone.com/product/productView.do?idx=${idx}` : null,
+        };
+      }).filter((x) => x.name && x.product_url);
     });
 
     products.push(...items.map(i => ({ ...i, source: "designmeal" })));

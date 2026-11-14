@@ -1,0 +1,45 @@
+# 식단 서비스 링크 검사 (scripts/verify/service_links.py)
+# 디자인밀·식스밀·메이크샐러드·그리팅·윤식단 링크를 브라우저로 열어 상품명·판매가·판매 상태를 우리 데이터와 대조한다.
+#  - 매주 월요일 새벽(한국 시간 4시 17분): 반영까지 (다른 상품·목록에서 내려간 메뉴·품절은 숨기고, 판매가가 바뀌었으면 고친다)
+#  - 수동 실행: mode=report 는 검사만, apply 는 반영
+# 이름은 자동으로 바꾸지 않는다 — 'wrong'(다른 상품)으로 나온 줄은 아티팩트를 보고 사람이 고친다.
+name: service-links
+
+on:
+  schedule:
+    - cron: "17 19 * * 0"
+  workflow_dispatch:
+    inputs:
+      mode: { description: "report(검사만) | apply(반영)", default: "report" }
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: 브라우저 설치
+        run: |
+          pip install playwright
+          playwright install --with-deps chromium
+      - name: 링크 검사
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: |
+          MODE="${{ github.event.inputs.mode }}"
+          if [ "${{ github.event_name }}" = "schedule" ] || [ "$MODE" = "apply" ]; then
+            python3 scripts/verify/service_links.py --apply
+          else
+            python3 scripts/verify/service_links.py
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: service-links, path: service-links.json, if-no-files-found: ignore }

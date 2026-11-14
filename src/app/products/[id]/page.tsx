@@ -188,12 +188,15 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
   // 건강식단서비스 원본 URL
   let originalProductUrl: string | null = null;
   if (product.category_large === "건강식단서비스" && product.manufacturer) {
-    const { data: hmProduct } = await (supabase as any)
+    const { data: hmProduct, error: hmError } = await (supabase as any)
       .from("health_meal_products")
       .select("product_url")
       .eq("source", product.manufacturer)
       .eq("name", product.name)
-      .single();
+      .eq("is_available", true) // 판매처에서 내려가거나 다른 상품으로 확인된 링크는 숨긴다 (scripts/verify/service_links.py)
+      .limit(1)
+      .maybeSingle();
+    if (hmError) console.error("원본 상품 페이지를 찾지 못했어요:", productId, hmError.message);
     originalProductUrl = hmProduct?.product_url || null;
   }
 
