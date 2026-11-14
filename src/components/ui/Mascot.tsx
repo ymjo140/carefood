@@ -100,7 +100,7 @@ function Body({ kind, mood, streak }: { kind: MascotKind; mood: MascotMood; stre
             <Face f={f} />
           </>
         ) : (
-          <path d="M36 82 H84 M36 94 H84 M36 106 H70" className="fill-none stroke-mascot-belly" strokeWidth={2} strokeLinecap="round" />
+          <path d="M36 82 H84 M36 94 H84 M36 106 H70" className="fill-none stroke-mascot-mute" opacity={0.3} strokeWidth={2} strokeLinecap="round" />
         )}
       </g>
     );

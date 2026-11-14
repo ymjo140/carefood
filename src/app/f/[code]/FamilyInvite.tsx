@@ -72,7 +72,7 @@ export default function FamilyInvite() {
       </Page>
     );
   }
-  const from = d.from ? `${d.from} 님이` : "가족이";
+  const heading = d.from ? `${d.from} 님이 가족으로 초대했어요` : "가족으로 초대받았어요";
   const none = !scopes.meals && !scopes.products && !scopes.meds && !scopes.numbers;
 
   return (
@@ -80,7 +80,7 @@ export default function FamilyInvite() {
       <div className="flex flex-col gap-8 pt-6 pb-40">
         <section className="flex flex-col gap-3">
           <span className="text-body text-ink-2">간단 모드 · 큰 글자</span>
-          <h1 className="text-display font-bold text-ink text-balance">{from} 가족으로 초대했어요</h1>
+          <h1 className="text-display font-bold text-ink text-balance">{heading}</h1>
           <p className="text-title font-regular text-ink">무엇을 보여 줄지 골라 주세요. 언제든 바꾸거나 그만둘 수 있어요.</p>
         </section>
 

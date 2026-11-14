@@ -100,8 +100,10 @@ export default function ChallengeCreateSheet({ open, onClose, onCreated }: {
           <span className="flex items-baseline justify-between text-label font-medium text-ink">템플릿 <span className="text-caption font-regular text-ink-2">누르면 숫자가 채워져요</span></span>
           <ChipRow>
             {TEMPLATES.map((x) => (
-              <ChoiceCard key={x.key} size="sm" className="w-36 shrink-0" selected={tpl === x.key} onClick={() => pickTemplate(x)}
-                title={x.name} description={`${BUNDLES.find((b) => b.key === ruleOf(x.metric)?.bundle)?.label} · ${x.days}일`} />
+              <div key={x.key} className="w-40 shrink-0">
+                <ChoiceCard size="sm" align="center" className="h-full" selected={tpl === x.key} onClick={() => pickTemplate(x)}
+                  title={x.name} description={`${BUNDLES.find((b) => b.key === ruleOf(x.metric)?.bundle)?.label} · ${x.days}일`} />
+              </div>
             ))}
           </ChipRow>
         </div>
