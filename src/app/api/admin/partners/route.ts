@@ -4,6 +4,7 @@ import { createServiceRoleClient } from "@/lib/supabase/server";
 import { adminOnly } from "@/lib/actor-server";
 import { syncPartnerProducts } from "@/lib/partner/ingest";
 import { asResult, selectAll } from "@/lib/supabase/all";
+import { STANDARD_RATES } from "@/lib/partner/rates";
 
 type Sb = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 const KINDS = ["meal_service", "brand", "mall"];
@@ -28,7 +29,7 @@ export async function GET() {
   return NextResponse.json({ partners });
 }
 
-/** POST /api/admin/partners — 업체 만들기 {slug, name, kind, contact_email?} */
+/** POST /api/admin/partners — 업체 만들기 {slug, name, kind, contact_email?} (기본 수수료율로) */
 export async function POST(req: NextRequest) {
   const denied = await adminOnly(); if (denied) return denied;
   const b = await req.json().catch(() => null);
@@ -38,8 +39,9 @@ export async function POST(req: NextRequest) {
   if (!name || name.length > 60) return NextResponse.json({ error: "업체 이름을 적어 주세요" }, { status: 400 });
   if (!KINDS.includes(b?.kind)) return NextResponse.json({ error: "업체 유형을 골라 주세요" }, { status: 400 });
   const sb: Sb = createServiceRoleClient();
+  // 새 업체는 기본 수수료율로 시작한다 (lib/partner/rates.ts) — 비워 두면 정산 마감이 막힌다
   const { data, error } = await sb.from("partners").insert({
-    slug, name, kind: b.kind, contact_email: typeof b.contact_email === "string" && b.contact_email.includes("@") ? b.contact_email.trim() : null,
+    slug, name, kind: b.kind, commission_rate: STANDARD_RATES.link, order_commission_rate: STANDARD_RATES.order, attribution_days: 7, contact_email: typeof b.contact_email === "string" && b.contact_email.includes("@") ? b.contact_email.trim() : null,
   }).select("id, slug, name, kind, status").single();
   if (error) return NextResponse.json({ error: error.code === "23505" ? "같은 영문 이름의 업체가 있어요" : error.message }, { status: error.code === "23505" ? 409 : 500 });
   return NextResponse.json({ partner: data });

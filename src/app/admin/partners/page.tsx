@@ -12,6 +12,7 @@ import { ClaimTerms } from "./ClaimTerms";
 import { AdminDisputes } from "./Disputes";
 import { AdminAgency } from "./Agency";
 import { AdminPayouts } from "./Payouts";
+import { STANDARD_RATES } from "@/lib/partner/rates";
 
 type Partner = {
   id: string; slug: string; name: string; kind: string; status: "onboarding" | "active" | "paused"; contact_email: string | null;
@@ -276,8 +277,8 @@ function PartnerRow({ p, onDone, onFail, onSettled }: { p: Partner; onDone: (m: 
         </div>
       </div>
       <form onSubmit={saveTerms} className="flex flex-wrap items-end gap-2 mt-3">
-        <Field label="구매 수수료율(%)" className="w-36"><Input inputMode="decimal" value={rate} onChange={(e) => setRate(e.target.value)} placeholder="계약 뒤" /></Field>
-        <Field label="앱 주문 수수료율(%)" className="w-40"><Input inputMode="decimal" value={orderRate} onChange={(e) => setOrderRate(e.target.value)} placeholder="계약 뒤" /></Field>
+        <Field label="구매 링크 수수료율(%)" hint={`기본 ${STANDARD_RATES.link}%`} className="w-40"><Input inputMode="decimal" value={rate} onChange={(e) => setRate(e.target.value)} placeholder={String(STANDARD_RATES.link)} /></Field>
+        <Field label="앱 주문 수수료율(%)" hint={`기본 ${STANDARD_RATES.order}% · 배송비 제외`} className="w-40"><Input inputMode="decimal" value={orderRate} onChange={(e) => setOrderRate(e.target.value)} placeholder={String(STANDARD_RATES.order)} /></Field>
         <Field label="인정 기간(일)" className="w-28"><Input inputMode="numeric" value={days} onChange={(e) => setDays(e.target.value)} /></Field>
         <Button type="submit" size="sm" variant="secondary" loading={savingTerms} disabled={rate.trim() === "" || Number.isNaN(Number(rate)) || (orderRate.trim() !== "" && Number.isNaN(Number(orderRate)))}>조건 저장하기</Button>
       </form>
