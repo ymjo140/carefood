@@ -42,10 +42,13 @@ async function partnerRates(sb: Sb, partnerId: string): Promise<{ link: number |
 
 /** 최근 6개월 — 달별 지금 숫자 + 마감해 둔 숫자 (앱 주문은 구매확정된 달) */
 export async function settlementMonths(sb: Sb, partnerId: string): Promise<SettlementMonth[]> {
-  const since = Date.now() - 185 * 86400e3;
+  // 이번 달 포함 여섯 달 — 첫 달 1일(한국 자정)부터 세야 그 달 숫자가 잘리지 않는다 (185일 전부터 세면 첫 달이 반쪽이었다)
+  let first = currentMonth();
+  for (let i = 0; i < 5; i++) first = previousMonth(Date.parse(`${first}-15T00:00:00+09:00`));
+  const since = monthMs(first).from;
   const rates = await partnerRates(sb, partnerId);
   const [months, bundles, st] = await Promise.all([
-    monthlySummary(sb, partnerId),
+    monthlySummary(sb, partnerId, since),
     loadBundles(sb, partnerId, rates.order, { deliveredFrom: since - CONFIRM_WINDOW }),
     sb.from("partner_settlements").select(SETTLE_COLS).eq("partner_id", partnerId),
   ]);
@@ -54,7 +57,7 @@ export async function settlementMonths(sb: Sb, partnerId: string): Promise<Settl
   const by = new Map<string, SettlementMonth>(months.map((m) => [m.month, { ...m, ...blank }]));
   const get = (m: string) => by.get(m) || by.set(m, { month: m, clicks: 0, orders: 0, confirmed: 0, confirmed_amount: 0, commission: 0, canceled: 0, ...blank }).get(m)!;
   for (const [m, v] of monthlyOf(bundles)) {
-    if (monthMs(m).to < since) continue; // 6개월 밖 — 배송 완료 창 끝에 걸린 일부만 잡혀 숫자가 틀린다
+    if (monthMs(m).from < since) continue; // 여섯 달 밖 — 배송 완료 창 끝에 걸린 일부만 잡혀 숫자가 틀린다
     const x = get(m); x.order_sales = v.sales; x.order_shipping = v.shipping; x.order_discount = v.discount; x.order_fee = v.fee;
   }
   for (const s of (st.data || []) as Settlement[]) get(s.month).settlement = s;

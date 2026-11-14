@@ -220,7 +220,7 @@ export function Orders({ qs, initialFilter }: { qs: string; initialFilter?: Orde
                   ))}
                 </ul>
                 <p className="text-label text-ink mt-2 flex justify-between gap-3">
-                  <span className="text-ink-2">합계 <span className="text-caption">(배송비 {o.shipping_fee > 0 ? won(o.shipping_fee) : "무료"} 포함{o.discount > 0 && <> · 우리 쿠폰 −{won(o.discount)}</>})</span></span>
+                  <span className="text-ink-2">합계 <span className="text-caption">({o.shipping_fee > 0 ? `배송비 ${won(o.shipping_fee)} 포함` : "배송비 무료"}{o.discount > 0 && <> · 우리 쿠폰 −{won(o.discount)}</>})</span></span>
                   <span className="num font-bold whitespace-nowrap">{won(o.amount + o.shipping_fee - (o.discount || 0))}</span>
                 </p>
                 {o.cancel_requested_at && (
@@ -239,7 +239,7 @@ export function Orders({ qs, initialFilter }: { qs: string; initialFilter?: Orde
                     {o.return.note && <p className="text-ink mt-1">{o.return.note}</p>}
                     {o.return.reply && <p className="text-ink-2 mt-1">답한 말 · {o.return.reply}</p>}
                     {o.return.fee ? <p className="text-ink-2 mt-1">반품 배송비 <span className="num">{won(o.return.fee)}</span>를 빼고 환불해요</p> : null}
-                    {returnOpen(o.return.status) && <p className="text-caption text-ink-2 mt-1">답할 때까지 구매확정과 정산이 멈춰요. 받는 분 정보는 회수가 끝날 때까지 보여요</p>}
+                    {returnOpen(o.return.status) && <p className="text-caption text-ink-2 mt-1">{o.return.status === "requested" ? "답할 때까지" : "반품·교환을 마칠 때까지"} 구매확정과 정산이 멈춰요. 받는 분 정보는 회수가 끝날 때까지 보여요</p>}
                   </div>
                 )}
                 {o.shipping ? (

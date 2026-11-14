@@ -116,7 +116,11 @@ export async function listPartnerOrders(sb: Sb, partnerId: string, opt: { status
   return list;
 }
 
-export type OrderCounts = { new: number; accepted: number; shipped: number; cancel_requests: number; late: number; deliver_pending: number; returns: number; return_requests: number };
+export type OrderCounts = {
+  new: number; accepted: number; shipped: number; cancel_requests: number; deliver_pending: number; returns: number; return_requests: number;
+  /** 결제하고 하루가 지나도록 보내지 않은 주문 — 합계와, 그중 아직 접수 전(late_new)·접수했지만 못 보낸(late_accepted) */
+  late: number; late_new: number; late_accepted: number;
+};
 const HOUR = 3600e3;
 export const LATE_HOURS = 24;
 export const DELIVER_PENDING_DAYS = 5;
@@ -138,11 +142,11 @@ export async function countPartnerOrders(sb: Sb, partnerId: string, now = Date.n
   }
   const retBy = new Map<string, string>();
   for (const r of (ret.data || []) as { order_id: string; return_status: string }[]) retBy.set(r.order_id, r.return_status);
-  const c: OrderCounts = { new: 0, accepted: 0, shipped: 0, cancel_requests: 0, late: 0, deliver_pending: 0, returns: retBy.size, return_requests: [...retBy.values()].filter((v) => v === "requested").length };
+  const c: OrderCounts = { new: 0, accepted: 0, shipped: 0, cancel_requests: 0, late: 0, deliver_pending: 0, returns: retBy.size, return_requests: [...retBy.values()].filter((v) => v === "requested").length, late_new: 0, late_accepted: 0 };
   for (const o of by.values()) {
     if (o.s === "new") c.new++; else if (o.s === "accepted") c.accepted++; else c.shipped++;
     if (o.req) c.cancel_requests++;
-    if ((o.s === "new" || o.s === "accepted") && !o.req && o.paid < now - LATE_HOURS * HOUR) c.late++;
+    if ((o.s === "new" || o.s === "accepted") && !o.req && o.paid < now - LATE_HOURS * HOUR) { c.late++; if (o.s === "new") c.late_new++; else c.late_accepted++; }
     if (o.s === "shipped" && o.shipped !== null && o.shipped < now - DELIVER_PENDING_DAYS * 24 * HOUR) c.deliver_pending++;
   }
   return c;

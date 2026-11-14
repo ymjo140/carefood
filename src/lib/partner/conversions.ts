@@ -90,8 +90,9 @@ export async function ingestConversions(sb: Sb, partnerId: string, rows: { row: 
 export type MonthSummary = { month: string; clicks: number; orders: number; confirmed: number; confirmed_amount: number; commission: number; canceled: number };
 
 /** 최근 6개월 — 한국 시간 달별 클릭·주문·구매확정·수수료 */
-export async function monthlySummary(sb: Sb, partnerId: string): Promise<MonthSummary[]> {
-  const since = new Date(Date.now() - 185 * 86400e3).toISOString();
+/** sinceMs: 셀 시작(달 첫날 한국 자정으로 맞춰 주면 첫 달도 온전히 센다). 없으면 185일 전 */
+export async function monthlySummary(sb: Sb, partnerId: string, sinceMs?: number): Promise<MonthSummary[]> {
+  const since = new Date(sinceMs ?? Date.now() - 185 * 86400e3).toISOString();
   const month = (iso: string) => new Date(Date.parse(iso) + 9 * 3600e3).toISOString().slice(0, 7);
   // 클릭은 줄을 다 받지 않고 달마다 건수만 센다(한국 시간 달 경계, 첫 달은 since 부터)
   const months: { m: string; from: string; to: string }[] = [];

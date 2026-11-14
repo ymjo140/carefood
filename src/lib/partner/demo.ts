@@ -18,7 +18,7 @@ type Sb = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
 import { DEMO_SKU_PREFIX, DEMO_USER_PREFIX } from "./demo-ids";
 import { selectAll } from "@/lib/supabase/all";
-import { closeMonth, markPaid, orderPayout, previousMonth } from "./settlement";
+import { closeMonth, markPaid, orderPayout, previousMonth, settlementMonths } from "./settlement";
 export { DEMO_SKU_PREFIX, DEMO_USER_PREFIX };
 
 const DAY = 86400e3;
@@ -298,7 +298,7 @@ export async function seedDemo(sb: Sb, partner: Partner, userId: string | null):
 }
 
 /**
- * 테스트 매장 — 석 달 장사한 가게처럼: 제품 원가·과세 구분, 업체 정보(비어 있을 때만), 지난 석 달 정산(마감·정산 끝, 한 달은 입금 차이).
+ * 테스트 매장 — 석 달 넘게 장사한 가게처럼: 제품 원가·과세 구분, 업체 정보(비어 있을 때만), 지난 달들 정산(지난 달은 마감만, 그 앞은 정산 끝, 한 달은 입금 차이).
  * 정산 숫자는 실제 마감 함수(closeMonth)로 센다 — 화면·엑셀과 같은 계산.
  */
 export async function seedDemoStore(sb: Sb, partner: Partner) {
@@ -321,17 +321,19 @@ export async function seedDemoStore(sb: Sb, partner: Partner) {
     const { error } = await sb.from("partners").update(fill).eq("id", partner.id);
     if (error) throw new Error(error.message);
   }
-  // 지난 석 달 정산 — 석 달 전·두 달 전은 정산 끝(두 달 전은 1,000원 덜 보내 입금 대사에 보이게), 지난 달은 마감만(다음 지급 대기)
+  // 지난 달들 정산 — 돈이 오간 달은 모두 마감하고, 지난 달만 빼고 정산을 끝낸다(그 앞달은 1,000원 덜 보내 입금 대사에 보이게).
+  // 지난 달은 마감만 — 다음 지급(10일) 대기. 예전 달을 마감하지 않으면 정산 화면이 '지급일 지남'으로 가득 찬다(11/14 테스트 매장 확인)
   const { error: dErr } = await sb.from("partner_settlements").delete().eq("partner_id", partner.id);
   if (dErr) throw new Error(dErr.message);
-  let m = previousMonth();
-  const months = [m];
-  for (let i = 0; i < 2; i++) { m = previousMonth(Date.parse(`${m}-15T00:00:00+09:00`)); months.unshift(m); }
-  for (const [i, month] of months.entries()) {
+  const last = previousMonth();
+  const months = (await settlementMonths(sb, partner.id))
+    .filter((x) => !x.open && (orderPayout(x) !== 0 || x.commission !== 0)).map((x) => x.month).sort();
+  for (const month of months) {
     const st = await closeMonth(sb, partner.id, month, null);
-    if (!st || i === 2) continue;
+    if (!st || month === last) continue;
     const net = orderPayout(st) - st.commission;
-    await markPaid(sb, partner.id, month, "예시 입금", i === 1 ? net - 1000 : net);
+    const short = month === months[months.length - (months.includes(last) ? 2 : 1)];
+    await markPaid(sb, partner.id, month, "예시 입금", short ? net - 1000 : net);
   }
 }
 
