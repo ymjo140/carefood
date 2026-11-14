@@ -18,7 +18,7 @@ const DAYS_LABEL: Record<Flow["kind"], string> = { first_thanks: "도착하고 �
 export function Flows({ qs, coupons, toCoupons }: { qs: string; coupons: { status: string; list: CouponRow[] }; toCoupons: () => void }) {
   const toast = useToast();
   const [state, setState] = useState<{ status: "loading" | "error" | "done"; flows?: Flow[]; readOnly?: boolean; ready?: boolean; error?: string }>({ status: "loading" });
-  const [edit, setEdit] = useState<Flow | null>(null);
+  const [edit, setEdit] = useState<(Flow & { days: string }) | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const seq = useRef(0);
 
@@ -51,6 +51,12 @@ export function Flows({ qs, coupons, toCoupons }: { qs: string; coupons: { statu
   };
 
   const active = coupons.list.filter((c) => c.status === "active");
+  // 저장하기 전에 칸마다 막는다 — 날 수 칸을 비우면 0 이 되어 서버가 거절하던 것 (어디가 틀렸는지 칸 아래에)
+  const editError = !edit ? null
+    : !edit.title.trim() ? { field: "title", message: "제목을 적어 주세요" }
+    : !edit.body.trim() ? { field: "body", message: "본문을 적어 주세요" }
+    : !(Number(edit.days) >= 1 && Number(edit.days) <= 180) ? { field: "days", message: "1~180 사이 날 수를 적어 주세요" }
+    : null;
   const nameOf = (id: string | null) => coupons.list.find((c) => c.id === id)?.name;
   return (
     <section>
@@ -74,7 +80,7 @@ export function Flows({ qs, coupons, toCoupons }: { qs: string; coupons: { statu
                     {DAYS_LABEL[f.kind]} <span className="num">{f.delay_days}</span>일 · {f.coupon_id ? `쿠폰: ${nameOf(f.coupon_id) || "고른 쿠폰"}` : "쿠폰 없음"}
                   </p>
                 </div>
-                {!state.readOnly && <Button size="sm" variant="secondary" onClick={() => setEdit({ ...f })}>고치기</Button>}
+                {!state.readOnly && <Button size="sm" variant="secondary" onClick={() => setEdit({ ...f, days: String(f.delay_days) })}>고치기</Button>}
               </div>
             </Card>
           ))}
@@ -83,13 +89,13 @@ export function Flows({ qs, coupons, toCoupons }: { qs: string; coupons: { statu
       )}
 
       <Sheet open={!!edit} onClose={() => setEdit(null)} title={edit ? `${edit.label} 고치기` : ""}
-        footer={<><Button variant="secondary" block onClick={() => setEdit(null)}>취소</Button><Button block loading={!!edit && busy === edit.kind} onClick={() => edit && save(edit)}>저장하기</Button></>}>
+        footer={<><Button variant="secondary" block onClick={() => setEdit(null)}>취소</Button><Button block loading={!!edit && busy === edit.kind} disabled={!!editError} onClick={() => edit && save({ ...edit, delay_days: Number(edit.days) })}>저장하기</Button></>}>
         {edit && (
           <div className="flex flex-col gap-4">
-            <Field label="제목" hint="30자까지"><Input value={edit.title} maxLength={30} onChange={(e) => setEdit({ ...edit, title: e.target.value })} /></Field>
-            <Field label="본문" hint="120자까지 · 효능·질병 표현은 쓸 수 없어요"><Textarea value={edit.body} maxLength={120} rows={3} onChange={(e) => setEdit({ ...edit, body: e.target.value })} /></Field>
-            <Field label={`${DAYS_LABEL[edit.kind]} (일)`} hint="1~180일">
-              <Input inputMode="numeric" value={String(edit.delay_days)} onChange={(e) => setEdit({ ...edit, delay_days: Number(e.target.value.replace(/\D/g, "")) || 0 })} />
+            <Field label="제목" hint="30자까지" error={editError?.field === "title" ? editError.message : undefined}><Input value={edit.title} maxLength={30} onChange={(e) => setEdit({ ...edit, title: e.target.value })} /></Field>
+            <Field label="본문" hint="120자까지 · 효능·질병 표현은 쓸 수 없어요" error={editError?.field === "body" ? editError.message : undefined}><Textarea value={edit.body} maxLength={120} rows={3} onChange={(e) => setEdit({ ...edit, body: e.target.value })} /></Field>
+            <Field label={`${DAYS_LABEL[edit.kind]} (일)`} hint="1~180일" error={editError?.field === "days" ? editError.message : undefined}>
+              <Input inputMode="numeric" value={edit.days} onChange={(e) => setEdit({ ...edit, days: e.target.value.replace(/\D/g, "").slice(0, 3) })} />
             </Field>
             <Field label="같이 줄 쿠폰" hint={active.length ? "알림과 함께 쿠폰을 줘요" : undefined}>
               {active.length ? (

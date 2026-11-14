@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { connection } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { canAct, getPartnerContext, readOnly } from "@/lib/partner/auth";
-import { COUPON_COLS, grantCoupon, type Coupon } from "@/lib/partner/coupons";
+import { COUPON_COLS, grantCoupon, parseCoupon, type Coupon } from "@/lib/partner/coupons";
 import { isStage, loadBuyers } from "@/lib/partner/customers";
 import { userPusher } from "@/lib/push";
 import { limitRequest } from "@/lib/rate-limit";
@@ -54,4 +54,30 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     console.error("쿠폰을 처리하지 못했어요:", id, (e as Error).message);
     return bad("처리하지 못했어요. 다시 시도해 주세요", 500);
   }
+}
+
+/**
+ * PATCH /api/partner/coupons/:id[?as=slug] — {name, kind, value, max_discount?, min_order, valid_days} 고치기
+ * 아직 아무에게도 주지 않았으면 모든 칸, 이미 줬으면 이름만 (받은 사람의 할인이 바뀌지 않게). 금액을 바꾸려면 복사해서 새로 만든다.
+ */
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  await connection();
+  const ctx = await getPartnerContext(req.nextUrl.searchParams.get("as"));
+  if ("error" in ctx) return ctx.error;
+  if (!canAct(ctx)) return readOnly();
+  const { id } = await params;
+  if (!UUID.test(id)) return bad("쿠폰을 찾지 못했어요", 404);
+  const p = parseCoupon((await req.json().catch(() => ({}))) || {});
+  if ("error" in p) return bad(p.error);
+  const c = p.coupon;
+  const { data, error } = await (createServiceRoleClient() as Sb).rpc("partner_coupon_update", {
+    p_id: id, p_partner: ctx.partner.id, p_name: c.name, p_kind: c.kind, p_value: c.value, p_max: c.max_discount, p_min: c.min_order, p_days: c.valid_days,
+  });
+  if (error) {
+    console.error("쿠폰을 고치지 못했어요:", id, error.message);
+    return bad("쿠폰을 고치지 못했어요. 다시 시도해 주세요", 500);
+  }
+  if (data === "not_found") return bad("쿠폰을 찾지 못했어요", 404);
+  if (data === "granted") return bad("이미 준 쿠폰은 이름만 고칠 수 있어요. 금액·조건을 바꾸려면 복사해서 새로 만들어 주세요", 409);
+  return NextResponse.json({ ok: true });
 }

@@ -49,7 +49,8 @@ function PartnerHome() {
   const [view, setView] = useState<Tab>(() => { const t = sp.get("tab"); return isTab(t) ? t : "today"; });
   const [prefill, setPrefill] = useState<{ need?: string; goal?: string } | null>(null);
   const [openItem, setOpenItem] = useState<string | null>(null);
-  const [productView, setProductView] = useState<"info" | "board">("info");
+  // 판매·출고가 먼저 — 매일 보는 것. 제품 관리는 올리기·검수·고치기 (반려·검수 중으로 들어오면 제품 관리로)
+  const [productView, setProductView] = useState<"info" | "board">("board");
 
   const loadMe = useCallback(async () => {
     try {
@@ -78,7 +79,7 @@ function PartnerHome() {
   useEffect(() => { if (me.status === "done" && view === "products") loadItems(filter); }, [me.status, view, filter, loadItems]); // eslint-disable-line react-hooks/set-state-in-effect -- 불러온 뒤에 상태를 바꾼다
 
   const go = useCallback((tab: Tab, opts?: { filter?: string; need?: string; goal?: string }) => {
-    if (tab === "products" && opts?.filter && ["pending", "approved", "rejected", "discontinued"].includes(opts.filter)) { setFilter(opts.filter as Filter); setItems({ status: "loading" }); }
+    if (tab === "products" && opts?.filter && ["pending", "approved", "rejected", "discontinued"].includes(opts.filter)) { setFilter(opts.filter as Filter); setItems({ status: "loading" }); setProductView("info"); }
     if (tab === "segments" && (opts?.need || opts?.goal)) setPrefill({ need: opts.need, goal: opts.goal });
     setView(tab);
     const next = new URLSearchParams(sp.toString());
@@ -143,7 +144,7 @@ function PartnerHome() {
         <section>
           <SectionHeader title="제품" />
           <Tabs value={productView} onChange={setProductView} label="제품 보기" className="mb-4"
-            items={[{ value: "info", label: "제품 정보" }, { value: "board", label: "판매·출고" }]} />
+            items={[{ value: "board", label: "판매·출고" }, { value: "info", label: "제품 관리" }]} />
           {productView === "board" ? <ProductBoard qs={qs} toOrders={() => go("orders")} /> : (<>
           <Tabs variant="line" value={filter} onChange={(f) => { setFilter(f); setItems({ status: "loading" }); }} label="제품 상태" className="mb-3"
             items={[
