@@ -186,14 +186,18 @@ async function seedDemoCoupons(sb: Sb, partner: Partner, used: { id: string; use
   const { error: dErr } = await sb.from("partner_coupons").delete().eq("partner_id", partner.id).like("name", `${DEMO_COUPON}%`);
   if (dErr) throw new Error(dErr.message);
   const { data: cs, error } = await sb.from("partner_coupons").insert([
-    { partner_id: partner.id, name: `${DEMO_COUPON}두 번째 주문 감사`, kind: "amount", value: 3000, min_order: 15000, valid_days: 14 },
+    { partner_id: partner.id, name: `${DEMO_COUPON}두 번째 주문 감사`, kind: "amount", value: 3000, max_discount: null, min_order: 15000, valid_days: 14 },
     { partner_id: partner.id, name: `${DEMO_COUPON}다시 찾아 주세요`, kind: "percent", value: 10, max_discount: 5000, min_order: 0, valid_days: 30 },
   ]).select("id, name");
   if (error) throw new Error(error.message);
   const thanks = cs.find((c: { name: string }) => c.name.endsWith("감사")).id;
   const now = Date.now();
   const firsts = CUSTOMERS.map((c, i) => ({ c, user: `${DEMO_USER_PREFIX}${partner.slug}-${String(i + 1).padStart(2, "0")}` })).filter(({ c }) => c[0] === 1 && c[1] <= 30);
-  const grants: Record<string, unknown>[] = firsts.map(({ user }) => ({ coupon_id: thanks, partner_id: partner.id, user_id: user, source: "flow", expires_at: new Date(now + 14 * DAY).toISOString() }));
+  // 여러 줄을 한 번에 넣을 때는 줄마다 칸이 같아야 한다 — 빠진 칸은 기본값이 아니라 null 로 들어간다
+  const grants: Record<string, unknown>[] = firsts.map(({ user }) => ({
+    coupon_id: thanks, partner_id: partner.id, user_id: user, source: "flow", expires_at: new Date(now + 14 * DAY).toISOString(),
+    status: "active", used_order_id: null, used_at: null, discount_amount: 0,
+  }));
   if (used) grants.push({ coupon_id: thanks, partner_id: partner.id, user_id: used.user, source: "manual", expires_at: new Date(now + 7 * DAY).toISOString(),
     status: "used", used_order_id: used.id, used_at: new Date(now - 6 * DAY).toISOString(), discount_amount: 3000 });
   if (grants.length) {
@@ -263,7 +267,7 @@ async function seedDemoCreators(sb: Sb, partner: Partner) {
   const code = `CF${partner.id.replace(/-/g, "").slice(0, 6).toUpperCase()}`;
   const { data: cs, error: iErr } = await sb.from("partner_collabs").insert([
     { partner_id: partner.id, user_id: people[0].id, title: "고단백 도시락 써 보실래요?", offer: "신제품 5식을 보내 드려요. 드셔 보고 솔직한 후기를 커뮤니티에 남겨 주세요", product_name: "닭가슴살 현미 볶음밥 도시락", coupon_id: coupon?.id || null, code, status: "accepted", decided_at: new Date(Date.now() - 5 * DAY).toISOString(), created_at: new Date(Date.now() - 7 * DAY).toISOString() },
-    { partner_id: partner.id, user_id: people[1].id, title: "저염 한 끼 같이 알려요", offer: "나트륨 600mg 이하 도시락 3식을 보내 드려요. 마음에 들면 글 하나 부탁드려요", product_name: "두부 버섯 덮밥", status: "proposed" },
+    { partner_id: partner.id, user_id: people[1].id, title: "저염 한 끼 같이 알려요", offer: "나트륨 600mg 이하 도시락 3식을 보내 드려요. 마음에 들면 글 하나 부탁드려요", product_name: "두부 버섯 덮밥", coupon_id: null, code: null, status: "proposed", decided_at: null, created_at: new Date(Date.now() - DAY).toISOString() },
   ]).select("id, status");
   if (iErr) throw new Error(iErr.message);
   const accepted = cs.find((c: { status: string }) => c.status === "accepted");
