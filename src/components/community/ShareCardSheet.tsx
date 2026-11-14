@@ -14,7 +14,7 @@ import { hasPhoto, renderCard, type CardData, type CardStyle } from "@/lib/share
  *   챌린지 카드의 링크는 내 묶음 초대 화면(/j/<code>)으로 간다.
  */
 /** day 의 id 는 날짜(YYYY-MM-DD) */
-export type ShareTarget = { kind: "meal" | "challenge" | "group_buy" | "day"; id: string };
+export type ShareTarget = { kind: "meal" | "challenge" | "group_buy" | "day" | "streak"; id: string };
 
 const STYLE_LABEL: Record<CardStyle, string> = { photo: "사진", sticker: "스티커만", record: "기록" };
 
@@ -187,7 +187,7 @@ export default function ShareCardSheet({ target, open, onClose }: { target: Shar
           <ShareSteps steps={style === "sticker"
             ? ["스티커 복사하기를 눌러요", "인스타 스토리에서 내 사진을 고르고 화면을 길게 눌러 붙여 넣어요", "링크 스티커에 게시물 링크를 붙이면 친구가 바로 볼 수 있어요"]
             : ["인스타에 공유하기 → 인스타그램 → 스토리를 골라요", "링크는 미리 복사돼요. 스티커 버튼 → 링크에 붙여 넣어요",
-              card.kind === "challenge" || kind === "day" ? "친구가 링크를 누르면 같이 기록을 시작할 수 있어요" : "친구가 링크를 누르면 이 게시물이 바로 열려요"]} />
+              card.kind === "challenge" || kind === "day" || kind === "streak" ? "친구가 링크를 누르면 같이 기록을 시작할 수 있어요" : "친구가 링크를 누르면 이 게시물이 바로 열려요"]} />
           <p className="text-caption text-ink-2 flex items-center gap-1"><Icon name="link" size={14} /><span className="min-w-0 truncate">{link}</span></p>
           {share.status === "error" && (
             <p className="text-caption text-ink-2">공유 링크를 만들지 못해 게시물 주소를 그대로 써요. 친구가 열어 본 수는 세지 않아요{share.error ? ` (${share.error})` : ""}</p>

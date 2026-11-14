@@ -1,13 +1,15 @@
 import { viewerFilters } from "@/lib/community-safety";
+import { addDays, todayKst } from "@/lib/day";
 
 /**
  * 내 소식 — 따로 저장하지 않고 커뮤니티 기록에서 만든다 (알림 화면 · 웹 푸시가 같이 쓴다)
  *   - 내 글에 남긴 답글 (다른 사람) · 내 답글에 달린 답글 · 내 글의 좋아요(글마다 묶음) · 나를 팔로우함
  *   - 공구: 내가 만든 공구에 온 질문 · 내 질문에 달린 답 · 내가 알림 받는 공구(만든 것 포함)가 목표 인원에 닿음 · 판매처에 요청함
+ *   - 챌린지 같이 하기: 나를 응원함(묶음·하루마다 묶어서) · 내 초대로 같이 하기로 함 · 내 묶음이 내일 시작 (최근 7일)
  *   차단한 사람의 소식은 뺀다. 실패하면 throw.
  */
 export type NotificationItem = {
-  id: string; type: "comment" | "reply" | "like" | "follow" | "gb_question" | "gb_answer" | "gb_reached" | "gb_requested"; at: string; who: string;
+  id: string; type: "comment" | "reply" | "like" | "follow" | "gb_question" | "gb_answer" | "gb_reached" | "gb_requested" | "ch_cheer" | "ch_join" | "ch_start"; at: string; who: string;
   count?: number; text?: string; post_id?: string; post_excerpt?: string; user_id?: string;
   /** 글이 아닌 곳으로 가는 소식 (공구) */
   url?: string;
@@ -81,6 +83,7 @@ export async function buildNotifications(sb: any, actor: string): Promise<Notifi
   for (const f of followers.filter((x) => !blocked.has(x.follower_id))) items.push({ id: `f-${f.id}`, type: "follow", at: f.created_at, who: names.get(f.follower_id) || "누군가", user_id: names.has(f.follower_id) ? f.follower_id : undefined });
 
   items.push(...(await groupBuyNotifications(sb, actor, blocked)));
+  items.push(...(await challengeNotifications(sb, actor, blocked)));
 
   items.sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
   return items;
@@ -166,4 +169,46 @@ export async function adNotifications(sb: any, actor: string): Promise<AdNotific
     text: `${r.partner_campaigns!.title} — ${r.partner_campaigns!.body}`,
     url: `/c/${r.campaign_id}`,
   }));
+}
+
+/** 챌린지 같이 하기 소식 — buildNotifications 가 함께 넣는다. 차단한 사람 것은 뺀다 */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function challengeNotifications(sb: any, actor: string, blocked: Set<string>): Promise<NotificationItem[]> {
+  const since = new Date(Date.now() - 7 * 86400e3).toISOString();
+  const today = todayKst();
+  const tomorrow = addDays(today, 1);
+  const [cheers, joins, mine] = await Promise.all([
+    sb.from("challenge_cheers").select("group_id, from_user, day, created_at").eq("to_user", actor).gte("created_at", since).order("created_at", { ascending: false }).limit(100),
+    sb.from("community_challenge_members").select("group_id, user_id, joined_at").eq("invited_by", actor).neq("user_id", actor).gte("joined_at", since).order("joined_at", { ascending: false }).limit(50),
+    sb.from("community_challenge_members").select("group_id, challenge_groups(start_on)").eq("user_id", actor).not("group_id", "is", null).limit(100),
+  ]);
+  for (const r of [cheers, joins, mine]) if (r.error) throw new Error(r.error.message);
+  type Cheer = { group_id: string; from_user: string; day: string; created_at: string };
+  type Join = { group_id: string; user_id: string; joined_at: string };
+  const cheerRows = ((cheers.data || []) as Cheer[]).filter((c) => !blocked.has(c.from_user));
+  const joinRows = ((joins.data || []) as Join[]).filter((j) => !blocked.has(j.user_id));
+  const starting = ((mine.data || []) as { group_id: string; challenge_groups: { start_on: string } | null }[]).filter((m) => m.challenge_groups?.start_on === tomorrow);
+  const groupIds = [...new Set([...cheerRows.map((c) => c.group_id), ...joinRows.map((j) => j.group_id), ...starting.map((m) => m.group_id)])];
+  if (!groupIds.length) return [];
+  const people = [...new Set([...cheerRows.map((c) => c.from_user), ...joinRows.map((j) => j.user_id)])];
+  const [g, p] = await Promise.all([
+    sb.from("challenge_groups").select("id, community_challenges(title)").in("id", groupIds),
+    people.length ? sb.from("community_profiles").select("actor_id, nickname").in("actor_id", people) : { data: [], error: null },
+  ]);
+  if (g.error) throw new Error(g.error.message);
+  if (p.error) throw new Error(p.error.message);
+  const title = new Map<string, string>(((g.data || []) as { id: string; community_challenges: { title: string } | null }[]).map((x) => [x.id, x.community_challenges?.title || "챌린지"]));
+  const name = new Map<string, string>(((p.data || []) as { actor_id: string; nickname: string }[]).map((x) => [x.actor_id, x.nickname]));
+  const url = (id: string) => `/community/challenges/g/${id}`;
+
+  const out: NotificationItem[] = [];
+  const byDay = new Map<string, Cheer[]>();
+  for (const c of cheerRows) byDay.set(`${c.group_id}|${c.day}`, [...(byDay.get(`${c.group_id}|${c.day}`) || []), c]);
+  for (const [key, list] of byDay) {
+    const [gid] = key.split("|");
+    out.push({ id: `cc-${key}-${list.length}`, type: "ch_cheer", at: list[0].created_at, who: name.get(list[0].from_user) || "같이 하는 사람", count: list.length, post_excerpt: title.get(gid), url: url(gid) });
+  }
+  for (const j of joinRows) out.push({ id: `cj-${j.group_id}-${j.user_id}`, type: "ch_join", at: j.joined_at, who: name.get(j.user_id) || "누군가", post_excerpt: title.get(j.group_id), url: url(j.group_id) });
+  for (const m of starting) out.push({ id: `cs-${m.group_id}-${tomorrow}`, type: "ch_start", at: `${today}T09:00:00+09:00`, who: "", post_excerpt: title.get(m.group_id), url: url(m.group_id) });
+  return out;
 }

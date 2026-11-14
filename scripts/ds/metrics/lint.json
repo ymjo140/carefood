@@ -1,6 +1,6 @@
 {
-  "checkedAt": "2026-11-14T05:56:33.429Z",
-  "files": 168,
+  "checkedAt": "2026-11-14T06:34:58.134Z",
+  "files": 177,
   "total": 0,
   "warnTotal": 0,
   "allowedCount": 68,
@@ -705,7 +705,7 @@
     },
     {
       "file": "src/components/community/DayCardPrompt.tsx",
-      "line": 19,
+      "line": 22,
       "rule": "silent-catch",
       "level": "warn",
       "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",

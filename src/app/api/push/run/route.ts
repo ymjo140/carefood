@@ -135,7 +135,7 @@ export async function POST(req: NextRequest) {
     asResult(selectAllIn(users, 200, (p) => sb.from("notification_prefs").select("user_id, meals, weekly, community, challenge, community_pushed_at").in("user_id", p), "user_id")),
     asResult(selectAllIn(users, 200, (p) => sb.from("meal_diary").select("user_id, date, meal_type, calories, protein_g, sodium_mg").in("user_id", p).gte("date", addDays(today, -14)).lte("date", today), "id", 1_000_000)),
     asResult(selectAllIn(users, 200, (p) => sb.from("push_log").select("user_id, kind, key").in("user_id", p).gte("sent_at", new Date(Date.now() - 8 * 86400e3).toISOString()), ["user_id", "sent_at", "kind", "key"], 1_000_000)),
-    asResult(selectAllIn(users, 200, (p) => sb.from("community_challenge_members").select("user_id, started_on, community_challenges(title, days, is_active)").in("user_id", p), ["challenge_id", "user_id"])),
+    asResult(selectAllIn(users, 200, (p) => sb.from("community_challenge_members").select("user_id, started_on, challenge_groups(start_on), community_challenges(title, days, is_active)").in("user_id", p), ["challenge_id", "user_id"])),
     // 저장한 식단 (끼니 알림에 계획 이름을 넣으려고) — 사람마다 가장 최근의 한 주
     slotOf(hour) ? asResult(selectAllIn(users, 200, (p) => sb.from("saved_meal_plans").select("user_id, grid, updated_at").in("user_id", p).eq("is_active", true)
       .gte("updated_at", new Date(Date.now() - 28 * 86400e3).toISOString()), ["-updated_at", "id"]))
@@ -152,14 +152,15 @@ export async function POST(req: NextRequest) {
   const diaryBy = new Map<string, Diary[]>();
   for (const d of (dRes.data || []) as Diary[]) diaryBy.set(d.user_id, [...(diaryBy.get(d.user_id) || []), d]);
   const logged = new Set(((lRes.data || []) as { user_id: string; kind: string; key: string }[]).map((l) => `${l.user_id}|${l.kind}|${l.key}`));
-  type Member = { user_id: string; started_on: string; community_challenges: { title: string; days: number; is_active: boolean } | null };
+  type Member = { user_id: string; started_on: string; challenge_groups: { start_on: string } | null; community_challenges: { title: string; days: number; is_active: boolean } | null };
   const runsBy = new Map<string, { title: string; day: number }[]>();
   for (const m of (mRes.data || []) as Member[]) {
     const c = m.community_challenges;
     if (!c?.is_active) continue;
-    const ends = addDays(m.started_on, c.days - 1);
+    // 끝나는 날은 묶음 시작일 기준 (늦게 들어온 사람도 묶음과 같이 끝난다)
+    const ends = addDays(m.challenge_groups?.start_on || m.started_on, c.days - 1);
     if (m.started_on <= today && today <= ends) {
-      const day = daysBetween(m.started_on, today) + 1;
+      const day = daysBetween(m.challenge_groups?.start_on || m.started_on, today) + 1;
       runsBy.set(m.user_id, [...(runsBy.get(m.user_id) || []), { title: c.title, day }]);
     }
   }
@@ -234,7 +235,8 @@ export async function POST(req: NextRequest) {
       let items;
       try { items = await buildNotifications(sb, user); } catch { continue; } // ds-allow: 한 사람 소식을 못 만들어도 다른 사람은 보낸다
       const since = Math.max(prefs.community_pushed_at ? Date.parse(prefs.community_pushed_at) : 0, Date.now() - 86400e3);
-      const fresh = items.filter((i) => i.type !== "like" && Date.parse(i.at) > since);
+      // 챌린지 같이 하기 소식은 '챌린지' 알림을 끈 사람에게는 보내지 않는다
+      const fresh = items.filter((i) => i.type !== "like" && (!i.type.startsWith("ch_") || prefs.challenge) && Date.parse(i.at) > since);
       if (fresh.length) {
         const top = fresh[0];
         const line = top.type === "comment" ? `${top.who} 님이 내 글에 답글을 남겼어요`
@@ -243,6 +245,9 @@ export async function POST(req: NextRequest) {
           : top.type === "gb_answer" ? `${top.who} 님이 내 질문에 답했어요`
           : top.type === "gb_reached" ? `${top.post_excerpt || "공구"}에 ${top.count}명이 모였어요`
           : top.type === "gb_requested" ? `${top.post_excerpt || "공구"}를 판매처에 요청했어요`
+          : top.type === "ch_cheer" ? `${top.who} 님이 ${top.post_excerpt || "챌린지"}에서 응원했어요`
+          : top.type === "ch_join" ? `${top.who} 님이 내 초대로 ${top.post_excerpt || "챌린지"}를 같이 하기로 했어요`
+          : top.type === "ch_start" ? `내일부터 ${top.post_excerpt || "챌린지"}를 같이 시작해요`
           : `${top.who} 님이 나를 팔로우했어요`;
         const payload: PushPayload = fresh.length === 1
           ? { title: "새 소식", body: top.text ? `${line}: “${top.text}”` : line, url: top.url ? top.url : top.post_id ? `/community/${top.post_id}` : top.user_id ? `/community/u/${encodeURIComponent(top.user_id)}` : "/notifications", tag: "community" }

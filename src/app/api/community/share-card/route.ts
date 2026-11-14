@@ -4,7 +4,7 @@ import { createServiceRoleClient } from "@/lib/supabase/server";
 import { getActorId, noActor } from "@/lib/actor-server";
 import { addDays, kstDay, todayKst } from "@/lib/day";
 import { imagePrefix } from "@/lib/community-images";
-import { type DiaryRow } from "@/lib/challenges";
+import { DIARY_COLS, type DiaryRow } from "@/lib/challenges";
 import { memberRun, type ChallengeRow, type MemberRow } from "@/lib/challenge-groups";
 import { enrichGroupBuys, type GroupBuyRow } from "@/lib/group-buy-server";
 import { bestOption, discountOf, readOffer } from "@/lib/group-buy";
@@ -16,6 +16,7 @@ import { selectAll } from "@/lib/supabase/all";
  *   meal: 내 식단 글 — 사진 · 끼니 · 날짜 · 음식 이름(앞 3개) · 합계 · 기록 연속 일수
  *   challenge: 내가 하는 챌린지 — 날마다 해냈는지 · 해낸 날 수 · 같이 하는 사람 수 · 연속 일수. 링크는 내 묶음 초대(/j/<code>)
  *   group_buy: 내가 연 공구 — 사진 · 가장 많이 깎은 구성 · 모인 인원 · 남은 날
+ *   streak: 이어서 기록한 날 수(id = 오늘 날짜) — 최근 14일 점. 링크는 하루 기록과 같음
  *   day: 내 하루 식단 기록(id = YYYY-MM-DD) — 합계 · 음식 이름 · 기록한 끼니 수 · 연속 일수. 링크는 하고 있는 챌린지 초대(없으면 첫 화면)
  * 사진은 우리 저장소 것만 준다(카드는 브라우저 캔버스에 그려서, 다른 사이트 사진은 그릴 수 없다).
  * 건강 목표·질환 관련 값·몸무게는 넣지 않는다. 다른 사람의 것은 카드 대신 링크로만 나눈다.
@@ -41,11 +42,28 @@ export async function GET(request: NextRequest) {
   if (!actor) return noActor();
   const kind = request.nextUrl.searchParams.get("kind");
   const id = request.nextUrl.searchParams.get("id") || "";
-  const okId = kind === "day" ? /^\d{4}-\d{2}-\d{2}$/.test(id) && id <= todayKst() : /^[0-9a-f-]{36}$/i.test(id);
+  const byDate = kind === "day" || kind === "streak";
+  const okId = byDate ? /^\d{4}-\d{2}-\d{2}$/.test(id) && id <= todayKst() : /^[0-9a-f-]{36}$/i.test(id);
   if (!okId) return NextResponse.json({ error: "카드로 만들 것을 골라 주세요" }, { status: 400 });
   const sb = createServiceRoleClient() as Sb;
 
   try {
+    if (kind === "streak") {
+      // 오늘(오늘 기록이 없으면 어제)까지 이어진 날 수 + 최근 14일 기록 여부
+      const today = todayKst();
+      const [{ data: rows, error }, { data: prof, error: pErr }, target, streak] = await Promise.all([
+        sb.from("meal_diary").select("date").eq("user_id", actor).gte("date", addDays(today, -13)).lte("date", today).order("id").limit(1000), // 14일 기록 여부만 — 1,000줄이면 충분
+        sb.from("community_profiles").select("nickname").eq("actor_id", actor).maybeSingle(),
+        dayTarget(sb, actor),
+        streakOf(sb, actor),
+      ]);
+      if (error || pErr) throw new Error((error || pErr).message);
+      if (streak < 1) return NextResponse.json({ error: "이어진 기록이 없어요" }, { status: 404 });
+      const has = new Set(((rows || []) as { date: string }[]).map((r) => r.date));
+      const days = Array.from({ length: 14 }, (_, i) => { const date = addDays(today, i - 13); return { date, state: has.has(date) ? "done" : date === today ? "today" : "missed" }; });
+      return NextResponse.json({ card: { kind: "streak", author: prof?.nickname || null, url: target.target_url, day: today, streak, days } });
+    }
+
     if (kind === "day") {
       const [{ data: rows, error }, { data: prof, error: pErr }, target] = await Promise.all([
         sb.from("meal_diary").select("meal_type, food_name, calories, protein_g, carbs_g, fat_g").eq("user_id", actor).eq("date", id).order("created_at").limit(200),
@@ -100,7 +118,7 @@ export async function GET(request: NextRequest) {
       if (!m) return NextResponse.json({ error: "참여한 챌린지만 인증 카드로 만들 수 있어요" }, { status: 403 });
       const today = todayKst();
       const g = m.challenge_groups as { id: string; code: string; start_on: string; member_count: number } | null;
-      const rows = await selectAll(() => sb.from("meal_diary").select("date, meal_type, calories, protein_g, sugar_g, sodium_mg")
+      const rows = await selectAll(() => sb.from("meal_diary").select(DIARY_COLS)
         .eq("user_id", actor).gte("date", m.started_on).lte("date", today), "id");
       const run = memberRun(c as ChallengeRow, g, m as MemberRow, (rows || []) as DiaryRow[], today);
       return NextResponse.json({

@@ -5,10 +5,10 @@ import Link from "next/link";
 import { Button, Card, EmptyState, Icon, LinkButton, SkeletonList, cn, type IconName } from "@/components/ui";
 import { timeAgo } from "@/components/ui/FeedPost";
 
-type Item = { id: string; type: "comment" | "reply" | "like" | "follow" | "gb_question" | "gb_answer" | "gb_reached" | "gb_requested" | "ad" | "consent" | "collab"; at: string; who: string; count?: number; text?: string; post_id?: string; post_excerpt?: string; user_id?: string; url?: string };
+type Item = { id: string; type: "comment" | "reply" | "like" | "follow" | "gb_question" | "gb_answer" | "gb_reached" | "gb_requested" | "ad" | "consent" | "collab" | "ch_cheer" | "ch_join" | "ch_start"; at: string; who: string; count?: number; text?: string; post_id?: string; post_excerpt?: string; user_id?: string; url?: string };
 
 const ICON: Record<Item["type"], IconName> = {
-  comment: "message", reply: "message", like: "heart", follow: "user", gb_question: "message", gb_answer: "message", gb_reached: "users", gb_requested: "bell", ad: "tag", consent: "bell", collab: "users",
+  comment: "message", reply: "message", like: "heart", follow: "user", gb_question: "message", gb_answer: "message", gb_reached: "users", gb_requested: "bell", ad: "tag", consent: "bell", collab: "users", ch_cheer: "heart", ch_join: "users", ch_start: "calendar",
 };
 
 export function NotificationList() {
@@ -74,6 +74,11 @@ export function NotificationList() {
                 {n.type === "gb_requested" && <>알림 받는 공구를 판매처에 요청했어요. 판매가 열리면 알려 드려요</>}
                 {n.type === "ad" && <>(광고) <b className="font-bold">{n.who}</b> 소식이에요</>}
                 {n.type === "consent" && <>업체 소식(광고) 받기 동의를 확인해 주세요</>}
+                {n.type === "ch_cheer" && (n.count && n.count > 1
+                  ? <><b className="font-bold">{n.who}</b> 님 외 <b className="num font-bold">{n.count - 1}</b>명이 응원했어요</>
+                  : <><b className="font-bold">{n.who}</b> 님이 응원했어요</>)}
+                {n.type === "ch_join" && <><b className="font-bold">{n.who}</b> 님이 내 초대로 같이 하기로 했어요</>}
+                {n.type === "ch_start" && <>내일부터 같이 시작해요. 오늘 밤 미리 알림을 켜 두면 좋아요</>}
                 {n.type === "collab" && <><b className="font-bold">{n.who}</b>에서 협업을 제안했어요. 마이 &gt; 협업 제안에서 받거나 거절할 수 있어요</>}
               </span>
               {n.text && n.type !== "ad" && <span className="text-label text-ink-2 line-clamp-2">“{n.text}”</span>}
