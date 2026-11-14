@@ -1,11 +1,32 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Badge, Button, Card, ChoiceList, ConfirmSheet, EmptyState, Field, Input, ListRow, Notice, SectionHeader, Sheet, SkeletonList, TextButton, useToast } from "@/components/ui";
 import { COUPON_KIND, couponText, type Coupon, type CouponKind } from "@/lib/partner/coupon-text";
 
 export type CouponRow = Coupon & { text: string; granted: number; used: number; discount: number };
-type State = { status: "loading" | "error" | "done"; list: CouponRow[]; readOnly: boolean };
+export type CouponState = { status: "loading" | "error" | "done"; list: CouponRow[]; readOnly: boolean };
+type State = CouponState;
+
+/** 쿠폰 목록 — 쿠폰·자동 알림·고객(혜택 주기)이 같이 쓴다. 만들기·주기·멈추기 뒤에 reload. 늦은 응답은 버린다 */
+export function useCoupons(qs: string) {
+  const [state, setState] = useState<CouponState>({ status: "loading", list: [], readOnly: true });
+  const seq = useRef(0);
+  const reload = useCallback(async () => {
+    const my = ++seq.current;
+    try {
+      const r = await fetch(`/api/partner/coupons?${qs}`);
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error);
+      if (my === seq.current) setState({ status: "done", list: d.coupons, readOnly: d.read_only });
+    } catch (e) {
+      console.error("쿠폰을 불러오지 못했어요:", (e as Error).message);
+      if (my === seq.current) setState((c) => ({ ...c, status: "error" })); // 화면마다 쿠폰 실패 상태를 그린다
+    }
+  }, [qs]);
+  useEffect(() => { reload(); }, [reload]); // eslint-disable-line react-hooks/set-state-in-effect -- 불러온 뒤에 상태를 바꾼다
+  return { state, reload };
+}
 
 const won = (n: number) => `${n.toLocaleString("ko-KR")}원`;
 const blank = { name: "", kind: "amount" as CouponKind, value: "3000", max_discount: "", min_order: "20000", valid_days: "14" };
@@ -18,9 +39,9 @@ const formOf = (c: CouponRow, copy: boolean): Form => ({
 });
 
 /**
- * 혜택 — 업체가 만드는 쿠폰 (v3 10.2). 정액·정률·무료배송, 최소 주문 금액, 쓸 수 있는 날 수.
+ * 마케팅 > 쿠폰 — 업체가 만드는 쿠폰 (v3 10.2). 정액·정률·무료배송, 최소 주문 금액, 쓸 수 있는 날 수.
  * 업체 부담이라 정산에서 판매액에서 빠진다. 결제할 때 업체 묶음마다 할인이 가장 큰 하나가 저절로 쓰인다.
- * 만들기·고치기·멈추기 뒤에 쿠폰 목록을 다시 불러온다(reload) — 고객 화면의 '혜택 주기'도 같은 목록을 쓴다.
+ * 만들기·고치기·멈추기 뒤에 쿠폰 목록을 다시 불러온다(reload) — 고객 화면의 '혜택 주기'·자동 알림도 같은 목록을 쓴다(useCoupons).
  * 고치기: 아직 아무에게도 안 준 쿠폰은 모든 칸, 이미 준 쿠폰은 이름만 (받은 사람의 할인이 바뀌지 않게). 금액은 복사해서 새로 만든다.
  */
 export function Coupons({ qs, state, reload }: { qs: string; state: State; reload: () => void }) {
@@ -62,7 +83,7 @@ export function Coupons({ qs, state, reload }: { qs: string; state: State; reloa
 
   return (
     <section>
-      <SectionHeader title="혜택" description="내 고객에게 주는 쿠폰이에요. 할인은 업체 부담이라 정산에서 빠지고, 결제할 때 저절로 쓰여요"
+      <SectionHeader title="쿠폰" description="내 고객에게 주는 쿠폰이에요. 할인은 업체 부담이라 정산에서 빠지고, 결제할 때 저절로 쓰여요"
         action={!state.readOnly ? <Button size="sm" onClick={() => setForm({ ...blank })}>쿠폰 만들기</Button> : undefined} />
       {state.status === "loading" ? <SkeletonList rows={2} thumb={false} /> : state.status === "error" ? (
         <EmptyState title="쿠폰을 불러오지 못했어요" action={<Button size="sm" variant="secondary" icon="refresh" onClick={reload}>다시 불러오기</Button>} />

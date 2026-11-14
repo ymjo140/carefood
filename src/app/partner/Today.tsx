@@ -2,10 +2,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { AsOf, Button, Card, CardButton, EmptyState, HowCounted, Icon, SectionHeader, Skeleton, Stat, cn } from "@/components/ui";
-import type { Tab } from "@/lib/partner/tabs";
+import type { Go, Tab } from "@/lib/partner/tabs";
 
-type Kpi = { label: string; value: string; unit?: string; tab: Tab; note?: string; how?: string };
-type Task = { kind: string; title: string; reason: string; action: string; tab: Tab; filter?: string; blocking: boolean };
+type Kpi = { label: string; value: string; unit?: string; tab: Tab; view?: string; note?: string; how?: string };
+type Task = { kind: string; title: string; reason: string; action: string; tab: Tab; view?: string; filter?: string; blocking: boolean };
 type Step = { key: string; label: string; value: number };
 type Data = {
   kpis: Kpi[]; tasks: Task[]; funnel: Step[] | null;
@@ -19,7 +19,7 @@ const BASE: Record<string, string> = { views: "impressions", saves: "views", cli
  * 오늘 — 지금 무엇을 해야 하나. 숫자 4개(유형별) → 할 일 Top 3 → 퍼널 한 줄 → 수요 한 줄. (v3 7.1)
  * 1순위는 할 일 첫째 줄. 숫자·퍼널은 해당 탭으로 데려간다.
  */
-export function Today({ qs, go }: { qs: string; go: (tab: Tab, opts?: { filter?: string; need?: string }) => void }) {
+export function Today({ qs, go }: { qs: string; go: Go }) {
   const [state, setState] = useState<{ status: "loading" | "error" | "done"; data?: Data; error?: string; at?: number }>({ status: "loading" });
   const load = useCallback(async () => {
     try {
@@ -55,9 +55,9 @@ export function Today({ qs, go }: { qs: string; go: (tab: Tab, opts?: { filter?:
         <Card>
           <ol className="flex flex-col gap-4">
             {[
-              { t: "연동 방식 고르기", s: "피드·API를 권해요. 가격이 바뀌면 바로 반영돼요", tab: "connect" as Tab },
-              { t: "제품 올리기", s: "양식에 한 줄에 제품 하나씩 적어 올려요", tab: "connect" as Tab },
+              { t: "제품 올리기", s: "양식에 한 줄에 제품 하나씩 적어 올려요. 제품 > 올리기", tab: "products" as Tab },
               { t: "검수 기다리기", s: "영양·원재료를 케어푸드가 확인한 뒤 앱에 보여요", tab: "products" as Tab },
+              { t: "자동 연동 걸기", s: "피드·API를 권해요. 가격이 바뀌면 바로 반영돼요. 설정 > 연동", tab: "settings" as Tab },
             ].map((x, i) => (
               <li key={x.t} className="flex gap-3">
                 <span className="num text-label font-bold text-ink-2 w-5 shrink-0">{i + 1}</span>
@@ -68,7 +68,7 @@ export function Today({ qs, go }: { qs: string; go: (tab: Tab, opts?: { filter?:
               </li>
             ))}
           </ol>
-          <Button className="mt-5" onClick={() => go("connect")}>연동 방식 고르기</Button>
+          <Button className="mt-5" onClick={() => go("products", { view: "upload" })}>제품 올리기</Button>
         </Card>
       </section>
     );
@@ -79,7 +79,7 @@ export function Today({ qs, go }: { qs: string; go: (tab: Tab, opts?: { filter?:
       <div>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {d.kpis.map((k) => (
-          <CardButton key={k.label} onClick={() => go(k.tab)}>
+          <CardButton key={k.label} onClick={() => go(k.tab, { view: k.view })}>
             <Stat label={k.label} value={k.value} unit={k.unit} />
             {k.note && <span className="block text-caption text-ink-2 mt-1">{k.note}</span>}
           </CardButton>
@@ -98,7 +98,7 @@ export function Today({ qs, go }: { qs: string; go: (tab: Tab, opts?: { filter?:
         <SectionHeader title="할 일" />
         {d.tasks.length === 0 ? (
           <EmptyState title="지금 막힌 일은 없어요" description="수요 빈틈을 보고 다음 제품을 정해 보세요"
-            action={<Button size="sm" variant="secondary" onClick={() => go("demand")}>수요 보기</Button>} />
+            action={<Button size="sm" variant="secondary" onClick={() => go("analytics", { view: "demand" })}>수요 보기</Button>} />
         ) : (
           <Card padding="none" className="divide-y divide-line">
             {d.tasks.map((t, i) => (
@@ -114,7 +114,7 @@ export function Today({ qs, go }: { qs: string; go: (tab: Tab, opts?: { filter?:
                   </span>
                 </span>
                 <Button size="sm" variant={i === 0 ? "primary" : "secondary"} className="self-start sm:self-center shrink-0"
-                  onClick={() => go(t.tab, { filter: t.filter })}>{t.action}</Button>
+                  onClick={() => go(t.tab, { view: t.view, filter: t.filter })}>{t.action}</Button>
               </div>
             ))}
           </Card>
@@ -123,11 +123,11 @@ export function Today({ qs, go }: { qs: string; go: (tab: Tab, opts?: { filter?:
 
       {d.funnel && (
         <section>
-          <SectionHeader title="지난 28일" action={<Button size="sm" variant="ghost" onClick={() => go("report")}>성과 자세히</Button>} />
+          <SectionHeader title="지난 30일" action={<Button size="sm" variant="ghost" onClick={() => go("analytics", { view: "report" })}>성과 자세히</Button>} />
           <Card>
             <ol className="grid grid-cols-5 gap-2">
               {d.funnel.map((s, i) => {
-                // 비율의 기준: 담기·클릭은 조회 대비, 확정 구매는 클릭 대비 (담기와 클릭은 나란한 행동이라 이어 붙이지 않는다)
+                // 비율의 기준: 담기·클릭은 조회 대비, 링크 판매는 클릭 대비 (담기와 클릭은 나란한 행동이라 이어 붙이지 않는다)
                 const base = BASE[s.key];
                 const prev = base ? d.funnel!.find((x) => x.key === base)?.value || 0 : 0;
                 return (
@@ -139,7 +139,7 @@ export function Today({ qs, go }: { qs: string; go: (tab: Tab, opts?: { filter?:
                 );
               })}
             </ol>
-            <p className="text-caption text-ink-2 mt-3">비율은 담기·클릭은 조회 대비, 확정 구매는 클릭 대비예요. 담기는 즐겨찾기·식단 리스트·식단 기록을 합친 수, 확정 구매는 업체가 보고한 구매확정이에요</p>
+            <p className="text-caption text-ink-2 mt-3">비율은 담기·클릭은 조회 대비, 링크 판매는 클릭 대비예요. 담기는 즐겨찾기·식단 리스트·식단 기록을 합친 수, 링크 판매는 업체가 보고한 구매 링크 판매 중 구매확정된 것이에요(앱 주문은 들어 있지 않아요)</p>
           </Card>
         </section>
       )}
@@ -154,8 +154,8 @@ export function Today({ qs, go }: { qs: string; go: (tab: Tab, opts?: { filter?:
               찾는 사람 <span className="num font-bold">{d.demand.share}%</span> · 살 수 있는 제품 <span className="num font-bold">{n(d.demand.supply)}</span>개 · 내 제품 <span className="num">{n(d.demand.mine)}</span>개
             </p>
             <div className="flex flex-wrap gap-2 mt-4">
-              <Button size="sm" variant="secondary" onClick={() => go("demand")}>수요 전체 보기</Button>
-              <Button size="sm" variant="ghost" onClick={() => go("segments", { need: d.demand!.key })}>이 조건으로 고객층 만들기</Button>
+              <Button size="sm" variant="secondary" onClick={() => go("analytics", { view: "demand" })}>수요 전체 보기</Button>
+              <Button size="sm" variant="ghost" onClick={() => go("marketing", { view: "ads", need: d.demand!.key })}>이 조건으로 광고 고객층 만들기</Button>
             </div>
           </Card>
         </section>

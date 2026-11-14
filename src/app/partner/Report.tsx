@@ -275,7 +275,7 @@ function Dashboard({ d }: { d: Data }) {
   const ps = d.prev?.sales, pt = d.prev?.totals;
   const saves = t ? t.diary + t.plans + t.favorites : 0;
   const kpis: { label: string; value: string; cur: number; prev: number | null | undefined }[] = sales ? [
-    { label: "판매액", value: won(sales.totals.revenue), cur: sales.totals.revenue, prev: ps?.revenue },
+    { label: "판매액 (결제 기준)", value: won(sales.totals.revenue), cur: sales.totals.revenue, prev: ps?.revenue },
     { label: "주문", value: `${n(sales.totals.orders ?? 0)}건`, cur: sales.totals.orders ?? 0, prev: ps?.orders },
     { label: "구매자", value: `${n(sales.totals.buyers)}명`, cur: sales.totals.buyers, prev: ps?.buyers },
     { label: "다시 산 사람", value: sales.totals.buyers ? `${Math.round((sales.totals.repeat_buyers / sales.totals.buyers) * 100)}%` : "—", cur: sales.totals.repeat_buyers, prev: ps?.repeat_buyers },
@@ -283,7 +283,7 @@ function Dashboard({ d }: { d: Data }) {
     { label: "상세 조회", value: n(t.views), cur: t.views, prev: pt?.views },
     { label: "구매 링크 클릭", value: n(t.clicks), cur: t.clicks, prev: pt?.clicks },
     { label: "식단에 담기", value: n(saves), cur: saves, prev: pt ? pt.diary + pt.plans + pt.favorites : null },
-    { label: "확정 구매", value: d.purchases === null || d.purchases === undefined ? "보고 대기" : `${n(d.purchases)}건`, cur: d.purchases ?? 0, prev: d.prev?.purchases },
+    { label: "링크 판매(보고)", value: d.purchases === null || d.purchases === undefined ? "보고 대기" : `${n(d.purchases)}건`, cur: d.purchases ?? 0, prev: d.prev?.purchases },
   ] : [];
   if (kpis.length === 0) return null; // 제품도 주문도 없으면 아래 비어 있음 안내가 대신한다
   const series = (d.daily || []).map((x) => ({ label: shortDay(x.day), value: metric === "revenue" ? x.revenue : x.orders, prev: metric === "revenue" ? x.prev_revenue : x.prev_orders }));
@@ -293,7 +293,7 @@ function Dashboard({ d }: { d: Data }) {
     { key: "save", label: "식단에 담기", value: saves, prev: t.views },
     { key: "click", label: "구매 링크 클릭", value: t.clicks, prev: t.views },
     ...(sales ? [{ key: "order", label: "앱 주문", value: sales.totals.orders ?? 0, prev: t.views }] : []),
-    ...(d.purchases !== null && d.purchases !== undefined ? [{ key: "buy", label: "확정 구매(보고)", value: d.purchases, prev: t.clicks }] : []),
+    ...(d.purchases !== null && d.purchases !== undefined ? [{ key: "buy", label: "링크 판매(보고)", value: d.purchases, prev: t.clicks }] : []),
   ] : [];
   const top = sales
     ? sales.rows.slice(0, 5).map((r) => ({ key: r.sku, label: r.name, value: r.revenue, display: won(r.revenue), sub: `${n(r.quantity)}개` }))
@@ -323,7 +323,7 @@ function Dashboard({ d }: { d: Data }) {
           <Card>
             <p className="text-label font-bold text-ink mb-3">어디서 빠지나</p>
             <BarList rows={funnel.map((f) => ({ key: f.key, label: f.label, value: f.value, display: n(f.value), sub: f.prev !== null ? pct(f.value, f.prev) : undefined }))} />
-            <p className="text-caption text-ink-2 mt-3">옆의 %는 앞 단계 대비예요(클릭·앱 주문은 상세 조회 대비, 확정 구매는 클릭 대비)</p>
+            <p className="text-caption text-ink-2 mt-3">옆의 %는 앞 단계 대비예요(클릭·앱 주문은 상세 조회 대비, 링크 판매는 클릭 대비). 앱 주문과 링크 판매는 서로 다른 길이에요</p>
           </Card>
         )}
         {top.length > 0 && (

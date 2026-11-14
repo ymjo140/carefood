@@ -38,7 +38,9 @@ export async function payoutBoard(sb: Sb, partnerId: string, month: string, now 
     const s = m.settlement;
     return { app: orderPayout(s || m), link: s ? s.commission : m.commission };
   };
-  const unpaid = months.filter((m) => !m.open && m.settlement?.status !== "paid").sort((a, b) => a.month.localeCompare(b.month));
+  // 오갈 돈이 0인 달(클릭만 있던 달)은 '정산 안 끝난 달'로 세지 않는다 — 0원 지급일 경고가 뜨지 않게
+  const unpaid = months.filter((m) => !m.open && m.settlement?.status !== "paid" && (() => { const v = net(m); return v.app !== 0 || v.link !== 0; })())
+    .sort((a, b) => a.month.localeCompare(b.month));
   const due = unpaid.reduce((acc, m) => { const v = net(m); return { app: acc.app + v.app, link: acc.link + v.link }; }, { app: 0, link: 0 });
   const nextPay = unpaid.length ? payDate(unpaid[0].month) : payDate(cur);
   const thisRow = months.find((m) => m.month === cur);

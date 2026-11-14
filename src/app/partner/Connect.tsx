@@ -14,18 +14,57 @@ export type Batch = {
 type RowError = { row: number; sku?: string; field?: string; message: string };
 
 /**
- * 연동 — 내 정보가 최신인가. 세 방식을 나란히 두고 피드·API를 권한다 (v3 7.8).
- * 엑셀 올리기는 제품 탭에서 여기로 옮겼다 — 가격·재고 갱신이 연동의 일이라서.
- * 케어푸드가 대신 올린 파일(대행)은 업체가 반영하기를 눌러야 들어간다. 예시 엑셀·API 예시와 받은 기록을 같이 둔다 (v3 10.6).
+ * 설정 > 연동 — 가격·재고를 자동으로 맞추는 연결(피드·API)과 상태, 구매 링크 판매 보고 (v3 7.8 → 11/14 구조 진단: 설정 메뉴로).
+ * 제품을 올리는 일(엑셀·대행·예시·받은 기록)은 제품 > 올리기(ProductUpload)로 옮겼다 — 올리기와 고치기를 한 메뉴에서.
  */
-export function Connect({ qs, batches, isDemo = false, readOnly = false, onChanged, onReport }: {
-  qs: string; batches: Batch[]; isDemo?: boolean; readOnly?: boolean; onChanged: () => void; onReport?: () => void;
+export function Connect({ qs, onChanged, linkSales }: { qs: string; onChanged: () => void; linkSales?: React.ReactNode }) {
+  const [tick, setTick] = useState(0); // 피드 가져오기 뒤에 연동 상태를 다시 불러온다
+  const toSales = () => document.getElementById("link-sales")?.scrollIntoView({ behavior: "smooth", block: "start" });
+
+  return (
+    <div className="flex flex-col gap-10">
+      <Status qs={qs} refresh={tick} onReport={linkSales ? toSales : undefined} />
+
+      <section>
+        <SectionHeader title="연동 방식" />
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Card>
+            <p className="text-body font-bold text-ink">피드 · API <span className="text-label font-medium text-brand-ink">권장</span></p>
+            <p className="text-label text-ink-2 mt-1">가격이 바뀌면 바로 반영돼요. 피드에서 빠진 제품은 판매 종료로 바뀌어 추천에서 빠지지 않게 지켜요</p>
+          </Card>
+          <Card>
+            <p className="text-body font-bold text-ink">엑셀 올리기</p>
+            <p className="text-label text-ink-2 mt-1">제품 &gt; 올리기에서 바로 시작할 수 있어요. 다시 올릴 때까지 가격이 그대로라, 확인한 지 60일이 넘은 가격은 앱에서 감춰져요</p>
+          </Card>
+          <Card>
+            <p className="text-body font-bold text-ink">대행 연동 (유료)</p>
+            <p className="text-label text-ink-2 mt-1">표시사항 사진·상품 목록만 보내 주면 케어푸드가 옮겨 적어요. 제품 &gt; 올리기에서 미리보기를 보고 &lsquo;반영하기&rsquo;를 눌러야 들어가요</p>
+          </Card>
+        </div>
+      </section>
+
+      <Feed qs={qs} onFetched={() => { onChanged(); setTick((t) => t + 1); }} />
+      <ApiKeys qs={qs} />
+      {linkSales && <div id="link-sales" className="scroll-mt-4">{linkSales}</div>}
+
+      <section>
+        <SectionHeader title="연동 안내" />
+        <p className="text-label text-ink-2 mb-3">양식의 칸, 피드 형식, API 요청과 구매 링크 판매 보고 방법을 한곳에 모았어요</p>
+        <LinkButton href="/partner/docs" variant="secondary" size="sm">연동 안내 보기</LinkButton>
+      </section>
+    </div>
+  );
+}
+
+/** 제품 > 올리기 — 엑셀 올리기 · 케어푸드가 대신 올린 파일 · 예시 · 받은 기록 */
+export function ProductUpload({ qs, batches, isDemo = false, readOnly = false, onChanged }: {
+  qs: string; batches: Batch[]; isDemo?: boolean; readOnly?: boolean; onChanged: () => void;
 }) {
   const toast = useToast();
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [result, setResult] = useState<Batch | null>(null);
-  const [tick, setTick] = useState(0); // 올리기·피드 가져오기 뒤에 연동 상태를 다시 불러온다
+  const [tick, setTick] = useState(0);
   const fileRef = useRef<HTMLInputElement>(null);
   const last = result || batches.find((b) => b.channel === "excel") || null;
 
@@ -54,63 +93,34 @@ export function Connect({ qs, batches, isDemo = false, readOnly = false, onChang
 
   return (
     <div className="flex flex-col gap-10">
-      <Status qs={qs} refresh={tick} onReport={onReport} />
-      <Agency qs={qs} refresh={tick} onChanged={() => { onChanged(); setTick((t) => t + 1); }} />
-
-      <section>
-        <SectionHeader title="연동 방식" />
-        <div className="grid gap-3 sm:grid-cols-3">
-          <Card>
-            <p className="text-body font-bold text-ink">피드 · API <span className="text-label font-medium text-brand-ink">권장</span></p>
-            <p className="text-label text-ink-2 mt-1">가격이 바뀌면 바로 반영돼요. 피드에서 빠진 제품은 판매 종료로 바뀌어 추천에서 빠지지 않게 지켜요</p>
-          </Card>
-          <Card>
-            <p className="text-body font-bold text-ink">엑셀 올리기</p>
-            <p className="text-label text-ink-2 mt-1">지금 바로 시작할 수 있어요. 다시 올릴 때까지 가격이 그대로라, 확인한 지 60일이 넘은 가격은 앱에서 감춰져요</p>
-          </Card>
-          <Card>
-            <p className="text-body font-bold text-ink">대행 연동 (유료)</p>
-            <p className="text-label text-ink-2 mt-1">표시사항 사진·상품 목록만 보내 주면 케어푸드가 옮겨 적어요. 업체가 미리보기를 보고 &lsquo;반영하기&rsquo;를 눌러야 들어가요</p>
-          </Card>
-        </div>
-      </section>
-
-      <Feed qs={qs} onFetched={() => { onChanged(); setTick((t) => t + 1); }} />
-      <ApiKeys qs={qs} />
-
       <section>
         <SectionHeader title="엑셀로 올리기"
           action={<a href="/api/partner/template" className={buttonClass({ variant: "ghost", size: "sm" })}>양식 내려받기</a>} />
         <Card className="mb-3">
           <p className="text-label text-ink-2">
             케어푸드 양식(.xlsx)의 &lsquo;제품&rsquo; 시트에 한 줄에 제품 하나씩 적어 올려요. 가격·재고·링크만 바뀐 줄은 바로 반영되고,
-            새 제품과 영양·원재료·알레르기가 바뀐 줄은 케어푸드가 확인한 뒤 반영돼요.
+            새 제품과 영양·원재료·알레르기가 바뀐 줄은 케어푸드가 확인한 뒤 반영돼요. 자동으로 맞추려면 설정 &gt; 연동에서 피드·API를 연결해요.
           </p>
-          <div className="flex flex-wrap items-center gap-2 mt-4">
-            <label className={buttonClass({ variant: "secondary" })}>
-              파일 고르기
-              <input ref={fileRef} type="file" accept=".xlsx" className="sr-only" onChange={(e) => setFile(e.target.files?.[0] || null)} />
-            </label>
-            <span className="text-label text-ink-2 min-w-0 truncate">{file ? file.name : "고른 파일이 없어요"}</span>
-            <Button className="ml-auto" disabled={!file} loading={uploading} onClick={upload}>올리기</Button>
-          </div>
+          {readOnly ? <p className="text-label text-ink-2 mt-4">관리자 보기에서는 올릴 수 없어요</p> : (
+            <div className="flex flex-wrap items-center gap-2 mt-4">
+              <label className={buttonClass({ variant: "secondary" })}>
+                파일 고르기
+                <input ref={fileRef} type="file" accept=".xlsx" className="sr-only" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+              </label>
+              <span className="text-label text-ink-2 min-w-0 truncate">{file ? file.name : "고른 파일이 없어요"}</span>
+              <Button className="ml-auto" disabled={!file} loading={uploading} onClick={upload}>올리기</Button>
+            </div>
+          )}
         </Card>
         {last && <BatchResult batch={last} fresh={!!result} />}
       </section>
-
+      <Agency qs={qs} refresh={tick} onChanged={() => { onChanged(); setTick((t) => t + 1); }} />
       <Examples qs={qs} isDemo={isDemo} readOnly={readOnly} onChanged={() => { onChanged(); setTick((t) => t + 1); }} />
       <History batches={batches} />
-
-      <section>
-        <SectionHeader title="연동 안내" />
-        <p className="text-label text-ink-2 mb-3">양식의 칸, 피드 형식, API 요청과 구매 확정 보고 방법을 한곳에 모았어요</p>
-        <LinkButton href="/partner/docs" variant="secondary" size="sm">연동 안내 보기</LinkButton>
-      </section>
     </div>
   );
 }
 
-/** 마지막으로 올린 결과 — 줄별 오류까지 */
 function BatchResult({ batch, fresh }: { batch: Batch; fresh: boolean }) {
   const failed = batch.error_count > 0;
   return (
@@ -142,7 +152,7 @@ function BatchResult({ batch, fresh }: { batch: Batch; fresh: boolean }) {
 export const VIA: Record<string, string> = { excel: "엑셀", feed: "피드", api: "API", agency: "대행", web: "화면에서 고침" };
 const n = (v: number) => v.toLocaleString("ko-KR");
 
-/** 연동 상태 — 마지막 수신 · 오래된 가격 · 구매 확정 보고. 문제가 있는 줄에는 경고 아이콘과 할 일 */
+/** 연동 상태 — 마지막 수신 · 오래된 가격 · 구매 링크 판매 보고. 문제가 있는 줄에는 경고 아이콘과 할 일 */
 function Status({ qs, refresh, onReport }: { qs: string; refresh: number; onReport?: () => void }) {
   const [state, setState] = useState<{ status: "loading" | "error" | "done"; data?: ConnectStatus; error?: string }>({ status: "loading" });
   const seq = useRef(0); // 다시 불러오기가 겹치면 마지막 응답만 쓴다
@@ -193,7 +203,7 @@ function Status({ qs, refresh, onReport }: { qs: string; refresh: number; onRepo
               )}
             />
             <Row
-              title="구매 확정 보고"
+              title="구매 링크 판매 보고"
               problem={d.reports.clicks_28 > 0 && (d.reports.gap_days === null || d.reports.gap_days > 3)}
               detail={
                 <>
@@ -201,7 +211,7 @@ function Status({ qs, refresh, onReport }: { qs: string; refresh: number; onRepo
                   {" · "}지난 28일 구매 링크 클릭 <span className="num">{n(d.reports.clicks_28)}</span>번 · 보고 <span className="num">{n(d.reports.reports_28)}</span>건
                 </>
               }
-              action={onReport && d.reports.clicks_28 > 0 ? <Button size="sm" variant="secondary" onClick={onReport}>주문 올리기</Button> : null}
+              action={onReport && d.reports.clicks_28 > 0 ? <Button size="sm" variant="secondary" onClick={onReport}>판매 보고 올리기</Button> : null}
             />
           </ul>
         </Card>
