@@ -8,7 +8,7 @@ import {
   Avatar, useToast, cn, type BadgeTone,
   BottomNavItems, SkeletonList, FoodEntryForm, DragArea, DragGhost, DragHandle, useDragItem, useDropTarget, type DragData, ChoiceCard, ChoiceList, LinkTabs, RatingStars, RatingInput, ScaleInput, QuickRating, PostAuthor, PostAction, PostActions, PostTags, ThreadItem, MealAttach, PlanAttach, CertAttach, ProductTagLinks, PhotoGrid, PollAttach, DayDots, Switch,
   ReelRow, ReelTile, ReelAddTile, ReelSkeleton, ReelMedia, CommentItem, VideoAttach, OfferOptionList, QtyStepper, UnitInput, RangeInput, Checkbox, FilePick,
-  MemberProgressRow, AvatarStack, StoryFrame, StoryProgress, StoryHeader, StoryMedia, StorySticker, StoryCaption, StoryAction, StoryReply, ShareCardPreview, ShareSteps,
+  MemberProgressRow, AvatarStack, Mascot, MASCOTS, type MascotMood, StoryFrame, StoryProgress, StoryHeader, StoryMedia, StorySticker, StoryCaption, StoryAction, StoryReply, ShareCardPreview, ShareSteps,
 } from "@/components/ui";
 
 // 서버(UTC)와 브라우저 시간대가 달라도 같은 글자가 나오도록 한국 시간으로 고정
@@ -613,6 +613,24 @@ export default function Reference({ status }: { status: DsStatus }) {
               <Icon name={n} size={22} className="text-ink" />
               <span className="font-mono text-caption text-ink-3 text-center break-all">{n}</span>
             </div>
+          ))}
+        </div>
+      </Section>
+
+      {/* ───────────── 캐릭터 ───────────── */}
+      <Section id="mascot" title="캐릭터" description="끼록이·람이·끼냥이 — 내 화면(챌린지·기록·인증 카드)에만. 가족 화면에는 쓰지 않습니다. 색은 mascot-* 토큰(일러스트 예외, 두 테마 같은 값). 몸 크기는 바뀌지 않고 표정·몸짓만">
+        <div className="flex flex-col gap-4">
+          {MASCOTS.map((m) => (
+            <Demo key={m.kind} label={`${m.name} · ${m.about}`} code={`<Mascot kind="${m.kind}" mood="done" streak={9} />`}>
+              <div className="flex flex-wrap items-end gap-4">
+                {(["wait", "logged", "done", "full", "worried", "sulk", "away", "together"] as MascotMood[]).map((mood) => (
+                  <div key={mood} className="flex flex-col items-center gap-1">
+                    <Mascot kind={m.kind} mood={mood} size={64} streak={9} />
+                    <span className="font-mono text-caption text-ink-3">{mood}</span>
+                  </div>
+                ))}
+              </div>
+            </Demo>
           ))}
         </div>
       </Section>

@@ -59,6 +59,23 @@
   /* 카카오 로그인 버튼 — 카카오 디자인 가이드가 정한 색(컨테이너 #FEE500, 글자·심볼 검정 85%). 이 버튼에만, 두 테마에 같은 값 */
   --ds-kakao: #FEE500;
   --ds-on-kakao: rgb(0 0 0 / 0.85);
+  /* 캐릭터 그림 — 끼록이·람이·끼냥이 (Mascot 에만, 두 테마에 같은 값). 앱 화면 강조색 규칙 밖의 일러스트 예외 */
+  --ds-mascot-tomato: #F2542D;
+  --ds-mascot-cream: #FFF6EC;
+  --ds-mascot-ink: #1F1A14;
+  --ds-mascot-mute: #756A5E;
+  --ds-mascot-chestnut: #C9814A;
+  --ds-mascot-tail: #A8652F;
+  --ds-mascot-tail-line: #C98A55;
+  --ds-mascot-belly: #FFF1E0;
+  --ds-mascot-ear: #E9A57A;
+  --ds-mascot-cheek: #F08C6A;
+  --ds-mascot-gray: #A9A49E;
+  --ds-mascot-gray-dark: #8E8984;
+  --ds-mascot-stripe: #7C7771;
+  --ds-mascot-white: #F4F1EC;
+  --ds-mascot-pink: #F2B8B0;
+  --ds-mascot-nose: #E58A8A;
   --ds-overlay-shadow: 0 12px 32px rgb(20 16 12 / 0.16), 0 2px 6px rgb(20 16 12 / 0.06);
 }
 
@@ -223,6 +240,22 @@
   --color-media: var(--ds-media);
   --color-kakao: var(--ds-kakao);
   --color-on-kakao: var(--ds-on-kakao);
+  --color-mascot-tomato: var(--ds-mascot-tomato);
+  --color-mascot-cream: var(--ds-mascot-cream);
+  --color-mascot-ink: var(--ds-mascot-ink);
+  --color-mascot-mute: var(--ds-mascot-mute);
+  --color-mascot-chestnut: var(--ds-mascot-chestnut);
+  --color-mascot-tail: var(--ds-mascot-tail);
+  --color-mascot-tail-line: var(--ds-mascot-tail-line);
+  --color-mascot-belly: var(--ds-mascot-belly);
+  --color-mascot-ear: var(--ds-mascot-ear);
+  --color-mascot-cheek: var(--ds-mascot-cheek);
+  --color-mascot-gray: var(--ds-mascot-gray);
+  --color-mascot-gray-dark: var(--ds-mascot-gray-dark);
+  --color-mascot-stripe: var(--ds-mascot-stripe);
+  --color-mascot-white: var(--ds-mascot-white);
+  --color-mascot-pink: var(--ds-mascot-pink);
+  --color-mascot-nose: var(--ds-mascot-nose);
 }
 
 /* ── 4. 디자인 시스템 유틸리티 ── */

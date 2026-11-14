@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Button, Card, Chip, ConfirmSheet, DayDots, EmptyState, Notice, Sheet, SkeletonList, TextButton, TextLink, useToast } from "@/components/ui";
 import ShareCardSheet from "@/components/community/ShareCardSheet";
 import ChallengeCreateSheet from "@/components/community/ChallengeCreateSheet";
+import { MascotBanner } from "@/components/community/MascotBanner";
 import { getOrCreateNickname } from "@/lib/nickname";
 import { todayKst } from "@/lib/day";
 import { kcalRange, todayLine, type ChallengeMetric, type DayState } from "@/lib/challenges";
@@ -124,6 +125,7 @@ export function ChallengeList() {
 
   return (
     <>
+      <MascotBanner reloadKey={attempt} />
       <Button block icon="plus" className="mb-4" onClick={() => setCreating(true)}>내 챌린지 만들기</Button>
       <ul className="flex flex-col gap-3">
         {items.map((c) => {

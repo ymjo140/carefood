@@ -39,6 +39,7 @@
   - 끼니는 색 없이 글자로.
   - 사진 위 글자: `media-scrim`(어두운 띠) + `on-media`(흰 글자) — 숏폼 칸·보기 화면의 사진 위에만. 두 테마에 같은 값. 스토리 보기 바탕은 `media`.
   - 카카오 로그인 버튼: `kakao`(#FEE500) `on-kakao` — 카카오 디자인 가이드 색, `KakaoButton` 에만.
+  - 캐릭터 그림: `mascot-*`(토마토·크림·밤색·회색 등) — `Mascot` 에만. 일러스트 예외, 두 테마에 같은 값.
   - Tailwind 기본 팔레트(`bg-blue-500`, `text-white`)와 지운 토큰(`*-soft`, `caution`, `meal-*`)은 칠해지지 않는다.
 - **글자 5종**: `text-caption`(12) `text-label`(14) `text-body`(16) `text-title`(20) `text-display`(32)
 - **굵기 3종**: `font-regular` `font-medium` `font-bold`
@@ -97,5 +98,6 @@
 | 겹침 | `Sheet` `ConfirmSheet` `useToast()` |
 | 하단 | `BottomNav`(레이아웃에 한 번) · 주 행동 줄 `BottomBar`(있으면 탭 바가 물러남) · 떠 있는 버튼은 `above-nav` |
 | 단계 | `Steps` |
+| 캐릭터(내 화면에만) | `Mascot` (kind 끼록이·람이·끼냥이 · mood 8가지) · 고르기는 `/me/character` |
 
 참고: suta(github.com/Guksu/suta, MIT) 의 금지선·모션 값·패턴, hallmark(github.com/Nutlope/hallmark, MIT) 의 연결 대조·데이터 4상태·새 눈 검토.

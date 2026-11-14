@@ -169,6 +169,7 @@ export function MeView() {
           <Row icon="share" title="내 공유" meta="인증 카드 링크를 본 사람 · 같이 시작한 사람" href="/me/shares" />
           <Row icon="bell" title="알림" href="/notifications" />
           <Row icon="bell" title="알림 설정" meta="끼니 기록·주간 요약·커뮤니티 소식" href="/me/notifications" />
+          <Row icon="heart" title="캐릭터" meta="끼록이·람이·끼냥이 · 간단 모드" href="/me/character" />
           <Row icon="user" title="차단한 사람" meta="차단을 풀 수 있어요" href="/me/blocked" />
           <Row icon="users" title="관심 표시한 공구" href="/group-buy?view=mine" />
           <Row icon="notebook" title="주간 식단 리포트" meta="지난 7일 식단 기록으로 정리" href="/diary/report" />
