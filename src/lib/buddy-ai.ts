@@ -33,11 +33,13 @@ export async function askBuddy(system: string, turns: Turn[]): Promise<{ text: s
     const r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST", signal: ctrl.signal,
       headers: { "Content-Type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({ model: process.env.BUDDY_MODEL || "claude-haiku-5-5", max_tokens: 300, system, messages }),
+      // 짧은 답이라 생각은 줄이고(effort low), 생각이 길어져도 답이 잘리지 않게 한도는 넉넉히 (생각도 max_tokens 에 들어간다 — 300 이면 추천처럼 긴 설정에서 빈 답이 왔다)
+      body: JSON.stringify({ model: process.env.BUDDY_MODEL || "claude-haiku-5-5", max_tokens: 1500, output_config: { effort: "low" }, system, messages }),
     });
     if (!r.ok) return { text: null, error: `api ${r.status}: ${(await r.text()).slice(0, 200)}` };
-    const d = (await r.json()) as { content?: { type: string; text?: string }[] };
+    const d = (await r.json()) as { content?: { type: string; text?: string }[]; stop_reason?: string };
     const raw = (d.content || []).filter((c) => c.type === "text").map((c) => c.text || "").join("").trim();
+    if (!raw) return { text: null, error: `empty: stop=${d.stop_reason} blocks=${(d.content || []).map((c) => c.type).join(",")}` };
     const text = cleanReply(raw);
     return text ? { text } : { text: null, error: `filtered: ${raw.slice(0, 120)}` };
   } catch (e) {
