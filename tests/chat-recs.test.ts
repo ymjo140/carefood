@@ -75,3 +75,51 @@ describe("대화에 붙이기", () => {
     expect(s).toContain("목록에 없는 음식을 지어내지 않는다");
   });
 });
+
+import { avoidedNote, lastMealOf, profileFocus, repeatOf, type RecentMeal } from "@/lib/chat-recs";
+
+describe("내 목표 · 겹침 · 입맛 · 채식", () => {
+  const T = "2026-11-15";
+  it("말에 초점이 없으면 내 목표(프로필)로 — 그것도 없으면 남은 양", () => {
+    expect(profileFocus({ conditions: ["diabetes"] })).toBe("sugar");
+    expect(profileFocus({ conditions: ["blood_pressure"] })).toBe("sodium");
+    expect(profileFocus({ diet_type: "diet" })).toBe("light");
+    expect(profileFocus({ diet_type: "exercise" })).toBe("protein");
+    expect(focusOf("저녁 뭐 먹지", { conditions: ["diabetes"] }).reason).toBe("내 목표에 맞춰 당류가 적은 쪽으로 골랐어요");
+    expect(focusOf("저녁 뭐 먹지", { diet_type: "normal" }).key).toBe("budget");
+    // 말로 물은 게 먼저
+    expect(focusOf("단백질 많은 저녁", { conditions: ["diabetes"] }).key).toBe("protein");
+  });
+  const recent: RecentMeal[] = [
+    { date: "2026-11-13", meal: "lunch", food: "연어 덮밥", productId: null, at: "2026-11-13T03:00:00Z" },
+    { date: "2026-11-12", meal: "dinner", food: "두부 스테이크", productId: null, at: "2026-11-12T10:00:00Z" },
+    { date: "2026-11-15", meal: "breakfast", food: "닭가슴살 샐러드", productId: null, at: "2026-11-14T23:00:00Z" },
+  ];
+  it("바로 전 끼니는 늘 빼고, 점심·저녁은 3일 안의 같은 음식·같은 주재료를 뺀다 (사흘 전은 괜찮다)", () => {
+    expect(lastMealOf(recent).map((r) => r.food)).toEqual(["닭가슴살 샐러드"]);
+    expect(repeatOf(CANDS[0], recent, "snack", T)?.food).toBe("닭가슴살 샐러드"); // 바로 전 끼니와 같은 이름
+    expect(repeatOf(CANDS[3], recent, "dinner", T)?.food).toBe("연어 덮밥"); // 연어 포케 ↔ 연어 덮밥 (주재료)
+    expect(repeatOf(CANDS[5], recent, "dinner", T)).toBeNull(); // 두부 스테이크는 3일 전 — 괜찮다
+    expect(repeatOf(CANDS[3], recent, "breakfast", T)).toBeNull(); // 아침은 3일 규칙 없음
+    const got = rankRecs(CANDS, "sugar", b, 1, 3, { today: T, recent });
+    expect(got.map((p) => p.name)).not.toContain("연어 포케");
+    expect(got.map((p) => p.name)).not.toContain("닭가슴살 샐러드");
+  });
+  it("겹치지 않게 고른 걸 말할 때는 가장 가까운 점심·저녁 하나", () => {
+    expect(avoidedNote(recent, "dinner", T)).toBe("그제 점심 연어 덮밥");
+    expect(recLine({ key: "sugar", reason: "당류가 적은 쪽으로 골랐어요" }, "dinner", rankRecs(CANDS, "sugar", b, 1), "그제 점심 연어 덮밥"))
+      .toMatch(/^당류가 적은 쪽으로, 그제 점심 연어 덮밥과 겹치지 않게 골랐어요\. 저녁은 /);
+  });
+  it("입맛이 가까운 쪽이 앞으로, 최근에 권한 것은 뒤로", () => {
+    const tasted = CANDS.map((c) => c.name === "곤약 비빔밥" ? { ...c, taste: 100, tasteWhy: "짠맛·매운맛이 고른 입맛과 가까워요" } : { ...c, taste: 20 });
+    const got = rankRecs(tasted, "budget", b, 0, 3);
+    expect(got.map((p) => p.name)).toContain("곤약 비빔밥");
+    expect(got.find((p) => p.name === "곤약 비빔밥")!.why).toContain("입맛");
+    const first = rankRecs(CANDS, "budget", b, 0, 3).filter((p) => p.kind === "product")[0];
+    const later = rankRecs(CANDS, "budget", b, 0, 3, { shown: [first.id] }).filter((p) => p.kind === "product");
+    expect(later[0].id).not.toBe(first.id);
+  });
+  it("채식이면 고기·생선이 든 이름은 뺀다", () => {
+    for (const p of rankRecs(CANDS, "budget", b, 0, 3, { vegetarian: true })) expect(p.name).not.toMatch(/닭|연어|불고기/);
+  });
+});

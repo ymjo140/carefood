@@ -11,11 +11,15 @@ import { buddyLine } from "@/lib/buddy-lines";
 import { checkLines } from "@/lib/buddy-check";
 import { MEAL_CATS, SNACK_CATS, mealBudget, menuFacts, pickMenus, type MealKey, type Menu } from "@/lib/menu-pick";
 import { perServing } from "@/lib/nutrition";
-import { focusOf, isRecAsk, mealOfText, rankRecs, type Cand, type Pick } from "@/lib/chat-recs";
+import { avoidedNote, focusOf, isRecAsk, mealOfText, rankRecs, type Cand, type Pick, type ProfileGoal, type RecentMeal } from "@/lib/chat-recs";
+import { cleanTastes, tasteFit, tasteReason } from "@/lib/recommend/taste";
 import { ALLERGEN_KEYWORDS } from "@/lib/recommend/constants";
-import { kstDayStartIso, kstHour } from "@/lib/day";
+import { addDays, kstDayStartIso, kstHour } from "@/lib/day";
 import { CRISIS_REPLY, QUICK_SAYS, nextSlot, reactPrompt, riskOf, ruleReply, systemPrompt, type ChatCtx } from "@/lib/buddy-chat";
 import { aiReady, askBuddy, type Turn } from "@/lib/buddy-ai";
+import { dueNow, suppNames, takenFromText } from "@/lib/supplements";
+import { loadSupps, markTaken } from "@/lib/supplements-server";
+import { josa } from "@/lib/buddy";
 
 /**
  * 같이 다니는 재료 캐릭터와 이야기하기 (내 화면에만). 규칙·안전선은 lib/buddy-chat.ts, AI 부르기는 lib/buddy-ai.ts.
@@ -42,10 +46,11 @@ const FOCUS_ORDER: Record<string, { col: string; asc: boolean }> = {
   light: { col: "calories", asc: true }, budget: { col: "health_score", asc: false },
 };
 
-/** 추천을 물었으면 우리 DB(제품 · 대표 메뉴)에서 고른다 — 순서는 영양 기준뿐 */
+/** 추천을 물었으면 우리 DB(제품 · 대표 메뉴)에서 고른다 — 순서는 영양·입맛 기준뿐. 내 목표·최근 3일 기록·최근 권한 것을 같이 본다 */
 async function loadRecs(sb: Sb, actor: string, text: string, t: TodayMood, base: Awaited<ReturnType<typeof loadCtx>>) {
   if (!isRecAsk(text)) return null;
-  const focus = focusOf(text);
+  const prof = base.profile;
+  const focus = focusOf(text, prof);
   const meal: MealKey = mealOfText(text) ?? base.slot.meal;
   const b = mealBudget({
     meal, mainLeft: meal === base.slot.meal ? base.slot.mainLeft : Math.max(1, base.slot.mainLeft), goalKcal: t.goals.kcal,
@@ -53,32 +58,54 @@ async function loadRecs(sb: Sb, actor: string, text: string, t: TodayMood, base:
   });
   const o = FOCUS_ORDER[focus.key];
   let q = sb.from("products")
-    .select("id, name, manufacturer, image_url, calories, protein_g, carbs_g, sugar_g, sodium_mg, serving_size_g, nutrient_base_g, dish_category")
+    .select("id, name, manufacturer, image_url, calories, protein_g, carbs_g, sugar_g, fat_g, sodium_mg, serving_size_g, nutrient_base_g, dish_category, taste_salty, taste_sweet, taste_fatty, taste_spicy, spicy_score")
     .eq("is_purchasable", true).is("nutrition_flag", null).is("rec_hold", null).gt("calories", 0)
     .gt("serving_size_g", 0).lte("serving_size_g", 350).not(o.col, "is", null);
   if (meal !== "snack") q = q.in("dish_category", MEAL_DISH);
   if (focus.key === "light") q = q.gte("calories", 40);
-  const { data, error } = await q.order(o.col, { ascending: o.asc, nullsFirst: false }).limit(500);
-  if (error) throw new Error(error.message);
-  type P = { id: string; name: string; manufacturer: string | null; image_url: string | null; calories: number | null; protein_g: number | null; carbs_g: number | null; sugar_g: number | null; sodium_mg: number | null; serving_size_g: number | null; nutrient_base_g: number | null; dish_category: string | null };
-  const products: Cand[] = ((data || []) as P[])
+  const [pRes, recentRes, shownRes] = await Promise.all([
+    q.order(o.col, { ascending: o.asc, nullsFirst: false }).limit(500),
+    // 최근 3일 기록 — 바로 전 끼니 · 점심·저녁 겹침 빼기
+    sb.from("meal_diary").select("date, meal_type, food_name, product_id, created_at").eq("user_id", actor).gte("date", addDays(t.today, -2)).lte("date", t.today).limit(200),
+    // 최근 이틀 대화에서 권한 것 — 뒤로 미룬다
+    sb.from("buddy_chats").select("items").eq("user_id", actor).eq("role", "buddy").not("items", "is", null).gte("created_at", kstDayStartIso(addDays(t.today, -1))).limit(50),
+  ]);
+  if (pRes.error) throw new Error(pRes.error.message);
+  if (recentRes.error) throw new Error(recentRes.error.message);
+  if (shownRes.error) throw new Error(shownRes.error.message);
+  const tastes = cleanTastes({ salty: prof?.taste_salty, sweet: prof?.taste_sweet, fatty: prof?.taste_fatty, spicy: prof?.taste_spicy });
+  const fit = (raw: Record<string, unknown>) => { const f = tasteFit(tastes, raw); return { taste: f.score, tasteWhy: tasteReason(f) }; };
+  type P = Record<string, unknown> & { id: string; name: string; manufacturer: string | null; image_url: string | null; calories: number | null; protein_g: number | null; carbs_g: number | null; sugar_g: number | null; sodium_mg: number | null; serving_size_g: number | null; nutrient_base_g: number | null; dish_category: string | null };
+  const products: Cand[] = ((pRes.data || []) as P[])
     .filter((r) => meal !== "snack" || !NOT_SNACK.includes(r.dish_category || ""))
-    .map((r) => perServing(r))
-    .map((r) => ({ kind: "product", id: r.id, name: r.name, maker: r.manufacturer, image: r.image_url, category: r.dish_category,
-      calories: r.calories, protein_g: r.protein_g, carbs_g: r.carbs_g, sugar_g: r.sugar_g, sodium_mg: r.sodium_mg }));
+    .map((raw) => {
+      const r = perServing(raw);
+      // 맛 단계는 100g 기준 값으로 잰다 (perServing 전)
+      return { kind: "product" as const, id: r.id, name: r.name, maker: r.manufacturer, image: r.image_url, category: r.dish_category,
+        calories: r.calories, protein_g: r.protein_g, carbs_g: r.carbs_g, sugar_g: r.sugar_g, sodium_mg: r.sodium_mg, ...fit(raw) };
+    });
   const cats = meal === "snack" ? SNACK_CATS : MEAL_CATS;
-  const menus: Cand[] = base.foods.filter((f) => cats.has(f.category)).map((f) => ({
-    kind: "menu", id: f.id, name: f.name, maker: null, image: null, category: f.category,
-    calories: f.calories, protein_g: f.protein_g, carbs_g: f.carbs_g, sugar_g: f.sugar_g, sodium_mg: f.sodium_mg,
-  }));
-  const picks = rankRecs([...menus, ...products], focus.key, { meal, kcal: b.kcal, protein: b.protein, sodium: b.sodium, avoid: base.avoid }, `${actor}:${t.today}:${text}`);
-  return { focus, meal, picks };
+  const menus: Cand[] = base.foods.filter((f) => cats.has(f.category)).map((f) => {
+    const g = Number(f.serving_size_g) || 0;
+    const per100 = (v: number | null) => (v == null || !g ? null : (Number(v) * 100) / g);
+    return {
+      kind: "menu" as const, id: f.id, name: f.name, maker: null, image: null, category: f.category,
+      calories: f.calories, protein_g: f.protein_g, carbs_g: f.carbs_g, sugar_g: f.sugar_g, sodium_mg: f.sodium_mg,
+      ...fit({ sodium_mg: per100(f.sodium_mg), sugar_g: per100(f.sugar_g), fat_g: per100(f.fat_g) }),
+    };
+  });
+  const recent: RecentMeal[] = ((recentRes.data || []) as { date: string; meal_type: string | null; food_name: string | null; product_id: string | null; created_at: string }[])
+    .filter((r) => r.food_name).map((r) => ({ date: r.date, meal: r.meal_type || "snack", food: String(r.food_name), productId: r.product_id, at: r.created_at }));
+  const shown = ((shownRes.data || []) as { items: Pick[] | null }[]).flatMap((r) => (r.items || []).map((i) => i.id));
+  const picks = rankRecs([...menus, ...products], focus.key, { meal, kcal: b.kcal, protein: b.protein, sodium: b.sodium, avoid: base.avoid },
+    `${actor}:${t.today}:${text}`, 3, { today: t.today, recent, shown, vegetarian: prof?.diet_type === "vegetarian" });
+  return { focus, meal, picks, avoided: avoidedNote(recent, meal, t.today) };
 }
 
 async function loadCtx(sb: Sb, actor: string, t: TodayMood, access: Access, buddy: { ingredient: string; personality: string }, days: number, stage: string) {
   const [dRes, pRes, fRes] = await Promise.all([
     sb.from("meal_diary").select("id, meal_type, food_name, created_at").eq("user_id", actor).eq("date", t.today).order("created_at", { ascending: true }).limit(40),
-    sb.from("user_profiles").select("allergies").eq("user_id", actor).maybeSingle(),
+    sb.from("user_profiles").select("allergies, conditions, concerns, diet_type, taste_salty, taste_sweet, taste_fatty, taste_spicy").eq("user_id", actor).maybeSingle(),
     sb.from("common_foods").select("id, name, category, serving_desc, serving_size_g, calories, protein_g, carbs_g, fat_g, sodium_mg, sugar_g"),
   ]);
   if (dRes.error) throw new Error(dRes.error.message);
@@ -100,7 +127,9 @@ async function loadCtx(sb: Sb, actor: string, t: TodayMood, access: Access, budd
     next: { meal: slot.meal, menus: menus.map((m) => ({ name: m.name, facts: menuFacts(m) })) },
     check: hasPerk(access, "check"),
   };
-  return { ctx, rows, slot, avoid, foods: (fRes.data || []) as Menu[] };
+  // 내 목표·입맛은 서버에서 추천 고르기에만 쓴다 (AI 에는 보내지 않는다)
+  const profile = pRes.data as (ProfileGoal & { taste_salty: number | null; taste_sweet: number | null; taste_fatty: number | null; taste_spicy: number | null }) | null;
+  return { ctx, rows, slot, avoid, profile, foods: (fRes.data || []) as Menu[] };
 }
 
 async function recent(sb: Sb, actor: string, n: number): Promise<Msg[]> {
@@ -132,7 +161,9 @@ export async function GET() {
     const base = { on: prefs.kind !== "none", ai: aiReady(), mood: t.state.mood, stage: state.stage, wraps: state.wraps.length, limit: chatLimit(access), quick: QUICK_SAYS };
     if (!state.buddy) return NextResponse.json({ ...base, buddy: null, messages: [], left: 0 });
     const buddy = state.buddy;
-    const { ctx, rows } = await loadCtx(sb, actor, t, access, buddy, state.days, state.stage.name);
+    const [{ ctx: ctx0, rows }, supps] = await Promise.all([loadCtx(sb, actor, t, access, buddy, state.days, state.stage.name), loadSupps(sb, actor, t.today)]);
+    const ctx: ChatCtx = { ...ctx0, supps };
+    const due = dueNow(supps, ctx.hour);
 
     // 캐릭터가 먼저 할 말 — 오늘 처음이면 인사, 마지막 캐릭터 말 뒤에 새 기록이 있으면 반응
     const { data: lastB, error: lErr } = await sb.from("buddy_chats").select("created_at").eq("user_id", actor).eq("role", "buddy")
@@ -152,14 +183,22 @@ export async function GET() {
         + (state.check?.length ? `\n${checkLines(t.totals, t.goals)[0]}` : "");
       auto = { key: `meal:${latest.id}`, text: ai.text ?? fallback, source: ai.text ? "ai" : "rule" };
     }
-    if (auto?.text) {
+    // 영양제 — 챙길 때가 지났는데 안 먹은 게 있으면 하루 한 번 묻는다
+    const autos = [auto];
+    if (due.length) {
+      const names = suppNames(due);
+      autos.push({ key: `supp:${t.today}`, text: `${names}${josa(names, "은", "는")} 챙겼어요? 먹었으면 '영양제 먹었어요'라고 말해 줘요`, source: "rule" });
+    }
+    for (const a of autos) {
+      if (!a?.text) continue;
       const { error } = await sb.from("buddy_chats").upsert(
-        { user_id: actor, buddy_id: buddy.id, role: "buddy", text: auto.text, source: auto.source, auto_key: auto.key },
+        { user_id: actor, buddy_id: buddy.id, role: "buddy", text: a.text, source: a.source, auto_key: a.key },
         { onConflict: "user_id,auto_key", ignoreDuplicates: true });
       if (error) throw new Error(error.message);
     }
     const [messages, used] = await Promise.all([recent(sb, actor, 40), usedToday(sb, actor, t.today)]);
-    return NextResponse.json({ ...base, buddy, messages, left: Math.max(0, base.limit - used) });
+    const quick = due.length ? ["영양제 먹었어요", ...QUICK_SAYS.slice(0, 3)] : QUICK_SAYS;
+    return NextResponse.json({ ...base, quick, buddy, messages, supps: { count: supps.length, due: due.length }, left: Math.max(0, base.limit - used) });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });
   }
@@ -194,10 +233,14 @@ export async function POST(request: NextRequest) {
     if (risk === "crisis") {
       reply = CRISIS_REPLY; source = "safety";
     } else {
-      const base = await loadCtx(sb, actor, t, access, buddy, state.days, state.stage.name);
+      const [base, supps0] = await Promise.all([loadCtx(sb, actor, t, access, buddy, state.days, state.stage.name), loadSupps(sb, actor, t.today)]);
       const careful = risk === "eating";
-      recs = careful ? null : await loadRecs(sb, actor, text, t, base);
-      const ctx: ChatCtx = { ...base.ctx, recs };
+      // 영양제를 먹었다는 말이면 체크부터 (먹었는지만 — 효과·양은 다루지 않는다)
+      const just = takenFromText(text, supps0, base.ctx.hour);
+      await markTaken(sb, actor, t.today, just.map((x) => x.id));
+      const supps = supps0.map((x) => (just.some((j) => j.id === x.id) ? { ...x, taken: true } : x));
+      recs = careful || just.length ? null : await loadRecs(sb, actor, text, t, base);
+      const ctx: ChatCtx = { ...base.ctx, recs, supps, suppJust: just.length ? suppNames(just) : null };
       const ai = aiReady() ? await askBuddy(systemPrompt(ctx, careful), [...history, { role: "me", text }]) : { text: null };
       if (ai.error && ai.error !== "no-key") console.error("캐릭터 답을 AI로 만들지 못했어요:", ai.error);
       reply = ai.text ?? ruleReply(text, ctx, careful);

@@ -5,6 +5,7 @@ import {
   BackButton, BottomBar, Buddy, Button, ChatBubble, ChatPicks, ChatTyping, Chip, ChipRow, ConfirmSheet, EmptyState, Input, LinkButton, Skeleton, TextButton, TextLink, useToast,
 } from "@/components/ui";
 import type { MascotMood } from "@/components/ui";
+import { SupplementSheet } from "./SupplementSheet";
 import { josa, type IngredientKey, type PersonalityKey, type StageKey } from "@/lib/buddy";
 
 /**
@@ -19,6 +20,8 @@ type Data = {
   stage: { key: StageKey; name: string };
   buddy: { id: string; ingredient: IngredientKey; personality: PersonalityKey; name: string } | null;
   messages: Msg[];
+  /** 영양제 — 등록한 수 · 때가 지났는데 안 먹은 수 */
+  supps?: { count: number; due: number };
 };
 
 export function BuddyChat() {
@@ -29,6 +32,7 @@ export function BuddyChat() {
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [clearing, setClearing] = useState<"closed" | "open" | "busy">("closed");
+  const [suppOpen, setSuppOpen] = useState(false);
   const seq = useRef(0);
   const end = useRef<HTMLDivElement>(null);
 
@@ -43,6 +47,7 @@ export function BuddyChat() {
   const count = data?.messages.length ?? 0;
   useEffect(() => { end.current?.scrollIntoView({ block: "end" }); }, [count, sending]);
 
+  const suppDue = data?.supps?.due ?? 0;
   const send = useCallback(async (raw: string) => {
     const say = raw.replace(/\s+/g, " ").trim();
     if (!say || sending || !data?.buddy) return;
@@ -57,6 +62,8 @@ export function BuddyChat() {
         if (r.status === 429) setData((x) => x && { ...x, left: 0 });
         throw new Error(r.status === 429 || r.status === 400 ? d.error : "");
       }
+      // 영양제를 먹었다고 했으면 빠른 말·묻기가 바뀐다 — 새로 불러온다
+      if (suppDue) setReload((k) => k + 1);
       setData((x) => x && {
         ...x, left: d.left,
         messages: [...x.messages.filter((m) => m.id !== temp.id), { id: String(d.mine.id), role: "me", text: say }, d.reply as Msg],
@@ -68,7 +75,7 @@ export function BuddyChat() {
     } finally {
       setSending(false);
     }
-  }, [data?.buddy, sending, toast]);
+  }, [data?.buddy, suppDue, sending, toast]);
 
   const clearAll = async () => {
     setClearing("busy");
@@ -88,7 +95,10 @@ export function BuddyChat() {
   const top = (
     <div className="flex items-center justify-between gap-3 mb-3">
       <BackButton fallback="/diary" />
-      <TextLink href="/me/character" className="text-label">캐릭터 관리</TextLink>
+      <div className="flex items-center gap-4">
+        {data?.buddy && <TextButton onClick={() => setSuppOpen(true)}>영양제{data.supps?.due ? ` · ${data.supps.due}개 아직` : ""}</TextButton>}
+        <TextLink href="/me/character" className="text-label">캐릭터 관리</TextLink>
+      </div>
     </div>
   );
 
@@ -146,7 +156,7 @@ export function BuddyChat() {
           <p className="text-label text-ink-2">{data.stage.name} · 오늘 기록을 같이 보며 이야기해요</p>
         </div>
       </header>
-      {data.ai && <p className="text-caption text-ink-3 mb-5">답은 AI가 만들어요. 오늘 기록한 음식과 목표 숫자만 함께 보내고, 이름·연락처·건강 정보는 보내지 않아요</p>}
+      {data.ai && <p className="text-caption text-ink-3 mb-5">답은 AI가 만들어요. 오늘 기록한 음식·목표 숫자·영양제 체크만 함께 보내고, 이름·연락처·건강 정보는 보내지 않아요</p>}
 
       <section aria-label={`${b.name}${josa(b.name, "과", "와")} 이야기`} aria-live="polite" className="flex flex-col gap-2 pb-48">
         {data.messages.length === 0 && <p className="text-label text-ink-2 py-6 text-center">아래에서 말을 걸어 보세요</p>}
@@ -182,6 +192,7 @@ export function BuddyChat() {
         </div>
       </BottomBar>
 
+      <SupplementSheet open={suppOpen} onClose={() => setSuppOpen(false)} onChanged={() => setReload((k) => k + 1)} />
       <ConfirmSheet open={clearing !== "closed"} onClose={() => setClearing("closed")} title="이야기를 모두 지울까요?"
         description="지운 이야기는 되돌릴 수 없어요. 캐릭터와 기록은 그대로 남아요" confirmLabel="지우기" tone="danger"
         loading={clearing === "busy"} onConfirm={clearAll} />
