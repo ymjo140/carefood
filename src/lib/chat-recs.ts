@@ -32,7 +32,7 @@ export function isRecAsk(text: string) {
 }
 
 /** 내 목표(온보딩 프로필) — 서버에서만 본다 */
-export type ProfileGoal = { conditions?: string[] | null; concerns?: string[] | null; diet_type?: string | null };
+export type ProfileGoal = { goals?: string[] | null; conditions?: string[] | null; concerns?: string[] | null; diet_type?: string | null };
 
 /** 말에서 초점을 못 찾으면 내 목표에서 — 그것도 없으면 오늘 남은 양 */
 export function focusOf(text: string, profile?: ProfileGoal | null): Focus {
@@ -45,11 +45,15 @@ export function focusOf(text: string, profile?: ProfileGoal | null): Focus {
 
 export function profileFocus(p?: ProfileGoal | null): Exclude<FocusKey, "budget"> | null {
   if (!p) return null;
-  const cond = p.conditions || [], con = p.concerns || [];
+  const cond = p.conditions || [], con = p.concerns || [], goals = p.goals || [];
+  // 질환 체크 → 고른 건강 목표 → 식단 유형 → 관심사 순서 (먼저 걸린 것 하나)
   if (cond.includes("diabetes")) return "sugar";
   if (cond.includes("blood_pressure") || cond.includes("kidney")) return "sodium";
-  if (p.diet_type === "diet" || con.includes("weight")) return "light";
+  if (goals.includes("weight_loss")) return "light";
+  if (goals.includes("muscle")) return "protein";
+  if (p.diet_type === "diet") return "light";
   if (p.diet_type === "exercise") return "protein";
+  if (con.includes("weight")) return "light";
   return null;
 }
 

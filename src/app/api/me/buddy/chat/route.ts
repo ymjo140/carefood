@@ -105,7 +105,7 @@ async function loadRecs(sb: Sb, actor: string, text: string, t: TodayMood, base:
 async function loadCtx(sb: Sb, actor: string, t: TodayMood, access: Access, buddy: { ingredient: string; personality: string }, days: number, stage: string) {
   const [dRes, pRes, fRes] = await Promise.all([
     sb.from("meal_diary").select("id, meal_type, food_name, created_at").eq("user_id", actor).eq("date", t.today).order("created_at", { ascending: true }).limit(40),
-    sb.from("user_profiles").select("allergies, conditions, concerns, diet_type, taste_salty, taste_sweet, taste_fatty, taste_spicy").eq("user_id", actor).maybeSingle(),
+    sb.from("user_profiles").select("allergies, goals, conditions, concerns, diet_type, taste_salty, taste_sweet, taste_fatty, taste_spicy").eq("user_id", actor).maybeSingle(),
     sb.from("common_foods").select("id, name, category, serving_desc, serving_size_g, calories, protein_g, carbs_g, fat_g, sodium_mg, sugar_g"),
   ]);
   if (dRes.error) throw new Error(dRes.error.message);

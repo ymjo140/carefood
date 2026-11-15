@@ -118,7 +118,9 @@ export function buildProfile(input: ProfileInput, nutritionGoals: NutritionGoals
  * 프로필 저장 — 이 기기 + 서버. 서버 저장이 실패하면 throw (이 기기에는 이미 저장됨)
  * syncDiaryGoals: 식단 기록의 하루 목표도 새 값으로 바꾼다 (마이페이지에서 고칠 때)
  */
-export async function persistProfile(profile: ReturnType<typeof buildProfile>, { syncDiaryGoals = false } = {}) {
+export async function persistProfile(input: ReturnType<typeof buildProfile>, { syncDiaryGoals = false } = {}) {
+  // 언제 저장했나 — 다른 기기·예전 저장과 맞출 때 어느 쪽이 새것인지 본다 (lib/profile-sync.ts)
+  const profile = { ...input, saved_at: new Date().toISOString() };
   try {
     localStorage.setItem("carefood_profile", JSON.stringify(profile));
   } catch { /* 저장소를 못 쓰는 브라우저 — 서버 저장은 계속 */ } // ds-allow: 서버 저장이 이어진다

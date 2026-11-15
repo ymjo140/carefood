@@ -193,7 +193,10 @@ function OnboardingContent() {
           }),
         }).catch(() => {}); // ds-allow: 로컬 저장이 있어 진행
       }
-    } catch { /* DB 저장 실패해도 localStorage가 있으니 진행 */ } // ds-allow: 로컬 저장이 있어 진행
+    } catch (e) {
+      // 이 기기에는 저장됐다 — 서버는 다음 접속 때 SessionSync 가 맞춘다 (lib/profile-sync.ts)
+      console.error("프로필을 서버에 저장하지 못했어요:", (e as Error).message); // ds-allow: 이 기기 저장으로 진행, 다음 접속에 서버와 맞춘다
+    }
 
     // 결과를 본 다음 행동: 내 기준으로 이번 주 식단을 바로 채워 보여 준다
     router.push("/weekly-box?fill=1");
