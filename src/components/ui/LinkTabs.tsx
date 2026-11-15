@@ -33,6 +33,12 @@ export function LinkTabs({ items, current, label, className }: {
   );
 }
 
+/** 식단 탭의 두 보기 — 하루(기록)·일주일(계획·장보기) */
+export const DIET_VIEWS = [
+  { href: "/diary", label: "하루" },
+  { href: "/weekly-box", label: "일주일" },
+];
+
 export const ADMIN_TABS = [
   { href: "/admin/metrics", label: "지표" },
   { href: "/admin", label: "데이터 현황" },

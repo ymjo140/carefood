@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import {
-  BackButton, BottomBar, Buddy, Button, ChatBubble, ChatPicks, ChatTyping, Chip, ChipRow, ConfirmSheet, EmptyState, Input, LinkButton, Skeleton, TextButton, TextLink, useToast,
+  BottomBar, Buddy, Button, ChatBubble, ChatPicks, ChatTyping, Chip, ChipRow, ConfirmSheet, EmptyState, Input, LinkButton, Skeleton, TextButton, TextLink, useToast,
 } from "@/components/ui";
 import type { MascotMood } from "@/components/ui";
 import { SupplementSheet } from "./SupplementSheet";
@@ -43,6 +43,12 @@ export function BuddyChat() {
       .then((d) => { if (n === seq.current) { setData(d); setStatus("ready"); } })
       .catch((e) => { console.error("캐릭터 이야기를 불러오지 못했어요:", (e as Error).message); if (n === seq.current) setStatus("error"); });
   }, [reload]);
+
+  // 식단 탭 요약 카드의 'AI에게 묻기'로 왔으면(?ask=) 그 말을 입력 줄에 넣어 둔다 — 보내기는 사용자가 (하루 한도를 쓰므로)
+  useEffect(() => {
+    const ask = new URLSearchParams(window.location.search).get("ask");
+    if (ask) setText(ask.slice(0, 300)); // eslint-disable-line react-hooks/set-state-in-effect -- 주소는 화면을 그린 뒤에 읽는다
+  }, []);
 
   const count = data?.messages.length ?? 0;
   useEffect(() => { end.current?.scrollIntoView({ block: "end" }); }, [count, sending]);
@@ -92,13 +98,12 @@ export function BuddyChat() {
     }
   };
 
+  // AI 탭의 첫 화면 — 뒤로 가기 없이, 오른쪽에 피드백(주간 리포트)과 관리
   const top = (
-    <div className="flex items-center justify-between gap-3 mb-3">
-      <BackButton fallback="/diary" />
-      <div className="flex items-center gap-4">
-        {data?.buddy && <TextButton onClick={() => setSuppOpen(true)}>영양제{data.supps?.due ? ` · ${data.supps.due}개 아직` : ""}</TextButton>}
-        <TextLink href="/me/character" className="text-label">캐릭터 관리</TextLink>
-      </div>
+    <div className="flex items-center justify-end gap-4 mb-3 min-h-11">
+      <TextLink href="/diary/report" className="text-label">주간 리포트</TextLink>
+      {data?.buddy && <TextButton onClick={() => setSuppOpen(true)}>영양제{data.supps?.due ? ` · ${data.supps.due}개 아직` : ""}</TextButton>}
+      <TextLink href="/me/character" className="text-label">캐릭터 관리</TextLink>
     </div>
   );
 
@@ -158,7 +163,7 @@ export function BuddyChat() {
       </header>
       {data.ai && <p className="text-caption text-ink-3 mb-5">답은 AI가 만들어요. 오늘 기록한 음식·목표 숫자·영양제 체크만 함께 보내고, 이름·연락처·건강 정보는 보내지 않아요</p>}
 
-      <section aria-label={`${b.name}${josa(b.name, "과", "와")} 이야기`} aria-live="polite" className="flex flex-col gap-2 pb-48">
+      <section aria-label={`${b.name}${josa(b.name, "과", "와")} 이야기`} aria-live="polite" className="flex flex-col gap-2 pb-64">
         {data.messages.length === 0 && <p className="text-label text-ink-2 py-6 text-center">아래에서 말을 걸어 보세요</p>}
         {data.messages.map((m, i) => (
           <ChatBubble key={m.id} from={m.role} avatar={m.role === "buddy" && data.messages[i - 1]?.role !== "buddy" ? face(40) : null}
@@ -176,7 +181,7 @@ export function BuddyChat() {
         <div ref={end} className="scroll-mb-56" aria-hidden="true" />
       </section>
 
-      <BottomBar>
+      <BottomBar overNav>
         <div className="flex-1 min-w-0 flex flex-col gap-2">
           {!out && (
             <ChipRow>
