@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import {
-  BackButton, BottomBar, Buddy, Button, ChatBubble, ChatTyping, Chip, ChipRow, ConfirmSheet, EmptyState, Input, LinkButton, Skeleton, TextButton, TextLink, useToast,
+  BackButton, BottomBar, Buddy, Button, ChatBubble, ChatPicks, ChatTyping, Chip, ChipRow, ConfirmSheet, EmptyState, Input, LinkButton, Skeleton, TextButton, TextLink, useToast,
 } from "@/components/ui";
 import type { MascotMood } from "@/components/ui";
 import { josa, type IngredientKey, type PersonalityKey, type StageKey } from "@/lib/buddy";
@@ -13,7 +13,7 @@ import { josa, type IngredientKey, type PersonalityKey, type StageKey } from "@/
  * 네 상태: 불러오는 중(말풍선 자리) · 비어 있음(캐릭터 없음·꺼 둠) · 실패(다시 불러오기) · 채워짐.
  * 늦게 온 불러오기 응답은 버리고(요청 번호), 보내는 동안은 다시 보내지 않는다.
  */
-type Msg = { id: string; role: "me" | "buddy"; text: string };
+type Msg = { id: string; role: "me" | "buddy"; text: string; items?: { id: string; name: string; maker: string | null; image: string | null; facts: string; href: string | null }[] | null };
 type Data = {
   on: boolean; ai: boolean; mood: MascotMood; wraps: number; limit: number; left: number; quick: string[];
   stage: { key: StageKey; name: string };
@@ -155,7 +155,10 @@ export function BuddyChat() {
             className={i > 0 && data.messages[i - 1].role !== m.role ? "mt-2" : undefined}>
             {m.text}
           </ChatBubble>
-        ))}
+        )).flatMap((el, i) => {
+          const items = data.messages[i].items;
+          return items?.length ? [el, <ChatPicks key={`${data.messages[i].id}-picks`} items={items} label={`${b.name}${josa(b.name, "이", "가")} 고른 추천`} />] : [el];
+        })}
         {sending && <ChatTyping avatar={face(40)} label={`${b.name}${josa(b.name, "이", "가")} 답을 쓰고 있어요`} />}
         {data.messages.length > 0 && (
           <TextButton className="self-center mt-4 text-ink-2" onClick={() => setClearing("open")}>이야기 지우기</TextButton>

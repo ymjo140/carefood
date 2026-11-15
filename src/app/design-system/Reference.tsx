@@ -9,7 +9,7 @@ import {
   Avatar, useToast, cn, type BadgeTone,
   BottomNavItems, SkeletonList, FoodEntryForm, DragArea, DragGhost, DragHandle, useDragItem, useDropTarget, type DragData, ChoiceCard, ChoiceList, LinkTabs, RatingStars, RatingInput, ScaleInput, QuickRating, PostAuthor, PostAction, PostActions, PostTags, ThreadItem, MealAttach, PlanAttach, CertAttach, ProductTagLinks, PhotoGrid, PollAttach, DayDots, Switch,
   ReelRow, ReelTile, ReelAddTile, ReelSkeleton, ReelMedia, CommentItem, VideoAttach, OfferOptionList, QtyStepper, UnitInput, RangeInput, Checkbox, FilePick,
-  MemberProgressRow, AvatarStack, Mascot, MASCOTS, type MascotMood, StoryFrame, StoryProgress, StoryHeader, StoryMedia, StorySticker, StoryCaption, StoryAction, StoryReply, ShareCardPreview, ShareSteps, Buddy, ChatBubble, ChatTyping, BackButton,
+  MemberProgressRow, AvatarStack, Mascot, MASCOTS, type MascotMood, StoryFrame, StoryProgress, StoryHeader, StoryMedia, StorySticker, StoryCaption, StoryAction, StoryReply, ShareCardPreview, ShareSteps, Buddy, ChatBubble, ChatTyping, ChatPicks, BackButton,
 } from "@/components/ui";
 
 // 서버(UTC)와 브라우저 시간대가 달라도 같은 글자가 나오도록 한국 시간으로 고정
@@ -683,13 +683,18 @@ export default function Reference({ status }: { status: DsStatus }) {
       </Section>
 
       {/* ───────────── 캐릭터와 이야기 ───────────── */}
-      <Section id="chat" title="캐릭터와 이야기" description="ChatBubble · ChatTyping — /buddy. 캐릭터는 왼쪽(얼굴 + 테두리 풍선), 나는 오른쪽(sunken 풍선). 이어지는 캐릭터 말은 얼굴을 한 번만. 색 바탕·그림자 없음. 입력 줄은 BottomBar + 빠른 말 Chip. 맨 위 왼쪽 BackButton(앱 안에서 왔으면 앞 화면, 바로 왔으면 fallback)">
+      <Section id="chat" title="캐릭터와 이야기" description="ChatBubble · ChatTyping · ChatPicks — /buddy. 추천은 우리 DB(제품·대표 메뉴)에서 고른 것만 말풍선 아래 카드로(제품은 상세로). 캐릭터는 왼쪽(얼굴 + 테두리 풍선), 나는 오른쪽(sunken 풍선). 이어지는 캐릭터 말은 얼굴을 한 번만. 색 바탕·그림자 없음. 입력 줄은 BottomBar + 빠른 말 Chip. 맨 위 왼쪽 BackButton(앱 안에서 왔으면 앞 화면, 바로 왔으면 fallback)">
         <div className="grid gap-4">
           <Demo label="말풍선 · 답 쓰는 중" code={`<ChatBubble from="buddy" avatar={<Buddy … size={40} decorative />}>…</ChatBubble>\n<ChatBubble from="me">…</ChatBubble>\n<ChatTyping avatar={…} />`}>
             <div className="flex flex-col gap-2 max-w-sm">
               <ChatBubble from="buddy" avatar={<Buddy ingredient="sweetpotato" personality="picky" mood="logged" size={40} decorative />}>흠, 김밥. 포슬포슬한 맛은 아니지만… 기록은 합격이에요. 3일째</ChatBubble>
               <ChatBubble from="buddy">단백질 18g · 하루 목표의 23%</ChatBubble>
-              <ChatBubble from="me" className="mt-2">저녁은 뭐 먹을까요?</ChatBubble>
+              <ChatBubble from="me" className="mt-2">당류 적은 저녁 추천해 줘요</ChatBubble>
+              <ChatBubble from="buddy" className="mt-2" avatar={<Buddy ingredient="sweetpotato" personality="picky" size={40} decorative />}>흠, 당류가 적은 쪽으로 골랐어요. 저녁은 연어 포케 어때요? 당류 2g · 탄수화물 31g · 420kcal. 아래에 몇 가지 더 있어요</ChatBubble>
+              <ChatPicks items={[
+                { id: "m", name: "닭가슴살 샐러드", facts: "당류 3g · 탄수화물 12g · 320kcal" },
+                { id: "p", name: "연어 포케", maker: "예시 식단", image: null, facts: "당류 2g · 탄수화물 31g · 420kcal", href: "#chat" },
+              ]} />
               <ChatTyping avatar={<Buddy ingredient="sweetpotato" personality="picky" size={40} decorative />} />
             </div>
           </Demo>

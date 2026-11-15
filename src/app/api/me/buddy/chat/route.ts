@@ -9,7 +9,9 @@ import { chatLimit, hasPerk, type Access } from "@/lib/plans";
 import { seedOf } from "@/lib/buddy";
 import { buddyLine } from "@/lib/buddy-lines";
 import { checkLines } from "@/lib/buddy-check";
-import { mealBudget, menuFacts, pickMenus, type Menu } from "@/lib/menu-pick";
+import { MEAL_CATS, SNACK_CATS, mealBudget, menuFacts, pickMenus, type MealKey, type Menu } from "@/lib/menu-pick";
+import { perServing } from "@/lib/nutrition";
+import { focusOf, isRecAsk, mealOfText, rankRecs, type Cand, type Pick } from "@/lib/chat-recs";
 import { ALLERGEN_KEYWORDS } from "@/lib/recommend/constants";
 import { kstDayStartIso, kstHour } from "@/lib/day";
 import { CRISIS_REPLY, QUICK_SAYS, nextSlot, reactPrompt, riskOf, ruleReply, systemPrompt, type ChatCtx } from "@/lib/buddy-chat";
@@ -23,12 +25,55 @@ import { aiReady, askBuddy, type Turn } from "@/lib/buddy-ai";
  * POST { text } — 내 말 남기기(하루 한도는 DB 함수 buddy_chat_say 가 잠그고 센다) → 캐릭터 답.
  *        위기 말은 AI에 보내지 않고 정해진 말(109). AI 가 없거나 실패·선을 넘으면 규칙 답(기록을 남긴다).
  * DELETE — 이야기 모두 지우기.
- * AI 에 보내는 것: 캐릭터 설정, 오늘 기록한 음식 이름·끼니, 오늘 합계·목표 숫자, 이어 기록한 날, 다음 끼니 일반 메뉴, 최근 이야기 12개.
+ * 추천을 물으면("뭐 먹을까", "당류 적은 거") 우리 DB(제품 products · 대표 메뉴 common_foods)에서 고르고(lib/chat-recs.ts) 카드로 같이 남긴다(items).
+ *   AI 는 고른 것을 말로 옮기기만 한다. 순서는 영양 기준뿐 — 광고비로 바꾸지 않는다.
+ * AI 에 보내는 것: 캐릭터 설정, 오늘 기록한 음식 이름·끼니, 오늘 합계·목표 숫자, 이어 기록한 날, 다음 끼니 메뉴·추천 목록(이름·숫자), 최근 이야기 12개.
  * 보내지 않는 것: 이름·연락처·알레르기·건강 관심사. 메뉴의 알레르기 거르기는 여기서 미리 한다.
  */
 type Sb = any; // eslint-disable-line @typescript-eslint/no-explicit-any
-type Msg = { id: string; role: "me" | "buddy"; text: string; created_at: string };
-const COLS = "id, role, text, created_at";
+type Msg = { id: string; role: "me" | "buddy"; text: string; created_at: string; items?: Pick[] | null };
+const COLS = "id, role, text, items, created_at";
+
+// 제품에서 한 끼로 먹는 종류 · 간식에서 빼는 종류 (/api/diary/next 와 같은 기준)
+const MEAL_DISH = ["rice", "soup", "noodle", "grill", "salad", "set", "bread", "side"];
+const NOT_SNACK = ["supplement", "powder", "sauce", "ingredient", "seafood", "rice", "soup", "noodle", "set"];
+const FOCUS_ORDER: Record<string, { col: string; asc: boolean }> = {
+  sugar: { col: "sugar_g", asc: true }, sodium: { col: "sodium_mg", asc: true }, protein: { col: "protein_g", asc: false },
+  light: { col: "calories", asc: true }, budget: { col: "health_score", asc: false },
+};
+
+/** 추천을 물었으면 우리 DB(제품 · 대표 메뉴)에서 고른다 — 순서는 영양 기준뿐 */
+async function loadRecs(sb: Sb, actor: string, text: string, t: TodayMood, base: Awaited<ReturnType<typeof loadCtx>>) {
+  if (!isRecAsk(text)) return null;
+  const focus = focusOf(text);
+  const meal: MealKey = mealOfText(text) ?? base.slot.meal;
+  const b = mealBudget({
+    meal, mainLeft: meal === base.slot.meal ? base.slot.mainLeft : Math.max(1, base.slot.mainLeft), goalKcal: t.goals.kcal,
+    remainKcal: t.goals.kcal - t.totals.kcal, remainProtein: t.goals.protein - t.totals.protein, remainSodium: t.goals.sodium - t.totals.sodium,
+  });
+  const o = FOCUS_ORDER[focus.key];
+  let q = sb.from("products")
+    .select("id, name, manufacturer, image_url, calories, protein_g, carbs_g, sugar_g, sodium_mg, serving_size_g, nutrient_base_g, dish_category")
+    .eq("is_purchasable", true).is("nutrition_flag", null).is("rec_hold", null).gt("calories", 0)
+    .gt("serving_size_g", 0).lte("serving_size_g", 350).not(o.col, "is", null);
+  if (meal !== "snack") q = q.in("dish_category", MEAL_DISH);
+  if (focus.key === "light") q = q.gte("calories", 40);
+  const { data, error } = await q.order(o.col, { ascending: o.asc, nullsFirst: false }).limit(500);
+  if (error) throw new Error(error.message);
+  type P = { id: string; name: string; manufacturer: string | null; image_url: string | null; calories: number | null; protein_g: number | null; carbs_g: number | null; sugar_g: number | null; sodium_mg: number | null; serving_size_g: number | null; nutrient_base_g: number | null; dish_category: string | null };
+  const products: Cand[] = ((data || []) as P[])
+    .filter((r) => meal !== "snack" || !NOT_SNACK.includes(r.dish_category || ""))
+    .map((r) => perServing(r))
+    .map((r) => ({ kind: "product", id: r.id, name: r.name, maker: r.manufacturer, image: r.image_url, category: r.dish_category,
+      calories: r.calories, protein_g: r.protein_g, carbs_g: r.carbs_g, sugar_g: r.sugar_g, sodium_mg: r.sodium_mg }));
+  const cats = meal === "snack" ? SNACK_CATS : MEAL_CATS;
+  const menus: Cand[] = base.foods.filter((f) => cats.has(f.category)).map((f) => ({
+    kind: "menu", id: f.id, name: f.name, maker: null, image: null, category: f.category,
+    calories: f.calories, protein_g: f.protein_g, carbs_g: f.carbs_g, sugar_g: f.sugar_g, sodium_mg: f.sodium_mg,
+  }));
+  const picks = rankRecs([...menus, ...products], focus.key, { meal, kcal: b.kcal, protein: b.protein, sodium: b.sodium, avoid: base.avoid }, `${actor}:${t.today}:${text}`);
+  return { focus, meal, picks };
+}
 
 async function loadCtx(sb: Sb, actor: string, t: TodayMood, access: Access, buddy: { ingredient: string; personality: string }, days: number, stage: string) {
   const [dRes, pRes, fRes] = await Promise.all([
@@ -55,7 +100,7 @@ async function loadCtx(sb: Sb, actor: string, t: TodayMood, access: Access, budd
     next: { meal: slot.meal, menus: menus.map((m) => ({ name: m.name, facts: menuFacts(m) })) },
     check: hasPerk(access, "check"),
   };
-  return { ctx, rows };
+  return { ctx, rows, slot, avoid, foods: (fRes.data || []) as Menu[] };
 }
 
 async function recent(sb: Sb, actor: string, n: number): Promise<Msg[]> {
@@ -145,18 +190,21 @@ export async function POST(request: NextRequest) {
 
     const risk = riskOf(text);
     let reply: string, source: "ai" | "rule" | "safety";
+    let recs: Awaited<ReturnType<typeof loadRecs>> = null;
     if (risk === "crisis") {
       reply = CRISIS_REPLY; source = "safety";
     } else {
-      const { ctx } = await loadCtx(sb, actor, t, access, buddy, state.days, state.stage.name);
+      const base = await loadCtx(sb, actor, t, access, buddy, state.days, state.stage.name);
       const careful = risk === "eating";
+      recs = careful ? null : await loadRecs(sb, actor, text, t, base);
+      const ctx: ChatCtx = { ...base.ctx, recs };
       const ai = aiReady() ? await askBuddy(systemPrompt(ctx, careful), [...history, { role: "me", text }]) : { text: null };
       if (ai.error && ai.error !== "no-key") console.error("캐릭터 답을 AI로 만들지 못했어요:", ai.error);
       reply = ai.text ?? ruleReply(text, ctx, careful);
       source = ai.text ? "ai" : "rule";
     }
     const { data: r, error: rErr } = await sb.from("buddy_chats")
-      .insert({ user_id: actor, buddy_id: buddy.id, role: "buddy", text: reply, source }).select(COLS).single();
+      .insert({ user_id: actor, buddy_id: buddy.id, role: "buddy", text: reply, source, items: recs?.picks.length ? recs.picks : null }).select(COLS).single();
     if (rErr) throw new Error(rErr.message);
     const used = await usedToday(sb, actor, t.today);
     return NextResponse.json({ mine: { id: mineId, role: "me", text }, reply: r, left: Math.max(0, limit - used) });

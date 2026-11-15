@@ -16,8 +16,8 @@ export type Budget = {
   avoid: string[];
 };
 
-const MEAL_CATS = new Set(["한식", "양식", "일식", "분식", "편의점", "중식", "패스트푸드"]);
-const SNACK_CATS = new Set(["간식", "카페"]);
+export const MEAL_CATS = new Set(["한식", "양식", "일식", "분식", "편의점", "중식", "패스트푸드"]);
+export const SNACK_CATS = new Set(["간식", "카페"]);
 
 /** 이번 끼니 예산 — 남은 열량을 남은 끼니로 나누되, 한 끼는 하루 목표의 45%를 넘기지 않는다 (식단 기록 화면과 같은 계산) */
 export function mealBudget(o: { meal: MealKey; mainLeft: number; goalKcal: number; remainKcal: number; remainProtein: number; remainSodium: number }) {
