@@ -3,7 +3,7 @@
 import Link from "@/components/ui/AppLink";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { IconLink, cn } from "@/components/ui";
+import { IconLink, NAV_TABS, cn } from "@/components/ui";
 
 /**
  * 머리 줄 — 왼쪽 로고 · (넓은 화면) 주 메뉴 · 오른쪽 알림 → 마이페이지
@@ -19,14 +19,10 @@ import { IconLink, cn } from "@/components/ui";
  * ds-wiring-drop: /admin/insights — 같은 이유
  * ds-wiring-drop: /admin/odm — 같은 이유
  * ds-wiring-drop: /design-system — 같은 이유
+ * ds-wiring-drop: /weekly-box — 식단 탭 안의 하루·일주일 전환(DIET_VIEWS)으로 간다
+ *
+ * 주 메뉴는 휴대폰 하단 탭과 같은 목록(NAV_TABS) — 홈 · 공구 · 식단 · AI · 커뮤니티
  */
-const NAV_ITEMS = [
-  { href: "/", label: "홈" }, // 홈 = 추천 + 제품 탐색
-  { href: "/diary", label: "식단 기록" },
-  { href: "/weekly-box", label: "식단 리스트" },
-  { href: "/group-buy", label: "공구" },
-  { href: "/community", label: "커뮤니티" },
-];
 
 export default function Header() {
   const pathname = usePathname();
@@ -71,7 +67,9 @@ export default function Header() {
     return () => { alive = false; window.removeEventListener("focus", check); window.removeEventListener("cf-notif-seen", onSeen); };
   }, []);
 
-  const isActive = (href: string) => (href === "/" ? pathname === "/" || pathname === "/products" : pathname === href || pathname.startsWith(href + "/"));
+  // 홈은 제품 탐색까지, 식단은 일주일 보기(also)까지 켜진다
+  const under = (href: string) => pathname === href || pathname.startsWith(href + "/");
+  const isActive = (t: (typeof NAV_TABS)[number]) => (t.href === "/" ? pathname === "/" || pathname === "/products" : under(t.href) || !!t.also?.some(under));
   const hasNew = latest != null && latest > seen && pathname !== "/notifications";
 
   return (
@@ -83,14 +81,14 @@ export default function Header() {
 
         {/* 넓은 화면 주 메뉴 — 휴대폰은 하단 탭 바 */}
         <nav className="hidden sm:flex items-center gap-1 flex-1 justify-center" aria-label="주 메뉴">
-          {NAV_ITEMS.map((item) => (
+          {NAV_TABS.map((item) => (
             <Link
               key={item.href}
               href={item.href}
-              aria-current={isActive(item.href) ? "page" : undefined}
+              aria-current={isActive(item) ? "page" : undefined}
               className={cn(
                 "h-9 px-3 inline-flex items-center rounded-md text-label whitespace-nowrap transition-colors",
-                isActive(item.href) ? "text-ink font-bold bg-sunken" : "text-ink-2 hover:text-ink hover:bg-sunken",
+                isActive(item) ? "text-ink font-bold bg-sunken" : "text-ink-2 hover:text-ink hover:bg-sunken",
               )}
             >
               {item.label}
