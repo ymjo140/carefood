@@ -160,7 +160,7 @@ export function BuddyChat() {
         {data.messages.length > 0 && (
           <TextButton className="self-center mt-4 text-ink-2" onClick={() => setClearing("open")}>이야기 지우기</TextButton>
         )}
-        <div ref={end} />
+        <div ref={end} className="scroll-mb-56" aria-hidden="true" />
       </section>
 
       <BottomBar>

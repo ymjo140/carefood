@@ -62,6 +62,8 @@ describe("AI 없이 답하기", () => {
     expect(intentOf("칭찬해 줘요")).toBe("praise");
     expect(intentOf("오늘 어땠어요?")).toBe("today");
     expect(intentOf("라면 먹었어")).toBe("ate");
+    expect(intentOf("혈당 관리에 좋은 음식 알려줘")).toBe("medical");
+    expect(ruleReply("살쪄서 고민이야", ctx)).toContain("의사나 약사");
   });
   it("메뉴는 후보에서 숫자와 함께, 숫자는 체크 줄로", () => {
     expect(ruleReply("다음 끼니 뭐 먹을까요?", ctx)).toBe("저녁은 치킨 샐러드 어때요? 단백질 28g · 나트륨 520mg · 380kcal");
