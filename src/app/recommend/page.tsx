@@ -20,6 +20,13 @@ type State =
   | { kind: "error" }
   | { kind: "ready"; items: Rec[]; cold: boolean; label: string; degradeMessage?: string; learned: number };
 
+/** 점수 높은 순 — 같으면 원래 순서 */
+function sortBy(list: Rec[], score: (p: Rec) => number): Rec[] {
+  return list.map((p, i) => ({ p, i }))
+    .sort((a, b) => score(b.p) - score(a.p) || a.i - b.i)
+    .map(({ p }) => p);
+}
+
 export default function RecommendMorePage() {
   const [state, setState] = useState<State>({ kind: "loading" });
   const [shown, setShown] = useState(STEP);
@@ -51,7 +58,9 @@ export default function RecommendMorePage() {
         if (my !== seq.current) return;
         setState({
           kind: "ready",
-          items: data.recommendations || [],
+          // 화면에 적합도 점수를 보여 주므로 점수 순 (서버 순서는 다양성 섞기·탐색 칸이 들어가 점수와 어긋나 보였다 — 11/15)
+          //  처음 온 사람(적합도 없음)은 건강 점수 순. 점수가 같으면 서버 순서
+          items: sortBy(data.recommendations || [], (p) => (cold ? p.health_score : p.match_score) ?? 0),
           cold,
           label: cold ? "" : profileLabel(profile),
           degradeMessage: data.degraded ? data.degradeMessage : undefined,
@@ -71,7 +80,7 @@ export default function RecommendMorePage() {
   const title = !ready ? "추천" : ready.cold ? "지금 살 수 있는 건강한 한 끼" : `${ready.label} 추천`;
   const description = !ready ? undefined
     : ready.cold ? "건강 점수가 높은 한 끼·반찬이에요. 목표를 알려 주면 맞춰 골라요"
-    : "내 목표·입맛에 맞는 순서예요. 지금 살 수 있는 제품만 보여 줘요";
+    : "적합도가 높은 순서예요. 지금 살 수 있는 제품만 보여 줘요";
 
   return (
     <Page>

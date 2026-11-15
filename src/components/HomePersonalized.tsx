@@ -36,11 +36,11 @@ export type QuickProduct = {
 
 
 /**
- * 홈 추천 세 칸 (추천 유형화 설계 v3)
+ * 홈 추천 칸 (추천 유형화 설계 v3) — 기본 세 칸, 홈은 다섯 칸(11/15: 세 칸은 넓은 화면에서 비어 보였다)
  * 1. 내 프로필에 가장 잘 맞는 것  2. 건강식단 서비스 중 가장 잘 맞는 것  3. 평소 안 보던 종류 (필터 버블 방지)
- * 해당하는 게 없으면 다음 순위로 채운다.
+ * 나머지 칸과 해당하는 게 없는 칸은 다음 순위로 채운다.
  */
-export function pickSlots(list: QuickProduct[]): QuickProduct[] {
+export function pickSlots(list: QuickProduct[], count = 3): QuickProduct[] {
   const out: QuickProduct[] = [];
   const used = new Set<string>();
   const take = (p: QuickProduct | undefined, slot: string) => { if (p && !used.has(p.id)) { used.add(p.id); out.push({ ...p, slot }); } };
@@ -53,7 +53,7 @@ export function pickSlots(list: QuickProduct[]): QuickProduct[] {
   take(list.find((p) => !used.has(p.id) && p.category_large === "건강식단서비스"), "건강식단 서비스");
   const firstCat = out[0]?.dish_category;
   take(list.find((p) => !used.has(p.id) && (p.is_exploration || (p.dish_category && p.dish_category !== firstCat))), "새로 시도해 보기");
-  for (const p of list) { if (out.length >= 3) break; take(p, "잘 맞아요"); }
+  for (const p of list) { if (out.length >= count) break; take(p, "잘 맞아요"); }
   return out;
 }
 
@@ -72,6 +72,9 @@ export function profileLabel(profile: any): string {
   const legacyLabels: Record<string, string> = { elderly: "어르신", patient: "환자", pregnant: "산모", general: "일반" };
   return legacyLabels[profile?.persona] || "맞춤";
 }
+
+/** 홈 맞춤 추천 칸 수 */
+const HOME_SLOTS = 5;
 
 /**
  * 홈 개인화 섹션 — 재방문 사용자에게 빠른 추천 카드 표시
@@ -130,7 +133,7 @@ export default function HomePersonalized({ cold = false }: { cold?: boolean }) {
         .then(async (r) => {
           const data = await r.json();
           if (!r.ok) throw new Error(data.error || String(r.status));
-          setProducts(pickSlots(data.recommendations || []));
+          setProducts(pickSlots(data.recommendations || [], HOME_SLOTS));
           setLearned(data.learned?.samples || 0);
           setFailed(false);
         })
@@ -142,7 +145,7 @@ export default function HomePersonalized({ cold = false }: { cold?: boolean }) {
   }, [cold, attempt]);
 
   if (cold) {
-    if (loading) return <CardsSkeleton title />;
+    if (loading) return <CardsSkeleton title count={6} />;
     if (products.length === 0) return null; // 첫 방문 추천은 보조 — 못 불러오면 칸을 숨기고 아래 전체 제품이 받는다
     return (
       <section className="pt-8">
@@ -153,7 +156,7 @@ export default function HomePersonalized({ cold = false }: { cold?: boolean }) {
     );
   }
 
-  if (loading) return <CardsSkeleton title />;
+  if (loading) return <CardsSkeleton title count={HOME_SLOTS} />;
   if (!profile) return null;
 
   const sectionLabel = profileLabel(profile);
@@ -230,12 +233,12 @@ export function ProductCards({ products, showMatch, onOpen, placement = "home_re
 }
 
 /** 추천 칸 자리 — 카드 모양 그대로 */
-function CardsSkeleton({ title = false }: { title?: boolean }) {
+function CardsSkeleton({ title = false, count = 3 }: { title?: boolean; count?: number }) {
   return (
     <section className="pt-8" role="status" aria-label="추천을 불러오는 중">
       {title && <Skeleton className="h-6 w-40 mb-3" />}
       <div className="flex gap-3 overflow-hidden">
-        {[0, 1, 2].map((i) => (
+        {Array.from({ length: count }, (_, i) => (
           <div key={i} className="w-44 shrink-0 rounded-lg border border-line bg-surface overflow-hidden">
             <Skeleton className="h-28" />
             <div className="p-3 flex flex-col gap-2">
