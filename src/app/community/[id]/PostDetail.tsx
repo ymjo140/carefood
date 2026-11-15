@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
-import Link from "next/link";
+import Link from "@/components/ui/AppLink";
 import ThreadCard, { type FeedPostData } from "@/components/community/ThreadCard";
 import PostMenu from "@/components/community/PostMenu";
 import ShareCardSheet from "@/components/community/ShareCardSheet";

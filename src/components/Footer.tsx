@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/ui/AppLink";
 
 const LINK = "inline-flex items-center min-h-8 text-caption text-ink-2 hover:text-ink transition-colors";
 

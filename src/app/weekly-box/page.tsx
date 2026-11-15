@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef, type ReactNode } from "react";
-import Link from "next/link";
+import Link from "@/components/ui/AppLink";
 import { perServing } from "@/lib/nutrition";
 import { defaultServingG, isBrothDish } from "@/lib/serving";
 import { unitPrice } from "@/lib/prices";

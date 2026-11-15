@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Suspense } from "react";
 import { weekday } from "@/lib/day";
-import Link from "next/link";
+import Link from "@/components/ui/AppLink";
 import ShareButton from "@/components/ShareButton";
 import {
   Badge, Button, Card, EmptyState, Icon, LinkButton, Notice, Page, PageHeader, ProgressBar, SectionHeader,

@@ -1,9 +1,9 @@
 {
-  "checkedAt": "2026-11-15T02:00:43.317Z",
-  "files": 200,
+  "checkedAt": "2026-11-15T02:39:00.783Z",
+  "files": 201,
   "total": 0,
   "warnTotal": 0,
-  "allowedCount": 70,
+  "allowedCount": 73,
   "rules": [
     {
       "id": "hex-color",
@@ -498,16 +498,7 @@
     },
     {
       "file": "src/app/onboarding/page.tsx",
-      "line": 196,
-      "rule": "silent-catch",
-      "level": "warn",
-      "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
-      "match": "catch {                                       }",
-      "snippet": "} catch { /* DB 저장 실패해도 localStorage가 있으니 진행 */ } // ds-allow: 로컬 저장이 있어 진행"
-    },
-    {
-      "file": "src/app/onboarding/page.tsx",
-      "line": 856,
+      "line": 859,
       "rule": "silent-catch",
       "level": "warn",
       "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
@@ -606,12 +597,39 @@
     },
     {
       "file": "src/components/Header.tsx",
-      "line": 46,
+      "line": 49,
+      "rule": "silent-catch",
+      "level": "warn",
+      "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
+      "match": "catch {                          }",
+      "snippet": "} catch { /* 저장소를 못 읽으면 서버에 묻는다 */ } // ds-allow: 저장소는 덤 — 못 읽으면 서버에 묻는다"
+    },
+    {
+      "file": "src/components/Header.tsx",
+      "line": 55,
+      "rule": "silent-catch",
+      "level": "warn",
+      "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
+      "match": "catch {       }",
+      "snippet": "try { localStorage.setItem(KEY, JSON.stringify({ at: Date.now(), latest_at: d.latest_at ?? null, seen_at: d.seen_at ?? null })); } catch { /"
+    },
+    {
+      "file": "src/components/Header.tsx",
+      "line": 57,
       "rule": "silent-catch",
       "level": "warn",
       "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
       "match": ".catch(() => {})",
       "snippet": ".catch(() => {}); // ds-allow: 점 표시는 보조 — 못 불러오면 점 없이 둔다"
+    },
+    {
+      "file": "src/components/Header.tsx",
+      "line": 66,
+      "rule": "silent-catch",
+      "level": "warn",
+      "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
+      "match": "catch {       }",
+      "snippet": "} catch { /* */ } // ds-allow: 저장 못 하면 다음 확인 때 서버 값으로 맞는다"
     },
     {
       "file": "src/components/HomePersonalized.tsx",
@@ -678,7 +696,7 @@
     },
     {
       "file": "src/components/SessionSync.tsx",
-      "line": 24,
+      "line": 26,
       "rule": "silent-catch",
       "level": "warn",
       "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
@@ -687,12 +705,21 @@
     },
     {
       "file": "src/components/SessionSync.tsx",
-      "line": 33,
+      "line": 35,
       "rule": "silent-catch",
       "level": "warn",
       "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
       "match": ".catch(() => {                           })",
       "snippet": ".catch(() => { /* 네트워크 실패 — 다음 접속에 다시 */ }); // ds-allow: 백그라운드 옮기기, 다음 접속에 재시도"
+    },
+    {
+      "file": "src/components/SessionSync.tsx",
+      "line": 45,
+      "rule": "silent-catch",
+      "level": "warn",
+      "message": "오류를 조용히 삼켜요 → 실패했다는 걸 보여 주세요 (useToast tone=danger 또는 오류 상태)",
+      "match": "catch {       }",
+      "snippet": "const mark = () => { try { sessionStorage.setItem(\"carefood_profile_synced\", \"1\"); } catch { /* */ } }; // ds-allow: 표시를 못 남기면 다음 화면에서 한 번 더"
     },
     {
       "file": "src/components/ShareButton.tsx",

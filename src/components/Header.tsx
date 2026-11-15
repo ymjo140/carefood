@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/ui/AppLink";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { IconLink, cn } from "@/components/ui";
@@ -34,17 +34,37 @@ export default function Header() {
   const [seen, setSeen] = useState(0);
 
   // 새 소식 점 — 처음 열 때, 다시 이 창으로 돌아올 때 확인. 본 시각은 서버가 사람 기준으로 기억한다
+  // 5분 안에 확인했으면 이 브라우저에 남긴 값을 쓴다 — 전에는 페이지를 열 때마다 확인해 서버 조회의 83%가 이 점이었다(11/15)
   useEffect(() => {
     let alive = true;
-    const check = () => fetch("/api/notifications?latest=1")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
-        if (!alive || !d) return;
-        setLatest(d.latest_at ? Date.parse(d.latest_at) : null);
-        setSeen(d.seen_at ? Date.parse(d.seen_at) : 0);
-      })
-      .catch(() => {}); // ds-allow: 점 표시는 보조 — 못 불러오면 점 없이 둔다
-    const onSeen = (e: Event) => setSeen((e as CustomEvent<number>).detail || Date.now());
+    const KEY = "carefood_notif_latest", TTL = 5 * 60_000;
+    const apply = (d: { latest_at: string | null; seen_at: string | null }) => {
+      setLatest(d.latest_at ? Date.parse(d.latest_at) : null);
+      setSeen(d.seen_at ? Date.parse(d.seen_at) : 0);
+    };
+    const check = () => {
+      try {
+        const c = JSON.parse(localStorage.getItem(KEY) || "null");
+        if (c && Date.now() - c.at < TTL) { apply(c); return; }
+      } catch { /* 저장소를 못 읽으면 서버에 묻는다 */ } // ds-allow: 저장소는 덤 — 못 읽으면 서버에 묻는다
+      fetch("/api/notifications?latest=1")
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          if (!alive || !d) return;
+          apply(d);
+          try { localStorage.setItem(KEY, JSON.stringify({ at: Date.now(), latest_at: d.latest_at ?? null, seen_at: d.seen_at ?? null })); } catch { /* */ } // ds-allow: 저장 못 하면 다음에 다시 묻는다
+        })
+        .catch(() => {}); // ds-allow: 점 표시는 보조 — 못 불러오면 점 없이 둔다
+    };
+    const onSeen = (e: Event) => {
+      const at = (e as CustomEvent<number>).detail || Date.now();
+      setSeen(at);
+      // 다 봤으면 남긴 값도 고친다 (5분 동안 점이 다시 뜨지 않게)
+      try {
+        const c = JSON.parse(localStorage.getItem(KEY) || "null");
+        if (c) localStorage.setItem(KEY, JSON.stringify({ ...c, seen_at: new Date(at).toISOString() }));
+      } catch { /* */ } // ds-allow: 저장 못 하면 다음 확인 때 서버 값으로 맞는다
+    };
     check();
     window.addEventListener("focus", check);
     window.addEventListener("cf-notif-seen", onSeen);

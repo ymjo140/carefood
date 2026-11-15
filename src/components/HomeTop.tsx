@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
+import Link from "@/components/ui/AppLink";
 import HomePersonalized from "@/components/HomePersonalized";
 import HomeTodayWidget from "@/components/HomeTodayWidget";
 import { Card, Icon, LinkButton, Skeleton } from "@/components/ui";

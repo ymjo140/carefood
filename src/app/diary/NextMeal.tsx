@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
+import Link from "@/components/ui/AppLink";
 import { Button, Card, Estimate, Kcal, Skeleton, Thumb } from "@/components/ui";
 import { menuFacts, type Menu } from "@/lib/menu-pick";
 

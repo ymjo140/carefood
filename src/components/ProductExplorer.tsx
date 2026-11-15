@@ -2,7 +2,7 @@
 
 import { useImpressions } from "@/lib/impressions";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import Link from "next/link";
+import Link from "@/components/ui/AppLink";
 import type { ProductWithPrices, TasteLevel, DishCategory } from "@/types/database";
 import { DISH_CATEGORY_LABELS } from "@/types/database";
 import { useFavorites } from "@/hooks/useFavorites";

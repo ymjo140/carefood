@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
+import Link from "@/components/ui/AppLink";
 import {
   Badge, Button, Card, EmptyState, Field, Input, LinkTabs, ADMIN_TABS, Page, PageHeader, Sheet, SkeletonList, Tabs, Thumb, timeAgo, useToast,
 } from "@/components/ui";

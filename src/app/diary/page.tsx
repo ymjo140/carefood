@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useMemo } from "react";
-import Link from "next/link";
+import Link from "@/components/ui/AppLink";
 import {
   Badge, Button, Card, Chip, ChipRow, ConfirmSheet, IconLink, Sheet, EmptyState, Field, Icon, IconButton, Input, Kcal, LinkButton, ListRow, MacroGrid, MealSlot, Page, PageHeader, PageLoading, SectionHeader, Spinner, Tabs, buttonClass, cn, useToast, SkeletonList, QuickRating, Notice, TextLink,
 } from "@/components/ui";

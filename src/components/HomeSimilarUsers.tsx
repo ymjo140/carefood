@@ -4,7 +4,7 @@
 
 import { useState, useEffect } from "react";
 import { PLATFORM_LABELS } from "@/lib/platforms";
-import Link from "next/link";
+import Link from "@/components/ui/AppLink";
 import { Price, SectionHeader } from "@/components/ui";
 
 type SimilarProduct = {
