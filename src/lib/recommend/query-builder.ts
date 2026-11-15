@@ -78,6 +78,8 @@ async function executeQuery(
     .from("products")
     .select("*")
     .eq("is_active", true)
+    // 살 수 있는 것만 — 전에는 점수 가산에만 써서 판매처 없는 제품(가격 0건)이 개인화 추천에 섞였다(11/15)
+    .eq("is_purchasable", true)
     .not("health_score", "is", null)
     .is("nutrition_flag", null).is("rec_hold", null) // 영양값 이상 — 추천에서 뺀다
     .neq("dish_category", "sauce")

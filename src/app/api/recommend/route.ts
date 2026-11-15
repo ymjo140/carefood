@@ -92,11 +92,11 @@ export async function POST(request: NextRequest) {
     // 같은 묶음(맛·용량만 다른 같은 제품)은 하나만 → 다양성 보장 + 탐색 슬롯
     const diversified = diversifyResults(dedupeFamilies(scored));
     const withExploration = insertExplorationSlots(diversified, interactions);
-    const top = withExploration.slice(0, 30);
-    const productIds = top.map((p) => p.id as string);
-
     // 가격 (리뷰 통계는 위에서 불러온 product_reviews 기준)
-    const priceMap = await loadPrices(supabase, productIds);
+    // is_purchasable 은 매시간 맞추므로(refresh_purchasable_all) 그 사이 판매가 끊긴 것까지 한 번 더 거른다 — 넉넉히 불러 거른 뒤 30개
+    const candidates = withExploration.slice(0, 45);
+    const priceMap = await loadPrices(supabase, candidates.map((p) => p.id as string));
+    const top = candidates.filter((p) => (priceMap[p.id as string] || []).some((pp) => pp.price > 0)).slice(0, 30);
 
     const recommendations = top.map((p) => ({
       ...p,

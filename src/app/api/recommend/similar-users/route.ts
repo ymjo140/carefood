@@ -30,7 +30,6 @@ export async function GET(request: NextRequest) {
 
   profileQuery = profileQuery.limit(100);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: similarUsers } = await profileQuery as { data: { user_id: string }[] | null };
 
   if (!similarUsers || similarUsers.length === 0) {
@@ -76,17 +75,17 @@ export async function GET(request: NextRequest) {
     .from("products")
     .select("id, name, manufacturer, calories, protein_g, sodium_mg, sugar_g, functional_tags")
     .in("id", topProductIds)
-    .eq("is_active", true);
+    .eq("is_active", true)
+    .eq("is_purchasable", true); // 살 수 없는 제품은 추천하지 않는다(11/15)
 
   // 4. 가격 로드
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  type PriceRow = { product_id: string; platform: string; price: number; url: string; image_url: string | null };
   const { data: prices } = await supabase
-    .from("v_all_prices" as any)
+    .from("v_all_prices" as "product_prices")
     .select("product_id, platform, price, url, image_url")
-    .in("product_id", topProductIds) as { data: any[] | null };
+    .in("product_id", topProductIds) as unknown as { data: PriceRow[] | null };
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const priceMap: Record<string, any[]> = {};
+  const priceMap: Record<string, PriceRow[]> = {};
   if (prices) {
     for (const p of prices) {
       if (!priceMap[p.product_id]) priceMap[p.product_id] = [];
@@ -102,6 +101,7 @@ export async function GET(request: NextRequest) {
       popularity_score: productScores[p.id] || 0,
       product_prices: (priceMap[p.id] || []).sort((a: { price: number }, b: { price: number }) => a.price - b.price),
     }))
+    .filter((p) => p.product_prices.some((pp: { price: number }) => pp.price > 0)) // 그 사이 판매가 끊긴 것
     .sort((a, b) => b.popularity_score - a.popularity_score);
 
   // 세그먼트 라벨
