@@ -8,7 +8,7 @@ import type { IngredientKey, PersonalityKey, StageKey } from "@/lib/buddy";
 /**
  * 식단 기록(오늘)·챌린지 화면 맨 위 — 같이 다니는 재료 캐릭터의 오늘 표정과 한 줄 (/api/me/buddy). 내 화면에만 나온다.
  * 오늘 기록이 있으면 숫자 체크 한두 줄(내 목표와 견준 사실 — lib/buddy-check.ts)을 붙인다. 기록하면 reloadKey 가 바뀌어 바로 새로 불러온다.
- * 아직 보자기를 안 풀었으면 '보자기가 도착했어요'. 캐릭터 없이를 골랐으면 그리지 않는다.
+ * '말 걸기'는 캐릭터와 이야기하기(/buddy). 아직 보자기를 안 풀었으면 '보자기가 도착했어요'. 캐릭터 없이를 골랐으면 그리지 않는다.
  * 불러오지 못하면 덤이라 자리를 비운다(기록만 남김). reloadKey 가 바뀌면(기록·챌린지 참여 뒤) 다시 불러온다 — 늦게 온 응답은 버린다.
  */
 type Data = {
@@ -50,7 +50,10 @@ export function MascotBanner({ reloadKey = 0 }: { reloadKey?: number }) {
             {data.check.map((c) => <li key={c}>{c}</li>)}
           </ul>
         )}
-        <TextLink href="/me/character" className="text-caption self-start">캐릭터 보기{data.wraps.length ? ` · 보자기 ${data.wraps.length}개` : ""}</TextLink>
+        <div className="flex gap-4">
+          <TextLink href="/buddy" className="text-caption">말 걸기</TextLink>
+          {data.wraps.length > 0 && <TextLink href="/me/character" className="text-caption">보자기 {data.wraps.length}개</TextLink>}
+        </div>
       </div>
     </section>
   );

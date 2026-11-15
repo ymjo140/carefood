@@ -41,3 +41,5 @@ export { StoryFrame, StoryProgress, StoryHeader, StoryMedia, StorySticker, Story
 export { ShareCardPreview, ShareSteps } from "./ShareCard";
 export { Mascot, MASCOTS, MOOD_NAMES, type MascotKind, type MascotMood } from "./Mascot";
 export { Buddy } from "./Buddy";
+export { ChatBubble, ChatTyping } from "./Chat";
+export { BackButton } from "./BackButton";

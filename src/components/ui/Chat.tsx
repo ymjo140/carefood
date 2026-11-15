@@ -1,0 +1,36 @@
+import type { ReactNode } from "react";
+import { cn } from "./cn";
+
+/**
+ * 캐릭터와 이야기하기 — 말풍선 한 줄. 캐릭터는 왼쪽(얼굴 + 테두리 풍선), 나는 오른쪽(옅은 바탕 풍선).
+ * 이어지는 캐릭터 말은 얼굴을 한 번만(avatar 를 비우면 자리만 둔다). 색 바탕·그림자 없음.
+ */
+export function ChatBubble({ from, avatar, children, className }: {
+  from: "buddy" | "me"; avatar?: ReactNode; children: ReactNode; className?: string;
+}) {
+  if (from === "me") {
+    return (
+      <div className={cn("flex justify-end pl-12", className)}>
+        <p className="rounded-lg rounded-tr-sm bg-sunken px-3.5 py-2.5 text-body text-ink whitespace-pre-line break-words min-w-0">{children}</p>
+      </div>
+    );
+  }
+  return (
+    <div className={cn("flex items-start gap-2 pr-12", className)}>
+      <span className="size-10 shrink-0 flex items-center justify-center" aria-hidden="true">{avatar}</span>
+      <p className="rounded-lg rounded-tl-sm border border-line bg-surface px-3.5 py-2.5 text-body text-ink whitespace-pre-line break-words min-w-0">{children}</p>
+    </div>
+  );
+}
+
+/** 캐릭터가 답을 쓰는 중 — 점 세 개가 차례로 옅어졌다 짙어진다 (opacity 만, 동작 줄이기면 멈춤) */
+export function ChatTyping({ avatar, label = "답을 쓰고 있어요" }: { avatar?: ReactNode; label?: string }) {
+  return (
+    <div className="flex items-start gap-2" role="status" aria-label={label}>
+      <span className="size-10 shrink-0 flex items-center justify-center" aria-hidden="true">{avatar}</span>
+      <span className="flex items-center gap-1 rounded-lg rounded-tl-sm border border-line bg-surface px-4 h-11" aria-hidden="true">
+        {[0, 1, 2].map((i) => <span key={i} className="size-1.5 rounded-full bg-ink-3 animate-skeleton" style={{ animationDelay: `${i * 150}ms` }} />)}
+      </span>
+    </div>
+  );
+}

@@ -9,7 +9,7 @@ import {
   Avatar, useToast, cn, type BadgeTone,
   BottomNavItems, SkeletonList, FoodEntryForm, DragArea, DragGhost, DragHandle, useDragItem, useDropTarget, type DragData, ChoiceCard, ChoiceList, LinkTabs, RatingStars, RatingInput, ScaleInput, QuickRating, PostAuthor, PostAction, PostActions, PostTags, ThreadItem, MealAttach, PlanAttach, CertAttach, ProductTagLinks, PhotoGrid, PollAttach, DayDots, Switch,
   ReelRow, ReelTile, ReelAddTile, ReelSkeleton, ReelMedia, CommentItem, VideoAttach, OfferOptionList, QtyStepper, UnitInput, RangeInput, Checkbox, FilePick,
-  MemberProgressRow, AvatarStack, Mascot, MASCOTS, type MascotMood, StoryFrame, StoryProgress, StoryHeader, StoryMedia, StorySticker, StoryCaption, StoryAction, StoryReply, ShareCardPreview, ShareSteps, Buddy,
+  MemberProgressRow, AvatarStack, Mascot, MASCOTS, type MascotMood, StoryFrame, StoryProgress, StoryHeader, StoryMedia, StorySticker, StoryCaption, StoryAction, StoryReply, ShareCardPreview, ShareSteps, Buddy, ChatBubble, ChatTyping, BackButton,
 } from "@/components/ui";
 
 // 서버(UTC)와 브라우저 시간대가 달라도 같은 글자가 나오도록 한국 시간으로 고정
@@ -678,6 +678,23 @@ export default function Reference({ status }: { status: DsStatus }) {
                 ))}
               </div>
             </div>
+          </Demo>
+        </div>
+      </Section>
+
+      {/* ───────────── 캐릭터와 이야기 ───────────── */}
+      <Section id="chat" title="캐릭터와 이야기" description="ChatBubble · ChatTyping — /buddy. 캐릭터는 왼쪽(얼굴 + 테두리 풍선), 나는 오른쪽(sunken 풍선). 이어지는 캐릭터 말은 얼굴을 한 번만. 색 바탕·그림자 없음. 입력 줄은 BottomBar + 빠른 말 Chip. 맨 위 왼쪽 BackButton(앱 안에서 왔으면 앞 화면, 바로 왔으면 fallback)">
+        <div className="grid gap-4">
+          <Demo label="말풍선 · 답 쓰는 중" code={`<ChatBubble from="buddy" avatar={<Buddy … size={40} decorative />}>…</ChatBubble>\n<ChatBubble from="me">…</ChatBubble>\n<ChatTyping avatar={…} />`}>
+            <div className="flex flex-col gap-2 max-w-sm">
+              <ChatBubble from="buddy" avatar={<Buddy ingredient="sweetpotato" personality="picky" mood="logged" size={40} decorative />}>흠, 김밥. 포슬포슬한 맛은 아니지만… 기록은 합격이에요. 3일째</ChatBubble>
+              <ChatBubble from="buddy">단백질 18g · 하루 목표의 23%</ChatBubble>
+              <ChatBubble from="me" className="mt-2">저녁은 뭐 먹을까요?</ChatBubble>
+              <ChatTyping avatar={<Buddy ingredient="sweetpotato" personality="picky" size={40} decorative />} />
+            </div>
+          </Demo>
+          <Demo label="뒤로" code={`<BackButton fallback="/diary" />`}>
+            <BackButton fallback="/design-system" />
           </Demo>
         </div>
       </Section>

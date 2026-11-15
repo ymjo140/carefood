@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { cn } from "./cn";
 import { Icon, type IconName } from "./Icon";
+import { useTrackNav } from "./BackButton";
 
 /**
  * 하단 탭 바 (suta bottom-nav)
@@ -24,6 +25,7 @@ export const NAV_TABS: { href: string; label: string; icon: IconName }[] = [
 
 export function BottomNav() {
   const pathname = usePathname();
+  useTrackNav();
   const [typing, setTyping] = useState(false);
   const [hasBar, setHasBar] = useState(false);
   const isTabRoot = NAV_TABS.some((t) => t.href === pathname);

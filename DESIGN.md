@@ -100,6 +100,8 @@
 | 하단 | `BottomNav`(레이아웃에 한 번) · 주 행동 줄 `BottomBar`(있으면 탭 바가 물러남) · 떠 있는 버튼은 `above-nav` |
 | 단계 | `Steps` |
 | 재료 캐릭터(내 화면에만) | `Buddy` (ingredient 30종 · personality 8 · mood 8 · stage 4) · 규칙·이름 `lib/buddy.ts`, 말 `lib/buddy-lines.ts` · 보자기·키우기는 `/me/character` |
+| 캐릭터와 이야기 | 말풍선 `ChatBubble` · 답 쓰는 중 `ChatTyping` (/buddy, 규칙 `lib/buddy-chat.ts`) |
+| 뒤로 가기 | `BackButton fallback` — 맨 위 왼쪽 한 번. 늘 같은 곳이면 `LinkButton` 으로 그곳 이름 |
 | 브랜드 마스코트 | `Mascot` (끼록이 — 앱 아이콘·공지. 사용자가 키우는 캐릭터는 `Buddy`) |
 
 참고: suta(github.com/Guksu/suta, MIT) 의 금지선·모션 값·패턴, hallmark(github.com/Nutlope/hallmark, MIT) 의 연결 대조·데이터 4상태·새 눈 검토.

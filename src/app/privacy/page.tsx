@@ -281,6 +281,11 @@ export default function PrivacyPage() {
                 <td className="py-2 pr-3">이용자가 켠 알림 전달</td>
                 <td className="py-2 pr-3">각 회사의 국외 서버</td>
               </tr>
+              <tr className="border-b border-line">
+                <td className="py-2 pr-3">Anthropic PBC</td>
+                <td className="py-2 pr-3">캐릭터와 이야기하기의 답 만들기, 음식 사진 인식</td>
+                <td className="py-2 pr-3">미국</td>
+              </tr>
             </tbody>
           </table></div>
           <h3 className="text-label font-bold text-ink mt-4 mb-1">국외 이전 (개인정보보호법 제28조의8)</h3>
@@ -292,6 +297,12 @@ export default function PrivacyPage() {
             <li>
               <strong className="text-ink">브라우저 푸시 서비스 (미국 등)</strong> — 이전 항목: 푸시 구독 주소, 알림 문구 · 이전 시점과 방법: 알림을 보낼 때 네트워크로 ·
               목적: 알림 전달 · 보유 기간: 전달이 끝날 때까지 · 거부하려면 마이페이지 › 알림 설정에서 알림을 끄면 됩니다.
+            </li>
+            <li>
+              <strong className="text-ink">Anthropic PBC (미국)</strong> — 이전 항목: 캐릭터에게 보낸 말과 최근 이야기, 오늘 기록한 음식 이름·끼니, 오늘 열량·단백질·나트륨 합계와 목표,
+              기록을 이어 간 날 수(이름·연락처·알레르기·건강 관심사는 보내지 않습니다), 사진으로 음식을 기록할 때 그 사진 · 이전 시점과 방법: 캐릭터에게 말을 걸거나 사진을 올릴 때 네트워크로 ·
+              목적: 캐릭터 답과 음식 이름 만들기 · 보유 기간: Anthropic의 API 데이터 보관 정책에 따른 기간(서비스 학습에 쓰이지 않음) ·
+              거부하려면 캐릭터에게 말을 걸지 않거나 캐릭터를 끄고, 사진 대신 검색으로 기록하면 됩니다. 거부해도 다른 기능은 그대로 쓸 수 있습니다.
             </li>
           </ul>
         </section>

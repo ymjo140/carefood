@@ -19,8 +19,8 @@ export type Perk = "check" | "recs" | "report" | "closet" | "swap";
 export type Plan = { code: PlanCode; name: string; price: number; slots: number; perks: Perk[]; about: string };
 
 export const PLANS: Plan[] = [
-  { code: "basic", name: "무료", price: 0, slots: 1, perks: [], about: "기록 · 챌린지 · 가족 · 캐릭터 1마리" },
-  { code: "kkirok", name: "기본 구독", price: 1900, slots: 1, perks: ["check", "recs", "report"], about: "기록할 때 숫자 체크 · 매 끼니 메뉴 추천 · 주간 리포트" },
+  { code: "basic", name: "무료", price: 0, slots: 1, perks: [], about: "기록 · 챌린지 · 가족 · 캐릭터 1마리(하루 5번 이야기)" },
+  { code: "kkirok", name: "기본 구독", price: 1900, slots: 1, perks: ["check", "recs", "report"], about: "캐릭터와 하루 50번 이야기 · 숫자 체크 · 매 끼니 메뉴 추천 · 주간 리포트" },
   { code: "all", name: "플러스 구독", price: 3900, slots: 3, perks: ["check", "recs", "report", "closet", "swap"], about: "기본 구독 + 캐릭터 3마리 · 성격 바꾸기 · 꾸미기" },
 ];
 export const ALL_PERKS: Perk[] = ["check", "recs", "report", "closet", "swap"];
@@ -75,6 +75,16 @@ export function accessOf(sub: SubRow | null | undefined, now: Date, enabled: boo
 }
 
 export const hasPerk = (a: Pick<Access, "perks">, perk: Perk) => a.perks.includes(perk);
+
+/**
+ * 캐릭터와 하루에 이야기할 수 있는 횟수 (내가 보낸 말 기준, 한국 시간 자정에 다시) — AI 답에 돈이 들어서 한도를 둔다.
+ * 체험 기간 30 · 무료 5 · 구독(기본·플러스) 50. 기록에 반응하는 말·처음 인사는 세지 않는다.
+ */
+export const CHAT_LIMIT = { beta: 30, free: 5, paid: 50 } as const;
+export function chatLimit(a: Pick<Access, "mode" | "plan">) {
+  if (a.mode === "beta") return CHAT_LIMIT.beta;
+  return a.plan === "basic" ? CHAT_LIMIT.free : CHAT_LIMIT.paid;
+}
 
 /**
  * 결제일 n번째 달 — 첫 결제 시각(anchor)에서 n달 뒤, 같은 날·같은 시각 (한국 시간 기준, 없는 날이면 그달 마지막 날).

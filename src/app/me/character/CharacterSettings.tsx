@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Buddy, Button, Card, ChoiceCard, EmptyState, ListRow, Notice, Sheet, Skeleton, Switch, TextButton, useToast } from "@/components/ui";
+import { Buddy, Button, Card, LinkButton, ChoiceCard, EmptyState, ListRow, Notice, Sheet, Skeleton, Switch, TextButton, useToast } from "@/components/ui";
 import type { MascotMood } from "@/components/ui";
 import { GROUP_NAME, ingredientOf, josa, personalityOf, type IngredientKey, type PersonalityKey, type StageKey } from "@/lib/buddy";
 import { planOf, won, type Access, type Plan } from "@/lib/plans";
@@ -108,6 +108,7 @@ export function CharacterSettings() {
             </span>
           </div>
           {d.line && <p className="w-full rounded-md bg-surface px-4 py-3 text-body text-ink">{d.line}</p>}
+          <LinkButton href="/buddy" icon="message" className="self-stretch">{b.name}에게 말 걸기</LinkButton>
           <span className="text-caption text-ink-2">{personalityOf(b.personality)?.how} · {GROUP_NAME[ingredientOf(b.ingredient)?.group ?? "carb"]} 재료 · 내 화면에만 나와요</span>
         </Card>
       ) : (
