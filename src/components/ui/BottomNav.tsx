@@ -15,20 +15,27 @@ import { useTrackNav } from "./BackButton";
  * - 높이 56 + 안전 영역. 지금 탭만 앰버 아이콘 + 굵은 라벨.
  * - 보이는 동안 <html data-bottom-nav> 를 달아, 떠 있는 버튼·알림이 그 위로 올라가게 합니다(.above-nav).
  */
-export const NAV_TABS: { href: string; label: string; icon: IconName }[] = [
+// 식단이 가운데 — 매일 여는 탭. 식단 탭은 하루(/diary)·일주일(/weekly-box) 두 보기를 가진다(also).
+// AI = 캐릭터와 이야기(탐색·피드백).
+export const NAV_TABS: { href: string; label: string; icon: IconName; also?: string[] }[] = [
   { href: "/", label: "홈", icon: "home" }, // 홈 = 추천 + 탐색 (제품 찾기는 홈 검색 줄)
-  { href: "/diary", label: "기록", icon: "notebook" },
-  { href: "/weekly-box", label: "식단", icon: "list" },
   { href: "/group-buy", label: "공구", icon: "users" }, // 판매 열기 전엔 관심 모으기 (src/lib/features.ts)
-  { href: "/community", label: "피드", icon: "feed" },
+  { href: "/diary", label: "식단", icon: "notebook", also: ["/weekly-box"] },
+  { href: "/buddy", label: "AI", icon: "message" },
+  { href: "/community", label: "커뮤니티", icon: "feed" },
 ];
+
+/** 이 경로가 어느 탭의 첫 화면인지 — 식단 탭의 일주일 보기도 식단 */
+export function navTabOf(pathname: string) {
+  return NAV_TABS.find((t) => t.href === pathname || t.also?.includes(pathname)) ?? null;
+}
 
 export function BottomNav() {
   const pathname = usePathname();
   useTrackNav();
   const [typing, setTyping] = useState(false);
   const [hasBar, setHasBar] = useState(false);
-  const isTabRoot = NAV_TABS.some((t) => t.href === pathname);
+  const isTabRoot = !!navTabOf(pathname);
   const visible = isTabRoot && !typing && !hasBar;
 
   useEffect(() => {
@@ -66,7 +73,7 @@ export function BottomNavItems({ current }: { current: string }) {
   return (
     <ul className="grid grid-cols-5 h-14">
       {NAV_TABS.map((t) => {
-        const active = t.href === current;
+        const active = navTabOf(current)?.href === t.href;
         return (
           <li key={t.href}>
             <Link href={t.href} aria-current={active ? "page" : undefined}

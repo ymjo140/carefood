@@ -4,7 +4,7 @@ import { INGREDIENTS as BUDDY_INGREDIENTS, PERSONALITIES as BUDDY_PERSONALITIES 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Badge, Button, Card, CardActions, CardButton, Chip, ChipRow, ConfirmSheet, EmptyState, Field, Icon, ICON_NAMES, IconButton, IconLink,
-  Input, KakaoButton, Kcal, LinkButton, ListRow, MacroGrid, MacroInline, MealSlot, MealTag, Notice, Estimate, HowCounted, AsOf, CodeBlock, TrendChart, BarList, GapChart, Page, PageHeader, Price,
+  Input, KakaoButton, Kcal, LinkButton, ListRow, MacroGrid, MacroInline, MealSlot, MealSplit, MealTag, Notice, Estimate, HowCounted, AsOf, CodeBlock, TrendChart, BarList, GapChart, Page, PageHeader, Price,
   ProgressBar, SearchField, SectionHeader, Select, Sheet, Spinner, Stat, Steps, Tabs, Textarea, TextLink, TextButton, Thumb, ProductImage,
   Avatar, useToast, cn, type BadgeTone,
   BottomNavItems, SkeletonList, FoodEntryForm, DragArea, DragGhost, DragHandle, useDragItem, useDropTarget, type DragData, ChoiceCard, ChoiceList, LinkTabs, RatingStars, RatingInput, ScaleInput, QuickRating, PostAuthor, PostAction, PostActions, PostTags, ThreadItem, MealAttach, PlanAttach, CertAttach, ProductTagLinks, PhotoGrid, PollAttach, DayDots, Switch,
@@ -960,6 +960,15 @@ export default function Reference({ status }: { status: DsStatus }) {
           <Demo label="영양 타일 4칸 (목표 대비)" code="<MacroGrid values targets />">
             <MacroGrid values={{ protein: 62, carbs: 180, fat: 41, sodium: 1650 }} targets={{ protein: 80, carbs: 260, fat: 60, sodium: 2000 }} />
           </Demo>
+          <Demo label="목표 숫자까지 — 하루 요약 카드" code="<MacroGrid values targets showTargets />">
+            <MacroGrid values={{ protein: 62, carbs: 120, fat: 28, sodium: 1350 }} targets={{ protein: 88, carbs: 176, fat: 39, sodium: 2000 }} showTargets />
+          </Demo>
+          <Demo label="끼니별 열량 — 먹은 끼니는 채움, 계획은 점선 (끼니는 색 없이 글자로)" code="<MealSplit parts goal />">
+            <MealSplit goal={1408} parts={[
+              { key: "breakfast", label: "아침", kcal: 380 }, { key: "lunch", label: "점심", kcal: 640 },
+              { key: "dinner", label: "저녁", kcal: 420, planned: true }, { key: "snack", label: "간식", kcal: 0 },
+            ]} />
+          </Demo>
           <Demo label="한 줄 요약 — 카드·목록 안" code="<MacroInline values />">
             <MacroInline values={{ protein: 32, carbs: 45, fat: 8, sodium: 620 }} />
           </Demo>
@@ -1068,7 +1077,7 @@ export default function Reference({ status }: { status: DsStatus }) {
           <div className="h-24 bg-canvas flex items-center justify-center text-caption text-ink-3">화면 내용</div>
           <div className="border-t border-line"><BottomNavItems current="/weekly-box" /></div>
         </div>
-        <p className="text-caption text-ink-2 mt-2"><Code>{"<BottomNav />"}</Code> 는 레이아웃에 한 번만 둡니다. 떠 있는 버튼·알림은 <Code>above-nav</Code> 로 탭 바 위에 뜹니다. 주 행동이 있는 화면은 <Code>{"<BottomBar>"}</Code> 를 쓰면 탭 바가 알아서 물러납니다.</p>
+        <p className="text-caption text-ink-2 mt-2"><Code>{"<BottomNav />"}</Code> 는 레이아웃에 한 번만 둡니다. 떠 있는 버튼·알림은 <Code>above-nav</Code> 로 탭 바 위에 뜹니다. 주 행동이 있는 화면은 <Code>{"<BottomBar>"}</Code> 를 쓰면 탭 바가 알아서 물러납니다. 탭의 첫 화면이라 탭 바를 남겨야 하면(AI 탭 입력 줄, 식단 일주일 보기의 장보기) <Code>{"<BottomBar overNav>"}</Code> — 탭 바 바로 위에 붙고 입력 중에는 맨 아래로 내려갑니다. 탭 순서는 홈 · 공구 · 식단 · AI · 커뮤니티, 식단 탭은 <Code>{"<LinkTabs items={DIET_VIEWS}>"}</Code> 로 하루·일주일.</p>
       </Section>
 
       {/* ───────────── 시트·알림 ───────────── */}

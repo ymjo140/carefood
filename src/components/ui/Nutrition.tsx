@@ -36,7 +36,7 @@ export function ProgressBar({ value, max = 100, tone = "brand", className, label
 }
 
 /** 영양 타일 — 4칸 격자로 씀 (MacroGrid) */
-export function MacroStat({ macro, value, target, digits = 0 }: { macro: Macro; value: number | null | undefined; target?: number; digits?: number }) {
+export function MacroStat({ macro, value, target, digits = 0, showTarget = false }: { macro: Macro; value: number | null | undefined; target?: number; digits?: number; showTarget?: boolean }) {
   const m = MACRO_META[macro];
   return (
     <div className={cn("flex flex-col gap-1.5 rounded-md p-2.5 min-w-0", m.bg)}>
@@ -46,19 +46,22 @@ export function MacroStat({ macro, value, target, digits = 0 }: { macro: Macro; 
         {fmt(value, digits)}<span className="inline-block text-caption font-medium ml-0.5">{m.unit}</span>
       </span>
       {target != null && <ProgressBar value={value || 0} max={target} tone={macro} label={`${m.label} 목표 대비`} />}
+      {target != null && showTarget && <span className="text-caption text-ink-2 num leading-none">/ {fmt(target)}{m.unit}</span>}
     </div>
   );
 }
 
-export function MacroGrid({ values, targets, className }: {
+export function MacroGrid({ values, targets, showTargets = false, className }: {
   values: Partial<Record<Macro, number | null | undefined>>;
   targets?: Partial<Record<Macro, number>>;
+  /** 막대 아래에 목표 숫자도 ("/ 88g") — 하루 요약처럼 얼마나 남았는지 봐야 하는 곳 */
+  showTargets?: boolean;
   className?: string;
 }) {
   return (
     <div className={cn("grid grid-cols-4 gap-2", className)}>
       {(Object.keys(MACRO_META) as Macro[]).map((k) => (
-        <MacroStat key={k} macro={k} value={values[k]} target={targets?.[k]} />
+        <MacroStat key={k} macro={k} value={values[k]} target={targets?.[k]} showTarget={showTargets} />
       ))}
     </div>
   );

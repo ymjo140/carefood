@@ -412,6 +412,10 @@ html[data-bottom-bar] { --ds-nav-h: calc(4.75rem + env(safe-area-inset-bottom));
 @utility above-nav {
   bottom: calc(var(--ds-nav-h, 0px) + max(1.5rem, env(safe-area-inset-bottom)));
 }
+/* 탭 바 바로 위에 붙는 줄(BottomBar overNav) — 탭 바가 숨으면(입력 중·넓은 화면) 맨 아래 */
+@utility over-nav {
+  bottom: max(var(--ds-nav-h, 0px), env(safe-area-inset-bottom));
+}
 /* 주 행동 줄(BottomBar)이 있으면 맨 아래 내용(푸터)이 줄에 가리지 않게 */
 html[data-bottom-bar] body { padding-bottom: calc(5.5rem + env(safe-area-inset-bottom)); }
 

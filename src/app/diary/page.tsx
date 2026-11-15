@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import Link from "@/components/ui/AppLink";
 import {
-  Badge, Button, Card, Chip, ChipRow, ConfirmSheet, IconLink, Sheet, EmptyState, Field, Icon, IconButton, Input, Kcal, LinkButton, ListRow, MacroGrid, MealSlot, Page, PageHeader, PageLoading, SectionHeader, Spinner, Tabs, buttonClass, cn, useToast, SkeletonList, QuickRating, Notice, TextLink,
+  Badge, Button, Card, Chip, ChipRow, ConfirmSheet, IconLink, Sheet, EmptyState, Field, Icon, IconButton, Input, Kcal, LinkButton, ListRow, MacroGrid, MealSlot, Page, PageHeader, PageLoading, SectionHeader, Spinner, Tabs, buttonClass, cn, useToast, SkeletonList, QuickRating, Notice, TextLink, LinkTabs, DIET_VIEWS, MealSplit, TextButton,
 } from "@/components/ui";
 import { getClientActorId } from "@/lib/actor-client";
 import { addDays, kstHour, monthDay, todayKst, weekday } from "@/lib/day";
@@ -14,6 +14,8 @@ import type { Menu } from "@/lib/menu-pick";
 import DayCardPrompt from "@/components/community/DayCardPrompt";
 import PushPrompt from "@/components/PushPrompt";
 import { MascotBanner } from "@/components/community/MascotBanner";
+import { PlanSheet } from "./PlanSheet";
+import type { PlannedMeal } from "@/lib/planned-meals";
 
 /* ── 타입 ── */
 type DiaryEntry = {
@@ -63,6 +65,8 @@ type DiaryData = {
     daily_protein_g: number;
     max_sodium_mg: number;
     max_sugar_g: number;
+    daily_carbs_g?: number | null;
+    daily_fat_g?: number | null;
   } | null;
   mealCount: number;
 };
@@ -133,6 +137,19 @@ function getUserId(): string {
 function formatDate(dateStr: string): string {
   const { month, date } = monthDay(dateStr);
   return `${month}월 ${date}일 (${DAY_NAMES[weekday(dateStr)]})`;
+}
+
+/**
+ * 하루 요약 카드의 AI 한 줄 — 지금 숫자로 한 문장(사실만, 효능 말 없이) + AI 탭에 넣어 줄 질문.
+ * 질문은 입력 줄에 넣어만 두고 보내기는 사용자가 한다(하루 대화 한도).
+ */
+function aiHelp(x: { hasRecords: boolean; remainKcal: number; remainProtein: number; sodiumOver: number; nextLabel: string }): { line: string; ask: string } {
+  const n = (v: number) => Math.round(v).toLocaleString("ko-KR");
+  if (!x.hasRecords) return { line: "기록하면 남은 열량과 단백질을 같이 계산해요", ask: "오늘 뭐 먹을지 같이 골라 줘" };
+  if (x.sodiumOver > 0) return { line: `나트륨이 목표보다 ${n(x.sodiumOver)}mg 많아요`, ask: `나트륨이 목표보다 ${n(x.sodiumOver)}mg 많은데 ${x.nextLabel}은 뭘 먹을까?` };
+  if (x.remainKcal > 0 && x.remainProtein >= 5) return { line: `${n(x.remainKcal)}kcal · 단백질 ${n(x.remainProtein)}g 남았어요`, ask: `남은 단백질 ${n(x.remainProtein)}g 채울 ${x.nextLabel} 골라 줘` };
+  if (x.remainKcal <= 0) return { line: `목표보다 ${n(-x.remainKcal)}kcal 더 먹었어요`, ask: "오늘 많이 먹었는데 내일은 어떻게 할까?" };
+  return { line: `${n(x.remainKcal)}kcal 남았어요`, ask: `${x.nextLabel}은 가볍게 뭘 먹을까?` };
 }
 
 /** 끼니별 영양소 경고 판단 — 가장 문제되는 영양소 하나 반환 */
@@ -313,6 +330,11 @@ export default function DiaryPage() {
   const [recordingPlan, setRecordingPlan] = useState<string | null>(null);
   /** 이 기기에 짜 둔 게 없어 서버에 저장한 식단을 쓸 때 그 이름 */
   const [planTitle, setPlanTitle] = useState<string | null>(null);
+  /** 그 날짜에 담아 둔 예정 끼니 (/api/diary/planned) — 식단 불러오기가 담고, 기록하면 지운다. 요일 식단보다 먼저 */
+  const [datedPlans, setDatedPlans] = useState<PlannedMeal[]>([]);
+  const [planSheetOpen, setPlanSheetOpen] = useState(false);
+  const [plannedReload, setPlannedReload] = useState(0);
+  const plannedSeq = useRef(0);
   const [weeklyTrend, setWeeklyTrend] = useState<{
     days: { date: string; label: string; dayOfWeek: string; calories: number; protein_g: number; count: number }[];
     weeklyAvg: { calories: number; protein_g: number; sodium_mg: number; goalAchievement: number } | null;
@@ -658,19 +680,36 @@ export default function DiaryPage() {
     }
     return !!(await post(given))?.ok;
   };
-  const recordPlanned = async (meal: string, foods: PlanFood[], label: string, mult = 1) => {
-    if (foods.length === 0) return;
+  const recordPlanned = async (meal: string, foods: PlanFood[], label: string, mult = 1): Promise<boolean> => {
+    if (foods.length === 0) return false;
     setRecordingPlan(meal);
     const results = await Promise.all(foods.map((f) => postPlanned(meal, f, mult)));
     setRecordingPlan(null);
     const ok = results.filter(Boolean).length;
-    if (ok === 0) { toast.show("기록하지 못했어요. 다시 시도해 주세요", { tone: "danger" }); return; }
+    if (ok === 0) { toast.show("기록하지 못했어요. 다시 시도해 주세요", { tone: "danger" }); return false; }
     if (ok < foods.length) toast.show(`${foods.length}개 중 ${ok}개만 기록했어요. 빠진 음식은 다시 추가해 주세요`, { tone: "danger" });
-    else toast.show(`${label}을 식단 리스트대로 기록했어요`);
+    else toast.show(`${label}을 계획대로 기록했어요`);
     setAddingMeal(null);
     setServingMultiplier(1);
     fetchDiary();
     loadWeeklyTrend();
+    // 날짜에 담아 둔 예정이었으면 — 기록했으니 예정에서 뺀다
+    if (datedPlans.some((p) => p.meal === meal)) void removeDated(meal, true);
+    return true;
+  };
+
+  /** 예정 끼니 빼기 — quiet: 기록한 뒤 저절로 빼는 것(알림 없음) */
+  const removeDated = async (meal: string, quiet = false) => {
+    try {
+      const r = await fetch(`/api/diary/planned?date=${date}&meal=${meal}`, { method: "DELETE" });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || String(r.status));
+      if (!quiet) toast.show("예정에서 뺐어요");
+    } catch (e) {
+      console.error("예정 끼니를 빼지 못했어요:", (e as Error).message);
+      if (!quiet) toast.show("예정에서 빼지 못했어요. 다시 시도해 주세요", { tone: "danger" });
+    } finally {
+      setPlannedReload((k) => k + 1);
+    }
   };
 
   // 사진 촬영/업로드 핸들러
@@ -771,9 +810,28 @@ export default function DiaryPage() {
   const todayStr = typeof window !== "undefined" ? todayKst() : "";
   const isToday = date === todayStr;
 
-  /* ── 식단 리스트 → 기록 ── 요일로만 짜는 식단이라 이번 주(오늘부터 6일 전까지)에만 맞춰 보인다 */
+  /* ── 날짜에 담아 둔 예정 끼니 ── 늦게 온 응답은 버린다(요청 번호) */
+  useEffect(() => {
+    if (!date) return;
+    const n = ++plannedSeq.current;
+    fetch(`/api/diary/planned?from=${date}&to=${date}`)
+      .then(async (r) => { const d = await r.json(); if (!r.ok) throw new Error(d.error); return d; })
+      .then((d) => { if (n === plannedSeq.current) setDatedPlans(d.planned || []); })
+      .catch((e) => {
+        // 보조 — 못 불러오면 예정 없이(요일 식단만) 보인다
+        console.error("예정 끼니를 불러오지 못했어요:", (e as Error).message);
+        if (n === plannedSeq.current) setDatedPlans([]);
+      });
+  }, [date, plannedReload]);
+
+  /* ── 식단 리스트 → 기록 ── 날짜에 담은 예정이 먼저. 없으면 요일 식단 — 요일로만 짜는 식단이라 이번 주(오늘부터 6일 전까지)에만 맞춰 보인다 */
   const planOk = !!planGrid && !!date && !!todayStr && date <= todayStr && date >= addDays(todayStr, -6);
-  const plannedFor = (meal: string) => (planOk && planGrid ? cellFoods(planGrid[weekdayKey(date)]?.[planMealKey(meal)]) : []);
+  const datedFor = (meal: string) => datedPlans.find((p) => p.meal === meal) || null;
+  const plannedFor = (meal: string): PlanFood[] => {
+    const dated = datedFor(meal);
+    if (dated) return dated.foods;
+    return planOk && planGrid ? cellFoods(planGrid[weekdayKey(date)]?.[planMealKey(meal)]) : [];
+  };
   const plannedRows = useMemo<PlannedRow[]>(() => {
     if (!planGrid || !date) return [];
     const today = weekdayKey(date);
@@ -812,6 +870,9 @@ export default function DiaryPage() {
   const goalCalories = data?.goals?.daily_calories || 2000;
   const goalProtein = data?.goals?.daily_protein_g || 80;
   const maxSodium = data?.goals?.max_sodium_mg || 2000;
+  // 탄수화물·지방 목표 — 저장한 값이 없으면 열량의 50%·25% (예전에는 300g·65g 고정이라 목표 열량과 안 맞았다)
+  const goalCarbs = data?.goals?.daily_carbs_g || Math.round((goalCalories * 0.5) / 4);
+  const goalFat = data?.goals?.daily_fat_g || Math.round((goalCalories * 0.25) / 9);
   const consumed = data?.totals.calories || 0;
   const filledCount = data ? Object.values(data.byMeal).filter(arr => arr.length > 0).length : 0;
 
@@ -825,6 +886,10 @@ export default function DiaryPage() {
     ? Object.values(data.byMeal).flat().find((e) => e.id === deleteConfirmId) || null
     : null;
   const streakDays = weeklyTrend ? weeklyTrend.days.filter(d => d.count > 0).length : 0;
+  // 오늘 기록이 있으면 — 다음 끼니(지금 시각과 빈 끼니로). 그 끼니 칸에 계획이 없으면 그 칸 아래에 AI 후보를 보인다
+  const nextPick = isToday && data && allEntries.length > 0
+    ? pickNextMeal(Object.fromEntries(Object.entries(data.byMeal).map(([k, v]) => [k, v.length > 0])), kstHour())
+    : null;
 
   /* 음식 추가 패널 (끼니 칸 안) */
   const renderAddPanel = () => (
@@ -1041,7 +1106,8 @@ export default function DiaryPage() {
 
   return (
     <Page width="narrow">
-      <PageHeader title="식단 기록" description={isToday ? `오늘 · ${formatDate(date)}` : formatDate(date)} />
+      <PageHeader title="식단" description={isToday ? `오늘 · ${formatDate(date)}` : formatDate(date)}
+        actions={<LinkTabs items={DIET_VIEWS} current="/diary" label="식단 보기" />} />
 
       {loadError && (
         <EmptyState className="mb-5" title="식단 기록을 불러오지 못했어요" description="아래 숫자는 비어 있는 상태예요"
@@ -1087,7 +1153,7 @@ export default function DiaryPage() {
         <IconButton icon="chevron-right" label="다음 주" size="sm" onClick={() => moveDate(7)} />
       </div>
 
-      {/* ━━ 오늘 합계 (칼로리 링 + 매크로) ━━ */}
+      {/* ━━ 하루 요약 — 남은 열량(링) · 영양소 목표 대비 · 끼니별 열량(계획은 점선) · AI에게 묻기 ━━ */}
       <Card className="mb-6">
         <div className="flex flex-col items-center mb-5">
           <CalorieRing consumed={consumed} goal={goalCalories} />
@@ -1102,8 +1168,30 @@ export default function DiaryPage() {
             fat: data?.totals.fat_g || 0,
             sodium: data?.totals.sodium_mg || 0,
           }}
-          targets={{ protein: goalProtein, carbs: 300, fat: 65, sodium: maxSodium }}
+          targets={{ protein: goalProtein, carbs: goalCarbs, fat: goalFat, sodium: maxSodium }}
+          showTargets
         />
+        <MealSplit className="mt-4" goal={goalCalories} parts={MEAL_TYPES.map((m) => {
+          const eaten = (data?.byMeal[m.key] || []).reduce((a, e) => a + (e.calories || 0), 0);
+          if (eaten > 0) return { key: m.key, label: m.label, kcal: eaten };
+          const plan = plannedFor(m.key).reduce((a, f) => a + (Number(f.calories) || 0), 0);
+          return { key: m.key, label: m.label, kcal: plan, planned: true };
+        })} />
+        {isToday && data && (() => {
+          const ai = aiHelp({
+            hasRecords: allEntries.length > 0,
+            remainKcal: goalCalories - consumed,
+            remainProtein: goalProtein - (data.totals.protein_g || 0),
+            sodiumOver: (data.totals.sodium_mg || 0) - maxSodium,
+            nextLabel: MEAL_TYPES.find((m) => m.key === nextPick?.meal)?.label || "다음 끼니",
+          });
+          return (
+            <div className="flex items-center gap-3 mt-4 pt-4 border-t border-line">
+              <p className="flex-1 min-w-0 text-label text-ink">{ai.line}</p>
+              <LinkButton href={`/buddy?ask=${encodeURIComponent(ai.ask)}`} size="sm" variant="secondary" icon="message" className="shrink-0">AI에게 묻기</LinkButton>
+            </div>
+          );
+        })()}
       </Card>
 
       {/* ━━ 기록이 있으면 하루 한 번: 오늘 인증 카드 ━━ */}
@@ -1115,29 +1203,15 @@ export default function DiaryPage() {
       {/* ━━ 첫 기록 뒤 한 번: 알림 켜기 ━━ */}
       {isToday && allEntries.length > 0 && <PushPrompt className="mt-3" />}
 
-      {/* ━━ 기록 직후: 남은 양 + 다음 끼니 후보 ━━ */}
-      {isToday && data && allEntries.length > 0 && (() => {
-        const filled = Object.fromEntries(Object.entries(data.byMeal).map(([k, v]) => [k, v.length > 0]));
-        const { meal, mainLeft } = pickNextMeal(filled, kstHour());
-        return (
-          <NextMeal
-            remainKcal={goalCalories - consumed}
-            remainProtein={goalProtein - (data.totals.protein_g || 0)}
-            remainSodium={maxSodium - (data.totals.sodium_mg || 0)}
-            goalKcal={goalCalories}
-            meal={meal} mainLeft={mainLeft}
-            exclude={allEntries.map((e) => e.product_id).filter((x): x is string => !!x)}
-            onLog={logToMeal}
-            onLogMenu={logMenuToMeal}
-            version={allEntries.length}
-          />
-        );
-      })()}
-
       {/* ━━ 끼니별 기록 ━━ */}
       <SectionHeader
         title={isToday ? "오늘의 식사" : formatDate(date)}
-        action={<span className="text-caption text-ink-2"><span className="num font-bold text-ink">{filledCount}/4</span> 기록</span>}
+        action={(
+          <span className="flex items-center gap-3">
+            <span className="text-caption text-ink-2"><span className="num font-bold text-ink">{filledCount}/4</span> 기록</span>
+            <TextButton onClick={() => setPlanSheetOpen(true)}>식단 불러오기</TextButton>
+          </span>
+        )}
       />
 
       {loading ? (
@@ -1158,17 +1232,23 @@ export default function DiaryPage() {
             return (
               <div key={meal.key} id={`meal-${meal.key}`} className="flex flex-col gap-2 scroll-mt-20">
                 {isEmpty && !isAdding && plannedFor(meal.key).length > 0 ? (() => {
-                  // 식단 리스트에 이 요일·끼니가 있으면 — 계획대로 한 번에, 아니면 다른 음식
+                  // 계획이 있으면 — 오늘·지난 날은 계획대로 한 번에(아니면 다른 음식), 앞으로 올 날은 예정(빼기만)
                   const foods = plannedFor(meal.key);
+                  const dated = datedFor(meal.key);
+                  const ahead = date > todayStr;
                   const kcal = foods.reduce((a, f) => a + (Number(f.calories) || 0), 0);
+                  const title = dated ? dated.plan_title || "불러온 식단" : planTitle || "식단 리스트";
                   return (
-                    <MealSlot meal={meal.key} right={<span className="text-caption text-ink-2 line-clamp-1 max-w-48">{planTitle || "식단 리스트"}</span>}>
+                    <MealSlot meal={meal.key} right={<span className="text-caption text-ink-2 line-clamp-1 max-w-48">{ahead ? "예정" : "계획"} · {title}</span>}>
                       <p className="text-body text-ink">{foods.map((f) => f.name).join(" · ")}</p>
-                      {kcal > 0 && <p className="text-caption text-ink-2 mt-0.5">계획 <Kcal value={Math.round(kcal)} className="text-caption" /></p>}
+                      {kcal > 0 && <p className="text-caption text-ink-2 mt-0.5">{ahead ? "예정" : "계획"} <Kcal value={Math.round(kcal)} className="text-caption" /></p>}
                       <div className="flex flex-wrap gap-1 mt-2 -ml-1">
-                        <Button size="sm" variant="secondary" icon="check" loading={recordingPlan === meal.key}
-                          onClick={() => recordPlanned(meal.key, foods, meal.label)}>계획대로 기록하기</Button>
-                        <Button size="sm" variant="ghost" onClick={toggleAdd}>다른 음식 기록하기</Button>
+                        {!ahead && (
+                          <Button size="sm" variant="secondary" icon="check" loading={recordingPlan === meal.key}
+                            onClick={() => void recordPlanned(meal.key, foods, meal.label)}>계획대로 기록하기</Button>
+                        )}
+                        {!ahead && <Button size="sm" variant="ghost" onClick={toggleAdd}>다른 음식 기록하기</Button>}
+                        {dated && <Button size="sm" variant="ghost" onClick={() => void removeDated(meal.key)}>예정에서 빼기</Button>}
                       </div>
                     </MealSlot>
                   );
@@ -1233,6 +1313,20 @@ export default function DiaryPage() {
                   </MealSlot>
                 )}
 
+                {/* 빈 끼니 칸: 계획이 있으면 계획(위), 없으면 AI 후보 — 다음 끼니 하나에만 */}
+                {nextPick && data && nextPick.meal === meal.key && isEmpty && !isAdding && plannedFor(meal.key).length === 0 && (
+                  <NextMeal
+                    remainKcal={goalCalories - consumed}
+                    remainProtein={goalProtein - (data.totals.protein_g || 0)}
+                    remainSodium={maxSodium - (data.totals.sodium_mg || 0)}
+                    goalKcal={goalCalories}
+                    meal={nextPick.meal} mainLeft={nextPick.mainLeft}
+                    exclude={allEntries.map((e) => e.product_id).filter((x): x is string => !!x)}
+                    onLog={logToMeal}
+                    onLogMenu={logMenuToMeal}
+                    version={allEntries.length}
+                  />
+                )}
               </div>
             );
           })}
@@ -1252,14 +1346,7 @@ export default function DiaryPage() {
         </Link>
       )}
 
-      {/* ━━ 주간 리포트 ━━ */}
-      <Link href="/diary/report" className="flex items-center justify-between gap-3 rounded-lg border border-line bg-surface px-4 py-3.5 mt-3 hover:border-line-strong transition-colors">
-        <div className="min-w-0">
-          <p className="text-label font-bold text-ink">주간 영양 리포트</p>
-          <p className="text-caption text-ink-2">이번 주 영양 밸런스를 확인하세요</p>
-        </div>
-        <span className="inline-flex items-center gap-0.5 text-label font-bold text-brand-ink shrink-0">보기 <Icon name="chevron-right" size={16} /></span>
-      </Link>
+      {/* 주간 리포트는 AI 탭(캐릭터와 이야기) 위쪽으로 옮겼다 — 피드백은 AI 탭에서 */}
 
       {/* ━━ 기록한 날 ━━ */}
       {streakDays > 0 && (
@@ -1277,6 +1364,9 @@ export default function DiaryPage() {
       )}
 
       <p className="text-caption text-ink-3 text-center mt-4">34만 식품 DB에서 검색하면 영양 정보가 자동으로 채워져요</p>
+
+      <PlanSheet open={planSheetOpen} onClose={() => setPlanSheetOpen(false)} date={date} today={todayStr} dateLabel={formatDate(date)}
+        onRecord={(meal, foods, label) => recordPlanned(meal, foods, label)} onSaved={() => setPlannedReload((k) => k + 1)} />
 
       <ConfirmSheet
         open={!!deleteConfirmId}

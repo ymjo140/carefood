@@ -11,7 +11,7 @@ import {
   IconButton, MacroGrid, MacroInline, MealSlot, Page, PageHeader, PageLoading, Price, ProgressBar, SearchField, SectionHeader, Sheet, SkeletonList,
   Stat, Tabs, TextLink, Thumb, cn, useToast,
   DragArea, DragGhost, DragHandle, useDragItem, useDropTarget, type DragData,
-  Chip, ChipRow, FoodEntryForm, type FoodBase, type FoodEntry, Field, Select,
+  Chip, ChipRow, FoodEntryForm, type FoodBase, type FoodEntry, Field, Select, LinkTabs, DIET_VIEWS,
 } from "@/components/ui";
 import { ORDERING_ENABLED } from "@/lib/features";
 import { ShoppingList } from "./ShoppingList";
@@ -915,7 +915,8 @@ export default function WeeklyBoxPage() {
 
   return (
     <Page width="narrow">
-    <PageHeader title="식단 리스트" description="일주일 식단을 짜 두면 식단 기록에서 계획대로 한 번에 기록할 수 있어요" />
+    <PageHeader title="식단" description="일주일 식단을 짜 두면 하루 보기에서 끼니마다 '먹었어요' 한 번으로 기록돼요"
+      actions={<LinkTabs items={DIET_VIEWS} current="/weekly-box" label="식단 보기" />} />
     <DragArea
       onDrop={onDrop}
       describe={(d) => String(d?.label || "항목")}
@@ -1176,9 +1177,11 @@ export default function WeeklyBoxPage() {
 
     </DragArea>
 
-      {/* ── 하단: 장보기 목록 (통합 주문은 ORDERING_ENABLED 를 켜야 열린다) ── */}
+      {/* ── 하단: 장보기 목록 (통합 주문은 ORDERING_ENABLED 를 켜야 열린다) ──
+           식단 탭의 첫 화면이라 탭 바를 남기고 그 위에 붙는다(overNav) — 아래 빈 줄은 마지막 내용이 줄에 가리지 않게 */}
+      {stats.products > 0 && <div className="h-24" aria-hidden="true" />}
       {stats.products > 0 && (
-        <BottomBar>
+        <BottomBar overNav>
           <div className="flex-1 min-w-0">
             <div className="text-caption text-ink-2">
               <span className="num">{stats.products}</span>끼 · 묶음은 개당 값으로

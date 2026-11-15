@@ -24,7 +24,7 @@ export { Avatar, ListRow, Thumb, Notice, Steps, Estimate, HowCounted, AsOf, Code
 export { ProductImage } from "./ProductImage";
 export { ChoiceCard } from "./ChoiceCard";
 export { ChoiceList, type ChoiceTone } from "./ChoiceList";
-export { LinkTabs, ADMIN_TABS } from "./LinkTabs";
+export { LinkTabs, ADMIN_TABS, DIET_VIEWS } from "./LinkTabs";
 export { RatingStars, RatingInput, ScaleInput, QuickRating, QUICK_RATINGS } from "./Rating";
 export { PostAuthor, PostAction, PostActions, PostTags, ThreadItem, MealAttach, PlanAttach, CertAttach, certLine, CERT_LABEL, type CertView, ProductTagLinks, PhotoGrid, PollAttach, timeAgo, AGE_GROUP_LABELS, CONCERN_LABELS } from "./FeedPost";
 export { DragArea, DragHandle, DragGhost, useDragItem, useDropTarget, dropClass, type DragData } from "./Drag";
@@ -43,3 +43,4 @@ export { Mascot, MASCOTS, MOOD_NAMES, type MascotKind, type MascotMood } from ".
 export { Buddy } from "./Buddy";
 export { ChatBubble, ChatTyping, ChatPicks, type ChatPickItem } from "./Chat";
 export { BackButton } from "./BackButton";
+export { MealSplit, type MealSplitPart } from "./MealSplit";
