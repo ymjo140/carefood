@@ -24,7 +24,7 @@ import type { CFBoost } from "@/lib/recommend";
  * POST /api/recommend — 프로필(목표·입맛·검진 수치) 기반 추천 (홈 · 검진 리포트)
  *   body: { profile, health } — 브라우저의 carefood_profile · carefood_health 그대로
  *   후보: lib/recommend/query-builder (거르기 + 단계적 완화) → 점수: lib/recommend/scoring (탐색 추천순과 같은 식)
- *   → 내 맛 평가로 입맛 보정·싫어한 제품 빼기(feedback.ts) → 같은 묶음 하나로(family.ts) → 다양성 섞기 + 탐색 칸 → 상위 30개
+ *   → 내 맛 평가로 입맛 보정·싫어한 제품 빼기(feedback.ts) → 같은 묶음 하나로(family.ts) → 다양성 섞기 + 탐색 칸 → 상위 limit개(기본 30 · 최대 100 — 추천 더보기 화면이 100)
  *   프로필이 없으면(첫 방문) cold: 살 수 있는 한 끼·반찬 중 건강 점수 높은 것 — 적합도 없이
  * (예전 GET — 묶음·쪽 나누기 탐색 — 은 부르는 곳이 없어 지웠다. 탐색은 /api/products)
  */
@@ -41,7 +41,12 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
 
     // v2 호환: concerns/tastes 직접 전달 → v4 프로필로 변환
-    const profileRaw = body.profile || body;
+    // limit: 돌려줄 개수 (기본 30 — 홈은 세 칸, 추천 더보기는 100)
+    const n = Number(body.limit);
+    const limit = Number.isFinite(n) ? Math.min(100, Math.max(1, Math.round(n))) : 30;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { limit: _limit, ...rest } = body;
+    const profileRaw = body.profile || rest;
     const healthRaw = body.health || null;
     const userId = (await getActorId()) || "";
     const cold = !profileRaw || typeof profileRaw !== "object" || Object.keys(profileRaw).length === 0 || body.cold === true;
@@ -93,10 +98,10 @@ export async function POST(request: NextRequest) {
     const diversified = diversifyResults(dedupeFamilies(scored));
     const withExploration = insertExplorationSlots(diversified, interactions);
     // 가격 (리뷰 통계는 위에서 불러온 product_reviews 기준)
-    // is_purchasable 은 매시간 맞추므로(refresh_purchasable_all) 그 사이 판매가 끊긴 것까지 한 번 더 거른다 — 넉넉히 불러 거른 뒤 30개
-    const candidates = withExploration.slice(0, 45);
+    // is_purchasable 은 매시간 맞추므로(refresh_purchasable_all) 그 사이 판매가 끊긴 것까지 한 번 더 거른다 — 넉넉히(1.5배) 불러 거른 뒤 limit개
+    const candidates = withExploration.slice(0, Math.ceil(limit * 1.5));
     const priceMap = await loadPrices(supabase, candidates.map((p) => p.id as string));
-    const top = candidates.filter((p) => (priceMap[p.id as string] || []).some((pp) => pp.price > 0)).slice(0, 30);
+    const top = candidates.filter((p) => (priceMap[p.id as string] || []).some((pp) => pp.price > 0)).slice(0, limit);
 
     const recommendations = top.map((p) => ({
       ...p,

@@ -13,7 +13,7 @@ const MIN_PEOPLE = 10;
 const GOAL_LABEL = new Map<string, string>(CRM_GOALS.map((g) => [g.key, g.label]));
 /** 노출 자리 (lib/impressions.ts Placement) */
 export const PLACEMENT_LABEL: Record<string, string> = {
-  home_reco: "홈 · 맞춤 추천", home_cold: "홈 · 처음 온 사람 추천", onboarding_preview: "가입 직후 미리보기",
+  home_reco: "홈 · 맞춤 추천", home_cold: "홈 · 처음 온 사람 추천", reco_more: "추천 더보기", onboarding_preview: "가입 직후 미리보기",
   product_list: "탐색 · 검색 목록", weekly_fill: "식단 리스트 채우기",
 };
 const MEAL_LABEL: Record<string, string> = { breakfast: "아침", lunch: "점심", dinner: "저녁", snack: "간식" };

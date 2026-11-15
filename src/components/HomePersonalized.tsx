@@ -58,6 +58,22 @@ export function pickSlots(list: QuickProduct[]): QuickProduct[] {
 }
 
 /**
+ * 추천 제목 라벨: 고른 목표 → v2 concerns → v1 persona
+ *   (concerns 는 목표 일부만 옮겨 담아 '근력 강화'를 골라도 기본값 '활력충전'으로 보였다)
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function profileLabel(profile: any): string {
+  const goalLabels = ((profile?.goals || []) as string[]).map((g) => CONCERN_LABELS[g]).filter(Boolean);
+  if (goalLabels.length > 0) return [...new Set(goalLabels)].join(" · ");
+  if (profile?.concerns && profile.concerns.length > 0) {
+    return profile.concerns.map((c: string) => CONCERN_LABELS[c] || c).join(" · ");
+  }
+  // v1 레거시
+  const legacyLabels: Record<string, string> = { elderly: "어르신", patient: "환자", pregnant: "산모", general: "일반" };
+  return legacyLabels[profile?.persona] || "맞춤";
+}
+
+/**
  * 홈 개인화 섹션 — 재방문 사용자에게 빠른 추천 카드 표시
  * 이너케어 방식: concerns 기반
  */
@@ -130,7 +146,7 @@ export default function HomePersonalized({ cold = false }: { cold?: boolean }) {
     if (products.length === 0) return null; // 첫 방문 추천은 보조 — 못 불러오면 칸을 숨기고 아래 전체 제품이 받는다
     return (
       <section className="pt-8">
-        <SectionHeader title="지금 살 수 있는 건강한 한 끼" />
+        <SectionHeader title="지금 살 수 있는 건강한 한 끼" action={<TextLink href="/recommend">더보기</TextLink>} />
         <p className="text-label text-ink-2 -mt-1 mb-3">건강 점수가 높은 한 끼·반찬이에요. 목표를 알려 주면 맞춰 골라요</p>
         <ProductCards products={products} showMatch={false} placement="home_cold" />
       </section>
@@ -140,28 +156,12 @@ export default function HomePersonalized({ cold = false }: { cold?: boolean }) {
   if (loading) return <CardsSkeleton title />;
   if (!profile) return null;
 
-  // 섹션 헤더 라벨: 고른 목표 → v2 concerns → v1 persona
-  //   (concerns 는 목표 일부만 옮겨 담아 '근력 강화'를 골라도 기본값 '활력충전'으로 보였다)
-  const sectionLabel = (() => {
-    const goalLabels = ((profile.goals || []) as string[]).map((g) => CONCERN_LABELS[g]).filter(Boolean);
-    if (goalLabels.length > 0) return [...new Set(goalLabels)].join(" · ");
-    if (profile.concerns && profile.concerns.length > 0) {
-      return profile.concerns.map((c: string) => CONCERN_LABELS[c] || c).join(" · ");
-    }
-    // v1 레거시
-    const legacyLabels: Record<string, string> = {
-      elderly: "어르신",
-      patient: "환자",
-      pregnant: "산모",
-      general: "일반",
-    };
-    return legacyLabels[profile.persona] || "맞춤";
-  })();
+  const sectionLabel = profileLabel(profile);
 
   return (
     <section className="pt-8">
-      {/* 전체 목록은 바로 아래 '전체 제품'이 맡는다 */}
-      <SectionHeader title={`${sectionLabel} 추천`} />
+      {/* 추천 100개는 '더보기'(/recommend), 전체 목록은 바로 아래 '전체 제품'이 맡는다 */}
+      <SectionHeader title={`${sectionLabel} 추천`} action={!failed && products.length > 0 ? <TextLink href="/recommend">더보기</TextLink> : undefined} />
 
       {failed ? (
         <EmptyState title="추천을 불러오지 못했어요" description="잠시 뒤 다시 불러와 주세요"

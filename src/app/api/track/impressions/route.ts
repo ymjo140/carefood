@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { limitRequest } from "@/lib/rate-limit";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 
-const PLACEMENTS = new Set(["home_reco", "home_cold", "onboarding_preview", "product_list", "weekly_fill"]);
+const PLACEMENTS = new Set(["home_reco", "home_cold", "reco_more", "onboarding_preview", "product_list", "weekly_fill"]);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**

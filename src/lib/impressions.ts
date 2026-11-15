@@ -6,7 +6,7 @@
  */
 import { useCallback, useEffect, useRef } from "react";
 
-export type Placement = "home_reco" | "home_cold" | "onboarding_preview" | "product_list" | "weekly_fill";
+export type Placement = "home_reco" | "home_cold" | "reco_more" | "onboarding_preview" | "product_list" | "weekly_fill";
 
 export function sendImpressions(placement: Placement, ids: string[]) {
   const list = [...new Set(ids.filter(Boolean))].slice(0, 60);
