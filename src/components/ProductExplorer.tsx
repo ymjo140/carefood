@@ -274,7 +274,6 @@ function FilterPanel({
   priceMin, priceMax, onPriceChange,
   nutrition, onNutritionChange,
   tastes, onTasteChange,
-  hasPriceOnly, onHasPriceOnlyChange,
   onReset,
 }: {
   categories: DishCategory[];
@@ -290,8 +289,6 @@ function FilterPanel({
   onNutritionChange: (n: NutritionFilters) => void;
   tastes: TasteFilters;
   onTasteChange: (t: TasteFilters) => void;
-  hasPriceOnly: boolean;
-  onHasPriceOnlyChange: (v: boolean) => void;
   onReset?: () => void;
 }) {
   const isPriceActive = (p: typeof PRICE_PRESETS[number]) =>
@@ -414,11 +411,6 @@ function FilterPanel({
         </div>
       </FilterGroup>
 
-      <label className="flex items-center gap-2 cursor-pointer">
-        <input type="checkbox" checked={hasPriceOnly} onChange={e => onHasPriceOnlyChange(e.target.checked)} className="ds-check" />
-        <span className="text-label text-ink">구매 가능한 제품만</span>
-      </label>
-
       {onReset && (
         <Button variant="ghost" size="sm" block icon="refresh" onClick={onReset}>필터 초기화하기</Button>
       )}
@@ -531,7 +523,8 @@ export default function ProductExplorer({ variant = "page" }: { variant?: "page"
   const [selectedCategories, setSelectedCategories] = useState<DishCategory[]>([]);
   const [selectedPurposes, setSelectedPurposes] = useState<string[]>([]);
   const [selectedIngredients, setSelectedIngredients] = useState<string[]>([]);
-  const [hasPriceOnly, setHasPriceOnly] = useState(true);
+  // 가격이 있는 제품만 — 가격 비교가 목적이라 늘 켜 둔다 (11/15, 끄는 선택지를 뺐다)
+  const hasPriceOnly = true;
   const [priceMin, setPriceMin] = useState(0);
   const [priceMax, setPriceMax] = useState(0);
   const [nutrition, setNutrition] = useState<NutritionFilters>(INITIAL_NUTRITION);
@@ -661,7 +654,7 @@ export default function ProductExplorer({ variant = "page" }: { variant?: "page"
     setTastes({ salty: 0, sweet: 0, spicy: 0, fatty: 0 });
     setSearch(""); setSearchInput("");
     setSelectedCategories([]); setSelectedPurposes([]); setSelectedIngredients([]);
-    setHasPriceOnly(false); setPriceMin(0); setPriceMax(0); setKind(null);
+    setPriceMin(0); setPriceMax(0); setKind(null);
     setNutrition(INITIAL_NUTRITION); setPage(1);
   };
 
@@ -669,8 +662,7 @@ export default function ProductExplorer({ variant = "page" }: { variant?: "page"
     + (kind ? 1 : 0)
     + (priceMin > 0 || priceMax > 0 ? 1 : 0)
     + Object.values(nutrition).filter(v => v > 0).length
-    + Object.values(tastes).filter(v => v > 0).length
-    + (hasPriceOnly ? 1 : 0);
+    + Object.values(tastes).filter(v => v > 0).length;
 
   const filterProps = {
     categories: selectedCategories,
@@ -685,8 +677,6 @@ export default function ProductExplorer({ variant = "page" }: { variant?: "page"
     onNutritionChange: (n: NutritionFilters) => { setNutrition(n); setPage(1); },
     tastes,
     onTasteChange: (t: TasteFilters) => { setTastes(t); setPage(1); },
-    hasPriceOnly,
-    onHasPriceOnlyChange: (v: boolean) => { setHasPriceOnly(v); setPage(1); },
   };
 
   return (
@@ -791,10 +781,8 @@ export default function ProductExplorer({ variant = "page" }: { variant?: "page"
           ) : (
             <EmptyState
               title="조건에 맞는 제품이 없어요"
-              description={hasPriceOnly ? "지금 살 수 있는 제품만 보고 있어요. 판매처가 없는 제품까지 넓혀 볼 수 있어요" : "필터를 줄이거나 다른 검색어로 찾아보세요"}
-              action={hasPriceOnly
-                ? <Button variant="secondary" size="sm" onClick={() => { setHasPriceOnly(false); setPage(1); }}>판매처 없는 제품도 보기</Button>
-                : <Button variant="secondary" size="sm" icon="refresh" onClick={resetAll}>필터 초기화하기</Button>}
+              description="가격이 있는 제품만 보여 드려요. 필터를 줄이거나 다른 검색어로 찾아보세요"
+              action={<Button variant="secondary" size="sm" icon="refresh" onClick={resetAll}>필터 초기화하기</Button>}
             />
           )}
         </div>

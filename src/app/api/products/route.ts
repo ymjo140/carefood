@@ -259,6 +259,13 @@ async function attachPricesAndFilter(supabase: any, products: any[], params: Ret
     };
   });
 
+  // 가격이 없는 제품은 뺀다 — 가격 비교가 목적이라 가격이 없으면 보여 줄 까닭이 없다(11/15).
+  // DB 의 is_purchasable 도 매시간 가격과 맞추지만(refresh_purchasable_all), 그 사이 판매가 끊긴 것까지 여기서 한 번 더 거른다.
+  // (쪽 수·전체 수는 DB 값 그대로 — 표시가 맞춰지면 차이는 사라진다)
+  if (params.hasPriceOnly || sort === "price_asc" || sort === "price_desc") {
+    result = result.filter((p: { product_prices: MallPrice[] }) => p.product_prices.some((pp) => pp.price > 0));
+  }
+
   // 100g당 기준 후처리
   if (per100gSugarMax > 0) result = result.filter((p: { per100g_sugar: number | null }) => p.per100g_sugar != null && p.per100g_sugar <= per100gSugarMax);
   if (per100gSodiumMax > 0) result = result.filter((p: { per100g_sodium: number | null }) => p.per100g_sodium != null && p.per100g_sodium <= per100gSodiumMax);
