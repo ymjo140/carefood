@@ -64,7 +64,14 @@ export function FamilyConnect() {
   useEffect(() => {
     let alive = true;
     fetch("/api/family/links")
-      .then(async (r) => { const d = await r.json(); if (!r.ok) throw new Error(d.error); if (alive) setLinks({ status: "done", data: d }); })
+      .then(async (r) => {
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error);
+        // 친구 연결은 '내 친구' 화면에서 — 여기는 가족만
+        const fam = <T,>(xs: T[] = []) => xs.filter((x) => (x as { kind?: string }).kind !== "friend");
+        const all = d as Links;
+        if (alive) setLinks({ status: "done", data: { watching: fam(all.watching), invites: fam(all.invites), watchers: fam(all.watchers) } });
+      })
       .catch(() => { if (alive) setLinks({ status: "error", data: null }); });
     return () => { alive = false; };
   }, [attempt]);

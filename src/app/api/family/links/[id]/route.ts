@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connection } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
-import { LINK_COLS, accountActor, familyDayOk, familyToday, nicknameOf, scopesOf, type LinkRow } from "@/lib/family";
+import { LINK_COLS, accountActor, familyDayOk, familyToday, kindOf, nicknameOf, scopesOf, type LinkRow } from "@/lib/family";
 import { todayKst } from "@/lib/day";
 
 /**
@@ -39,7 +39,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     const nudgeReady = !nudges.error;
     if (nudges.error && nudges.error.code !== "42P01" && nudges.error.code !== "PGRST205") throw new Error(nudges.error.message);
     return NextResponse.json({
-      id: l.id, label: l.label, scopes: scopesOf(l), alert_evening: l.alert_evening, alert_meds: l.alert_meds,
+      id: l.id, kind: kindOf(l), label: l.label, scopes: scopesOf(l), alert_evening: l.alert_evening, alert_meds: l.alert_meds,
       today: dayView, is_today: day === today,
       // 최근 7일 안 요청 하나 (기다림·답함) — 보는 사람 화면의 '요청 보내기'·'답을 기다려요'
       request: reqs.error ? null : (reqs.data?.[0] ?? null), request_ready: !reqs.error,

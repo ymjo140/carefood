@@ -153,9 +153,10 @@ export function MeView() {
           <Row icon="info" title="건강검진 정보" meta={local ? (local.hasHealth ? "입력했어요" : "혈당·혈압을 넣으면 더 정확하게 골라요") : undefined} href="/health" />
           <Row icon="list" title="건강검진 영양 리포트" meta="입력한 혈당·혈압 수치로 정리" href="/health/report" />
           <Row icon="users" title="내 가족" meta="가족 초대 · 보여 줄 것 고르기 · 약 체크" href="/family" />
+          <Row icon="user" title="내 친구" meta="서로 끼니 기록 보기 · 같이 먹기" href="/friends" />
         </ul>
         <p className="flex items-center gap-1.5 text-caption text-ink-2 mt-2">
-          <Icon name="lock" size={14} className="shrink-0" />건강 정보는 나만 봐요. 가족에게는 내가 고른 것만 보이고, 커뮤니티 글에는 나오지 않아요
+          <Icon name="lock" size={14} className="shrink-0" />건강 정보는 나만 봐요. 가족·친구에게는 내가 고른 것만 보이고, 커뮤니티 글에는 나오지 않아요
         </p>
       </section>
 

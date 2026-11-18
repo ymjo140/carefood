@@ -14,7 +14,9 @@ import { josa } from "@/lib/buddy";
  *   건강 목표·체중은 보이지 않는다. 캐릭터는 넣지 않는다.
  *   오늘 아직 기록 안 한 끼니: '콕 찌르기'(끼니당 하루 한 번, 가족이 받기로 한 경우) · '추천 보내기'(가족 기준으로 고른 후보를 예정으로)
  *   가족이 '대신 기록하기'를 켰으면: 담긴 예정을 '대신 기록하기', 약 '대신 체크'.
- *   더 보고 싶으면 '보여 달라고 요청하기' → 가족이 푸시 · 알림함에서 동의 화면으로 직접 켠다.
+ *   더 보고 싶으면 '보여 달라고 요청하기' → 가족이 푸시 · 알림함에서 동의 화면으로 직접 켠다(친구에게는 먹은 음식만).
+ *   '같이 먹기': 두 사람 모두에게 맞는 후보(알레르기 둘 다 빼고, 예산은 작은 쪽) 하나를 상대 예정으로 보내고 내 예정에도 담는다.
+ *   친구(kind friend)는 끼니 기록 여부·먹은 음식·숫자만 — 약 체크·고른 제품·대신 기록하기는 없다.
  *   볼 수 있는 날은 오늘부터 6일 전까지 (서버 familyDayOk 와 같은 폭).
  */
 export type FamilyPerson = { id: string; label: string };
@@ -32,6 +34,7 @@ type Food = { name: string; amount: string | null; kcal: number | null; by: stri
 type Planned = { names: string[]; kcal: number | null; from: string | null; note: string | null };
 type Day = {
   label: string;
+  kind?: "family" | "friend";
   scopes: { meals: boolean; products: boolean; meds: boolean; numbers: boolean; foods: boolean; proxy: boolean };
   is_today: boolean;
   today: {
@@ -75,7 +78,7 @@ export function FamilyDay({ person }: { person: FamilyPerson }) {
   const [status, setStatus] = useState<"loading" | "error" | "done">("loading");
   const [reload, setReload] = useState(0);
   const [busy, setBusy] = useState<string | null>(null);
-  const [sendMeal, setSendMeal] = useState<Meal | null>(null);
+  const [sendMeal, setSendMeal] = useState<{ meal: Meal; together: boolean } | null>(null);
   const [asking, setAsking] = useState(false);
   const seq = useRef(0);
 
@@ -123,7 +126,9 @@ export function FamilyDay({ person }: { person: FamilyPerson }) {
   const t = data?.today;
   const s = data?.scopes;
   const nothing = !!s && !s.meals && !s.meds && !s.numbers && !s.products && !s.foods;
-  const missing = s ? (["foods", "proxy"] as Ask[]).filter((a) => !s[a]) : [];
+  const friend = data?.kind === "friend";
+  const home = friend ? "/friends" : "/family";
+  const missing = s ? ((friend ? ["foods"] : ["foods", "proxy"]) as Ask[]).filter((a) => !s[a]) : [];
   const pending = data?.request?.status === "pending";
 
   return (
@@ -142,13 +147,13 @@ export function FamilyDay({ person }: { person: FamilyPerson }) {
       {status === "loading" && <SkeletonList rows={4} thumb={false} />}
 
       {status === "error" && (
-        <EmptyState title="가족 기록을 불러오지 못했어요" description="연결이 잠깐 끊겼을 수 있어요"
+        <EmptyState title={`${person.label} 기록을 불러오지 못했어요`} description="연결이 잠깐 끊겼을 수 있어요"
           action={<Button size="sm" variant="secondary" icon="refresh" onClick={() => setReload((n) => n + 1)}>다시 불러오기</Button>} />
       )}
 
       {status === "done" && nothing && (
-        <EmptyState title={`${person.label} 쪽에서 보여 주는 것이 없어요`} description="보여 줄 것은 확인받는 사람이 직접 골라요"
-          action={<LinkButton size="sm" variant="secondary" href="/family">가족 화면으로</LinkButton>} />
+        <EmptyState title={`${person.label} 쪽에서 보여 주는 것이 없어요`} description="보여 줄 것은 보여 주는 사람이 직접 골라요"
+          action={<LinkButton size="sm" variant="secondary" href={home}>{friend ? "내 친구 화면으로" : "가족 화면으로"}</LinkButton>} />
       )}
 
       {status === "done" && data && t && s && !nothing && (
@@ -226,7 +231,8 @@ export function FamilyDay({ person }: { person: FamilyPerson }) {
                             <Button size="sm" loading={busy === `proxy-${m.meal}`} disabled={!!busy} onClick={() => proxyMeal(m.meal)}>대신 기록하기</Button>
                           )}
                           {canNudge && <Button size="sm" variant="secondary" icon="bell" loading={busy === `nudge-${m.meal}`} disabled={!!busy} onClick={() => nudge(m.meal)}>콕 찌르기</Button>}
-                          {!m.planned && <Button size="sm" variant="secondary" icon="send" disabled={!!busy} onClick={() => setSendMeal(m.meal)}>추천 보내기</Button>}
+                          {!m.planned && <Button size="sm" variant="secondary" icon="bowl" disabled={!!busy} onClick={() => setSendMeal({ meal: m.meal, together: true })}>같이 먹기</Button>}
+                          {!m.planned && <Button size="sm" variant="secondary" icon="send" disabled={!!busy} onClick={() => setSendMeal({ meal: m.meal, together: false })}>추천 보내기</Button>}
                         </div>
                       )}
                       {open && sent && <p className="text-caption text-ink-2 mt-1">콕 찔렀어요 · 기록하면 여기에 보여요</p>}
@@ -265,10 +271,10 @@ export function FamilyDay({ person }: { person: FamilyPerson }) {
             </Card>
           )}
 
-          <p className="text-caption text-ink-2">보여 줄 것·알림 설정은 <TextLink href="/family">가족 화면</TextLink>에서 바꿔요</p>
+          <p className="text-caption text-ink-2">{friend ? <>내가 보여 줄 것은 <TextLink href="/friends">내 친구</TextLink>에서 바꿔요</> : <>보여 줄 것·알림 설정은 <TextLink href="/family">가족 화면</TextLink>에서 바꿔요</>}</p>
 
           <AskSheet open={asking} onClose={() => setAsking(false)} person={person} missing={missing} onSent={() => setReload((n) => n + 1)} />
-          <SendSheet meal={sendMeal} onClose={() => setSendMeal(null)} person={person} onSent={() => setReload((n) => n + 1)} />
+          <SendSheet meal={sendMeal?.meal ?? null} together={!!sendMeal?.together} onClose={() => setSendMeal(null)} person={person} onSent={() => setReload((n) => n + 1)} />
         </>
       )}
     </div>
@@ -312,10 +318,13 @@ function AskSheet({ open, onClose, person, missing, onSent }: { open: boolean; o
 
 type Pick = { key: string; kind: "menu" | "product"; ref: string; name: string; calories: number; protein_g: number; sodium_mg: number; price: number | null; sub: string };
 
-/** 추천 보내기 — 가족 기준(알레르기·남은 양)으로 서버가 고른 후보 중 하나를 그 끼니 예정으로 */
-function SendSheet({ meal, onClose, person, onSent }: { meal: Meal | null; onClose: () => void; person: FamilyPerson; onSent: () => void }) {
+/** 추천 보내기 — 상대 기준(알레르기·남은 양)으로 서버가 고른 후보 중 하나를 그 끼니 예정으로
+ *  같이 먹기(together) — 두 사람 모두에게 맞는 후보를 상대 예정으로 보내고 내 예정에도 담는다 */
+function SendSheet({ meal, together, onClose, person, onSent }: {
+  meal: Meal | null; together: boolean; onClose: () => void; person: FamilyPerson; onSent: () => void;
+}) {
   const toast = useToast();
-  const [state, setState] = useState<{ status: "loading" | "error" | "done"; picks: Pick[] }>({ status: "loading", picks: [] });
+  const [state, setState] = useState<{ status: "loading" | "error" | "done"; picks: Pick[]; mine: { recorded: boolean; planned: boolean } | null }>({ status: "loading", picks: [], mine: null });
   const [attempt, setAttempt] = useState(0);
   const [picked, setPicked] = useState<string | null>(null);
   const [note, setNote] = useState("");
@@ -325,9 +334,9 @@ function SendSheet({ meal, onClose, person, onSent }: { meal: Meal | null; onClo
   useEffect(() => {
     if (!meal) return;
     const my = ++seq.current;
-    setState({ status: "loading", picks: [] }); // eslint-disable-line react-hooks/set-state-in-effect -- 끼니를 열 때마다 새로
+    setState({ status: "loading", picks: [], mine: null }); // eslint-disable-line react-hooks/set-state-in-effect -- 끼니를 열 때마다 새로
     setPicked(null);
-    fetch(`/api/family/links/${person.id}/picks?meal=${meal}`)
+    (together ? fetch(`/api/family/links/${person.id}/together?meal=${meal}`) : fetch(`/api/family/links/${person.id}/picks?meal=${meal}`))
       .then(async (r) => {
         const d = await r.json();
         if (!r.ok) throw new Error(d.error || String(r.status));
@@ -338,21 +347,25 @@ function SendSheet({ meal, onClose, person, onSent }: { meal: Meal | null; onClo
           ...(d.items || []).map((i: { id: string; name: string; calories: number; protein_g: number; sodium_mg: number; price: number | null }) =>
             ({ key: `p-${i.id}`, kind: "product", ref: i.id, name: i.name, calories: i.calories, protein_g: i.protein_g, sodium_mg: i.sodium_mg, price: i.price, sub: "살 수 있는 제품" })),
         ];
-        setState({ status: "done", picks });
+        setState({ status: "done", picks, mine: d.mine ?? null });
         setPicked(picks[0]?.key ?? null);
       })
-      .catch((e) => { console.error(e); if (my === seq.current) setState({ status: "error", picks: [] }); });
-  }, [meal, person.id, attempt]);
+      .catch((e) => { console.error(e); if (my === seq.current) setState({ status: "error", picks: [], mine: null }); });
+  }, [meal, together, person.id, attempt]);
 
   const send = async () => {
     const p = state.picks.find((x) => x.key === picked);
     if (!meal || !p) return;
     setBusy(true);
     try {
-      const r = await fetch(`/api/family/links/${person.id}/send`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ meal, kind: p.kind, ref: p.ref, note }) });
+      const body = JSON.stringify({ meal, kind: p.kind, ref: p.ref, note });
+      const r = together
+        ? await fetch(`/api/family/links/${person.id}/together`, { method: "POST", headers: { "Content-Type": "application/json" }, body })
+        : await fetch(`/api/family/links/${person.id}/send`, { method: "POST", headers: { "Content-Type": "application/json" }, body });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) { toast.show(d.error || "보내지 못했어요. 다시 시도해 주세요", { tone: "danger" }); return; }
-      toast.show(`${person.label} ${MEAL_LABEL[meal]}에 넣었어요`);
+      if (d.partial) toast.show(d.error, { tone: "danger" });
+      else toast.show(together ? `${person.label}에게 보내고 내 ${MEAL_LABEL[meal]}에도 담았어요` : `${person.label} ${MEAL_LABEL[meal]}에 넣었어요`);
       setNote("");
       onSent();
       onClose();
@@ -364,11 +377,14 @@ function SendSheet({ meal, onClose, person, onSent }: { meal: Meal | null; onClo
   };
 
   const mealName = meal ? MEAL_LABEL[meal] : "";
+  const mineDone = together && !!state.mine?.recorded;
   return (
-    <Sheet open={!!meal} onClose={onClose} title={`${person.label} ${mealName}에 넣을 음식`}
-      description={`${person.label} 기준(알레르기·오늘 남은 양)으로 골랐어요. 이유는 성분 숫자로만 보여요`}
+    <Sheet open={!!meal} onClose={onClose} title={together ? `${person.label}${josa(person.label, "과", "와")} ${mealName} 같이 먹기` : `${person.label} ${mealName}에 넣을 음식`}
+      description={together
+        ? "두 사람 모두에게 맞게 골랐어요(알레르기는 둘 다 빼고, 오늘 남은 양은 적은 쪽에 맞춰요). 이유는 성분 숫자로만 보여요"
+        : `${person.label} 기준(알레르기·오늘 남은 양)으로 골랐어요. 이유는 성분 숫자로만 보여요`}
       footer={<div className="flex gap-2"><Button variant="secondary" className="flex-1" onClick={onClose}>취소</Button>
-        <Button className="flex-[2]" loading={busy} disabled={!picked || state.status !== "done"} onClick={send}>{person.label} {mealName}에 넣기</Button></div>}>
+        <Button className="flex-[2]" loading={busy} disabled={!picked || state.status !== "done" || mineDone} onClick={send}>{together ? "같이 먹자고 보내기" : `${person.label} ${mealName}에 넣기`}</Button></div>}>
       {state.status === "loading" && <SkeletonList rows={4} thumb={false} />}
       {state.status === "error" && (
         <EmptyState title="후보를 불러오지 못했어요" description="잠시 뒤 다시 불러와 주세요"
@@ -395,7 +411,14 @@ function SendSheet({ meal, onClose, person, onSent }: { meal: Meal | null; onClo
           <Field label="한마디 (선택)" hint="60자까지">
             <Input value={note} maxLength={60} name="family_note" placeholder="오늘 저녁은 이거 어때요?" onChange={(e) => setNote(e.target.value)} />
           </Field>
-          <p className="text-caption text-ink-2">{person.label} 하루 보기 {mealName} 칸에 예정으로 들어가요. 먹으면 한 번에 기록돼요</p>
+          {together ? (
+            <p className="text-caption text-ink-2">
+              {person.label}{josa(person.label, "과", "와")} 내 {mealName} 칸에 같은 음식이 예정으로 들어가요. 먹으면 각자 한 번에 기록해요
+              {mineDone ? ` · 내 ${mealName}은 이미 기록해서 보낼 수 없어요` : state.mine?.planned ? ` · 내 ${mealName}에 담아 둔 계획은 이 음식으로 바뀌어요` : ""}
+            </p>
+          ) : (
+            <p className="text-caption text-ink-2">{person.label} 하루 보기 {mealName} 칸에 예정으로 들어가요. 먹으면 한 번에 기록돼요</p>
+          )}
         </div>
       )}
     </Sheet>

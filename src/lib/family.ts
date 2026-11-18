@@ -19,13 +19,14 @@ export type Scopes = { meals: boolean; products: boolean; meds: boolean; numbers
 /** 요청으로 더할 수 있는 항목 — 건강 관련 정보·기록 권한이라 확인받는 사람이 따로 켠다 (기본 꺼짐) */
 export const ASKABLE = ["foods", "proxy"] as const;
 export type Askable = (typeof ASKABLE)[number];
+export type LinkKind = "family" | "friend";
 export type LinkRow = {
-  id: string; viewer_id: string; owner_id: string | null; label: string; code: string; status: "pending" | "active" | "ended";
+  id: string; viewer_id: string; owner_id: string | null; label: string; code: string; status: "pending" | "active" | "ended"; kind?: LinkKind;
   share_meals: boolean; share_products: boolean; share_meds: boolean; share_numbers: boolean; alert_evening: boolean;
   alert_meds: boolean; allow_nudge: boolean; share_foods: boolean; share_proxy: boolean;
   consented_at: string | null; expires_at: string; created_at: string;
 };
-export const LINK_COLS = "id, viewer_id, owner_id, label, code, status, share_meals, share_products, share_meds, share_numbers, alert_evening, alert_meds, allow_nudge, share_foods, share_proxy, consented_at, expires_at, created_at";
+export const LINK_COLS = "id, viewer_id, owner_id, label, code, status, kind, share_meals, share_products, share_meds, share_numbers, alert_evening, alert_meds, allow_nudge, share_foods, share_proxy, consented_at, expires_at, created_at";
 
 export const scopesOf = (l: LinkRow): Scopes => ({
   meals: l.share_meals, products: l.share_products, meds: l.share_meds, numbers: l.share_numbers, foods: !!l.share_foods, proxy: !!l.share_proxy,
@@ -35,10 +36,18 @@ export function cleanScopes(raw: unknown, base: Scopes = { meals: true, products
   const b = (k: keyof Scopes) => (typeof r[k] === "boolean" ? (r[k] as boolean) : base[k]);
   return { meals: b("meals"), products: b("products"), meds: b("meds"), numbers: b("numbers"), foods: b("foods"), proxy: b("proxy") };
 }
-/** 요청한 것 가운데 아직 꺼진 것만 (같은 걸 두 번 묻지 않게) */
-export function askableOf(raw: unknown, s: Scopes): Askable[] {
+/** 친구 — 서로 끼니 기록 여부(기본)와, 각자 켤 때만 먹은 음식·숫자. 고른 제품·약 체크·대신 기록하기는 친구에게 없다 */
+export const FRIEND_NEVER = ["products", "meds", "proxy"] as const;
+export const kindOf = (l: { kind?: string | null }): LinkKind => (l.kind === "friend" ? "friend" : "family");
+export const kindWord = (k: LinkKind) => (k === "friend" ? "친구" : "가족");
+/** 연결 종류에 맞게 — 친구 연결이면 친구에게 없는 항목은 늘 꺼진다 */
+export function limitScopes(kind: LinkKind, s: Scopes): Scopes {
+  return kind === "friend" ? { ...s, products: false, meds: false, proxy: false } : s;
+}
+/** 요청한 것 가운데 아직 꺼진 것만 (같은 걸 두 번 묻지 않게) · 친구에게는 먹은 음식만 물을 수 있다 */
+export function askableOf(raw: unknown, s: Scopes, kind: LinkKind = "family"): Askable[] {
   const asks = Array.isArray(raw) ? raw : [];
-  return ASKABLE.filter((k) => asks.includes(k) && !s[k]);
+  return ASKABLE.filter((k) => asks.includes(k) && !s[k] && !(kind === "friend" && k === "proxy"));
 }
 /** 답에서 켤 것 — 요청한 것 안에서만 (요청하지 않은 항목은 답으로 켤 수 없다) */
 export function grantOf(raw: unknown, asks: string[]): Askable[] {
