@@ -11,6 +11,8 @@ import { ownVideo, removeVideos } from "@/lib/community-video";
 import { cleanPoll, withPolls } from "@/lib/community-poll";
 import { rateLimit } from "@/lib/rate-limit";
 import { ensureNickname } from "@/lib/community-profile";
+import { CANT_TAG, TAG_MAX, judgeTags, tagsAndSources } from "@/lib/community-tags";
+import { userPusher } from "@/lib/push";
 
 
 /**
@@ -20,6 +22,8 @@ import { ensureNickname } from "@/lib/community-profile";
  *
  * 작성자의 건강 관심사·목표·나이대는 응답에 넣지 않는다 (민감정보 — 예전 글에 남아 있어도 보이지 않게).
  * 글에 붙은 제품(product_ids)은 이름을 같이 돌려준다 → products: [{ id, name }]
+ * 태그된 사람(보이는 것만) → people: [{ id, nickname }] · 원본 출처 → source: { id, nickname, gone } (lib/community-tags)
+ * POST 는 people: [actor id] (10명까지, 받는 사람 설정 안에서만 — 못 한 사람은 dropped 로) · source_post_id 를 받는다
  * 투표가 붙은 글은 poll 이 결과 모양 → { options, counts, total, my_choice, closes_at, closed }
  */
 
@@ -67,10 +71,11 @@ export async function GET(request: NextRequest) {
       .single();
     if (error || !post) return NextResponse.json({ error: "게시글 없음" }, { status: 404 });
     const isMine = !!userId && post.user_id === userId;
+    let f: Awaited<ReturnType<typeof viewerFilters>>;
+    try { f = await viewerFilters(sb, userId); } catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: 500 }); }
     // 신고가 모여 가려진 글·차단한 사람의 글은 (글쓴이 본인 말고는) 열지 않는다
     if (!isMine) {
       if (post.hidden_by_reports) return NextResponse.json({ error: "신고가 모여 가려진 글이에요", reason: "reported" }, { status: 404 });
-      const f = await viewerFilters(sb, userId);
       if (f.blocked.has(post.user_id)) return NextResponse.json({ error: "차단한 사람의 글이에요", reason: "blocked" }, { status: 404 });
     }
 
@@ -86,9 +91,15 @@ export async function GET(request: NextRequest) {
     }
     const names = await productNames(sb, [post]);
     const products = (post.product_ids || []).filter((id: string) => names.has(id)).map((id: string) => ({ id, name: names.get(id) }));
-    let polled;
-    try { [polled] = await withPolls(sb, [publicPost(post) as { id: string; poll?: unknown }], userId); } catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: 500 }); }
-    return NextResponse.json({ post: { ...polled, products, is_mine: isMine, is_liked: isLiked, is_following: isFollowing } });
+    let polled, ts;
+    try {
+      [polled] = await withPolls(sb, [publicPost(post) as { id: string; poll?: unknown }], userId);
+      ts = await tagsAndSources(sb, [post], f.blocked);
+    } catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: 500 }); }
+    return NextResponse.json({ post: {
+      ...polled, products, is_mine: isMine, is_liked: isLiked, is_following: isFollowing,
+      people: ts.people.get(post.id) || [], source: post.source_post_id ? ts.sources.get(post.source_post_id) ?? null : null,
+    } });
   }
 
   /* ── 피드 목록 모드 ── */
@@ -216,11 +227,17 @@ export async function GET(request: NextRequest) {
     preview_comments: commentMap[p.id] || [],
   }));
 
-  let polled;
-  try { polled = await withPolls(sb, result, userId); } catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: 500 }); }
+  let polled, ts;
+  try {
+    polled = await withPolls(sb, result, userId);
+    ts = await tagsAndSources(sb, posts, filters.blocked);
+  } catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: 500 }); }
+  const withTags = polled.map((p: { id: string; source_post_id?: string | null }) => ({
+    ...p, people: ts.people.get(p.id) || [], source: p.source_post_id ? ts.sources.get(p.source_post_id) ?? null : null,
+  }));
 
   return NextResponse.json({
-    posts: polled,
+    posts: withTags,
     total: count,
     page,
     hasMore: from + limit < count,
@@ -322,6 +339,27 @@ export async function POST(request: NextRequest) {
     // 협업 중인 업체의 제품을 붙였으면 글 맨 앞에 "협찬 · 업체" (추천·보증 심사지침 — lib/partner/collabs.ts)
     const sponsor = await sponsorFor(sb, user_id, product_ids);
 
+    // 원본 출처 — 보이는 글만 (지워짐·신고로 가려짐·어느 쪽이든 차단이면 붙이지 않는다)
+    let source_post_id: string | null = null;
+    if (typeof body.source_post_id === "string" && UUID.test(body.source_post_id)) {
+      const { data: src, error: sErr } = await sb.from("community_feed").select("id, user_id, is_active, hidden_by_reports").eq("id", body.source_post_id).maybeSingle();
+      if (sErr) return NextResponse.json({ error: sErr.message }, { status: 500 });
+      if (!src || !src.is_active || src.hidden_by_reports) return NextResponse.json({ error: "원본 글을 볼 수 없어요. 원본을 빼고 올려 주세요" }, { status: 400 });
+      if (src.user_id !== user_id) {
+        const { data: bl, error: blErr } = await sb.from("community_blocks").select("blocker_id")
+          .or(`and(blocker_id.eq.${user_id},blocked_id.eq.${src.user_id}),and(blocker_id.eq.${src.user_id},blocked_id.eq.${user_id})`).limit(1);
+        if (blErr) return NextResponse.json({ error: blErr.message }, { status: 500 });
+        if (bl?.length) return NextResponse.json({ error: "원본 글을 볼 수 없어요. 원본을 빼고 올려 주세요" }, { status: 400 });
+      }
+      source_post_id = src.id;
+    }
+    // 사람 태그 — 받는 사람 설정으로 판단 (못 하는 사람은 빼고 알린다)
+    const wanted: string[] = Array.isArray(body.people) ? body.people.filter((v: unknown): v is string => typeof v === "string").slice(0, TAG_MAX) : [];
+    let judged: Awaited<ReturnType<typeof judgeTags>> = new Map();
+    if (wanted.length) {
+      try { judged = await judgeTags(sb, user_id, wanted); } catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: 500 }); }
+    }
+
     const { data, error } = await sb
       .from("community_feed")
       .insert({
@@ -339,6 +377,7 @@ export async function POST(request: NextRequest) {
         cert,
         author_nickname,
         sponsor,
+        source_post_id,
         // 건강 관심사·목표·나이대는 글에 붙이지 않는다 (마이페이지에서 나만 본다)
         author_age_group: null,
         author_concerns: [],
@@ -348,8 +387,32 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    const ok = [...judged].filter(([, j]) => j.rule.ok) as [string, { nickname: string | null; rule: { ok: true; status: "shown" | "pending" } }][];
+    const dropped = [...judged].filter(([, j]) => !j.rule.ok).map(([, j]) => j.nickname || "알 수 없는 사람");
+    let people: { id: string; nickname: string }[] = [];
+    if (ok.length) {
+      const { error: tErr } = await sb.from("community_post_people").insert(ok.map(([id, j]) => ({ post_id: data.id, tagger_id: user_id, tagged_id: id, status: j.rule.status })));
+      if (tErr) {
+        // 글은 올라갔다 — 태그만 빠졌으니 쓴 사람에게 알린다
+        console.error("사람 태그를 붙이지 못했어요:", tErr.message);
+        dropped.push(...ok.map(([, j]) => j.nickname || "알 수 없는 사람"));
+      } else {
+        people = ok.filter(([, j]) => j.rule.status === "shown").map(([id, j]) => ({ id, nickname: j.nickname || "" }));
+        const push = userPusher(sb);
+        if (push) {
+          for (const [id, j] of ok) {
+            try {
+              await push(id, j.rule.status === "pending"
+                ? { title: "태그 승인", body: `${author_nickname} 님이 나를 글에 태그했어요. 승인하면 글에 보여요`, url: "/community/tags", tag: `tag-${data.id}` }
+                : { title: "태그", body: `${author_nickname} 님이 나를 글에 태그했어요`, url: `/community/${data.id}`, tag: `tag-${data.id}` });
+            } catch (e) { console.error("태그 푸시를 보내지 못했어요:", (e as Error).message); } // ds-allow: 알림함에는 들어갔다 — 푸시만 빠짐
+          }
+        }
+      }
+    }
     const [polled] = await withPolls(sb, [publicPost(data) as { id: string; poll?: unknown }], user_id);
-    return NextResponse.json({ post: polled });
+    return NextResponse.json({ post: { ...polled, people }, dropped, dropped_reason: dropped.length ? CANT_TAG : null });
   } catch {
     return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
   }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { IconButton, MealAttach, PhotoGrid, VideoClip, PlanAttach, PollAttach, PostAction, PostActions, ProductTagLinks, Sheet, ThreadItem, useToast, CertAttach, type CertView } from "@/components/ui";
+import { IconButton, MealAttach, PhotoGrid, VideoClip, PlanAttach, PollAttach, PostAction, PostActions, PostCredits, ProductTagLinks, Sheet, ThreadItem, useToast, CertAttach, type CertView } from "@/components/ui";
 import { isTopic } from "@/lib/community-topics";
 import { pollRemaining, type PollView } from "@/lib/community-poll";
 import PostMenu, { type MenuDone } from "./PostMenu";
@@ -36,6 +36,9 @@ export type FeedPostData = {
   sponsor?: { partner_name?: string } | null;
   /** 인증 글(챌린지·연속 기록·하루 기록) — 카드 그림이 사진으로 붙고, 해낸 숫자와 같이 하기 */
   cert?: CertView | null;
+  /** 태그된 사람(보이는 것만) · 원본 출처 (따라 한 글) */
+  people?: { id: string; nickname: string }[];
+  source?: { id: string; nickname: string | null; gone: boolean } | null;
 };
 
 /**
@@ -137,6 +140,7 @@ export default function ThreadCard({ post, onLike, onCopy, onReply, onMenuDone, 
         <MealAttach mealType={post.meal_type} foods={md.foods} total={md.total} />
       ) : null}
       <ProductTagLinks products={post.products} />
+      <PostCredits people={post.people} source={post.source} />
     </ThreadItem>
   );
 }

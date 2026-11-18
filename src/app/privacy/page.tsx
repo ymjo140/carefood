@@ -127,7 +127,7 @@ export default function PrivacyPage() {
               </tr>
               <tr className="border-b border-line">
                 <td className="py-2 pr-3">커뮤니티 글·답글·사진, 커뮤니티 이름</td>
-                <td className="py-2 pr-3">커뮤니티 이용 (공개). 사진은 위치 등 촬영 정보를 지운 뒤 저장합니다. 건강 관심사·목표는 글에 붙이지 않습니다</td>
+                <td className="py-2 pr-3">커뮤니티 이용 (공개). 사진은 위치 등 촬영 정보를 지운 뒤 저장합니다. 건강 관심사·목표는 글에 붙이지 않습니다. 글에 다른 이용자를 태그하면 태그된 이용자의 커뮤니티 이름이 글에 보이며, 태그된 이용자는 누가 태그할 수 있는지·승인 후에만 보일지를 정하고 언제든 태그를 지울 수 있습니다. 다른 글을 따라 해 올린 글에는 원본 글과 그 글쓴이의 커뮤니티 이름이 보입니다</td>
                 <td className="py-2 pr-3 whitespace-nowrap">선택</td>
               </tr>
               <tr className="border-b border-line">

@@ -68,10 +68,15 @@ export default function CommunityPage() {
     const qs = new URLSearchParams(window.location.search);
     const t = qs.get("tab");
     if (t === "mine" || t === "following" || t === "topic") setTab(t);
-    // 기록·식단 리스트의 '나누기' — ?compose=meal&date=&meal= 또는 ?compose=plan&plan=
+    // 기록·식단 리스트의 '나누기' — ?compose=meal&date=&meal= 또는 ?compose=plan&plan= (따라 한 글은 &source=)
     const compose = qs.get("compose");
     if (compose === "meal" || compose === "plan") {
-      setComposer({ open: true, attach: compose, preset: { day: qs.get("date") || undefined, meal: qs.get("meal") || undefined, planId: qs.get("plan") || undefined } });
+      // 따라 한 글 — &source=원본 글 id (원본 출처를 달고 올린다)
+      const src = qs.get("source");
+      setComposer({ open: true, attach: compose, preset: {
+        day: qs.get("date") || undefined, meal: qs.get("meal") || undefined, planId: qs.get("plan") || undefined,
+        source: src && /^[0-9a-f-]{36}$/i.test(src) ? src : undefined,
+      } });
       window.history.replaceState(null, "", "/community"); // 새로 고침해도 다시 열리지 않게
     }
     /* eslint-enable react-hooks/set-state-in-effect */

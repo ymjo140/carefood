@@ -7,7 +7,7 @@ import {
   Input, KakaoButton, Kcal, LinkButton, ListRow, MacroGrid, MacroInline, MealSlot, MealSplit, MealTag, Notice, Estimate, HowCounted, AsOf, CodeBlock, TrendChart, BarList, GapChart, Page, PageHeader, Price,
   ProgressBar, SearchField, SectionHeader, Select, Sheet, Spinner, Stat, Steps, Tabs, Textarea, TextLink, TextButton, Thumb, ProductImage,
   Avatar, useToast, cn, type BadgeTone,
-  BottomNavItems, SkeletonList, FoodEntryForm, DragArea, DragGhost, DragHandle, useDragItem, useDropTarget, type DragData, ChoiceCard, ChoiceList, LinkTabs, RatingStars, RatingInput, ScaleInput, QuickRating, PostAuthor, PostAction, PostActions, PostTags, ThreadItem, MealAttach, PlanAttach, CertAttach, ProductTagLinks, PhotoGrid, PollAttach, DayDots, Switch,
+  BottomNavItems, SkeletonList, FoodEntryForm, DragArea, DragGhost, DragHandle, useDragItem, useDropTarget, type DragData, ChoiceCard, ChoiceList, LinkTabs, RatingStars, RatingInput, ScaleInput, QuickRating, PostAuthor, PostAction, PostActions, PostTags, ThreadItem, MealAttach, PlanAttach, CertAttach, ProductTagLinks, PostCredits, PhotoGrid, PollAttach, DayDots, Switch,
   ReelRow, ReelTile, ReelAddTile, ReelSkeleton, ReelMedia, CommentItem, VideoAttach, OfferOptionList, QtyStepper, UnitInput, RangeInput, Checkbox, FilePick,
   MemberProgressRow, AvatarStack, Mascot, MASCOTS, type MascotMood, StoryFrame, StoryProgress, StoryHeader, StoryMedia, StorySticker, StoryCaption, StoryAction, StoryReply, ShareCardPreview, ShareSteps, Buddy, ChatBubble, ChatTyping, ChatPicks, BackButton,
 } from "@/components/ui";
@@ -851,7 +851,7 @@ export default function Reference({ status }: { status: DsStatus }) {
               <PostAction icon="copy" label="따라하기" count={4} onClick={() => toast.show("식단 리스트에 담았어요")} />
             </PostActions>
           </Demo>
-          <Demo label="쓰레드형 글 — 카드 없이 줄로 · 끼니/일주일 식단/인증/제품 첨부 · 답글 미리보기" code="<ThreadItem reply> <MealAttach/> <PlanAttach/> <CertAttach/> <ProductTagLinks/> <PostActions variant='thread'>" className="px-4 py-0">
+          <Demo label="쓰레드형 글 — 카드 없이 줄로 · 끼니/일주일 식단/인증/제품 첨부 · 답글 미리보기" code="<ThreadItem reply> <MealAttach/> <PlanAttach/> <CertAttach/> <ProductTagLinks/> <PostCredits people source/> <PostActions variant='thread'>" className="px-4 py-0">
             <ThreadItem nickname="지민" topic="저염 식단"
               reply={{ nickname: "하늘", content: "드레싱 반만 쓰는 거 저도 해 볼게요", more: 5 }}
               actions={
@@ -864,6 +864,8 @@ export default function Reference({ status }: { status: DsStatus }) {
               <p className="text-body text-ink">드레싱은 따로 담아서 반만 뿌렸어요</p>
               <MealAttach mealType="lunch" foods={[{ name: "닭가슴살 샐러드" }, { name: "현미밥 105g" }, { name: "오리엔탈 드레싱 15g" }]} total={{ calories: 512, protein_g: 38, carbs_g: 52, fat_g: 14 }} />
               <ProductTagLinks products={[{ id: "00000000-0000-0000-0000-000000000000", name: "훈제 닭가슴살 100g" }]} />
+              <PostCredits people={[{ id: "demo-minji", nickname: "민지" }, { id: "demo-coach", nickname: "단백질코치" }]}
+                source={{ id: "00000000-0000-0000-0000-000000000001", nickname: "단백질코치", gone: false }} />
             </ThreadItem>
             <ThreadItem nickname="유나" topic="고단백">
               <PlanAttach title="이번 주 식단" dayKcal={[1600, 1500, 1700, 1600, 1600, 1900, 1400]} avgKcal={1614} avgProtein={104} />
