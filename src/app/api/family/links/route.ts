@@ -82,7 +82,7 @@ export async function PATCH(request: NextRequest) {
     if (link.owner_id !== who.actor) return NextResponse.json({ error: "보여 줄 것은 본인만 바꿀 수 있어요" }, { status: 403 });
     const s = cleanScopes(body.scopes, scopesOf(link));
     // 다른 사람이 같은 순간 그만뒀으면(ended) 바꾸지 않는다
-    const { data: up, error: uErr } = await sb.from("family_links").update({ share_meals: s.meals, share_products: s.products, share_meds: s.meds, share_numbers: s.numbers })
+    const { data: up, error: uErr } = await sb.from("family_links").update({ share_meals: s.meals, share_products: s.products, share_meds: s.meds, share_numbers: s.numbers, share_foods: s.foods, share_proxy: s.proxy })
       .eq("id", link.id).eq("status", "active").select("id");
     if (uErr) return NextResponse.json({ error: uErr.message }, { status: 500 });
     if (!up?.length) return NextResponse.json({ error: "연결이 끝났어요" }, { status: 409 });

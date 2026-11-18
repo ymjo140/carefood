@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sb = createServiceRoleClient() as any;
   const { data, error } = await sb.from("planned_meals")
-    .select("date, meal, foods, plan_title")
+    .select("date, meal, foods, plan_title, sent_name, note")
     .eq("user_id", userId).gte("date", from).lte("date", to)
     .order("date");
   if (error) {
@@ -61,7 +61,8 @@ export async function POST(req: NextRequest) {
   const rows = PLANNED_MEALS
     .map((meal) => ({ meal, foods: cleanPlanFoods(meals[meal]) }))
     .filter((r) => r.foods.length > 0)
-    .map((r) => ({ user_id: userId, date, meal: r.meal, foods: r.foods, plan_title }));
+    // 내가 담은 계획 — 가족이 보낸 예정을 덮으면 보낸 사람 표시도 지운다
+    .map((r) => ({ user_id: userId, date, meal: r.meal, foods: r.foods, plan_title, sent_by: null, sent_name: null, note: null }));
   if (rows.length === 0) return NextResponse.json({ error: "담을 끼니를 골라 주세요" }, { status: 400 });
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
