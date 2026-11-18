@@ -18,9 +18,10 @@ export type Scopes = { meals: boolean; products: boolean; meds: boolean; numbers
 export type LinkRow = {
   id: string; viewer_id: string; owner_id: string | null; label: string; code: string; status: "pending" | "active" | "ended";
   share_meals: boolean; share_products: boolean; share_meds: boolean; share_numbers: boolean; alert_evening: boolean;
+  alert_meds: boolean; allow_nudge: boolean;
   consented_at: string | null; expires_at: string; created_at: string;
 };
-export const LINK_COLS = "id, viewer_id, owner_id, label, code, status, share_meals, share_products, share_meds, share_numbers, alert_evening, consented_at, expires_at, created_at";
+export const LINK_COLS = "id, viewer_id, owner_id, label, code, status, share_meals, share_products, share_meds, share_numbers, alert_evening, alert_meds, allow_nudge, consented_at, expires_at, created_at";
 
 export const scopesOf = (l: LinkRow): Scopes => ({ meals: l.share_meals, products: l.share_products, meds: l.share_meds, numbers: l.share_numbers });
 export function cleanScopes(raw: unknown, base: Scopes = { meals: true, products: true, meds: false, numbers: false }): Scopes {
@@ -44,7 +45,28 @@ export function inviteCode() {
 }
 export const INVITE_RE = /^[A-Za-z0-9]{10}$/;
 
-const MEALS = ["breakfast", "lunch", "dinner"] as const;
+export const MEALS = ["breakfast", "lunch", "dinner"] as const;
+export type FamilyMeal = (typeof MEALS)[number];
+export const MEAL_LABEL: Record<FamilyMeal, string> = { breakfast: "아침", lunch: "점심", dinner: "저녁" };
+export const isFamilyMeal = (v: unknown): v is FamilyMeal => typeof v === "string" && (MEALS as readonly string[]).includes(v);
+
+/** 가족 하루 보기로 볼 수 있는 날 — 오늘부터 6일 전까지 (주간 보기와 같은 폭) */
+export const FAMILY_DAYS = 7;
+export function familyDayOk(day: string, today = todayKst()) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(day) && day <= today && day >= addDays(today, -(FAMILY_DAYS - 1));
+}
+
+/** 콕 찌르기를 보내도 되는지 — 안 되면 이유(화면 문구), 되면 null
+ *  밤 10시~아침 8시는 보내지 않는다(푸시와 같은 조용한 시간). 이미 기록한 끼니·이미 콕 한 끼니는 다시 보내지 않는다 */
+export const NUDGE_QUIET = { from: 22, to: 8 };
+export function nudgeBlock(x: { allow: boolean; shareMeals: boolean; recorded: boolean; already: boolean; hourKst: number }): string | null {
+  if (!x.shareMeals) return "끼니 기록 여부를 보여 주는 가족에게만 보낼 수 있어요";
+  if (!x.allow) return "이 가족은 콕 찌르기를 받지 않기로 했어요";
+  if (x.hourKst >= NUDGE_QUIET.from || x.hourKst < NUDGE_QUIET.to) return "밤 10시부터 아침 8시까지는 보내지 않아요";
+  if (x.recorded) return "이미 기록한 끼니예요";
+  if (x.already) return "이 끼니는 오늘 이미 콕 찔렀어요";
+  return null;
+}
 const kst = (iso: string) => new Date(new Date(iso).getTime() + 9 * 3600e3).toISOString().slice(11, 16);
 
 export type FamilyToday = {
@@ -108,4 +130,28 @@ export async function nicknameOf(sb: Sb, actor: string) {
   const { data, error } = await sb.from("community_profiles").select("nickname").eq("actor_id", actor).maybeSingle();
   if (error) throw new Error(error.message);
   return (data?.nickname as string | undefined) || null;
+}
+
+export type NudgeNotification = { id: string; type: "nudge"; at: string; who: string; text: string; url: string };
+
+/** 알림함 — 나를 보는 가족이 지난 3일 안에 콕 찌른 것 (표가 아직 없으면 빈 목록) */
+export async function nudgeNotifications(sb: Sb, actor: string): Promise<NudgeNotification[]> {
+  const { data: ls, error } = await sb.from("family_links").select("id, viewer_id").eq("owner_id", actor).eq("status", "active");
+  if (error) throw new Error(error.message);
+  const links = (ls || []) as { id: string; viewer_id: string }[];
+  if (!links.length) return [];
+  const { data, error: nErr } = await sb.from("family_nudges").select("id, link_id, meal, created_at").in("link_id", links.map((l) => l.id))
+    .gte("created_at", new Date(Date.now() - 3 * 86400e3).toISOString()).order("created_at", { ascending: false }).limit(20);
+  if (nErr) {
+    if (nErr.code === "42P01" || nErr.code === "PGRST205") return [];
+    throw new Error(nErr.message);
+  }
+  const viewerOf = new Map(links.map((l) => [l.id, l.viewer_id]));
+  const ids = [...new Set(links.map((l) => l.viewer_id))];
+  const { data: ps, error: pErr } = await sb.from("community_profiles").select("actor_id, nickname").in("actor_id", ids);
+  if (pErr) throw new Error(pErr.message);
+  const names = new Map(((ps || []) as { actor_id: string; nickname: string }[]).map((p) => [p.actor_id, p.nickname]));
+  return ((data || []) as { id: number; link_id: string; meal: FamilyMeal; created_at: string }[]).map((n) => ({
+    id: `nudge-${n.id}`, type: "nudge", at: n.created_at, who: names.get(viewerOf.get(n.link_id) || "") || "가족", text: MEAL_LABEL[n.meal] || "끼니", url: "/diary",
+  }));
 }

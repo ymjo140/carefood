@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connection } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
-import { LINK_COLS, accountActor, familyToday, nicknameOf, scopesOf, type LinkRow } from "@/lib/family";
+import { LINK_COLS, accountActor, familyDayOk, familyToday, nicknameOf, scopesOf, type LinkRow } from "@/lib/family";
+import { todayKst } from "@/lib/day";
 
 /**
- * GET /api/family/links/[id] — 보는 사람의 가족 화면: 확인받는 사람이 고른 것만 (끼니 기록 여부 · 이번 주 고른 제품 · 약 먹었는지 · 숫자)
- *   연결된 보는 사람만. 고르지 않은 칸은 null.
+ * GET /api/family/links/[id][?date=YYYY-MM-DD] — 보는 사람의 가족 하루(식단 탭 사람 칩 · 가족 화면):
+ *   확인받는 사람이 고른 것만 (끼니 기록 여부 · 이번 주 고른 제품 · 약 먹었는지 · 숫자). 연결된 보는 사람만. 고르지 않은 칸은 null.
+ *   date 는 오늘부터 6일 전까지(없으면 오늘). nudge: 그날 콕 찌른 끼니 · 콕을 받는지 (표가 아직 없으면 ready:false)
  * POST /api/family/links/[id] { plan_id } — 식단 보내기: 내 식단 리스트의 식단 하나를 가족의 식단 리스트에 '가족이 보냄'으로 담는다 (연결마다 하루 5개)
  */
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -14,6 +16,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   await connection();
   const { id } = await params;
   if (!UUID.test(id)) return NextResponse.json({ error: "연결을 찾지 못했어요" }, { status: 404 });
+  const today = todayKst();
+  const day = _req.nextUrl.searchParams.get("date") || today;
+  if (!familyDayOk(day, today)) return NextResponse.json({ error: "오늘부터 6일 전까지만 볼 수 있어요" }, { status: 400 });
   const who = await accountActor();
   if ("res" in who) return who.res;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -23,7 +28,17 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     if (error) throw new Error(error.message);
     if (!data) return NextResponse.json({ error: "연결을 찾지 못했어요" }, { status: 404 });
     const l = data as LinkRow;
-    return NextResponse.json({ id: l.id, label: l.label, scopes: scopesOf(l), alert_evening: l.alert_evening, today: await familyToday(sb, l) });
+    const [dayView, nudges] = await Promise.all([
+      familyToday(sb, l, day),
+      sb.from("family_nudges").select("meal").eq("link_id", l.id).eq("day", day),
+    ]);
+    const nudgeReady = !nudges.error;
+    if (nudges.error && nudges.error.code !== "42P01" && nudges.error.code !== "PGRST205") throw new Error(nudges.error.message);
+    return NextResponse.json({
+      id: l.id, label: l.label, scopes: scopesOf(l), alert_evening: l.alert_evening, alert_meds: l.alert_meds,
+      today: dayView, is_today: day === today,
+      nudge: { ready: nudgeReady, allowed: l.allow_nudge && l.share_meals, sent: nudgeReady ? ((nudges.data || []) as { meal: string }[]).map((n) => n.meal) : [] },
+    });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });
   }

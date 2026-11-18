@@ -15,6 +15,7 @@ import DayCardPrompt from "@/components/community/DayCardPrompt";
 import PushPrompt from "@/components/PushPrompt";
 import { MascotBanner } from "@/components/community/MascotBanner";
 import { PlanSheet } from "./PlanSheet";
+import { FamilyDay, PersonChips, type FamilyPerson } from "./FamilyDay";
 import type { PlannedMeal } from "@/lib/planned-meals";
 
 /* ── 타입 ── */
@@ -332,9 +333,38 @@ export default function DiaryPage() {
   const [planTitle, setPlanTitle] = useState<string | null>(null);
   /** 그 날짜에 담아 둔 예정 끼니 (/api/diary/planned) — 식단 불러오기가 담고, 기록하면 지운다. 요일 식단보다 먼저 */
   const [datedPlans, setDatedPlans] = useState<PlannedMeal[]>([]);
+  // 식단 탭 사람 칩 — 내가 보는 가족 (로그인한 사람만, 없으면 칩을 그리지 않는다). who = null 이면 나
+  const [people, setPeople] = useState<FamilyPerson[]>([]);
+  const [who, setWho] = useState<string | null>(null);
   const [planSheetOpen, setPlanSheetOpen] = useState(false);
   const [plannedReload, setPlannedReload] = useState(0);
   const plannedSeq = useRef(0);
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/family/links")
+      .then(async (r) => {
+        if (r.status === 401) return null; // 로그인 전 — 가족 연결은 계정만
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || String(r.status));
+        return d as { watching: { id: string; label: string }[] };
+      })
+      .then((d) => {
+        if (!alive || !d) return;
+        const list = (d.watching || []).map((w) => ({ id: w.id, label: w.label }));
+        setPeople(list);
+        // 알림에서 왔으면(?who=연결) 그 가족으로 연다
+        const q = new URLSearchParams(window.location.search).get("who");
+        if (q && list.some((p) => p.id === q)) setWho(q);
+      })
+      .catch((e) => console.error("가족 목록을 불러오지 못했어요:", e)); // ds-allow: 사람 칩은 보조 — 못 불러오면 내 식단만 보인다
+    return () => { alive = false; };
+  }, []);
+  const pickWho = (id: string | null) => {
+    setWho(id);
+    const u = new URL(window.location.href);
+    if (id) u.searchParams.set("who", id); else u.searchParams.delete("who");
+    window.history.replaceState(null, "", u.toString());
+  };
   const [weeklyTrend, setWeeklyTrend] = useState<{
     days: { date: string; label: string; dayOfWeek: string; calories: number; protein_g: number; count: number }[];
     weeklyAvg: { calories: number; protein_g: number; sodium_mg: number; goalAchievement: number } | null;
@@ -1104,10 +1134,23 @@ export default function DiaryPage() {
     </div>
   );
 
+  const person = who ? people.find((p) => p.id === who) : undefined;
+  if (person) {
+    return (
+      <Page width="narrow">
+        <PageHeader title="식단" description={`${person.label} 하루`}
+          actions={<LinkTabs items={DIET_VIEWS} current="/diary" label="식단 보기" />} />
+        <PersonChips people={people} who={who} onChange={pickWho} />
+        <FamilyDay person={person} />
+      </Page>
+    );
+  }
+
   return (
     <Page width="narrow">
       <PageHeader title="식단" description={isToday ? `오늘 · ${formatDate(date)}` : formatDate(date)}
         actions={<LinkTabs items={DIET_VIEWS} current="/diary" label="식단 보기" />} />
+      <PersonChips people={people} who={who} onChange={pickWho} />
 
       {loadError && (
         <EmptyState className="mb-5" title="식단 기록을 불러오지 못했어요" description="아래 숫자는 비어 있는 상태예요"
