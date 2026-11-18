@@ -22,19 +22,19 @@ begin
   if l.kind = 'friend' then
     -- 친구에게는 약 체크·고른 제품을 보여 주지 않는다
     update family_links set owner_id = p_owner, status = 'active', share_meals = p_meals, share_products = false,
-      share_meds = false, share_numbers = p_numbers, consent_version = p_version, consented_at = now()
+      share_meds = false, share_numbers = p_numbers, alert_evening = false, alert_meds = false, consent_version = p_version, consented_at = now()
     where id = l.id;
     insert into family_link_log (link_id, actor, action, scopes, consent_version)
     values (l.id, p_owner, 'accept', jsonb_build_object('meals', p_meals, 'numbers', p_numbers, 'kind', 'friend'), p_version);
     -- 받은 사람이 초대한 사람을 보는 줄 — 초대한 사람은 초대를 만들 때 끼니 기록 여부를 보여 주는 데 동의했다
     if not exists (select 1 from family_links where viewer_id = p_owner and owner_id = l.viewer_id and status = 'active') then
-      select left(coalesce(nickname, '친구'), 10) into v_label from community_profiles where actor_id = l.viewer_id;
+      select left(nullif(btrim(nickname), ''), 10) into v_label from community_profiles where actor_id = l.viewer_id;
       -- 이미 연결된 줄이라 초대 코드로 쓰이지 않는다 — 표의 unique 만 맞춘다
       v_code := substr(md5(random()::text || clock_timestamp()::text || l.id::text), 1, 10);
       insert into family_links (viewer_id, owner_id, label, code, status, kind, share_meals, share_products, share_meds, share_numbers,
-        alert_evening, consent_version, consented_at, expires_at)
+        alert_evening, alert_meds, consent_version, consented_at, expires_at)
       values (p_owner, l.viewer_id, coalesce(v_label, '친구'), v_code, 'active', 'friend', true, false, false, false,
-        false, p_version, now(), now())
+        false, false, p_version, now(), now())
       returning id into v_back;
       insert into family_link_log (link_id, actor, action, scopes, consent_version)
       values (v_back, l.viewer_id, 'accept', jsonb_build_object('meals', true, 'kind', 'friend', 'by_invite', l.id), p_version);
