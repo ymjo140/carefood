@@ -27,7 +27,8 @@ import { getOrCreateNickname, setNickname } from "@/lib/nickname";
 type Tab = "recommend" | "following" | "topic" | "mine";
 
 type Reel =
-  | { kind: "meal"; id: string; image: string | null; author: string; seconds: number | null; meal_type: string | null; kcal: number | null; protein_g: number | null; text: string }
+  | { kind: "meal" | "regram"; id: string; image: string | null; author: string; seconds: number | null; meal_type: string | null; kcal: number | null; protein_g: number | null; text: string;
+      origin?: { id: string; author: string } | null; together?: { nickname: string; nth: number } | null }
   | { kind: "cert"; id: string; image: string | null; author: string; seconds: number | null; cert: CertView; text: string }
   | { kind: "group_buy"; id: string; image: string | null; author: string; seconds: number | null; product_name: string; current_count: number; target_count: number; pct: number | null; days_left: number | null };
 
@@ -196,9 +197,15 @@ export default function CommunityPage() {
             <ReelTile key={`c-${r.id}`} href={`/stories?at=cert-${r.id}`} image={r.image} author={r.author} seconds={r.seconds}
               label={`${r.author}의 ${CERT_LABEL[r.cert.kind]}`} line={certLine(r.cert)} />
           ) : (
-            <ReelTile key={`m-${r.id}`} href={`/stories?at=meal-${r.id}`} image={r.image} author={r.author} seconds={r.seconds}
-              label={`${r.author}의 식단${r.seconds != null ? ` 영상 ${r.seconds}초` : ""}${r.text ? `: ${r.text}` : ""}`}
-              line={r.protein_g != null
+            <ReelTile key={`m-${r.id}`} href={`/stories?at=${r.kind}-${r.id}`} image={r.image} author={r.author} seconds={r.seconds}
+              label={r.kind === "regram" && r.origin
+                ? `${r.author} 님이 스토리에 올린 ${r.origin.author} 님의 글${r.text ? `: ${r.text}` : ""}`
+                : `${r.author}의 식단${r.seconds != null ? ` 영상 ${r.seconds}초` : ""}${r.text ? `: ${r.text}` : ""}`}
+              line={r.kind === "regram" && r.origin
+                ? <>리그램 · {r.origin.author} 님</>
+                : r.together
+                ? <>같이 먹기 <span className="num font-bold">{r.together.nth}</span>번째</>
+                : r.protein_g != null
                 ? <>단백질 <span className="num font-bold">{Math.round(r.protein_g)}</span>g {r.meal_type ? mealMeta(r.meal_type).label : ""}</>
                 : r.kcal != null
                   ? <><span className="num font-bold">{Math.round(r.kcal)}</span>kcal {r.meal_type ? mealMeta(r.meal_type).label : ""}</>

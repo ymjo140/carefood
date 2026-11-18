@@ -6,6 +6,7 @@
  *       '이 사람 태그 받지 않기'(community_tag_mutes) · 어느 쪽이든 차단했으면 태그할 수 없다
  *   · 태그할 수 없는 이유는 쓰는 사람에게 하나로만 알린다('태그를 받지 않는 사람이에요') — 받지 않기·차단을 드러내지 않는다
  *   · 원본 출처: 따라 한 글이 가리키는 원래 글. 원본 글쓴이에게 소식이 간다(태그 받지 않기면 가지 않음)
+ *   · 리그램(내 글을 스토리에 올림)도 소식으로 — lib/community-regram
  */
 type Sb = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
@@ -101,7 +102,7 @@ export async function tagsAndSources(sb: Sb, posts: { id: string; source_post_id
 
 /** 내 소식 — 나를 태그함(바로 보임·승인 기다림) · 내 글을 따라 한 글. 차단·받지 않기 한 사람 것은 뺀다 */
 export type TagNotification = {
-  id: string; type: "tag" | "tag_pending" | "source"; at: string; who: string; post_id: string; post_excerpt?: string; url?: string;
+  id: string; type: "tag" | "tag_pending" | "source" | "regram"; at: string; who: string; post_id: string; post_excerpt?: string; url?: string;
 };
 export async function tagNotifications(sb: Sb, actor: string, blocked: Set<string>): Promise<TagNotification[]> {
   const since = new Date(Date.now() - 30 * 86400e3).toISOString();
@@ -119,6 +120,12 @@ export async function tagNotifications(sb: Sb, actor: string, blocked: Set<strin
         .eq("is_active", true).eq("hidden_by_reports", false).gte("created_at", since).order("created_at", { ascending: false }).limit(20)
     : { data: [], error: null };
   if (sErr) throw new Error(sErr.message);
+  // 내 글을 스토리에 올린 사람 (리그램)
+  const { data: regrams, error: rgErr } = myIds.length
+    ? await sb.from("community_feed").select("id, user_id, author_nickname, regram_of, created_at").in("regram_of", myIds).neq("user_id", actor)
+        .eq("is_active", true).gte("created_at", since).order("created_at", { ascending: false }).limit(20)
+    : { data: [], error: null };
+  if (rgErr) throw new Error(rgErr.message);
 
   const tagRows = ((tags || []) as { id: string; post_id: string; tagger_id: string; status: string; created_at: string }[])
     .filter((t) => !blocked.has(t.tagger_id) && !muted.has(t.tagger_id));
@@ -141,6 +148,10 @@ export async function tagNotifications(sb: Sb, actor: string, blocked: Set<strin
   for (const f of (follows || []) as { id: string; user_id: string; author_nickname: string | null; content: string | null; created_at: string }[]) {
     if (blocked.has(f.user_id) || muted.has(f.user_id)) continue;
     items.push({ id: `src-${f.id}`, type: "source", at: f.created_at, who: f.author_nickname || "누군가", post_id: f.id, post_excerpt: (f.content || "식단 공유").slice(0, 30) });
+  }
+  for (const g of (regrams || []) as { id: string; user_id: string; author_nickname: string | null; regram_of: string; created_at: string }[]) {
+    if (blocked.has(g.user_id)) continue;
+    items.push({ id: `rg-${g.id}`, type: "regram", at: g.created_at, who: g.author_nickname || "누군가", post_id: g.regram_of, url: `/stories?at=regram-${g.id}` });
   }
   return items;
 }

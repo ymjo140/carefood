@@ -16,11 +16,16 @@ import { getOrCreateNickname } from "@/lib/nickname";
  * - 사진은 5초, 영상은 끝까지 보여 주고 다음 사람으로. 왼쪽 1/3 누르면 이전, 꾹 누르면 멈춤, 화살표·Esc
  * - 답글은 그 게시물의 답글(공구는 질문)로 남고 올린 사람에게 알림이 간다 (1:1 메시지는 없음)
  * - 오른쪽 위 '게시물'로 글 상세·공구 상세에 간다. 공구 조건·구성 고르기·질문 목록은 상세에만 있다
- * - 내 스토리면 아래 줄이 '인증 카드 만들기'(인스타 공유)로 바뀐다
+ * - 내 스토리면 아래 줄이 '인증 카드 만들기'(인스타 공유)로 바뀐다 · 내가 올린 리그램이면 '스토리에서 내리기'
+ * - 리그램(kind regram): 남의 글을 스토리에 올린 것 — 사진·식단은 원본, 스티커와 '게시물'은 원본으로
+ * - 식단이 붙은 스토리는 '따라하기'(내 식단 리스트에 담기), 올릴 수 있으면 '내 스토리에 올리기'(원본 글쓴이가 허락한 글만)
+ * - 사진 글에서 서로 태그한 두 사람은 스티커가 '같이 먹기 N번째'
+ * - 스토리 줄의 사진·식단은 /api/community/reels 가 판단한다
  * - 동작 줄이기를 켠 사람은 저절로 넘어가지 않는다(누를 때만)
  */
 type Story = {
-  kind: "meal" | "cert" | "group_buy"; id: string; cert?: CertView | null; image: string | null; video: string | null; author: string; created_at: string;
+  kind: "meal" | "cert" | "group_buy" | "regram"; id: string; cert?: CertView | null;
+  origin?: { id: string; author: string } | null; copyable?: boolean; regram_ok?: boolean; together?: { nickname: string; nth: number } | null; image: string | null; video: string | null; author: string; created_at: string;
   seconds: number | null; mine: boolean; liked: boolean; like_count: number; comment_count: number; text?: string;
   meal_type?: string | null; kcal?: number | null; protein_g?: number | null;
   product_name?: string; current_count?: number; target_count?: number; pct?: number | null; days_left?: number | null;
@@ -28,7 +33,7 @@ type Story = {
 
 const PHOTO_MS = 5000;
 const keyOf = (s: Story) => `${s.kind}-${s.id}`;
-const postHref = (s: Pick<Story, "kind" | "id">) => (s.kind === "group_buy" ? `/group-buy/${s.id}` : `/community/${s.id}`);
+const postHref = (s: Pick<Story, "kind" | "id" | "origin">) => (s.kind === "group_buy" ? `/group-buy/${s.id}` : s.kind === "regram" ? (s.origin ? `/community/${s.origin.id}` : "/community") : `/community/${s.id}`);
 
 export default function StoryViewer() {
   const router = useRouter();
@@ -63,6 +68,7 @@ export default function StoryViewer() {
           const [kind, ...rest] = at.split("-");
           const id = rest.join("-");
           if ((kind === "meal" || kind === "cert" || kind === "group_buy") && id) { router.replace(postHref({ kind, id })); return; }
+          if (kind === "regram") { router.replace("/community"); return; } // 원본이 사라진 리그램
         }
         setIndex(Math.max(0, i));
         setState({ status: "done", items });
@@ -171,6 +177,50 @@ export default function StoryViewer() {
     } finally { setSending(false); }
   };
 
+  const [acting, setActing] = useState<string | null>(null);
+  const followMeal = async () => {
+    if (!story) return;
+    setActing("copy");
+    try {
+      const r = await fetch("/api/community/copy", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ post_id: story.origin?.id ?? story.id }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error);
+      toast.show(`"${d.title || "식단"}" 식단 리스트에 담았어요. 아래 식단 탭에서 볼 수 있어요`);
+    } catch {
+      toast.show("식단 리스트에 담지 못했어요. 다시 시도해 주세요", { tone: "danger" });
+    } finally { setActing(null); }
+  };
+  const regram = async () => {
+    if (!story) return;
+    const s = story;
+    setActing("regram");
+    try {
+      const r = await fetch("/api/community/regram", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ post_id: s.origin?.id ?? s.id }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) { toast.show(d.error || "스토리에 올리지 못했어요. 다시 시도해 주세요", { tone: "danger" }); return; }
+      // 같은 원본을 가리키는 스토리는 다시 올릴 수 없게
+      setState((x) => ({ ...x, items: x.items.map((i) => ((i.origin?.id ?? i.id) === (s.origin?.id ?? s.id) ? { ...i, regram_ok: false } : i)) }));
+      toast.show(`내 스토리에 올렸어요. ${s.origin?.author ?? s.author} 님에게 알려요`);
+    } catch {
+      toast.show("스토리에 올리지 못했어요. 다시 시도해 주세요", { tone: "danger" });
+    } finally { setActing(null); }
+  };
+  const takeDown = async () => {
+    if (!story) return;
+    const s = story;
+    setActing("down");
+    try {
+      const r = await fetch(`/api/community/feed?id=${s.id}`, { method: "DELETE" });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) { toast.show(d.error || "스토리에서 내리지 못했어요. 다시 시도해 주세요", { tone: "danger" }); return; }
+      toast.show("스토리에서 내렸어요");
+      setState((x) => ({ ...x, items: x.items.filter((i) => i.id !== s.id) }));
+      if (index >= items.length - 1) close();
+    } catch {
+      toast.show("스토리에서 내리지 못했어요. 다시 시도해 주세요", { tone: "danger" });
+    } finally { setActing(null); }
+  };
+
   const sendLink = async () => {
     if (!story) return;
     const url = `${window.location.origin}${postHref(story)}`;
@@ -202,22 +252,25 @@ export default function StoryViewer() {
     );
   }
 
-  const isMeal = story.kind === "meal";
+  const isRegram = story.kind === "regram";
+  const isMeal = story.kind === "meal" || isRegram;
   const cert = story.kind === "cert" ? story.cert ?? null : null;
   const isPost = story.kind !== "group_buy";
-  const what = cert ? CERT_LABEL[cert.kind] : isMeal ? "식단" : "공구";
+  const what = cert ? CERT_LABEL[cert.kind] : isRegram ? "스토리" : isMeal ? "식단" : "공구";
   const meal = isMeal && story.meal_type ? mealMeta(story.meal_type).label : null;
   // 챌린지 인증은 제목을 위 글자 띠에, 스티커에는 숫자만 (좁은 스티커에서 잘리지 않게)
   const stickerText = cert
     ? cert.kind === "challenge" ? <><span className="num font-bold">{cert.done}</span>/<span className="num">{cert.total_days}</span>일 해냈어요</> : certLine(cert)
+    : story.together
+      ? <>같이 먹기 <span className="num font-bold">{story.together.nth}</span>번째 · {story.together.nickname} 님과</>
     : isMeal
-      ? <>{meal ? `${meal} · ` : ""}{story.protein_g != null ? <>단백질 <span className="num font-bold">{Math.round(story.protein_g)}</span>g</> : "식단 기록 보기"}</>
+      ? <>{isRegram && story.origin ? `${story.origin.author} 님 · ` : ""}{meal ? `${meal} · ` : ""}{story.protein_g != null ? <>단백질 <span className="num font-bold">{Math.round(story.protein_g)}</span>g</> : "식단 기록 보기"}</>
       : <>공구{story.days_left != null ? ` D-${story.days_left}` : ""}{story.pct ? <> · <span className="num font-bold">{story.pct}</span>%</> : ""} · <span className="num">{story.current_count}/{story.target_count}</span>명</>;
   const caption = cert?.kind === "challenge" ? (story.text ? `${cert.title} · ${story.text}` : cert.title) : isPost ? story.text : story.product_name;
   // 인증 스티커는 같이 하기(초대 링크)로 — 링크가 없으면 게시물로
   const join = cert && cert.url && cert.url !== "/" ? cert.url : null;
   const stickerHref = join || postHref(story);
-  const stickerLabel = join ? "같이 하기" : isPost ? "게시물에서 식단 보기" : "공구 조건 보기";
+  const stickerLabel = join ? "같이 하기" : isRegram && story.origin ? `${story.origin.author} 님 글에서 식단 보기` : isPost ? "게시물에서 식단 보기" : "공구 조건 보기";
 
   return (
     <>
@@ -225,7 +278,7 @@ export default function StoryViewer() {
         onPrev={() => go(index - 1)} onNext={() => go(index + 1)} onHold={setHeld}
         top={<>
           <StoryProgress count={items.length} index={index} value={progress} />
-          <StoryHeader author={story.author} meta={<>{what} · {timeAgo(story.created_at)}</>} paused={held}
+          <StoryHeader author={story.author} meta={<>{isRegram && story.origin ? `${story.origin.author} 님의 글` : what} · {timeAgo(story.created_at)}</>} paused={held}
             postHref={postHref(story)} postLabel={isPost ? "게시물 보기" : "공구 게시물 보기"} onClose={close} />
         </>}
         sticker={
@@ -240,7 +293,9 @@ export default function StoryViewer() {
               좋아요 <span className="num font-bold">{story.like_count}</span> · {isPost ? "답글" : "질문"} <span className="num font-bold">{story.comment_count}</span>
             </p>
             {story.video && <StoryAction icon={muted ? "volume-off" : "volume-on"} label={muted ? "소리 켜기" : "소리 끄기"} active={!muted} onClick={() => setMuted((m) => !m)} />}
-            {!cert && <Button size="sm" icon="share" onClick={() => setShare({ kind: story.kind === "group_buy" ? "group_buy" : "meal", id: story.id })}>인증 카드 만들기</Button>}
+            {isRegram
+              ? <Button size="sm" variant="secondary" loading={acting === "down"} onClick={takeDown}>스토리에서 내리기</Button>
+              : !cert && <Button size="sm" icon="share" onClick={() => setShare({ kind: story.kind === "group_buy" ? "group_buy" : "meal", id: story.id })}>인증 카드 만들기</Button>}
           </div>
         ) : (
           <div className="flex items-center gap-1">
@@ -248,6 +303,8 @@ export default function StoryViewer() {
               placeholder={isPost ? `${story.author} 님에게 답글` : `${story.author} 님에게 질문`} />
             {story.video && <StoryAction icon={muted ? "volume-off" : "volume-on"} label={muted ? "소리 켜기" : "소리 끄기"} active={!muted} onClick={() => setMuted((m) => !m)} />}
             <StoryAction icon="heart" label="좋아요" active={story.liked} onClick={like} />
+            {isPost && story.copyable && <StoryAction icon="copy" label="따라하기 — 내 식단 리스트에 담기" onClick={() => { if (!acting) followMeal(); }} />}
+            {isPost && story.regram_ok && <StoryAction icon="repost" label="내 스토리에 올리기" onClick={() => { if (!acting) regram(); }} />}
             <StoryAction icon="send" label="링크 보내기" onClick={sendLink} />
           </div>
         )}>

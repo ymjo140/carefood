@@ -5,10 +5,10 @@ import Link from "@/components/ui/AppLink";
 import { Button, Card, EmptyState, Icon, LinkButton, SkeletonList, cn, type IconName } from "@/components/ui";
 import { timeAgo } from "@/components/ui/FeedPost";
 
-type Item = { id: string; type: "comment" | "reply" | "like" | "follow" | "gb_question" | "gb_answer" | "gb_reached" | "gb_requested" | "ad" | "consent" | "collab" | "inquiry" | "ch_cheer" | "ch_join" | "ch_start" | "nudge" | "family_request" | "family_answer" | "tag" | "tag_pending" | "source"; at: string; who: string; count?: number; text?: string; post_id?: string; post_excerpt?: string; user_id?: string; url?: string };
+type Item = { id: string; type: "comment" | "reply" | "like" | "follow" | "gb_question" | "gb_answer" | "gb_reached" | "gb_requested" | "ad" | "consent" | "collab" | "inquiry" | "ch_cheer" | "ch_join" | "ch_start" | "nudge" | "family_request" | "family_answer" | "tag" | "tag_pending" | "source" | "regram"; at: string; who: string; count?: number; text?: string; post_id?: string; post_excerpt?: string; user_id?: string; url?: string };
 
 const ICON: Record<Item["type"], IconName> = {
-  comment: "message", reply: "message", like: "heart", follow: "user", gb_question: "message", gb_answer: "message", gb_reached: "users", gb_requested: "bell", ad: "tag", consent: "bell", collab: "users", inquiry: "message", ch_cheer: "heart", ch_join: "users", ch_start: "calendar", nudge: "bell", family_request: "lock", family_answer: "users", tag: "user", tag_pending: "user", source: "copy",
+  comment: "message", reply: "message", like: "heart", follow: "user", gb_question: "message", gb_answer: "message", gb_reached: "users", gb_requested: "bell", ad: "tag", consent: "bell", collab: "users", inquiry: "message", ch_cheer: "heart", ch_join: "users", ch_start: "calendar", nudge: "bell", family_request: "lock", family_answer: "users", tag: "user", tag_pending: "user", source: "copy", regram: "repost",
 };
 
 export function NotificationList() {
@@ -87,6 +87,7 @@ export function NotificationList() {
                 {n.type === "tag" && <><b className="font-bold">{n.who}</b> 님이 나를 글에 태그했어요</>}
                 {n.type === "tag_pending" && <><b className="font-bold">{n.who}</b> 님이 나를 글에 태그했어요. 승인하면 글에 보여요</>}
                 {n.type === "source" && <><b className="font-bold">{n.who}</b> 님이 내 식단을 따라 하고 글을 올렸어요</>}
+                {n.type === "regram" && <><b className="font-bold">{n.who}</b> 님이 내 글을 스토리에 올렸어요</>}
               </span>
               {n.text && n.type !== "ad" && n.type !== "nudge" && n.type !== "family_request" && n.type !== "family_answer" && <span className="text-label text-ink-2 line-clamp-2">“{n.text}”</span>}
               {(n.type === "ad" || n.type === "consent") && <span className="text-label text-ink-2 line-clamp-3">{n.text}</span>}
