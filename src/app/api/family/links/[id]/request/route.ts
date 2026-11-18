@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
-import { LINK_COLS, accountActor, askableOf, logLink, nicknameOf, scopesOf, type LinkRow } from "@/lib/family";
+import { LINK_COLS, accountActor, askableOf, kindOf, logLink, nicknameOf, scopesOf, type LinkRow } from "@/lib/family";
 import { userPusher } from "@/lib/push";
 
 /**
@@ -24,7 +24,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (error) throw new Error(error.message);
     if (!data) return NextResponse.json({ error: "연결을 찾지 못했어요" }, { status: 404 });
     const l = data as LinkRow;
-    const asks = askableOf(body.asks, scopesOf(l));
+    const asks = askableOf(body.asks, scopesOf(l), kindOf(l));
     if (!asks.length) return NextResponse.json({ error: "요청할 항목을 골라 주세요 (이미 보여 주는 항목은 묻지 않아요)" }, { status: 400 });
 
     const { count, error: cErr } = await sb.from("family_requests").select("id", { count: "exact", head: true })

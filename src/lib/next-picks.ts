@@ -1,12 +1,12 @@
 import { perServing } from "@/lib/nutrition";
 import { ALLERGEN_KEYWORDS } from "@/lib/recommend/constants";
-import { pickMenus, type MealKey, type Menu } from "@/lib/menu-pick";
+import { mealBudget, pickMenus, type MealKey, type Menu } from "@/lib/menu-pick";
 
 /**
  * 다음 끼니 후보 — 일반 메뉴(대표 메뉴 common_foods) + 살 수 있는 제품. 서버 전용.
  *   /api/diary/next(내 다음 끼니)와 /api/family/links/[id]/picks(가족에게 보낼 끼니)가 같은 규칙을 쓴다.
  *   남은 칼로리·단백질·나트륨에 맞춰 (1회 제공량 기준). 순서는 영양 기준뿐 — 광고비로 바꾸지 않는다.
- *   알레르기는 그 사람(person)의 서버 프로필로 거른다. "성분 정보 + 통계적 매칭" — 처방이 아니다.
+ *   알레르기는 그 사람(person)의 서버 프로필로 거른다 — 같이 먹기는 두 사람 것을 모두. "성분 정보 + 통계적 매칭" — 처방이 아니다.
  */
 type Sb = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 type Row = {
@@ -24,7 +24,29 @@ export const PICK_MEALS = new Set(["breakfast", "lunch", "dinner", "snack"]);
 const MEAL_CATS = ["rice", "soup", "noodle", "grill", "salad", "set", "bread", "side"];
 const NOT_SNACK = ["supplement", "powder", "sauce", "ingredient", "seafood", "rice", "soup", "noodle", "set"];
 
-export async function loadNextPicks(sb: Sb, person: string, o: { meal: MealKey; kcal: number; protein: number; sodium: number; exclude?: Set<string>; menus: number; seed: number }) {
+/** 그 사람 오늘 이 끼니 예산 — 목표에서 먹은 만큼 빼고 남은 끼니로 나눈다. 오늘 많이 먹었어도 한 끼 후보는 보여 준다(하루 목표의 30%)
+ *  가족 추천 보내기·같이 먹기가 같은 규칙. 예산 자체는 화면에 내보내지 않는다 */
+export async function personMealBudget(sb: Sb, person: string, meal: "breakfast" | "lunch" | "dinner", today: string) {
+  const [{ data: goal, error: gErr }, { data: rows, error: dErr }] = await Promise.all([
+    sb.from("daily_nutrition_goals").select("daily_calories, daily_protein_g, max_sodium_mg").eq("user_id", person).maybeSingle(),
+    sb.from("meal_diary").select("meal_type, calories, protein_g, sodium_mg").eq("user_id", person).eq("date", today).limit(500),
+  ]);
+  if (gErr) throw new Error(gErr.message);
+  if (dErr) throw new Error(dErr.message);
+  const ate = (rows || []) as { meal_type: string; calories: number | null; protein_g: number | null; sodium_mg: number | null }[];
+  const sum = (k: "calories" | "protein_g" | "sodium_mg") => ate.reduce((s, r) => s + (Number(r[k]) || 0), 0);
+  const goalKcal = Number(goal?.daily_calories) || 2000;
+  const recorded = new Set(ate.map((r) => r.meal_type));
+  const mainLeft = (["breakfast", "lunch", "dinner"] as const).filter((m) => m === meal || !recorded.has(m)).length;
+  const b = mealBudget({
+    meal, mainLeft, goalKcal, remainKcal: goalKcal - sum("calories"),
+    remainProtein: (Number(goal?.daily_protein_g) || 60) - sum("protein_g"), remainSodium: (Number(goal?.max_sodium_mg) || 2000) - sum("sodium_mg"),
+  });
+  const budget = b.kcal >= 120 ? b : { kcal: Math.round(goalKcal * 0.3), protein: b.protein, sodium: b.sodium };
+  return { ...budget, recorded: recorded.has(meal) };
+}
+
+export async function loadNextPicks(sb: Sb, person: string | string[], o: { meal: MealKey; kcal: number; protein: number; sodium: number; exclude?: Set<string>; menus: number; seed: number }) {
   const { meal, kcal, protein, sodium } = o;
   const exclude = o.exclude || new Set<string>();
   const [{ data: rows, error }, { data: prof, error: pErr }, { data: foods, error: fErr }] = await Promise.all([
@@ -34,14 +56,15 @@ export async function loadNextPicks(sb: Sb, person: string, o: { meal: MealKey; 
       // 1회 제공량이 포장 전체로 잘못 들어간 제품이 많아 350g 이하만
       .gt("serving_size_g", 0).lte("serving_size_g", 350)
       .order("health_score", { ascending: false, nullsFirst: false }).limit(400),
-    sb.from("user_profiles").select("allergies").eq("user_id", person).maybeSingle(),
+    sb.from("user_profiles").select("allergies").in("user_id", Array.isArray(person) ? person : [person]),
     sb.from("common_foods").select("id, name, category, serving_desc, serving_size_g, calories, protein_g, carbs_g, fat_g, sodium_mg, sugar_g"),
   ]);
   if (error) throw new Error(error.message);
   if (pErr) throw new Error(pErr.message);
   if (fErr) throw new Error(fErr.message);
 
-  const allergyWords = ((prof?.allergies as string[] | null) || []).flatMap((a) => ALLERGEN_KEYWORDS[a] || []);
+  const allergies = new Set(((prof || []) as { allergies: string[] | null }[]).flatMap((p) => p.allergies || []));
+  const allergyWords = [...allergies].flatMap((a) => ALLERGEN_KEYWORDS[a] || []);
   const minKcal = meal === "snack" ? 60 : 200;
   const maxKcal = Math.max(minKcal + 50, kcal * 1.05);
 

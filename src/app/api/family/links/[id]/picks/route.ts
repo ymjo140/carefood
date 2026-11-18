@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connection } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
-import { MEALS, accountActor, isFamilyMeal } from "@/lib/family";
-import { loadNextPicks } from "@/lib/next-picks";
-import { mealBudget } from "@/lib/menu-pick";
+import { accountActor, isFamilyMeal } from "@/lib/family";
+import { loadNextPicks, personMealBudget } from "@/lib/next-picks";
 import { loadPrices } from "@/lib/recommend/query-builder";
 import { seedOf } from "@/lib/buddy";
 import { todayKst } from "@/lib/day";
@@ -32,25 +31,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     if (error) throw new Error(error.message);
     if (!l) return NextResponse.json({ error: "연결을 찾지 못했어요" }, { status: 404 });
     const owner = l.owner_id as string;
-
-    const [{ data: goal, error: gErr }, { data: rows, error: dErr }] = await Promise.all([
-      sb.from("daily_nutrition_goals").select("daily_calories, daily_protein_g, max_sodium_mg").eq("user_id", owner).maybeSingle(),
-      sb.from("meal_diary").select("meal_type, calories, protein_g, sodium_mg").eq("user_id", owner).eq("date", today).limit(500),
-    ]);
-    if (gErr) throw new Error(gErr.message);
-    if (dErr) throw new Error(dErr.message);
-    const ate = (rows || []) as { meal_type: string; calories: number | null; protein_g: number | null; sodium_mg: number | null }[];
-    const sum = (k: "calories" | "protein_g" | "sodium_mg") => ate.reduce((s, r) => s + (Number(r[k]) || 0), 0);
-    const goalKcal = Number(goal?.daily_calories) || 2000;
-    const recorded = new Set(ate.map((r) => r.meal_type));
-    const mainLeft = MEALS.filter((m) => m === meal || !recorded.has(m)).length;
-    const b = mealBudget({
-      meal, mainLeft, goalKcal, remainKcal: goalKcal - sum("calories"),
-      remainProtein: (Number(goal?.daily_protein_g) || 60) - sum("protein_g"), remainSodium: (Number(goal?.max_sodium_mg) || 2000) - sum("sodium_mg"),
-    });
-    // 오늘 많이 먹었어도 한 끼 후보는 보여 준다 (한 끼 기본 예산 — 하루 목표의 30%)
-    const budget = b.kcal >= 120 ? b : { kcal: Math.round(goalKcal * 0.3), protein: b.protein, sodium: b.sodium };
-    const { menus, items } = await loadNextPicks(sb, owner, { meal, ...budget, menus: 3, seed: seedOf(owner, today, meal) });
+    const budget = await personMealBudget(sb, owner, meal, today);
+    const { menus, items } = await loadNextPicks(sb, owner, { meal, kcal: budget.kcal, protein: budget.protein, sodium: budget.sodium, menus: 3, seed: seedOf(owner, today, meal) });
     const prices = await loadPrices(sb, items.map((i) => i.id));
     return NextResponse.json({
       menus: menus.map((m) => ({ id: m.id, name: m.name, category: m.category, serving_desc: m.serving_desc, calories: Math.round(Number(m.calories) || 0), protein_g: Math.round(Number(m.protein_g) || 0), sodium_mg: Math.round(Number(m.sodium_mg) || 0) })),

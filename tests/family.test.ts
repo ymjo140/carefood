@@ -1,6 +1,6 @@
 /** 가족 연결 (lib/family.ts · lib/family-alerts.ts) — 보여 줄 것 정리 · 약 알림 시간 */
 import { describe, expect, it } from "vitest";
-import { askableOf, cleanScopes, familyDayOk, grantOf, nudgeBlock } from "@/lib/family";
+import { askableOf, cleanScopes, familyDayOk, grantOf, kindOf, limitScopes, nudgeBlock } from "@/lib/family";
 import { kstMinutes, planMedAlerts, planViewerMedAlerts } from "@/lib/family-alerts";
 
 describe("보여 줄 것", () => {
@@ -90,5 +90,23 @@ describe("보여 줄 것 요청·답", () => {
     expect(grantOf(["foods", "proxy"], ["foods"])).toEqual(["foods"]);
     expect(grantOf(["numbers"], ["foods", "proxy"])).toEqual([]);
     expect(grantOf(undefined, ["foods"])).toEqual([]);
+  });
+});
+
+describe("친구 연결", () => {
+  const all = { meals: true, products: true, meds: true, numbers: true, foods: true, proxy: true };
+  it("친구에게는 고른 제품·약 체크·대신 기록하기가 늘 꺼진다", () => {
+    expect(limitScopes("friend", all)).toEqual({ meals: true, products: false, meds: false, numbers: true, foods: true, proxy: false });
+    expect(limitScopes("family", all)).toEqual(all);
+  });
+  it("친구에게는 먹은 음식만 요청할 수 있다", () => {
+    const none = { meals: true, products: false, meds: false, numbers: false, foods: false, proxy: false };
+    expect(askableOf(["foods", "proxy"], none, "friend")).toEqual(["foods"]);
+    expect(askableOf(["foods", "proxy"], none, "family")).toEqual(["foods", "proxy"]);
+  });
+  it("종류가 비어 있으면 가족으로 읽는다 (예전 줄)", () => {
+    expect(kindOf({})).toBe("family");
+    expect(kindOf({ kind: null })).toBe("family");
+    expect(kindOf({ kind: "friend" })).toBe("friend");
   });
 });
