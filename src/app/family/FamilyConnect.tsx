@@ -15,9 +15,9 @@ import {
  */
 type Scopes = { meals: boolean; products: boolean; meds: boolean; numbers: boolean };
 type Links = {
-  watching: { id: string; label: string; scopes: Scopes; alert_evening: boolean }[];
+  watching: { id: string; label: string; scopes: Scopes; alert_evening: boolean; alert_meds: boolean }[];
   invites: { id: string; label: string; url: string; expires_at: string }[];
-  watchers: { id: string; who: string | null; scopes: Scopes }[];
+  watchers: { id: string; who: string | null; scopes: Scopes; allow_nudge: boolean }[];
 };
 type Today = {
   date: string;
@@ -105,6 +105,19 @@ export function FamilyConnect() {
     } finally { setBusy(null); }
   };
 
+  const saveNudge = async (id: string, allow: boolean) => {
+    setBusy(id);
+    try {
+      const r = await fetch("/api/family/links", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, allow_nudge: allow }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || "");
+      setLinks((s) => (s.data ? { ...s, data: { ...s.data, watchers: s.data.watchers.map((w) => (w.id === id ? { ...w, allow_nudge: allow } : w)) } } : s));
+      toast.show(allow ? "콕 찌르기를 받기로 했어요" : "콕 찌르기를 받지 않기로 했어요");
+    } catch (e) {
+      toast.show((e as Error).message || "바꾸지 못했어요. 다시 시도해 주세요", { tone: "danger" });
+    } finally { setBusy(null); }
+  };
+
   if (links.status === "loading") return <div className="flex flex-col gap-4 mb-10"><Skeleton className="h-10 rounded-full w-40" /><SkeletonList rows={3} thumb={false} /></div>;
   if (links.status === "error" || !links.data) {
     return (
@@ -158,6 +171,9 @@ export function FamilyConnect() {
                   <Switch key={k} checked={w.scopes[k]} disabled={busy === w.id} label={SCOPE_LABEL[k].title} description={SCOPE_LABEL[k].hint}
                     onChange={(v) => saveScopes(w.id, { ...w.scopes, [k]: v })} />
                 ))}
+                <Switch checked={w.allow_nudge !== false} disabled={busy === w.id} label="콕 찌르기 받기"
+                  description="아직 기록하지 않은 끼니를 끼니마다 하루 한 번 알려 줄 수 있어요 · 밤 10시~아침 8시에는 오지 않아요"
+                  onChange={(v) => saveNudge(w.id, v)} />
                 <p className="text-caption text-ink-2">체중·건강 목표·먹은 음식 이름은 보여 주지 않아요</p>
                 <TextButton className="self-start text-danger" onClick={() => setEnding({ id: w.id, title: `${w.who ? `${w.who} 님에게` : "이 가족에게"} 그만 보여 줄까요?` })}>그만 보여 주기</TextButton>
               </Card>
@@ -198,6 +214,7 @@ function FamilyToday({ link, onEnd }: { link: Links["watching"][number]; onEnd: 
   const [state, setState] = useState<{ status: "loading" | "error" | "done"; today: Today | null }>({ status: "loading", today: null });
   const [attempt, setAttempt] = useState(0);
   const [alert, setAlert] = useState(link.alert_evening);
+  const [medAlert, setMedAlert] = useState(link.alert_meds !== false);
   const [sending, setSending] = useState(false);
   const seq = useRef(0);
 
@@ -208,11 +225,12 @@ function FamilyToday({ link, onEnd }: { link: Links["watching"][number]; onEnd: 
       .catch(() => { if (n === seq.current) setState({ status: "error", today: null }); });
   }, [link.id, attempt]);
 
-  const toggleAlert = async (v: boolean) => {
-    setAlert(v);
-    const r = await fetch("/api/family/links", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: link.id, alert_evening: v }) }).catch(() => null); // ds-allow: 실패는 바로 아래에서 알림
-    if (!r?.ok) { setAlert(!v); toast.show("알림 설정을 바꾸지 못했어요. 다시 시도해 주세요", { tone: "danger" }); }
+  const toggle = async (key: "alert_evening" | "alert_meds", v: boolean, set: (v: boolean) => void) => {
+    set(v);
+    const r = await fetch("/api/family/links", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: link.id, [key]: v }) }).catch(() => null); // ds-allow: 실패는 바로 아래에서 알림
+    if (!r?.ok) { set(!v); toast.show("알림 설정을 바꾸지 못했어요. 다시 시도해 주세요", { tone: "danger" }); }
   };
+  const toggleAlert = (v: boolean) => toggle("alert_evening", v, setAlert);
 
   if (state.status === "loading") return <SkeletonList rows={4} thumb={false} />;
   if (state.status === "error" || !state.today) {
@@ -264,6 +282,9 @@ function FamilyToday({ link, onEnd }: { link: Links["watching"][number]; onEnd: 
           </ul>
         )}
         {t.meds && <p className="text-caption text-ink-2">앱은 먹었는지 체크만 해요 · 약 이름·용량은 보이지 않아요</p>}
+        {t.meds && t.meds.length > 0 && (
+          <Switch checked={medAlert} onChange={(v) => toggle("alert_meds", v, setMedAlert)} label="정한 시각에서 1시간 넘게 체크가 없으면 알려 주기" description="나에게만 와요" />
+        )}
       </section>
 
       {t.numbers && (
@@ -273,6 +294,7 @@ function FamilyToday({ link, onEnd }: { link: Links["watching"][number]; onEnd: 
         </section>
       )}
 
+      <LinkButton variant="secondary" icon="notebook" href={`/diary?who=${link.id}`}>식단 탭에서 {link.label} 하루 보기</LinkButton>
       <div className="flex flex-col gap-1">
         <Button variant="secondary" icon="send" onClick={() => setSending(true)}>식단 보내기</Button>
         <p className="text-caption text-ink-2">내 식단 리스트의 식단을 {link.label} 식단 리스트에 담아 드려요</p>
@@ -280,7 +302,7 @@ function FamilyToday({ link, onEnd }: { link: Links["watching"][number]; onEnd: 
       <SendPlanSheet open={sending} onClose={() => setSending(false)} linkId={link.id} label={link.label} />
 
       {t.meals && (
-        <Switch checked={alert} onChange={toggleAlert} label="저녁 8시까지 기록이 없으면 알려 주기" description={`나에게만 와요 · ${link.label} 쪽에는 재촉 알림이 가지 않아요`} />
+        <Switch checked={alert} onChange={toggleAlert} label="저녁 8시까지 기록이 없으면 알려 주기" description={`나에게만 와요 · ${link.label} 쪽에는 자동으로 가지 않아요(직접 누르는 콕 찌르기만 가요)`} />
       )}
       <p className="text-caption text-ink-2">보여 주기로 한 것 · {shared(link.scopes)} · 바꾸거나 그만두기는 {link.label} 쪽에서만 할 수 있어요
         {" "}<TextButton className="text-caption" onClick={onEnd}>연결 끊기</TextButton></p>

@@ -11,6 +11,8 @@ import { nicknames } from "@/lib/challenge-groups";
  * POST   { label } — 초대 링크 만들기 (7일, 하루 5개까지). 응답 { id, code, url }
  * PATCH  { id, scopes } — 확인받는 사람만: 보여 줄 것 바꾸기 (기록을 남김)
  *        { id, alert_evening } — 보는 사람만: 저녁 8시까지 기록이 없으면 나에게 알림
+ *        { id, alert_meds } — 보는 사람만: 가족 약 체크가 정한 시각에서 1시간 넘게 없으면 나에게 알림
+ *        { id, allow_nudge } — 확인받는 사람만: 콕 찌르기 받기
  * DELETE { id } — 어느 쪽이든 그만두기 (기다리는 초대는 보낸 사람이 지우기)
  */
 type Sb = any; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -34,9 +36,9 @@ export async function GET() {
   try { names = await nicknames(sb, watchers.map((l) => l.viewer_id)); }
   catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: 500 }); }
   return NextResponse.json({
-    watching: out.filter((l) => l.status === "active").map((l) => ({ id: l.id, label: l.label, scopes: scopesOf(l), alert_evening: l.alert_evening, since: l.consented_at })),
+    watching: out.filter((l) => l.status === "active").map((l) => ({ id: l.id, label: l.label, scopes: scopesOf(l), alert_evening: l.alert_evening, alert_meds: l.alert_meds, since: l.consented_at })),
     invites: out.filter((l) => l.status === "pending" && Date.parse(l.expires_at) > now).map((l) => ({ id: l.id, label: l.label, url: `${site()}/f/${l.code}`, expires_at: l.expires_at })),
-    watchers: watchers.map((l) => ({ id: l.id, who: names.get(l.viewer_id) || null, scopes: scopesOf(l), since: l.consented_at })),
+    watchers: watchers.map((l) => ({ id: l.id, who: names.get(l.viewer_id) || null, scopes: scopesOf(l), allow_nudge: l.allow_nudge, since: l.consented_at })),
   });
 }
 
@@ -88,11 +90,20 @@ export async function PATCH(request: NextRequest) {
     catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: 500 }); }
     return NextResponse.json({ ok: true, scopes: s });
   }
-  if (typeof body.alert_evening === "boolean") {
+  for (const key of ["alert_evening", "alert_meds"] as const) {
+    if (typeof body[key] !== "boolean") continue;
     if (link.viewer_id !== who.actor) return NextResponse.json({ error: "알림은 보는 사람만 바꿀 수 있어요" }, { status: 403 });
-    const { error: uErr } = await sb.from("family_links").update({ alert_evening: body.alert_evening }).eq("id", link.id).eq("status", "active");
+    const { data: up, error: uErr } = await sb.from("family_links").update({ [key]: body[key] }).eq("id", link.id).eq("status", "active").select("id");
     if (uErr) return NextResponse.json({ error: uErr.message }, { status: 500 });
-    return NextResponse.json({ ok: true, alert_evening: body.alert_evening });
+    if (!up?.length) return NextResponse.json({ error: "연결이 끝났어요" }, { status: 409 });
+    return NextResponse.json({ ok: true, [key]: body[key] });
+  }
+  if (typeof body.allow_nudge === "boolean") {
+    if (link.owner_id !== who.actor) return NextResponse.json({ error: "콕 찌르기 받기는 본인만 바꿀 수 있어요" }, { status: 403 });
+    const { data: up, error: uErr } = await sb.from("family_links").update({ allow_nudge: body.allow_nudge }).eq("id", link.id).eq("status", "active").select("id");
+    if (uErr) return NextResponse.json({ error: uErr.message }, { status: 500 });
+    if (!up?.length) return NextResponse.json({ error: "연결이 끝났어요" }, { status: 409 });
+    return NextResponse.json({ ok: true, allow_nudge: body.allow_nudge });
   }
   return NextResponse.json({ error: "바꿀 것을 골라 주세요" }, { status: 400 });
 }
