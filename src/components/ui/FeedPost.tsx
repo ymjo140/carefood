@@ -257,6 +257,36 @@ export function ProductTagLinks({ products, className }: { products?: { id: stri
   );
 }
 
+/** 글의 사람 태그 · 원본 출처 한 줄씩 — 이름은 프로필로, 원본은 그 글로. 원본이 지워졌거나 가려졌으면 그렇다고만 */
+export function PostCredits({ people, source, className }: {
+  people?: { id: string; nickname: string }[] | null;
+  source?: { id: string; nickname: string | null; gone: boolean } | null;
+  className?: string;
+}) {
+  if (!(people && people.length) && !source) return null;
+  return (
+    <div className={cn("flex flex-col gap-0.5", className)}>
+      {people && people.length > 0 && (
+        <p className="flex flex-wrap items-center gap-x-1.5 text-label text-ink-2">
+          <Icon name="user" size={14} className="shrink-0" /><span>함께</span>
+          {people.map((p) => (
+            <Link key={p.id} href={`/community/u/${encodeURIComponent(p.id)}`}
+              className="inline-flex items-center min-h-8 font-medium text-ink hover:underline underline-offset-4">{p.nickname}</Link>
+          ))}
+        </p>
+      )}
+      {source && (source.gone || !source.nickname ? (
+        <p className="flex items-center gap-1.5 text-label text-ink-2 min-h-8"><Icon name="copy" size={14} className="shrink-0" />따라 한 원본 글을 볼 수 없어요</p>
+      ) : (
+        <p className="flex flex-wrap items-center gap-x-1.5 text-label text-ink-2">
+          <Icon name="copy" size={14} className="shrink-0" /><span>따라 한 원본</span>
+          <Link href={`/community/${source.id}`} className="inline-flex items-center min-h-8 font-medium text-ink hover:underline underline-offset-4">{source.nickname} 님의 글</Link>
+        </p>
+      ))}
+    </div>
+  );
+}
+
 /** #태그 줄 */
 export function PostTags({ tags, className }: { tags?: string[] | null; className?: string }) {
   if (!tags || tags.length === 0) return null;

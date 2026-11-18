@@ -6,7 +6,7 @@ import Link from "@/components/ui/AppLink";
 import ThreadCard, { type FeedPostData } from "@/components/community/ThreadCard";
 import PostMenu from "@/components/community/PostMenu";
 import ShareCardSheet from "@/components/community/ShareCardSheet";
-import { Avatar, BottomBar, Button, Chip, EmptyState, Icon, Input, Page, PageLoading, SectionHeader, useToast } from "@/components/ui";
+import { Avatar, BottomBar, Button, Chip, EmptyState, Icon, Input, LinkButton, Page, PageLoading, SectionHeader, useToast } from "@/components/ui";
 import { timeAgo } from "@/components/ui/FeedPost";
 import { getOrCreateNickname } from "@/lib/nickname";
 
@@ -170,6 +170,13 @@ export default function PostDetail() {
 
       <ThreadCard post={post} detail onLike={handleLike} onCopy={handleCopy} onReply={() => { setReplyTo(null); inputRef.current?.focus(); }}
         onMenuDone={() => router.push("/community")} />
+      {!post.is_mine && (post.meal_data?.plan || (post.meal_data?.foods?.length ?? 0) > 0) && (
+        <div className="flex flex-col gap-1 py-3 border-b border-line">
+          <LinkButton variant="secondary" icon="camera" className="self-start"
+            href={`/community?compose=${post.meal_data?.plan ? "plan" : "meal"}&source=${post.id}`}>따라 한 식단 올리기</LinkButton>
+          <p className="text-caption text-ink-2">내 기록을 붙여 올리면 이 글이 원본으로 달리고, {post.author_nickname} 님에게 소식이 가요</p>
+        </div>
+      )}
 
       {/* ── 답글 (한 단계까지 이어 달기) ── */}
       <section className="mt-4" aria-label="답글">

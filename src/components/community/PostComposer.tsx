@@ -6,11 +6,13 @@ import {
   Button, Chip, ChipRow, IconButton, Field, Icon, Input, Kcal, Select, Sheet, SkeletonList, Textarea, VideoAttach, cn, useToast,
 } from "@/components/ui";
 import { useVideoUpload } from "./useVideoUpload";
+import PeopleTagSheet, { type TagPerson } from "./PeopleTagSheet";
 import { COMMUNITY_TOPICS } from "@/lib/community-topics";
 import { POLL_DAYS, POLL_MAX_OPTIONS, POLL_OPTION_MAX } from "@/lib/community-poll";
 
 /**
- * 글쓰기 시트 — 글 + 붙이기(사진 4장 · 영상 1개 · 기록한 끼니 · 저장한 식단 · 제품 태그 · 투표) + 모임.
+ * 글쓰기 시트 — 글 + 붙이기(사진 4장 · 영상 1개 · 기록한 끼니 · 저장한 식단 · 제품 태그 · 사람 태그 · 투표) + 모임.
+ * 따라 한 글은 원본 출처(preset.source)를 달고 올린다 — 원본 글쓴이에게 소식이 간다.
  * 사진은 /api/community/upload 가 위치 정보 같은 메타데이터를 지우고 줄여서 올린다.
  * 작성자 건강 관심사는 붙이지 않는다 (서버도 받지 않음).
  */
@@ -37,7 +39,7 @@ function lastDays(n = 7) {
 type Load<T> = { status: "idle" | "loading" | "error" | "done"; items: T[] };
 
 /** 기록·식단 리스트에서 '나누기'로 열 때 미리 고를 것 — 그 날짜·끼니의 기록, 또는 그 식단 */
-export type ComposerPreset = { day?: string; meal?: string; planId?: string };
+export type ComposerPreset = { day?: string; meal?: string; planId?: string; source?: string };
 
 export default function PostComposer({ isOpen, initialAttach, preset, nickname, onClose, onPosted }: {
   isOpen: boolean;
@@ -52,6 +54,10 @@ export default function PostComposer({ isOpen, initialAttach, preset, nickname, 
   const [attach, setAttach] = useState<Attach | null>(null);
   const [topic, setTopic] = useState("");
   const [posting, setPosting] = useState(false);
+  const [people, setPeople] = useState<TagPerson[]>([]);
+  const [tagOpen, setTagOpen] = useState(false);
+  const [source, setSource] = useState<{ id: string; nickname: string } | null>(null);
+  const [srcWanted, setSrcWanted] = useState<string | null>(null);
 
   // 기록한 끼니
   // 날짜는 시트를 열 때 정한다 (미리 그릴 때 시계를 읽지 않게)
@@ -153,6 +159,8 @@ export default function PostComposer({ isOpen, initialAttach, preset, nickname, 
       setDays(d);
       setDay(preset?.day && d.some((x) => x.iso === preset.day) ? preset.day : d[0].iso);
       setPending(preset ?? null);
+      setSource(null);
+      setSrcWanted(preset?.source ?? null);
       setEntries({ status: "idle", items: [] }); // 지난번 연 날짜의 목록으로 미리 고르지 않게
       setAttach(initialAttach === "poll" ? null : initialAttach ?? null);
       if (initialAttach === "poll") setPollOn(true);
@@ -170,6 +178,18 @@ export default function PostComposer({ isOpen, initialAttach, preset, nickname, 
   }, [isOpen, attach, day, retry]);
 
   // 미리 고를 것 — 목록이 오면 한 번만 적용
+  // 따라 한 원본 — 시트를 열 때 원본 글쓴이 이름을 받아 온다 (못 받으면 원본 없이 쓰고 알린다)
+  const srcId = isOpen ? srcWanted : null;
+  useEffect(() => {
+    if (!srcId) return;
+    let alive = true;
+    fetch(`/api/community/feed?id=${encodeURIComponent(srcId)}`)
+      .then(async (r) => { const d = await r.json(); if (!r.ok) throw new Error(d.error || String(r.status)); return d.post as { id: string; author_nickname: string }; })
+      .then((p) => { if (alive) setSource({ id: p.id, nickname: p.author_nickname }); })
+      .catch((e) => { console.error(e); if (alive) toast.show("원본 글을 불러오지 못해 원본 없이 써요", { tone: "danger" }); });
+    return () => { alive = false; };
+  }, [srcId, toast]);
+
   if (pending?.meal && entries.status === "done") {
     const hit = entries.items.filter((e) => e.meal_type === pending.meal);
     setPending(null);
@@ -206,6 +226,7 @@ export default function PostComposer({ isOpen, initialAttach, preset, nickname, 
     setContent(""); setAttach(null); setTopic(""); setPicked([]); setPlan(null); setProducts([]); setQ(""); dropAllPhotos(!posted); vClear(posted);
     setPollOn(false); setPollOpts(["", ""]); setPollDays(3);
     setHits({ status: "idle", items: [] }); if (days[0]) setDay(days[0].iso);
+    setPeople([]); setSource(null); setSrcWanted(null);
   };
   const close = () => { reset(); onClose(); };
 
@@ -252,12 +273,16 @@ export default function PostComposer({ isOpen, initialAttach, preset, nickname, 
           video,
           poll: pollOn ? { options: pollFilled, days: pollDays } : null,
           topic: topic || null,
+          people: people.map((p) => p.id),
+          source_post_id: source?.id ?? null,
           author_nickname: nickname,
         }),
       });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(d.error);
-      toast.show(pollOn ? "투표를 올렸어요" : "올렸어요");
+      const dropped = (d.dropped || []) as string[];
+      if (dropped.length) toast.show(`올렸어요. ${dropped.join(", ")} 님은 태그하지 못했어요 · ${d.dropped_reason || "태그를 받지 않는 사람이에요"}`, { tone: "danger" });
+      else toast.show(pollOn ? "투표를 올렸어요" : "올렸어요");
       reset(true);
       onPosted();
       onClose();
@@ -311,7 +336,7 @@ export default function PostComposer({ isOpen, initialAttach, preset, nickname, 
         )}
 
         {/* 붙인 것 */}
-        {(hasMeal || plan || products.length > 0 || photos.length > 0 || vStatus !== "idle") && (
+        {(hasMeal || plan || products.length > 0 || photos.length > 0 || vStatus !== "idle" || people.length > 0 || source) && (
           <div className="flex flex-col gap-2">
             <VideoAttach status={vStatus} video={video} onRemove={vDrop} />
             {photos.length > 0 && (
@@ -346,6 +371,25 @@ export default function PostComposer({ isOpen, initialAttach, preset, nickname, 
                 <Button size="sm" variant="ghost" onClick={() => setPicked([])}>빼기</Button>
               </div>
             )}
+            {source && (
+              <div className="flex items-center gap-3 rounded-md bg-sunken px-3 py-2.5">
+                <Icon name="copy" size={18} className="text-ink-2" />
+                <span className="flex-1 min-w-0 text-label text-ink truncate">따라 한 원본 · {source.nickname} 님의 글</span>
+                <Button size="sm" variant="ghost" onClick={() => setSource(null)}>빼기</Button>
+              </div>
+            )}
+            {people.length > 0 && (
+              <div className="flex flex-col gap-1.5">
+                <div className="flex flex-wrap gap-1.5">
+                  {people.map((p) => (
+                    <Chip key={p.id} size="sm" selected aria-label={`${p.nickname} 태그 빼기`} onClick={() => setPeople(people.filter((x) => x.id !== p.id))}>
+                      <Icon name="user" size={14} /><span className="max-w-[10rem] truncate">{p.nickname}</span><Icon name="close" size={14} />
+                    </Chip>
+                  ))}
+                </div>
+                {people.some((p) => p.pending) && <p className="text-caption text-ink-2">{people.filter((p) => p.pending).map((p) => p.nickname).join(", ")} 님은 승인하면 글에 보여요</p>}
+              </div>
+            )}
             {products.length > 0 && (
               <div className="flex flex-wrap gap-1.5">
                 {products.map((p) => (
@@ -376,10 +420,15 @@ export default function PostComposer({ isOpen, initialAttach, preset, nickname, 
                 <Icon name={icon} size={16} />{label}
               </Chip>
             ))}
+            <Chip selected={tagOpen} onClick={() => setTagOpen(true)}>
+              <Icon name="user" size={16} />사람 태그{people.length > 0 && <span className="num">{people.length}</span>}
+            </Chip>
             <Chip selected={pollOn} onClick={() => setPollOn(!pollOn)}>
               <Icon name="poll" size={16} />투표
             </Chip>
           </ChipRow>
+          <PeopleTagSheet open={tagOpen} onClose={() => setTagOpen(false)} chosen={people}
+            onAdd={(p) => setPeople((xs) => (xs.some((x) => x.id === p.id) ? xs : [...xs, p]))} />
         </div>
 
         {/* ── 기록한 끼니 ── */}
