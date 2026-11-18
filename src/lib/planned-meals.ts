@@ -6,7 +6,8 @@ import type { PlanFood } from "@/lib/weekly-plan";
  */
 export const PLANNED_MEALS = ["breakfast", "lunch", "dinner", "snack"] as const;
 export type PlannedMealKey = (typeof PLANNED_MEALS)[number];
-export type PlannedMeal = { date: string; meal: PlannedMealKey; foods: PlanFood[]; plan_title: string | null };
+/** sent_name · note: 가족이 보낸 예정 ('예정 · 지은이 보냄' + 한마디, /api/family/links/[id]/send) */
+export type PlannedMeal = { date: string; meal: PlannedMealKey; foods: PlanFood[]; plan_title: string | null; sent_name?: string | null; note?: string | null };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const num = (v: unknown, max: number) => {

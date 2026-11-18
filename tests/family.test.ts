@@ -1,12 +1,12 @@
 /** 가족 연결 (lib/family.ts · lib/family-alerts.ts) — 보여 줄 것 정리 · 약 알림 시간 */
 import { describe, expect, it } from "vitest";
-import { cleanScopes, familyDayOk, nudgeBlock } from "@/lib/family";
+import { askableOf, cleanScopes, familyDayOk, grantOf, nudgeBlock } from "@/lib/family";
 import { kstMinutes, planMedAlerts, planViewerMedAlerts } from "@/lib/family-alerts";
 
 describe("보여 줄 것", () => {
   it("기본은 숫자 꺼짐 · 모르는 값은 기본값", () => {
-    expect(cleanScopes(undefined)).toEqual({ meals: true, products: true, meds: false, numbers: false });
-    expect(cleanScopes({ numbers: "yes", meds: true })).toEqual({ meals: true, products: true, meds: true, numbers: false });
+    expect(cleanScopes(undefined)).toEqual({ meals: true, products: true, meds: false, numbers: false, foods: false, proxy: false });
+    expect(cleanScopes({ numbers: "yes", meds: true })).toEqual({ meals: true, products: true, meds: true, numbers: false, foods: false, proxy: false });
   });
 });
 
@@ -76,5 +76,19 @@ describe("가족 약 체크 알림(보는 사람)", () => {
     expect(a.payload.body).toBe("엄마 · 아침 약 체크가 아직이에요");
     expect(a.payload.body).not.toMatch(/복용|용량|식후|식전/);
     expect(a.payload.url).toBe("/diary?who=L1");
+  });
+});
+
+describe("보여 줄 것 요청·답", () => {
+  const base = { meals: true, products: true, meds: true, numbers: false, foods: false, proxy: false };
+  it("요청은 아직 꺼진 먹은 음식·대신 기록하기만", () => {
+    expect(askableOf(["foods", "proxy", "numbers", "x"], base)).toEqual(["foods", "proxy"]);
+    expect(askableOf(["foods"], { ...base, foods: true })).toEqual([]);
+    expect(askableOf("foods", base)).toEqual([]);
+  });
+  it("답으로는 요청한 것만 켤 수 있다", () => {
+    expect(grantOf(["foods", "proxy"], ["foods"])).toEqual(["foods"]);
+    expect(grantOf(["numbers"], ["foods", "proxy"])).toEqual([]);
+    expect(grantOf(undefined, ["foods"])).toEqual([]);
   });
 });

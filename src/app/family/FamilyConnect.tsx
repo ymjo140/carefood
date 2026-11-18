@@ -13,7 +13,7 @@ import {
  *  - 나를 보는 가족: 보여 줄 것 바꾸기 · 그만 보여 주기 (나만 할 수 있다)
  *  - 내 약 체크: 내가 정한 이름 + 알림 시각, 오늘 먹었어요 체크 (복용 안내는 하지 않는다)
  */
-type Scopes = { meals: boolean; products: boolean; meds: boolean; numbers: boolean };
+type Scopes = { meals: boolean; products: boolean; meds: boolean; numbers: boolean; foods: boolean; proxy: boolean };
 type Links = {
   watching: { id: string; label: string; scopes: Scopes; alert_evening: boolean; alert_meds: boolean }[];
   invites: { id: string; label: string; url: string; expires_at: string }[];
@@ -35,7 +35,11 @@ const SCOPE_LABEL: Record<keyof Scopes, { title: string; hint: string }> = {
   products: { title: "고른 제품", hint: "이번 주 기록한 제품과 성분 한 줄" },
   meds: { title: "약 먹었는지", hint: "내가 정한 이름과 체크 여부만 · 약 이름은 보이지 않아요" },
   numbers: { title: "열량·영양 숫자", hint: "하루 열량과 단백질·나트륨" },
+  foods: { title: "먹은 음식", hint: "끼니마다 음식 이름과 양 · 담아 둔 예정" },
+  proxy: { title: "대신 기록하기", hint: "담아 둔 끼니와 약 체크를 가족이 대신 기록 · 기록에 가족 이름이 붙어요" },
 };
+// 건강 관련 정보·기록 권한 — 켤 때는 한 번 더 묻는다
+const SENSITIVE: (keyof Scopes)[] = ["foods", "proxy"];
 const won = (v: number) => v.toLocaleString("ko-KR");
 const weekday = (d: string) => "일월화수목금토"[new Date(`${d}T00:00:00+09:00`).getDay()];
 const shared = (s: Scopes) => (Object.keys(SCOPE_LABEL) as (keyof Scopes)[]).filter((k) => s[k]).map((k) => SCOPE_LABEL[k].title).join(", ") || "없음";
@@ -55,6 +59,7 @@ export function FamilyConnect() {
   const [made, setMade] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [ending, setEnding] = useState<{ id: string; title: string } | null>(null);
+  const [confirmOn, setConfirmOn] = useState<{ id: string; key: keyof Scopes; who: string | null; next: Scopes } | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -169,12 +174,14 @@ export function FamilyConnect() {
                 <h3 className="text-body font-bold text-ink">{w.who ? `${w.who} 님에게` : "연결된 가족에게"} 보여 주는 것</h3>
                 {(Object.keys(SCOPE_LABEL) as (keyof Scopes)[]).map((k) => (
                   <Switch key={k} checked={w.scopes[k]} disabled={busy === w.id} label={SCOPE_LABEL[k].title} description={SCOPE_LABEL[k].hint}
-                    onChange={(v) => saveScopes(w.id, { ...w.scopes, [k]: v })} />
+                    onChange={(v) => (v && SENSITIVE.includes(k)
+                      ? setConfirmOn({ id: w.id, key: k, who: w.who, next: { ...w.scopes, [k]: v } })
+                      : saveScopes(w.id, { ...w.scopes, [k]: v }))} />
                 ))}
                 <Switch checked={w.allow_nudge !== false} disabled={busy === w.id} label="콕 찌르기 받기"
                   description="아직 기록하지 않은 끼니를 끼니마다 하루 한 번 알려 줄 수 있어요 · 밤 10시~아침 8시에는 오지 않아요"
                   onChange={(v) => saveNudge(w.id, v)} />
-                <p className="text-caption text-ink-2">체중·건강 목표·먹은 음식 이름은 보여 주지 않아요</p>
+                <p className="text-caption text-ink-2">{w.scopes.foods ? "체중·건강 목표는 보여 주지 않아요" : "체중·건강 목표·먹은 음식 이름은 보여 주지 않아요"}</p>
                 <TextButton className="self-start text-danger" onClick={() => setEnding({ id: w.id, title: `${w.who ? `${w.who} 님에게` : "이 가족에게"} 그만 보여 줄까요?` })}>그만 보여 주기</TextButton>
               </Card>
             ))}
@@ -200,6 +207,11 @@ export function FamilyConnect() {
           </Field>
         )}
       </Sheet>
+
+      <ConfirmSheet open={!!confirmOn} onClose={() => setConfirmOn(null)} loading={!!confirmOn && busy === confirmOn.id}
+        title={confirmOn ? `${confirmOn.who ? `${confirmOn.who} 님에게` : "가족에게"} ${SCOPE_LABEL[confirmOn.key].title}${confirmOn.key === "foods" ? "을" : "를"} 켤까요?` : ""}
+        description={confirmOn?.key === "foods" ? "끼니마다 음식 이름과 양이 보여요. 먹은 음식은 건강과 관련된 정보예요. 언제든 여기서 끌 수 있어요" : "담아 둔 끼니와 약 체크를 가족이 대신 기록할 수 있어요. 언제든 여기서 끌 수 있어요"}
+        confirmLabel="켜기" onConfirm={async () => { if (confirmOn) { await saveScopes(confirmOn.id, confirmOn.next); setConfirmOn(null); } }} />
 
       <ConfirmSheet open={!!ending} onClose={() => setEnding(null)} loading={!!ending && busy === ending.id}
         title={ending?.title || ""} description="끊으면 서로의 기록이 더는 보이지 않아요. 다시 연결하려면 새 초대가 필요해요"

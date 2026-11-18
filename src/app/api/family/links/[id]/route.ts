@@ -28,15 +28,21 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     if (error) throw new Error(error.message);
     if (!data) return NextResponse.json({ error: "연결을 찾지 못했어요" }, { status: 404 });
     const l = data as LinkRow;
-    const [dayView, nudges] = await Promise.all([
+    const [dayView, nudges, reqs] = await Promise.all([
       familyToday(sb, l, day),
       sb.from("family_nudges").select("meal").eq("link_id", l.id).eq("day", day),
+      sb.from("family_requests").select("asks, status, granted, created_at, answered_at").eq("link_id", l.id)
+        .gte("created_at", new Date(Date.now() - 7 * 86400e3).toISOString()).order("created_at", { ascending: false }).limit(1),
     ]);
+    const missing = (e: { code?: string } | null) => !!e && (e.code === "42P01" || e.code === "PGRST205");
+    if (reqs.error && !missing(reqs.error)) throw new Error(reqs.error.message);
     const nudgeReady = !nudges.error;
     if (nudges.error && nudges.error.code !== "42P01" && nudges.error.code !== "PGRST205") throw new Error(nudges.error.message);
     return NextResponse.json({
       id: l.id, label: l.label, scopes: scopesOf(l), alert_evening: l.alert_evening, alert_meds: l.alert_meds,
       today: dayView, is_today: day === today,
+      // 최근 7일 안 요청 하나 (기다림·답함) — 보는 사람 화면의 '요청 보내기'·'답을 기다려요'
+      request: reqs.error ? null : (reqs.data?.[0] ?? null), request_ready: !reqs.error,
       nudge: { ready: nudgeReady, allowed: l.allow_nudge && l.share_meals, sent: nudgeReady ? ((nudges.data || []) as { meal: string }[]).map((n) => n.meal) : [] },
     });
   } catch (e) {

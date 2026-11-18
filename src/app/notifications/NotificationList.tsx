@@ -5,10 +5,10 @@ import Link from "@/components/ui/AppLink";
 import { Button, Card, EmptyState, Icon, LinkButton, SkeletonList, cn, type IconName } from "@/components/ui";
 import { timeAgo } from "@/components/ui/FeedPost";
 
-type Item = { id: string; type: "comment" | "reply" | "like" | "follow" | "gb_question" | "gb_answer" | "gb_reached" | "gb_requested" | "ad" | "consent" | "collab" | "inquiry" | "ch_cheer" | "ch_join" | "ch_start" | "nudge"; at: string; who: string; count?: number; text?: string; post_id?: string; post_excerpt?: string; user_id?: string; url?: string };
+type Item = { id: string; type: "comment" | "reply" | "like" | "follow" | "gb_question" | "gb_answer" | "gb_reached" | "gb_requested" | "ad" | "consent" | "collab" | "inquiry" | "ch_cheer" | "ch_join" | "ch_start" | "nudge" | "family_request" | "family_answer"; at: string; who: string; count?: number; text?: string; post_id?: string; post_excerpt?: string; user_id?: string; url?: string };
 
 const ICON: Record<Item["type"], IconName> = {
-  comment: "message", reply: "message", like: "heart", follow: "user", gb_question: "message", gb_answer: "message", gb_reached: "users", gb_requested: "bell", ad: "tag", consent: "bell", collab: "users", inquiry: "message", ch_cheer: "heart", ch_join: "users", ch_start: "calendar", nudge: "bell",
+  comment: "message", reply: "message", like: "heart", follow: "user", gb_question: "message", gb_answer: "message", gb_reached: "users", gb_requested: "bell", ad: "tag", consent: "bell", collab: "users", inquiry: "message", ch_cheer: "heart", ch_join: "users", ch_start: "calendar", nudge: "bell", family_request: "lock", family_answer: "users",
 };
 
 export function NotificationList() {
@@ -81,9 +81,11 @@ export function NotificationList() {
                 {n.type === "ch_start" && <>내일부터 같이 시작해요. 오늘 밤 미리 알림을 켜 두면 좋아요</>}
                 {n.type === "collab" && <><b className="font-bold">{n.who}</b>에서 협업을 제안했어요. 마이 &gt; 협업 제안에서 받거나 거절할 수 있어요</>}
                 {n.type === "nudge" && <><b className="font-bold">{n.who}</b> 님이 {n.text} 기록을 기다려요</>}
+                {n.type === "family_request" && <><b className="font-bold">{n.who}</b> 님이 보여 줄 것을 요청했어요 · {n.text}. 눌러서 정해 주세요</>}
+                {n.type === "family_answer" && <><b className="font-bold">{n.who}</b> · {n.text}</>}
                 {n.type === "inquiry" && <><b className="font-bold">{n.who}</b>가 주문 문의에 답했어요. 마이 &gt; 주문 내역에서 볼 수 있어요</>}
               </span>
-              {n.text && n.type !== "ad" && n.type !== "nudge" && <span className="text-label text-ink-2 line-clamp-2">“{n.text}”</span>}
+              {n.text && n.type !== "ad" && n.type !== "nudge" && n.type !== "family_request" && n.type !== "family_answer" && <span className="text-label text-ink-2 line-clamp-2">“{n.text}”</span>}
               {(n.type === "ad" || n.type === "consent") && <span className="text-label text-ink-2 line-clamp-3">{n.text}</span>}
               {n.type === "ad" && <span className="text-caption text-ink-3">받지 않으려면 마이 &gt; 알림 설정에서 끌 수 있어요</span>}
               {n.post_excerpt && n.type !== "comment" && n.type !== "reply" && <span className="text-caption text-ink-2 line-clamp-1">{n.post_excerpt}</span>}

@@ -16,6 +16,7 @@ import PushPrompt from "@/components/PushPrompt";
 import { MascotBanner } from "@/components/community/MascotBanner";
 import { PlanSheet } from "./PlanSheet";
 import { FamilyDay, PersonChips, type FamilyPerson } from "./FamilyDay";
+import { josa } from "@/lib/buddy";
 import type { PlannedMeal } from "@/lib/planned-meals";
 
 /* ── 타입 ── */
@@ -34,6 +35,8 @@ type DiaryEntry = {
   sodium_mg: number | null;
   fiber_g: number | null;
   memo: string | null;
+  /** 가족이 대신 기록했으면 그 사람 이름 */
+  recorded_name?: string | null;
 };
 
 type RecentMeal = {
@@ -1281,9 +1284,12 @@ export default function DiaryPage() {
                   const ahead = date > todayStr;
                   const kcal = foods.reduce((a, f) => a + (Number(f.calories) || 0), 0);
                   const title = dated ? dated.plan_title || "불러온 식단" : planTitle || "식단 리스트";
+                  // 가족이 보낸 예정 — '예정 · 지은이 보냄' + 한마디
+                  const from = dated?.sent_name;
                   return (
-                    <MealSlot meal={meal.key} right={<span className="text-caption text-ink-2 line-clamp-1 max-w-48">{ahead ? "예정" : "계획"} · {title}</span>}>
+                    <MealSlot meal={meal.key} right={<span className="text-caption text-ink-2 line-clamp-1 max-w-48">{from ? `예정 · ${from}${josa(from, "이", "가")} 보냄` : `${ahead ? "예정" : "계획"} · ${title}`}</span>}>
                       <p className="text-body text-ink">{foods.map((f) => f.name).join(" · ")}</p>
+                      {dated?.note && <p className="text-label text-ink rounded-md bg-sunken px-3 py-2 mt-1.5">“{dated.note}”</p>}
                       {kcal > 0 && <p className="text-caption text-ink-2 mt-0.5">{ahead ? "예정" : "계획"} <Kcal value={Math.round(kcal)} className="text-caption" /></p>}
                       <div className="flex flex-wrap gap-1 mt-2 -ml-1">
                         {!ahead && (
@@ -1336,6 +1342,7 @@ export default function DiaryPage() {
                                 {e.protein_g != null && <span>단백질 <span className="num">{e.protein_g}</span>g</span>}
                                 {e.sodium_mg != null && e.sodium_mg > 600 && <span className="font-bold text-sodium">나트륨 <span className="num">{e.sodium_mg}</span>mg</span>}
                                 {e.fat_g != null && e.fat_g > 15 && !e.sodium_mg && <span>지방 <span className="num">{e.fat_g}</span>g</span>}
+                                {e.recorded_name && <span>{e.recorded_name}{josa(e.recorded_name, "이", "가")} 기록</span>}
                               </div>
 
                             </div>
