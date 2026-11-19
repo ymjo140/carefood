@@ -37,13 +37,16 @@ export function MemberProgressRow({ name, me = false, host = false, days, done, 
  * 묶음 보드 한 줄 — 오늘 인증했는지와 그 사진만 (사람끼리 해낸 날 수·순위를 비교하지 않는다).
  * photo 가 없고 proved 면 '인증했어요'(볼 수 없는 팔로워만 글), 아니면 '아직'. 사진을 누르면 그 글로 간다.
  */
-export function MemberTodayRow({ name, me = false, host = false, proved, photo, href, album = false, action }: {
+export function MemberTodayRow({ name, me = false, host = false, proved, photo, full, href, album = false, action }: {
   name: string; me?: boolean; host?: boolean; proved: boolean; photo?: string | null; href?: string | null; album?: boolean;
+  /** 작게 보기 사진이 없을 때 돌아갈 원래 사진 */
+  full?: string | null;
   action?: ReactNode;
 }) {
   const thumb = photo
     // eslint-disable-next-line @next/next/no-img-element
-    ? <img src={photo} alt={`${name}의 오늘 인증 사진`} className="size-14 rounded-md border border-line object-cover" />
+    ? <img src={photo} alt={`${name}의 오늘 인증 사진`} className="size-14 rounded-md border border-line object-cover"
+      onError={(e) => { if (full && e.currentTarget.src !== full) e.currentTarget.src = full; }} />
     : null;
   return (
     <li className={cn("flex items-center gap-3 py-3", me && "-mx-3 px-3 rounded-md bg-sunken")}>

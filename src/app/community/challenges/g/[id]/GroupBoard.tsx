@@ -15,7 +15,7 @@ import { daysBetween, monthDay, todayKst } from "@/lib/day";
  * ?joined=1 — 링크로 막 들어왔을 때 한 번 안내
  */
 type Member = { user_id: string; nickname: string; is_me: boolean; is_host: boolean; cheered: boolean;
-  today: { proved: boolean; photo: string | null; post_id: string | null; album: boolean } };
+  today: { proved: boolean; photo: string | null; full?: string | null; post_id: string | null; album: boolean } };
 type Board = {
   group: { id: string; code: string; start_on: string; ends_on: string; member_count: number; max_members: number; is_host: boolean; finished: boolean };
   challenge: { id: string; title: string; rule: string; days: number; proof: "photo" | "none" };
@@ -128,7 +128,7 @@ export default function GroupBoard() {
         <ul className="flex flex-col divide-y divide-line">
           {b.members.map((m) => (
             <MemberTodayRow key={m.user_id} name={m.nickname} me={m.is_me} host={m.is_host}
-              proved={m.today.proved} photo={m.today.photo} href={m.today.post_id ? `/community/${m.today.post_id}` : null} album={m.today.album}
+              proved={m.today.proved} photo={m.today.photo} full={m.today.full} href={m.today.post_id ? `/community/${m.today.post_id}` : null} album={m.today.album}
               action={m.is_me || b.group.finished ? undefined : (
                 <IconButton icon="heart" size="sm" active={m.cheered} disabled={m.cheered || cheering === m.user_id}
                   label={m.cheered ? `${m.nickname}님을 오늘 응원했어요` : `${m.nickname}님 응원하기`} onClick={() => cheer(m)} />

@@ -4,9 +4,11 @@ import { createServiceRoleClient } from "@/lib/supabase/server";
 import { getActorId } from "@/lib/actor-server";
 import { viewerFilters } from "@/lib/community-safety";
 import { audienceOf, canSee } from "@/lib/community-visibility";
+import { thumbOf } from "@/lib/community-images";
 
 /**
  * GET /api/community/challenges/[id]/proofs?before=<created_at> — 챌린지 인증 사진 (새것부터 24장)
+ *   photo: 작게 보기(400px), full: 원래 사진 — 작게 보기가 없던 예전 사진은 화면이 full 로 돌아간다
  *   사진·닉네임·날짜만 — 숫자·순위·몇 번째 인증인지는 없다(사람끼리 비교하지 않는다).
  *   보는 사람이 볼 수 없는 글(팔로워만·차단·숨김·신고로 가려짐·지운 글)의 사진은 뺀다.
  *   next: 다음 쪽을 부를 before 값 (없으면 끝)
@@ -30,7 +32,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const sb = createServiceRoleClient() as Sb;
   try {
     const [f, a] = await Promise.all([viewerFilters(sb, viewer), audienceOf(sb, viewer)]);
-    const items: { id: string; photo: string; post_id: string; day: string; nickname: string; album: boolean; mine: boolean }[] = [];
+    const items: { id: string; photo: string; full: string; post_id: string; day: string; nickname: string; album: boolean; mine: boolean }[] = [];
     let cursor = before && !Number.isNaN(Date.parse(before)) ? before : null;
     let next: string | null = null;
     // 가려서 빠지는 것이 있으니 몇 번까지 더 읽어 한 쪽을 채운다
@@ -47,7 +49,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         if (!p || !p.is_active || !r.community_uploads?.url) continue;
         const mine = !!viewer && r.user_id === viewer;
         if (!mine && (p.hidden_by_reports || f.blocked.has(r.user_id) || f.hidden.has(p.id) || !canSee(p, a))) continue;
-        items.push({ id: r.id, photo: r.community_uploads.url, post_id: r.post_id, day: r.day, nickname: p.author_nickname || "익명", album: !r.community_uploads.taken_at, mine });
+        items.push({ id: r.id, photo: thumbOf(r.community_uploads.url)!, full: r.community_uploads.url, post_id: r.post_id, day: r.day, nickname: p.author_nickname || "익명", album: !r.community_uploads.taken_at, mine });
         if (items.length >= PAGE) { next = r.created_at; break; }
       }
       if (items.length >= PAGE) break;

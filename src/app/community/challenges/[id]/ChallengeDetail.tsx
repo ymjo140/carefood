@@ -19,7 +19,7 @@ type Detail = {
   me: { days: DayDot[]; done_count: number; goal: number; reached: boolean; finished: boolean; group: { id: string; code: string; start_on: string; member_count: number } | null } | null;
   cohorts: { start_on: string; ends_on: string; apply_until: string; state: "recruiting" | "running" | "soon"; joined: number }[];
 };
-type Proof = { id: string; photo: string; post_id: string; day: string; nickname: string; album: boolean };
+type Proof = { id: string; photo: string; full: string; post_id: string; day: string; nickname: string; album: boolean };
 
 const md = (d: string) => { const { month, date } = monthDay(d); return `${month}/${date}`; };
 
@@ -166,7 +166,7 @@ export default function ChallengeDetail() {
         )}
         {proofs.status === "done" && proofs.items.length > 0 && (
           <div className="flex flex-col gap-3">
-            <ProofGrid items={proofs.items.map((p) => ({ id: p.id, photo: p.photo, href: `/community/${p.post_id}`, nickname: p.nickname, day: p.day, album: p.album }))} />
+            <ProofGrid items={proofs.items.map((p) => ({ id: p.id, photo: p.photo, full: p.full, href: `/community/${p.post_id}`, nickname: p.nickname, day: p.day, album: p.album }))} />
             {proofs.next && <Button variant="secondary" size="sm" className="self-center" loading={proofs.more} onClick={() => loadProofs(proofs.next)}>더 보기</Button>}
             <p className="text-caption text-ink-2">남의 사진이나 몸·체중 사진은 글의 ⋯ 메뉴에서 신고해 주세요</p>
           </div>
