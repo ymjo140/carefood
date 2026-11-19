@@ -735,6 +735,19 @@ export default function WeeklyBoxPage() {
     }
   };
 
+  // 캐릭터 이야기에서 '일주일 식단에 담기'로 왔으면(?plan=) 그 식단을 편집기에 연다
+  const planOpened = useRef(false);
+  useEffect(() => {
+    if (loading || planOpened.current) return;
+    const id = new URLSearchParams(window.location.search).get("plan");
+    if (!id) return;
+    planOpened.current = true;
+    window.history.replaceState(null, "", "/weekly-box");
+    void loadPlan(id); // eslint-disable-line react-hooks/set-state-in-effect -- 주소로 받은 식단을 한 번 연다
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- 첫 로딩이 끝났을 때 한 번만
+  }, [loading]);
+
+
   const updateCell = (day: string, meal: string, cell: CellData) => {
     setGrid(prev => ({ ...prev, [day]: { ...prev[day], [meal]: cell } }));
   };
@@ -1017,15 +1030,16 @@ export default function WeeklyBoxPage() {
           })}
         </div>
 
+        {/* 순서: 추천 받기(채우기·AI) → 이름 → 저장하기 — 추천을 받고 고친 뒤 저장하는 흐름 */}
         <div className="flex flex-col gap-3 mt-6">
-          <Field label="식단 이름">
-            <Input
-              value={planTitle}
-              onChange={e => setPlanTitle(e.target.value)}
-              placeholder="예: 체중관리 첫 주"
-              name="plan_title"
-            />
-          </Field>
+          <div className="flex items-center gap-3 pt-4 border-t border-line">
+            <p className="flex-1 min-w-0 text-label text-ink">
+              {stats.products > 0
+                ? <>하루 평균 <span className="num font-bold">{stats.avgCal.toLocaleString("ko-KR")}</span>kcal · 단백질 <span className="num font-bold">{stats.avgProtein}</span>g이에요</>
+                : "내 목표로 7일을 채우거나 AI에게 짜 달라고 해 보세요"}
+            </p>
+            <LinkButton href={`/buddy?ask=${encodeURIComponent(stats.products > 0 ? "일주일 식단 다른 걸로 짜 줘" : "일주일 식단 짜 줘")}`} size="sm" variant="secondary" icon="message" className="shrink-0">AI에게 묻기</LinkButton>
+          </div>
           {familyList.length > 0 && (
             <Field label="누구 기준으로 채울까요">
               <Select value={forWhom} onChange={(e) => setForWhom(e.target.value)}>
@@ -1034,15 +1048,21 @@ export default function WeeklyBoxPage() {
               </Select>
             </Field>
           )}
-          <div className="flex gap-2">
-            <Button variant="secondary" block onClick={() => (stats.products > 0 ? setConfirmFill(true) : generatePlan())} loading={generating || (!precomputed && preloading)}>
-              {generating ? "만드는 중" : !precomputed && preloading ? "준비 중" : "추천으로 채우기"}
-            </Button>
-            {/* 채운 버튼은 아래 고정 줄(장보기) 하나 — 저장하기는 테두리 버튼 */}
-            <Button variant="secondary" block onClick={savePlan} disabled={stats.products === 0} loading={saving}>
-              {saving ? "저장 중" : "저장하기"}
-            </Button>
-          </div>
+          <Button variant="secondary" block icon="refresh" onClick={() => (stats.products > 0 ? setConfirmFill(true) : generatePlan())} loading={generating || (!precomputed && preloading)}>
+            {generating ? "만드는 중" : !precomputed && preloading ? "준비 중" : "추천으로 채우기"}
+          </Button>
+          <Field label="식단 이름">
+            <Input
+              value={planTitle}
+              onChange={e => setPlanTitle(e.target.value)}
+              placeholder="예: 체중관리 첫 주"
+              name="plan_title"
+            />
+          </Field>
+          {/* 채운 버튼은 아래 고정 줄(장보기) 하나 — 저장하기는 테두리 버튼 */}
+          <Button variant="secondary" block onClick={savePlan} disabled={stats.products === 0} loading={saving}>
+            {saving ? "저장 중" : "저장하기"}
+          </Button>
         </div>
 
         {/* ── 주간 요약 ── */}

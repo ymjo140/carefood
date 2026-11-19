@@ -58,3 +58,44 @@ export function ChatPicks({ items, label = "추천", className }: { items: ChatP
     </ul>
   );
 }
+
+/**
+ * 캐릭터가 짠 하루·일주일 식단 — 묶음(끼니 또는 요일)마다 머리 줄 + 추천 줄, 맨 아래 행동 하나(예: 일주일 식단에 담기).
+ * ChatPicks 와 같은 테두리 카드 한 겹. 머리 줄 오른쪽 숫자는 그 묶음의 열량 합.
+ */
+export function ChatPlan({ groups, label, action, compact = false, className }: {
+  groups: { key: string; title: string; meta?: ReactNode; items: ChatPickItem[] }[];
+  label: string; action?: ReactNode;
+  /** 일주일처럼 줄이 많을 때 — 이름·숫자를 한 줄씩 작게 (상세로 가는 줄 없이) */
+  compact?: boolean; className?: string;
+}) {
+  if (!groups.length) return null;
+  return (
+    <section aria-label={label} className={cn("ml-12 rounded-lg border border-line bg-surface overflow-hidden", className)}>
+      <ul className="flex flex-col divide-y divide-line">
+        {groups.map((g) => (
+          <li key={g.key} className="flex flex-col">
+            <p className="flex items-baseline justify-between gap-2 px-3 pt-2.5 text-label font-bold text-ink">
+              <span>{g.title}</span>{g.meta && <span className="text-caption font-medium text-ink-2 num whitespace-nowrap">{g.meta}</span>}
+            </p>
+            {compact ? (
+              <ul className="flex flex-col gap-1 px-3 pt-1.5 pb-2.5">
+                {g.items.map((it) => (
+                  <li key={`${g.key}-${it.id}`} className="flex items-baseline justify-between gap-2 text-label text-ink min-w-0">
+                    <span className="truncate">{it.name}</span><span className="text-caption text-ink-2 num whitespace-nowrap">{it.facts}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : g.items.map((it) => (
+              <ListRow key={`${g.key}-${it.id}`} href={it.href ?? undefined}
+                title={it.name}
+                meta={<span className="num">{it.maker ? `${it.maker} · ` : ""}{it.facts}</span>}
+                trailing={it.href ? <Icon name="chevron-right" size={18} className="text-ink-3" /> : undefined} />
+            ))}
+          </li>
+        ))}
+      </ul>
+      {action && <div className="border-t border-line p-3">{action}</div>}
+    </section>
+  );
+}
