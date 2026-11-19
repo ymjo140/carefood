@@ -1054,7 +1054,7 @@ export default function Reference({ status }: { status: DsStatus }) {
             </MealSlot>
             <MealSlot meal="dinner" empty onAdd={() => toast.show("음식 고르기를 열었어요")} />
             <MealSlot meal="snack" empty addLabel="기록하기" onAdd={() => toast.show("음식 고르기를 열었어요")}
-              aside={<Button variant="secondary" onClick={() => toast.show("간식을 AI 추천으로 채웠어요")}>AI로 채우기</Button>} />
+              aside={<Button variant="secondary" onClick={() => toast.show("간식을 AI 추천으로 채웠어요")}>AI 추천</Button>} />
             <span className="text-caption text-ink-2"><Code>{"<MealSlot meal right empty onAdd aside />"}</Code> — 빈 칸은 44px, aside 는 칸 옆 동작 하나</span>
           </div>
         </div>

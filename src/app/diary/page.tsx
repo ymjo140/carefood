@@ -339,7 +339,7 @@ export default function DiaryPage() {
   // 식단 리스트 화면에서 짜 둔 한 주 (이 기기) — 요일·끼니가 맞으면 '계획대로 기록하기'
   const [planGrid, setPlanGrid] = useState<PlanGrid | null>(null);
   const [recordingPlan, setRecordingPlan] = useState<string | null>(null);
-  /** 빈 끼니 'AI로 채우기' — 고르는 중인 끼니 · 끼니마다 이미 권한 것(다른 추천을 누르면 건너뛴다). 날짜가 바뀌면 비운다 */
+  /** 빈 끼니 'AI 추천' — 고르는 중인 끼니 · 끼니마다 이미 권한 것(다른 추천을 누르면 건너뛴다). 날짜가 바뀌면 비운다 */
   const [aiFilling, setAiFilling] = useState<string | null>(null);
   const [aiSkips, setAiSkips] = useState<{ date: string; byMeal: Record<string, string[]> }>({ date: "", byMeal: {} });
   /** 이 기기에 짜 둔 게 없어 서버에 저장한 식단을 쓸 때 그 이름 */
@@ -1345,7 +1345,7 @@ export default function DiaryPage() {
                   <MealSlot meal={meal.key} empty onAdd={toggleAdd} addLabel="기록하기"
                     aside={date >= todayStr ? (
                       <Button variant="secondary" loading={aiFilling === meal.key} disabled={!!aiFilling}
-                        onClick={() => void aiFill(meal.key, meal.label)}>AI로 채우기</Button>
+                        onClick={() => void aiFill(meal.key, meal.label)}>AI 추천</Button>
                     ) : undefined} />
                 ) : (
                   <MealSlot

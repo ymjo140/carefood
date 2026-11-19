@@ -10,7 +10,7 @@ import type { MealKey } from "@/lib/menu-pick";
 import { saveAiPlan } from "@/lib/ai-fill-server";
 
 /**
- * POST /api/diary/ai-fill { date, meal, skip?: string[] } — 식단 탭 빈 끼니의 'AI로 채우기' (규칙: lib/ai-fill.ts)
+ * POST /api/diary/ai-fill { date, meal, skip?: string[] } — 식단 탭 빈 끼니의 'AI 추천' (규칙: lib/ai-fill.ts)
  *   그날 남은 양에 맞는 음식 하나를 골라 그 끼니의 예정(planned_meals, plan_title "AI 추천")으로 담는다. 먹었다는 기록은 아니다.
  *   오늘부터 두 달 안의 날짜만 (지난 날은 무엇을 먹었는지 AI 가 알 수 없다).
  *   이미 기록했거나 다른 계획(식단 불러오기·가족이 보낸 것)이 담긴 끼니는 덮지 않는다 — 409.

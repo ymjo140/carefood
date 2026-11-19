@@ -25,7 +25,7 @@ export function MealTag({ meal, className }: { meal: string; className?: string 
   );
 }
 
-/** 끼니 칸 — 끼니 이름 + 내용. 비어 있으면 점선 + 추가 동작 (aside: 점선 칸 옆에 붙는 동작 하나, 예: 'AI로 채우기') */
+/** 끼니 칸 — 끼니 이름 + 내용. 비어 있으면 점선 + 추가 동작 (aside: 점선 칸 옆에 붙는 동작 하나, 예: 'AI 추천') */
 export function MealSlot({ meal, right, children, empty = false, onAdd, addLabel = "음식 추가하기", aside, handle, dropping = false }: {
   meal: string; right?: ReactNode; children?: ReactNode; empty?: boolean; onAdd?: () => void; addLabel?: string;
   /** 빈 칸 옆 동작 — 칸과 같은 높이(44px) 버튼 하나 */

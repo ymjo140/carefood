@@ -1,4 +1,4 @@
-/** 식단 탭 빈 끼니 'AI로 채우기' (lib/ai-fill) — 이 끼니 몫 · 하나 고르기 · 다른 추천 */
+/** 식단 탭 빈 끼니 'AI 추천' (lib/ai-fill) — 이 끼니 몫 · 하나 고르기 · 다른 추천 */
 import { describe, expect, it } from "vitest";
 import { fillBudget, pickOne, skipKey } from "@/lib/ai-fill";
 import type { Menu } from "@/lib/menu-pick";
