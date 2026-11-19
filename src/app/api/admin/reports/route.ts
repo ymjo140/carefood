@@ -72,6 +72,11 @@ export async function POST(request: NextRequest) {
     : kind === "post" ? { is_active: false, hidden_by_reports: true, image_url: null, image_urls: [], video_url: null, video_poster: null } : { is_active: false, hidden_by_reports: true };
   const { data: target, error: tErr } = await sb.from(table).update(update).eq("id", id).select(kind === "post" ? "id" : "id, post_id, is_active").single();
   if (tErr) return NextResponse.json({ error: tErr.message }, { status: 500 });
+  // 내린 글로 한 챌린지 인증은 세지 않는다 (남의 사진·몸 사진 신고)
+  if (action === "remove" && kind === "post") {
+    const { error: pErr } = await sb.from("challenge_proofs").update({ status: "hidden" }).eq("post_id", id);
+    if (pErr) return NextResponse.json({ error: `글은 내렸지만 인증을 거두지 못했어요: ${pErr.message}` }, { status: 500 });
+  }
   if (action === "remove" && kind === "comment" && target?.post_id) {
     try { await syncCount(sb, target.post_id, "comment_count"); } catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: 500 }); }
   }

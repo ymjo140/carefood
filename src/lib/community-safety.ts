@@ -11,6 +11,8 @@ export const REPORT_REASONS = {
   abuse: "욕설·비방",
   medical: "근거 없는 의료·효능 주장",
   privacy: "개인정보 노출",
+  stolen_photo: "남의 사진으로 인증",
+  body_photo: "몸·체중 사진",
   other: "기타",
 } as const;
 export type ReportReason = keyof typeof REPORT_REASONS;

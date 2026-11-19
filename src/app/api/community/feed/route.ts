@@ -16,7 +16,7 @@ import { togetherCounts } from "@/lib/community-regram";
 import { userPusher } from "@/lib/push";
 import { audienceOf, canSee, isVisibility, visibleOr } from "@/lib/community-visibility";
 import { attachProofs, proofDayNow, type UploadRow } from "@/lib/challenge-proofs";
-import { kstDay, todayKst } from "@/lib/day";
+import { todayKst } from "@/lib/day";
 
 
 /**

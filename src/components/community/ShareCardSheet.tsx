@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Button, Icon, ShareCardPreview, ShareSteps, Sheet, Switch, Tabs, useToast } from "@/components/ui";
+import { Button, Chip, ChipRow, Icon, ShareCardPreview, ShareSteps, Sheet, Switch, Tabs, useToast } from "@/components/ui";
 import { hasPhoto, renderCard, type CardData, type CardStyle } from "@/lib/share-card";
 import { getOrCreateNickname } from "@/lib/nickname";
 
@@ -27,6 +27,8 @@ export default function ShareCardSheet({ target, open, onClose, onPosted }: { ta
   const [attempt, setAttempt] = useState(0);
   const [style, setStyle] = useState<CardStyle>("photo");
   const [showKcal, setShowKcal] = useState(false);
+  /** 스토리 9:16 · 피드 게시물 4:5 */
+  const [frame, setFrame] = useState<"story" | "feed">("story");
   const [img, setImg] = useState<{ blob: Blob; url: string } | null>(null);
   const [drawError, setDrawError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -63,10 +65,10 @@ export default function ShareCardSheet({ target, open, onClose, onPosted }: { ta
     const n = ++seq.current;
     setImg(null);  
     setDrawError(null);
-    renderCard(data.card, { style, showKcal, site: window.location.host })
+    renderCard(data.card, { style, showKcal, site: window.location.host, frame })
       .then((blob) => { if (n === seq.current) setImg({ blob, url: URL.createObjectURL(blob) }); })
       .catch((e) => { if (n === seq.current) setDrawError((e as Error).message || "카드를 만들지 못했어요"); });
-  }, [data, style, showKcal]);
+  }, [data, style, showKcal, frame]);
 
   useEffect(() => () => { if (img) URL.revokeObjectURL(img.url); }, [img]);
 
@@ -103,7 +105,7 @@ export default function ShareCardSheet({ target, open, onClose, onPosted }: { ta
       .then((r) => { if (!r.ok) console.error("공유 표시를 남기지 못했어요", r.status); })
       .catch((e) => console.error("공유 표시를 남기지 못했어요", e)); // ds-allow: 세기는 보조 — 공유는 이미 했다
   };
-  const fileName = `kkirok-${card?.kind || "card"}-${style}.png`;
+  const fileName = `kkirok-${card?.kind || "card"}-${style}${frame === "feed" && style !== "sticker" ? "-feed" : ""}.png`;
 
   const copyLink = async (quiet = false) => {
     try {
@@ -187,7 +189,7 @@ export default function ShareCardSheet({ target, open, onClose, onPosted }: { ta
   const styles: CardStyle[] = card ? (hasPhoto(card) ? ["photo", "sticker", "record"] : ["record", "sticker"]) : ["photo"];
 
   return (
-    <Sheet open={open} onClose={onClose} title="인증 카드" description="인스타 스토리에 올릴 9:16 카드예요. 몸무게·건강 목표는 들어가지 않아요"
+    <Sheet open={open} onClose={onClose} title="인증 카드" description="인스타 스토리(9:16)·피드(4:5)에 올릴 카드예요. 몸무게·건강 목표는 들어가지 않아요"
       footer={data.status === "done" ? (
         <div className="w-full flex flex-col gap-2">
           {style === "sticker"
@@ -214,9 +216,15 @@ export default function ShareCardSheet({ target, open, onClose, onPosted }: { ta
       {data.status === "done" && card && (
         <div className="flex flex-col gap-4">
           <Tabs variant="line" label="카드 모양" value={style} onChange={setStyle} items={styles.map((s) => ({ value: s, label: STYLE_LABEL[s] }))} />
+          {style !== "sticker" && (
+            <ChipRow>
+              <Chip size="sm" selected={frame === "story"} onClick={() => setFrame("story")}>스토리 9:16</Chip>
+              <Chip size="sm" selected={frame === "feed"} onClick={() => setFrame("feed")}>피드 4:5</Chip>
+            </ChipRow>
+          )}
           {drawError
             ? <p role="alert" className="text-label text-danger">{drawError}. 다른 모양을 골라 주세요</p>
-            : <ShareCardPreview src={img?.url ?? null} alt={`${STYLE_LABEL[style]} 모양 인증 카드 미리 보기`} sticker={style === "sticker"} />}
+            : <ShareCardPreview src={img?.url ?? null} alt={`${STYLE_LABEL[style]} 모양 인증 카드 미리 보기`} sticker={style === "sticker"} feed={frame === "feed" && style !== "sticker"} />}
           {card.kind === "meal" && card.total && (
             <Switch checked={showKcal} onChange={setShowKcal} label="열량도 넣기" description="기본은 단백질·탄수화물·지방만 보여요" />
           )}

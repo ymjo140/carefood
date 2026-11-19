@@ -1,8 +1,8 @@
 {
-  "measuredAt": "2026-11-15T02:39:00.581Z",
-  "files": 158,
+  "measuredAt": "2026-11-19T13:39:51.146Z",
+  "files": 172,
   "distinctColors": 2,
-  "gradients": 2,
+  "gradients": 3,
   "shadows": 1,
   "fontSizeKinds": 5,
   "radiusKinds": 4,
@@ -21,15 +21,15 @@
   "fontSizes": [
     [
       "ds:label",
-      476
+      515
     ],
     [
       "ds:caption",
-      392
+      423
     ],
     [
       "ds:body",
-      136
+      143
     ],
     [
       "ds:title",
@@ -42,11 +42,11 @@
   ],
   "radii": [
     [
-      "md",
-      48
+      "lg",
+      46
     ],
     [
-      "lg",
+      "md",
       42
     ],
     [
@@ -55,7 +55,7 @@
     ],
     [
       "sm",
-      4
+      3
     ]
   ],
   "worstFiles": [

@@ -19,6 +19,8 @@ import { kstHour, todayKst } from "@/lib/day";
  *  4. 올린 뒤: 결과(인증됐는지·안 된 이유) + 인스타에 올리기(인증 카드)
  * 쓰던 글은 이 기기에 24시간 남겨 둔다(올린 사진·글·고른 것). 같은 글을 두 번 보내도 하나만 올라간다(client_key).
  * 사진은 /api/community/upload 가 위치 정보 같은 메타데이터를 지우고, 고른 모양으로 잘라 올린다.
+ * ds-wiring-drop: photo — 사진 입력은 PhotoPicker 의 photo_camera·photo_album 으로 옮겼다
+ * ds-wiring-drop: notebook — 아이콘 이름(입력 아님). '기록한 끼니'는 2단계 MealStep 이 맡는다
  */
 export type Attach = "meal" | "plan" | "product" | "poll";
 /** 기록·식단 리스트에서 '나누기'로 열 때 미리 고를 것 — 그 날짜·끼니의 기록, 또는 그 식단 */

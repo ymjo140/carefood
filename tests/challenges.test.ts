@@ -125,7 +125,7 @@ describe("같이 하기 알림 계획", () => {
     const opts = { groups, challenges: new Map([["c1", ch("meals_min")]]), members: [mem("a"), mem("b"), mem("c")], diary, today: "2026-11-17" };
     expect(planGroupAlerts({ ...opts, hour: 18 })).toEqual([]);
     const at7 = planGroupAlerts({ ...opts, hour: 19 });
-    expect(at7.map((o) => [o.user, o.key, o.payload.title])).toEqual([["c", "alone:2026-11-17", "오늘 나만 남았어요"]]);
+    expect(at7.map((o) => [o.user, o.key, o.payload.title])).toEqual([["c", "alone:2026-11-17", "오늘 아직 채우지 않았어요"]]);
     expect(at7[0].payload.body).not.toMatch(/kcal|mg/);
   });
   it("열량 구간: 사람마다 내 구간으로, 다 같이 알림은 다음 날 아침에 '어제'로", () => {
@@ -141,7 +141,20 @@ describe("같이 하기 알림 계획", () => {
   it("하루가 끝나야 아는 규칙의 저녁 7시는 '기록이 없는 사람'으로", () => {
     const diary = new Map([["a", [row("lunch", { date: "2026-11-17" })]], ["b", []]]);
     const out = planGroupAlerts({ groups, challenges: new Map([["c1", ch("sodium_max", 2000)]]), members: [mem("a"), mem("b")], diary, today: "2026-11-17", hour: 19 });
-    expect(out.map((o) => [o.user, o.payload.title, o.payload.url])).toEqual([["b", "오늘 나만 기록이 없어요", "/diary"]]);
+    expect(out.map((o) => [o.user, o.payload.title, o.payload.url])).toEqual([["b", "오늘 아직 기록이 없어요", "/diary"]]);
+  });
+  it("사진 인증: 식단을 채워도 사진이 없는 사람이 있으면 다 같이 알림은 없다 · 문구에 남의 수를 넣지 않는다", () => {
+    const diary = new Map([["a", rows("2026-11-17")], ["b", rows("2026-11-17")]]);
+    const c = { ...ch("meals_min"), proof: "photo" as const };
+    const base = { groups, challenges: new Map([["c1", c]]), members: [mem("a"), mem("b")], diary, today: "2026-11-17" };
+    const only = new Map([["c1:a", new Set(["2026-11-17"])]]);
+    expect(planGroupAlerts({ ...base, hour: 15, proofs: only })).toEqual([]);
+    const both = new Map([["c1:a", new Set(["2026-11-17"])], ["c1:b", new Set(["2026-11-17"])]]);
+    expect(planGroupAlerts({ ...base, hour: 15, proofs: both })).toHaveLength(2);
+    const at7 = planGroupAlerts({ ...base, hour: 19, proofs: only });
+    expect(at7.map((o) => o.user)).toEqual(["b"]);
+    expect(at7[0].payload.body).toContain("사진");
+    expect(at7[0].payload.body).not.toMatch(/\d+명/);
   });
   it("늦게 들어온 사람은 들어오기 전 날을 세지 않는다 · 혼자면 알림 없음", () => {
     const diary = new Map([["a", rows("2026-11-17")]]);

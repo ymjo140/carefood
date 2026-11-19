@@ -1,7 +1,7 @@
 {
-  "builtAt": "2026-11-15T02:39:00.516Z",
-  "sha": "220cd52ea9bc382c1e5969dd62e9ca2b904566f3",
-  "message": "캐릭터 AI 빈 답 고침: 생각도 max_tokens 에 들어가 추천처럼 긴 설정에서 300 안에 답이 못 나옴 → effort low · 한도 1500, 빈 답이면 이유(stop·블록) 기록",
-  "branch": "main",
+  "builtAt": "2026-11-19T13:39:51.066Z",
+  "sha": "6e7d5bd3d6f71c0dc6c69145515339fd6e4967f2",
+  "message": "피드 올리기 2단계: 사진부터 쓰는 글쓰기(6장·자르기·순서), 식단 기록 연결·사진으로 찾기, 챌린지 인증 줄, 공개 범위, 이어 쓰기, 올린 뒤 인스타 공유",
+  "branch": "feat/post-flow-photo-proof",
   "env": "local"
 }

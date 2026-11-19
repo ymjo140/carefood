@@ -30,7 +30,7 @@ export { PostAuthor, PostAction, PostActions, PostTags, ThreadItem, MealAttach, 
 export { DragArea, DragHandle, DragGhost, useDragItem, useDropTarget, dropClass, type DragData } from "./Drag";
 export { FoodEntryForm, type FoodBase, type FoodEntry } from "./FoodEntry";
 export { DayDots, type DayDot } from "./Challenge";
-export { MemberProgressRow, AvatarStack } from "./ChallengeGroup";
+export { MemberProgressRow, MemberTodayRow, AvatarStack } from "./ChallengeGroup";
 export { Switch } from "./Switch";
 export { ReelRow, ReelTile, ReelAddTile, ReelSkeleton, clock } from "./Reel";
 export { ReelMedia, VideoClip, VideoAttach } from "./ReelMedia";
@@ -44,4 +44,4 @@ export { Buddy } from "./Buddy";
 export { ChatBubble, ChatTyping, ChatPicks, type ChatPickItem } from "./Chat";
 export { BackButton } from "./BackButton";
 export { MealSplit, type MealSplitPart } from "./MealSplit";
-export { PhotoPicker, CropFrame, PhotoCarousel, cropRect, CROP_CENTER, ASPECT_RATIO, type PickedPhoto, type CropAspect, type CropValue } from "./Photo";
+export { PhotoPicker, CropFrame, PhotoCarousel, ProofGrid, cropRect, CROP_CENTER, ASPECT_RATIO, type PickedPhoto, type CropAspect, type CropValue } from "./Photo";

@@ -84,6 +84,11 @@ alter table public.challenge_cohorts enable row level security;
 alter table public.community_challenge_members add column if not exists cohort_id uuid references public.challenge_cohorts(id) on delete set null;
 alter table public.challenge_groups add column if not exists cohort_id uuid references public.challenge_cohorts(id) on delete set null;
 
+-- 신고 이유 — 남의 사진으로 인증 · 몸·체중 사진 (인증 사진 갤러리에서)
+alter table public.community_reports drop constraint if exists community_reports_reason_check;
+alter table public.community_reports add constraint community_reports_reason_check
+  check (reason in ('spam', 'abuse', 'medical', 'ad', 'privacy', 'stolen_photo', 'body_photo', 'other'));
+
 -- 아직 배포 전 — 사진 규칙을 모두에게 적용하므로 테스트로 쌓인 참여 기록을 비운다
 delete from public.challenge_cheers;
 delete from public.community_challenge_members;

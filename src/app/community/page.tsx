@@ -1,5 +1,7 @@
 "use client";
 
+// ds-wiring-drop: notebook — 올리기 6갈래 메뉴의 아이콘(입력 아님). 글쓰기는 사진부터 한 곳(PostComposer)에서 시작한다
+
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import ThreadCard, { type FeedPostData } from "@/components/community/ThreadCard";

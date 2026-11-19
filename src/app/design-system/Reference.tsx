@@ -9,7 +9,7 @@ import {
   Avatar, useToast, cn, type BadgeTone,
   BottomNavItems, SkeletonList, FoodEntryForm, DragArea, DragGhost, DragHandle, useDragItem, useDropTarget, type DragData, ChoiceCard, ChoiceList, LinkTabs, RatingStars, RatingInput, ScaleInput, QuickRating, PostAuthor, PostAction, PostActions, PostTags, ThreadItem, MealAttach, PlanAttach, CertAttach, ProductTagLinks, PostCredits, PhotoGrid, PollAttach, DayDots, Switch,
   ReelRow, ReelTile, ReelAddTile, ReelSkeleton, ReelMedia, CommentItem, VideoAttach, OfferOptionList, QtyStepper, UnitInput, RangeInput, Checkbox, FilePick,
-  MemberProgressRow, AvatarStack, Mascot, MASCOTS, type MascotMood, StoryFrame, StoryProgress, StoryHeader, StoryMedia, StorySticker, StoryCaption, StoryAction, StoryReply, ShareCardPreview, ShareSteps, Buddy, ChatBubble, ChatTyping, ChatPicks, BackButton,
+  MemberProgressRow, MemberTodayRow, PhotoPicker, CropFrame, PhotoCarousel, ProofGrid, CROP_CENTER, type CropValue, type CropAspect, AvatarStack, Mascot, MASCOTS, type MascotMood, StoryFrame, StoryProgress, StoryHeader, StoryMedia, StorySticker, StoryCaption, StoryAction, StoryReply, ShareCardPreview, ShareSteps, Buddy, ChatBubble, ChatTyping, ChatPicks, BackButton,
 } from "@/components/ui";
 
 // 서버(UTC)와 브라우저 시간대가 달라도 같은 글자가 나오도록 한국 시간으로 고정
@@ -886,7 +886,25 @@ export default function Reference({ status }: { status: DsStatus }) {
             <div className="flex flex-col gap-2">
               <DayDots days={(["done", "done", "missed", "done", "today", "future", "future"] as const).map((state, i) => ({ date: `d${i}`, state }))} />
               <p className="text-label text-ink"><span className="num">7</span>일 중 <span className="num font-bold text-brand-ink">3</span>일 해냈어요</p>
+              <DayDots days={(["done", "photo_needed", "done", "photo_needed", "future", "future", "future"] as const).map((state, i) => ({ date: `p${i}`, state }))} label="사진 인증 예시" />
+              <p className="text-caption text-ink-2">사진 인증 챌린지 — 식단 기준은 채웠는데 그날 사진이 없으면 카메라 표시(photo_needed), 해낸 날로 세지 않아요</p>
             </div>
+          </Demo>
+          <Demo label="같이 하는 보드 한 줄 — 오늘 인증했는지와 그 사진만. 해낸 날 수·순위로 사람끼리 비교하지 않음" code="<MemberTodayRow name proved photo href album action />">
+            <ul className="flex flex-col divide-y divide-line max-w-md">
+              <MemberTodayRow name="민지" me proved photo={SWATCH(0)} href="#" />
+              <MemberTodayRow name="서연" host proved photo={SWATCH(1)} href="#" album action={<IconButton icon="heart" size="sm" label="서연님 응원하기" />} />
+              <MemberTodayRow name="준호" proved={false} action={<IconButton icon="heart" size="sm" active label="준호님을 오늘 응원했어요" />} />
+            </ul>
+          </Demo>
+          <Demo label="사진 고르기 — 찍기·앨범 6장까지, 첫 장이 대표, 누르면 고른 사진(자르기·순서). 찍은 시각이 없으면 '앨범에서 고름'" code="<PhotoPicker photos selected onAdd onSelect onRemove /> · <CropFrame src natural aspect value onChange />">
+            <PhotoPickDemo />
+          </Demo>
+          <Demo label="글 사진 넘기기 — 옆으로 넘기고 오른쪽 위 '2/3', 아래 점. 첫 장 비율로 1:1 또는 4:5" code="<PhotoCarousel urls alt ratio onOpen />">
+            <div className="max-w-sm"><PhotoCarousel alt="도시락 사진" ratio={0.8} urls={[0, 1, 2].map(SWATCH)} /></div>
+          </Demo>
+          <Demo label="인증 사진 모음 — 세 칸 격자, 닉네임·날짜만(숫자·순위 없음)" code="<ProofGrid items />">
+            <div className="max-w-sm"><ProofGrid items={[0, 1, 2, 3].map((i) => ({ id: `pg${i}`, photo: SWATCH(i), href: "#", nickname: ["민지", "서연", "준호", "하늘"][i], day: "2026-11-19", album: i === 2 }))} /></div>
           </Demo>
           <Demo label="같이 하기 진행표 한 줄 — 아바타 · 닉네임(나·연 사람) · 작은 날짜 점(늦게 들어온 앞 날은 빈 칸) · 해낸 날/목표 · 응원. 성분 숫자는 없음" code="<MemberProgressRow name days done goal action /> · <AvatarStack names />">
             <div className="flex flex-col gap-3 max-w-md">
@@ -933,6 +951,7 @@ export default function Reference({ status }: { status: DsStatus }) {
           <Demo label="인증 카드 — 내 식단·챌린지·공구를 9:16 카드로(사진 · 스티커만 · 기록). 미리 보기 틀과 공유 순서 안내" code="<ShareCardPreview src sticker /> · <ShareSteps steps />">
             <div className="flex flex-col sm:flex-row gap-4 items-start">
               <ShareCardPreview src={null} alt="" className="sm:mx-0 max-w-40" />
+              <ShareCardPreview src={null} alt="" feed className="sm:mx-0 max-w-40" />
               <ShareSteps steps={["인스타에 공유하기 → 인스타그램 → 스토리를 골라요", "링크는 미리 복사돼요. 스티커 버튼 → 링크에 붙여 넣어요", "친구가 링크를 누르면 이 게시물이 바로 열려요"]} />
             </div>
           </Demo>
@@ -1352,6 +1371,32 @@ function StoryDemo() {
           <StoryMedia image={null} alt="예시" paused muted />
         </StoryFrame>
       )}
+    </div>
+  );
+}
+
+/** 기준 페이지용 단색 사진 */
+function SWATCH(i: number) {
+  const c = ["#E7E0D5", "#CFC5B6", "#F3EEE6", "#D9CFC0"][i % 4];
+  return `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="400" height="500"><rect width="400" height="500" fill="${c}"/><circle cx="200" cy="250" r="110" fill="#FBF8F3"/></svg>`)}`;
+}
+
+function PhotoPickDemo() {
+  const [photos, setPhotos] = useState([
+    { key: "a", src: SWATCH(0), status: "done" as const },
+    { key: "b", src: SWATCH(1), status: "uploading" as const },
+    { key: "c", src: SWATCH(3), status: "ready" as const, album: true },
+  ]);
+  const [sel, setSel] = useState<string | null>("a");
+  const [crop, setCrop] = useState<CropValue>(CROP_CENTER);
+  const [aspect, setAspect] = useState<CropAspect>("portrait");
+  const cur = photos.find((p) => p.key === sel);
+  return (
+    <div className="flex flex-col gap-4 max-w-sm">
+      <PhotoPicker photos={photos} selected={sel} onAdd={() => {}} onSelect={(k) => setSel(sel === k ? null : k)}
+        onRemove={(k) => setPhotos(photos.filter((p) => p.key !== k))} />
+      <Tabs<CropAspect> variant="line" label="사진 모양" value={aspect} onChange={setAspect} items={[{ value: "square", label: "정사각 1:1" }, { value: "portrait", label: "세로 4:5" }]} />
+      {cur && <CropFrame src={cur.src} natural={{ w: 400, h: 500 }} aspect={aspect} value={crop} onChange={setCrop} />}
     </div>
   );
 }
