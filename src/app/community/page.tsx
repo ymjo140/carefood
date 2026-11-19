@@ -1,16 +1,15 @@
 "use client";
 
+// ds-wiring-drop: notebook — 올리기 6갈래 메뉴의 아이콘(입력 아님). 글쓰기는 사진부터 한 곳(PostComposer)에서 시작한다
+
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import ThreadCard, { type FeedPostData } from "@/components/community/ThreadCard";
 import PostComposer, { type Attach, type ComposerPreset } from "@/components/community/PostComposer";
 import ChallengeEntry from "@/components/community/ChallengeEntry";
 import GroupBuyComposer from "@/components/community/GroupBuyComposer";
-import ShareCardSheet, { type ShareTarget } from "@/components/community/ShareCardSheet";
-import CertPickSheet from "@/components/community/CertPickSheet";
-import { todayKst } from "@/lib/day";
 import {
-  Button, Chip, ChipRow, EmptyState, Icon, ListRow, Page, PageHeader, ReelAddTile, ReelRow, ReelSkeleton, ReelTile, SectionHeader, Sheet,
+  Button, Chip, ChipRow, EmptyState, Page, PageHeader, ReelAddTile, ReelRow, ReelSkeleton, ReelTile, SectionHeader,
   SkeletonPost, Spinner, Tabs, mealMeta, certLine, CERT_LABEL, type CertView, useToast,
 } from "@/components/ui";
 import { COMMUNITY_TOPICS } from "@/lib/community-topics";
@@ -51,10 +50,7 @@ export default function CommunityPage() {
   const [nickname, setNick] = useState("");
   const [reels, setReels] = useState<{ status: "loading" | "error" | "done"; items: Reel[] }>({ status: "loading", items: [] });
   const [reelTry, setReelTry] = useState(0);
-  const [picker, setPicker] = useState(false);
   const [groupOpen, setGroupOpen] = useState(false);
-  const [certPick, setCertPick] = useState(false);
-  const [cert, setCert] = useState<ShareTarget | null>(null);
   const toast = useToast();
   const sentinelRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
@@ -164,10 +160,6 @@ export default function CommunityPage() {
   };
 
   const openComposer = (attach: Attach | null = null) => setComposer({ open: true, attach });
-  const pick = (what: Attach | null | "group") => {
-    setPicker(false);
-    if (what === "group") setGroupOpen(true); else openComposer(what);
-  };
 
   const empty = {
     recommend: { title: "아직 글이 없어요", description: "첫 번째로 오늘 식단을 나눠 보세요" },
@@ -184,7 +176,7 @@ export default function CommunityPage() {
       <section aria-label="스토리" className="pb-4 border-b border-line">
         <SectionHeader title="스토리" />
         <ReelRow label="스토리">
-          <ReelAddTile onClick={() => setPicker(true)} />
+          <ReelAddTile onClick={() => openComposer(null)} />
           {reels.status === "loading" && <ReelSkeleton count={3} />}
           {reels.status === "done" && reels.items.map((r) => r.kind === "group_buy" ? (
             <ReelTile key={`g-${r.id}`} href={`/stories?at=group_buy-${r.id}`} image={r.image} author={r.author} seconds={r.seconds}
@@ -271,20 +263,7 @@ export default function CommunityPage() {
         )}
       </div>
 
-      {/* ── 올리기: 무엇을 올릴지 ── */}
-      <Sheet open={picker} onClose={() => setPicker(false)} title="올리기" size="sm">
-        <div className="flex flex-col gap-1">
-          <ListRow onClick={() => pick("meal")} leading={<Icon name="notebook" size={20} className="text-ink-2" />} title="오늘 먹은 끼니" meta="기록한 끼니에 사진·영상·한 줄을 붙여요" />
-          <ListRow onClick={() => pick("plan")} leading={<Icon name="calendar" size={20} className="text-ink-2" />} title="저장한 식단" meta="며칠 치 식단을 나눠요" />
-          <ListRow onClick={() => pick(null)} leading={<Icon name="edit" size={20} className="text-ink-2" />} title="글 · 투표" meta="사진·제품 태그·투표를 붙일 수 있어요" />
-          <ListRow onClick={() => { setPicker(false); setCertPick(true); }} leading={<Icon name="flag" size={20} className="text-ink-2" />} title="챌린지 인증" meta="하고 있는 챌린지의 해낸 날을 카드로 올려요" />
-          <ListRow onClick={() => { setPicker(false); setCert({ kind: "streak", id: todayKst() }); }} leading={<Icon name="check" size={20} className="text-ink-2" />} title="연속 기록 인증" meta="며칠째 이어서 기록했는지 카드로 올려요" />
-          <ListRow onClick={() => pick("group")} leading={<Icon name="users" size={20} className="text-ink-2" />} title="공구 만들기" meta="자주 먹는 제품을 사진·영상과 함께 올려 함께 살 사람을 모아요" />
-        </div>
-      </Sheet>
       <GroupBuyComposer open={groupOpen} onClose={() => setGroupOpen(false)} />
-      <CertPickSheet open={certPick} onClose={() => setCertPick(false)} onPick={(id) => { setCertPick(false); setCert({ kind: "challenge", id }); }} />
-      <ShareCardSheet target={cert} open={!!cert} onClose={() => setCert(null)} onPosted={() => setReelTry((n) => n + 1)} />
 
       <PostComposer
         isOpen={composer.open}
@@ -292,6 +271,7 @@ export default function CommunityPage() {
         preset={composer.preset}
         nickname={nickname || "익명"}
         onClose={() => setComposer({ open: false, attach: null })}
+        onGroupBuy={() => setGroupOpen(true)}
         onPosted={() => { setReelTry((n) => n + 1); if (tab !== "recommend" && tab !== "mine") setTab("recommend"); else fetchFeed(1, false); }}
       />
     </Page>

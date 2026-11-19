@@ -1,3 +1,4 @@
+import { audienceOf, canSee } from "@/lib/community-visibility";
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { getActorId, noActor } from "@/lib/actor-server";
@@ -21,9 +22,10 @@ export async function POST(request: NextRequest) {
     // 게시글의 meal_data + 작성자 정보 로드
     const { data: post } = await sb
       .from("community_feed")
-      .select("meal_data, meal_type, author_nickname, content")
+      .select("id, user_id, is_active, visibility, meal_data, meal_type, author_nickname, content")
       .eq("id", post_id)
       .single();
+    if (!post || !post.is_active || !canSee(post, await audienceOf(sb, user_id))) return NextResponse.json({ error: "글을 찾을 수 없어요" }, { status: 404 });
 
     // 저장한 식단(일주일)을 공유한 글 — 7일 그리드를 통째로 담는다
     const sharedPlan = post?.meal_data?.plan as { title?: string; grid?: Record<string, unknown>; avg_kcal?: number; avg_protein?: number; days?: number } | undefined;

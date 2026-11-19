@@ -14,6 +14,9 @@ import { ensureNickname } from "@/lib/community-profile";
 import { ACTOR_RE, CANT_TAG, TAG_MAX, judgeTags, tagsAndSources } from "@/lib/community-tags";
 import { togetherCounts } from "@/lib/community-regram";
 import { userPusher } from "@/lib/push";
+import { audienceOf, canSee, isVisibility, visibleOr } from "@/lib/community-visibility";
+import { attachProofs, proofDayNow, type UploadRow } from "@/lib/challenge-proofs";
+import { todayKst } from "@/lib/day";
 
 
 /**
@@ -28,13 +31,24 @@ import { userPusher } from "@/lib/push";
  * 글에 붙은 제품(product_ids)은 이름을 같이 돌려준다 → products: [{ id, name }]
  * 태그된 사람(보이는 것만) → people: [{ id, nickname }] · 원본 출처 → source: { id, nickname, gone } (lib/community-tags)
  * POST 는 people: [actor id] (10명까지, 받는 사람 설정 안에서만 — 못 한 사람은 dropped 로) · source_post_id 를 받는다
+ *   upload_ids: /api/community/upload 가 돌려준 id (6장까지, 순서대로) · diary_ids: 연결할 식단 기록(영양값은 서버가 기록에서 복사)
+ *   client_key: 같은 글을 두 번 보내도 하나만(다시 보내면 처음 글을 돌려준다) · visibility: public|followers · show_kcal
+ *   challenge_ids: 이 글의 사진으로 인증할 챌린지 → proofs: { added, skipped } (lib/challenge-proofs)
+ * 팔로워만(followers) 글은 글쓴이·팔로워·태그된 사람에게만 보인다 (lib/community-visibility)
  * 투표가 붙은 글은 poll 이 결과 모양 → { options, counts, total, my_choice, closes_at, closed }
  */
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function publicPost({ author_concerns, author_goals, author_age_group, ...rest }: Record<string, any>) {
-  void author_concerns; void author_goals; void author_age_group;
+function publicPost({ author_concerns, author_goals, author_age_group, client_key, diary_ids, ...rest }: Record<string, any>) {
+  void author_concerns; void author_goals; void author_age_group; void client_key; void diary_ids;
   return rest;
+}
+
+/** 열량 숨김 글 — 글쓴이 말고는 숫자를 보내지 않는다 (음식 이름만) */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function kcalFor<T extends Record<string, any>>(p: T, viewer: string | null): T {
+  if (p.show_kcal !== false || p.user_id === viewer || !p.meal_data?.foods) return p;
+  return { ...p, meal_data: { foods: p.meal_data.foods.map((f: { name: string }) => ({ name: f.name })), total: null } };
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -81,6 +95,9 @@ export async function GET(request: NextRequest) {
     if (!isMine) {
       if (post.hidden_by_reports) return NextResponse.json({ error: "신고가 모여 가려진 글이에요", reason: "reported" }, { status: 404 });
       if (f.blocked.has(post.user_id)) return NextResponse.json({ error: "차단한 사람의 글이에요", reason: "blocked" }, { status: 404 });
+      let a;
+      try { a = await audienceOf(sb, userId); } catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: 500 }); }
+      if (!canSee(post, a)) return NextResponse.json({ error: "팔로워에게만 보이는 글이에요", reason: "followers" }, { status: 404 });
     }
 
     let isLiked = false;
@@ -97,7 +114,7 @@ export async function GET(request: NextRequest) {
     const products = (post.product_ids || []).filter((id: string) => names.has(id)).map((id: string) => ({ id, name: names.get(id) }));
     let polled, ts, tg;
     try {
-      [polled] = await withPolls(sb, [publicPost(post) as { id: string; poll?: unknown }], userId);
+      [polled] = await withPolls(sb, [kcalFor(publicPost(post), userId) as { id: string; poll?: unknown }], userId);
       ts = await tagsAndSources(sb, [post], f.blocked);
       tg = await togetherCounts(sb, [post], ts.people);
     } catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: 500 }); }
@@ -125,6 +142,8 @@ export async function GET(request: NextRequest) {
   try { filters = await viewerFilters(sb, userId); } catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: 500 }); }
   const safeIds = (set: Set<string>) => [...set].filter((v) => /^[A-Za-z0-9_-]{1,64}$/.test(v));
   if (tab !== "mine") {
+    // 팔로워만 글 — 글쓴이·팔로워·태그된 사람에게만
+    try { query = query.or(visibleOr(await audienceOf(sb, userId))); } catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: 500 }); }
     query = query.eq("hidden_by_reports", false);
     const blocked = safeIds(filters.blocked);
     if (blocked.length) query = query.not("user_id", "in", `(${blocked.join(",")})`);
@@ -240,7 +259,7 @@ export async function GET(request: NextRequest) {
   // 추천탭: 인기도 기반 재정렬
   const names = await productNames(sb, posts);
   const result = posts.map((p: { id: string; user_id: string; product_ids?: string[] | null }) => ({
-    ...publicPost(p),
+    ...kcalFor(publicPost(p), userId),
     products: (p.product_ids || []).filter((id) => names.has(id)).map((id) => ({ id, name: names.get(id) })),
     is_mine: !!userId && p.user_id === userId,
     is_liked: likedIds.has(p.id),
@@ -315,22 +334,87 @@ function cleanMealData(md: unknown) {
   };
 }
 
+const KEY_RE = /^[A-Za-z0-9_-]{8,64}$/;
+const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+const MEALS = ["breakfast", "lunch", "dinner", "snack"];
+
+type DiaryPick = { id: string; date: string; meal_type: string; food_name: string; calories: number | null; protein_g: number | null; carbs_g: number | null; fat_g: number | null; image_url?: string | null };
+
+/** 글에 붙인 식단 기록 → meal_data (숫자는 기록에서 — 보낸 숫자를 믿지 않는다) */
+function mealFromDiary(rows: DiaryPick[]) {
+  const r1 = (v: number | null) => Math.round((Number(v) || 0) * 10) / 10;
+  const foods = rows.map((r) => ({ name: r.food_name.slice(0, 80), calories: r1(r.calories), protein_g: r1(r.protein_g), carbs_g: r1(r.carbs_g), fat_g: r1(r.fat_g) }));
+  const sum = (k: "calories" | "protein_g" | "carbs_g" | "fat_g") => Math.round(foods.reduce((a, f) => a + (f[k] || 0), 0) * 10) / 10;
+  return { foods, total: { calories: sum("calories"), protein_g: sum("protein_g"), carbs_g: sum("carbs_g"), fat_g: sum("fat_g") } };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function replayed(sb: any, user_id: string, client_key: string) {
+  const { data, error } = await sb.from("community_feed").select("*").eq("user_id", user_id).eq("client_key", client_key).maybeSingle();
+  if (error) throw new Error(error.message);
+  return data;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { post_type, meal_type, topic } = body;
+    const { topic } = body;
     const user_id = await getActorId();
     if (!user_id) return noActor();
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sb = createServiceRoleClient() as any;
+    // 다시 보낸 글 — 처음 올린 글을 그대로 돌려준다 (사진·인증을 두 번 붙이지 않는다)
+    const client_key = typeof body.client_key === "string" && KEY_RE.test(body.client_key) ? body.client_key : null;
+    if (client_key) {
+      const prev = await replayed(sb, user_id, client_key);
+      if (prev) {
+        const [polled] = await withPolls(sb, [publicPost(prev) as { id: string; poll?: unknown }], user_id);
+        return NextResponse.json({ post: { ...polled, people: [] }, replayed: true, dropped: [], dropped_reason: null, proofs: { added: [], skipped: [] } });
+      }
+    }
+
     const content = typeof body.content === "string" ? body.content.trim().slice(0, 1000) : "";
     if (body.meal_data && JSON.stringify(body.meal_data).length > 60_000) return NextResponse.json({ error: "식단이 너무 커요" }, { status: 400 });
-    const meal_data = cleanMealData(body.meal_data);
-    // 사진은 우리 저장소(/api/community/upload 가 올린 것)만 받는다
+    const visibility = isVisibility(body.visibility) ? body.visibility : "public";
+    const show_kcal = body.show_kcal !== false;
+
+    // 식단 기록 연결 — 내 기록만, 같은 날·같은 끼니만
+    const diaryIds: string[] = Array.isArray(body.diary_ids) ? [...new Set(body.diary_ids.filter((v: unknown): v is string => typeof v === "string" && UUID.test(v)))].slice(0, 20) as string[] : [];
+    let diary: DiaryPick[] = [];
+    if (diaryIds.length) {
+      const { data: d, error: dErr } = await sb.from("meal_diary").select("id, date, meal_type, food_name, calories, protein_g, carbs_g, fat_g, image_url").eq("user_id", user_id).in("id", diaryIds);
+      if (dErr) return NextResponse.json({ error: dErr.message }, { status: 500 });
+      diary = ((d || []) as DiaryPick[]).sort((a, b) => diaryIds.indexOf(a.id) - diaryIds.indexOf(b.id));
+      if (diary.length !== diaryIds.length) return NextResponse.json({ error: "내 식단 기록만 붙일 수 있어요" }, { status: 403 });
+      if (new Set(diary.map((r) => `${r.date}:${r.meal_type}`)).size > 1) return NextResponse.json({ error: "한 끼니의 기록만 붙여 주세요" }, { status: 400 });
+    }
+    // 저장한 식단(plan)은 따라하기용 칸 그대로, 한 끼 음식은 기록에서만
+    const sent = cleanMealData(body.meal_data);
+    const meal_data = diary.length ? mealFromDiary(diary) : sent && "plan" in sent ? sent : null;
+    const meal_type = diary[0]?.meal_type ?? (MEALS.includes(body.meal_type) ? body.meal_type : null);
+    // 그 글의 날짜 — 기록이 있으면 기록 날짜, 아니면 보낸 날짜(오늘·0시 직후의 어제만), 없으면 오늘
+    const now = Date.now();
+    const day: string = diary[0]?.date ?? (typeof body.day === "string" && DAY_RE.test(body.day) && proofDayNow(now).includes(body.day) ? body.day : todayKst());
+
+    // 사진 — upload_ids(새 글쓰기) 또는 image_urls(카드 그림 등 예전 방식). 내가 올린 것만
     const imgPrefix = imagePrefix();
-    // 내가 올린 사진만 (내 폴더) — 남의 사진 주소를 붙였다가 글을 지워 그 사진이 지워지는 일을 막는다
     const okImg = (u: unknown): u is string => typeof u === "string" && u.startsWith(`${imgPrefix}${user_id}/`) && !u.includes("..") && u.length <= 400;
-    const image_urls = [...new Set((Array.isArray(body.image_urls) ? body.image_urls : [body.image_url]).filter(okImg))].slice(0, 4) as string[];
+    const uploadIds: string[] = Array.isArray(body.upload_ids) ? [...new Set(body.upload_ids.filter((v: unknown): v is string => typeof v === "string" && UUID.test(v)))].slice(0, 6) as string[] : [];
+    let uploads: (UploadRow & { width: number | null; height: number | null })[] = [];
+    if (uploadIds.length) {
+      const { data: u, error: uErr } = await sb.from("community_uploads").select("id, url, created_at, taken_at, phash, width, height, used_post_id").eq("user_id", user_id).in("id", uploadIds);
+      if (uErr) return NextResponse.json({ error: uErr.message }, { status: 500 });
+      const rows = (u || []) as (UploadRow & { width: number | null; height: number | null; used_post_id: string | null })[];
+      if (rows.length !== uploadIds.length) return NextResponse.json({ error: "내가 올린 사진만 붙일 수 있어요" }, { status: 403 });
+      if (rows.some((r) => r.used_post_id)) return NextResponse.json({ error: "이미 다른 글에 쓴 사진이에요. 사진을 다시 골라 주세요" }, { status: 409 });
+      uploads = rows.sort((a, b) => uploadIds.indexOf(a.id) - uploadIds.indexOf(b.id));
+    }
+    const image_urls = uploads.length
+      ? uploads.map((u) => u.url)
+      : [...new Set((Array.isArray(body.image_urls) ? body.image_urls : [body.image_url]).filter(okImg))].slice(0, 6) as string[];
     const image_url = image_urls[0] ?? null; // 한 장 칸은 첫 장 (예전 화면 호환)
+    const media = uploads.length ? uploads.map((u) => ({ upload_id: u.id, w: u.width, h: u.height, album: !u.taken_at })) : null;
     // 영상은 /api/community/video 가 다시 만든 이 사람의 것만 (표지 사진도 우리 저장소)
     const video = ownVideo(body.video?.url, user_id) && okImg(body.video?.poster)
       ? { video_url: body.video.url as string, video_poster: body.video.poster as string, video_seconds: Math.min(30, Math.max(0, Number(body.video.seconds) || 0)) }
@@ -342,9 +426,8 @@ export async function POST(request: NextRequest) {
     if (poll && !content) return NextResponse.json({ error: "투표 질문을 내용에 적어 주세요" }, { status: 400 });
     const product_ids = Array.isArray(body.product_ids) ? body.product_ids.filter((id: unknown) => typeof id === "string" && UUID.test(id)).slice(0, 3) : [];
     const tags = isTopic(topic) ? [topic] : [];
+    const challengeIds: string[] = Array.isArray(body.challenge_ids) ? body.challenge_ids.filter((v: unknown): v is string => typeof v === "string" && UUID.test(v)).slice(0, 5) : [];
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const sb = createServiceRoleClient() as any;
     const limited = await rateLimit(sb, request, user_id, "post");
     if (limited) return limited;
     // 이름은 서버에 둔 이 사람의 이름 (보낸 이름은 처음 한 번만 — lib/community-profile.ts)
@@ -362,12 +445,12 @@ export async function POST(request: NextRequest) {
     // 협업 중인 업체의 제품을 붙였으면 글 맨 앞에 "협찬 · 업체" (추천·보증 심사지침 — lib/partner/collabs.ts)
     const sponsor = await sponsorFor(sb, user_id, product_ids);
 
-    // 원본 출처 — 보이는 글만 (지워짐·신고로 가려짐·어느 쪽이든 차단이면 붙이지 않는다)
+    // 원본 출처 — 보이는 글만 (지워짐·신고로 가려짐·팔로워만 글·어느 쪽이든 차단이면 붙이지 않는다)
     let source_post_id: string | null = null;
     if (typeof body.source_post_id === "string" && UUID.test(body.source_post_id)) {
-      const { data: src, error: sErr } = await sb.from("community_feed").select("id, user_id, is_active, hidden_by_reports").eq("id", body.source_post_id).maybeSingle();
+      const { data: src, error: sErr } = await sb.from("community_feed").select("id, user_id, is_active, hidden_by_reports, visibility").eq("id", body.source_post_id).maybeSingle();
       if (sErr) return NextResponse.json({ error: sErr.message }, { status: 500 });
-      if (!src || !src.is_active || src.hidden_by_reports) return NextResponse.json({ error: "원본 글을 볼 수 없어요. 원본을 빼고 올려 주세요" }, { status: 400 });
+      if (!src || !src.is_active || src.hidden_by_reports || (src.visibility === "followers" && src.user_id !== user_id)) return NextResponse.json({ error: "원본 글을 볼 수 없어요. 원본을 빼고 올려 주세요" }, { status: 400 });
       if (src.user_id !== user_id) {
         const { data: bl, error: blErr } = await sb.from("community_blocks").select("blocker_id")
           .or(`and(blocker_id.eq.${user_id},blocked_id.eq.${src.user_id}),and(blocker_id.eq.${src.user_id},blocked_id.eq.${user_id})`).limit(1);
@@ -387,13 +470,14 @@ export async function POST(request: NextRequest) {
       .from("community_feed")
       .insert({
         user_id,
-        post_type: post_type === "meal" && meal_data ? "meal" : "daily",
+        post_type: meal_data ? "meal" : "daily",
         content: content || null,
-        meal_type: ["breakfast", "lunch", "dinner", "snack"].includes(meal_type) ? meal_type : null,
+        meal_type,
         meal_data: meal_data || null,
         product_ids: product_ids.length ? product_ids : null,
         image_url,
         image_urls,
+        media,
         ...(video || {}),
         poll,
         tags,
@@ -401,6 +485,11 @@ export async function POST(request: NextRequest) {
         author_nickname,
         sponsor,
         source_post_id,
+        client_key,
+        visibility,
+        show_kcal,
+        day,
+        diary_ids: diary.map((r) => r.id),
         // 건강 관심사·목표·나이대는 글에 붙이지 않는다 (마이페이지에서 나만 본다)
         author_age_group: null,
         author_concerns: [],
@@ -409,7 +498,47 @@ export async function POST(request: NextRequest) {
       .select()
       .single();
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) {
+      // 같은 client_key 가 동시에 두 번 들어온 경우 — 먼저 들어간 글을 돌려준다
+      if (client_key && /duplicate key|unique/i.test(error.message)) {
+        const prev = await replayed(sb, user_id, client_key);
+        if (prev) return NextResponse.json({ post: { ...publicPost(prev), people: [] }, replayed: true, dropped: [], dropped_reason: null, proofs: { added: [], skipped: [] } });
+      }
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    // 사진을 이 글에 묶는다 — 아직 안 쓴 것만(조건부). 다른 요청이 먼저 가져갔으면 글을 거두고 알린다
+    if (uploads.length) {
+      const { data: claimed, error: cErr } = await sb.from("community_uploads").update({ used_post_id: data.id })
+        .eq("user_id", user_id).in("id", uploads.map((u) => u.id)).is("used_post_id", null).select("id");
+      if (cErr || (claimed || []).length !== uploads.length) {
+        const { error: rbErr } = await sb.from("community_feed").update({ is_active: false }).eq("id", data.id);
+        if (rbErr) console.error("[feed] 사진 묶기 실패 뒤 글 거두기", rbErr.message);
+        if (claimed?.length) {
+          const { error: ubErr } = await sb.from("community_uploads").update({ used_post_id: null }).eq("used_post_id", data.id);
+          if (ubErr) console.error("[feed] 사진 묶음 풀기", ubErr.message);
+        }
+        return NextResponse.json({ error: cErr ? cErr.message : "이미 다른 글에 쓴 사진이에요. 사진을 다시 골라 주세요" }, { status: cErr ? 500 : 409 });
+      }
+    }
+    // 식단 기록에 사진이 없으면 첫 장을 붙인다 (식단 화면에서 같이 보인다)
+    if (diary.length && image_url) {
+      const ids = diary.filter((r) => !r.image_url).map((r) => r.id);
+      if (ids.length) {
+        const { error: diErr } = await sb.from("meal_diary").update({ image_url }).in("id", ids).eq("user_id", user_id).is("image_url", null);
+        if (diErr) console.error("[feed] 식단 기록에 사진 붙이기", diErr.message); // ds-allow: 덤 — 글은 올라갔다
+      }
+    }
+
+    // 챌린지 인증 — 글은 올라갔다. 인증이 안 된 것은 이유와 함께 돌려준다
+    let proofs: Awaited<ReturnType<typeof attachProofs>> = { added: [], skipped: [] };
+    if (challengeIds.length) {
+      try { proofs = await attachProofs(sb, user_id, { id: data.id, day, meal_type }, uploads, challengeIds, now); }
+      catch (e) {
+        console.error("[feed] 챌린지 인증", (e as Error).message);
+        proofs = { added: [], skipped: challengeIds.map((id) => ({ challenge_id: id, title: "챌린지", reason: "인증을 붙이지 못했어요. 글 상세에서 다시 시도해 주세요" })) };
+      }
+    }
 
     const ok = [...judged].filter(([, j]) => j.rule.ok) as [string, { nickname: string | null; rule: { ok: true; status: "shown" | "pending" } }][];
     const dropped = [...judged].filter(([, j]) => !j.rule.ok).map(([, j]) => j.nickname || "알 수 없는 사람");
@@ -435,8 +564,9 @@ export async function POST(request: NextRequest) {
       }
     }
     const [polled] = await withPolls(sb, [publicPost(data) as { id: string; poll?: unknown }], user_id);
-    return NextResponse.json({ post: { ...polled, people }, dropped, dropped_reason: dropped.length ? CANT_TAG : null });
-  } catch {
+    return NextResponse.json({ post: { ...polled, people }, dropped, dropped_reason: dropped.length ? CANT_TAG : null, proofs });
+  } catch (e) {
+    console.error("[feed] POST", e instanceof Error ? e.message : e);
     return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
   }
 }
@@ -455,6 +585,11 @@ export async function DELETE(request: NextRequest) {
   const { error } = await sb.from("community_feed").update({ is_active: false, image_url: null, image_urls: [], video_url: null, video_poster: null, updated_at: new Date().toISOString() })
     .eq("id", id).eq("user_id", actor);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  // 이 글로 한 챌린지 인증도 지운다 (그날은 다시 '사진 필요'가 된다)
+  const { error: pErr } = await sb.from("challenge_proofs").delete().eq("post_id", id);
+  if (pErr) return NextResponse.json({ error: `글은 지웠지만 인증을 지우지 못했어요: ${pErr.message}` }, { status: 500 });
+  const { error: uErr } = await sb.from("community_uploads").delete().eq("used_post_id", id).eq("user_id", actor);
+  if (uErr) console.error("사진 기록을 지우지 못했어요:", uErr.message);
   // 사진 파일도 지운다 (남겨 두지 않음)
   const [imgErr, vidErr] = await Promise.all([removeImages(sb, [before.image_url, ...(before.image_urls || []), before.video_poster], actor), removeVideos(sb, [before.video_url])]);
   if (imgErr) console.error("사진 파일을 지우지 못했어요:", imgErr);

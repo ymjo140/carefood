@@ -20,7 +20,7 @@ async function find(sb: Sb, code: string) {
   const { data: g, error } = await sb.from("challenge_groups").select("*").eq("code", code).maybeSingle();
   if (error) throw new Error(error.message);
   if (!g) return null;
-  const { data: c, error: cErr } = await sb.from("community_challenges").select("id, slug, title, rule, metric, target, days, goal_days, is_active").eq("id", g.challenge_id).maybeSingle();
+  const { data: c, error: cErr } = await sb.from("community_challenges").select("id, slug, title, rule, metric, target, days, goal_days, is_active, proof, kind, visibility").eq("id", g.challenge_id).maybeSingle();
   if (cErr) throw new Error(cErr.message);
   if (!c || !c.is_active) return null;
   return { g: g as GroupRow, c: c as ChallengeRow };
@@ -57,7 +57,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ cod
     const lateBy = Math.max(0, daysBetween(g.start_on, today));
     return NextResponse.json({
       group: { id: g.id, code: g.code, ...period, member_count: g.member_count, max_members: g.max_members },
-      challenge: { id: c.id, title: c.title, rule: c.rule, days: c.days },
+      // listed: 상세(인증 사진)를 누구나 열 수 있는 챌린지 — 링크로만인 사람이 만든 챌린지는 참여한 뒤에
+      challenge: { id: c.id, title: c.title, rule: c.rule, days: c.days, proof: c.proof === "none" ? "none" : "photo",
+        listed: (c as { kind?: string }).kind !== "user" || (c as { visibility?: string }).visibility === "public" },
       host: names.get(g.host_id) || "익명",
       // 같이 하는 사람은 첫 글자만 (아직 참여하지 않은 사람에게 닉네임을 다 보이지 않는다). 연 사람 이름은 초대에 이미 있다
       members: users.filter((u) => !filters.blocked.has(u)).slice(0, 8).map((u) => (names.get(u) || "익명").slice(0, 1)),

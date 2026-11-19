@@ -3,21 +3,24 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
-  BottomBar, Button, EmptyState, IconButton, LinkButton, MemberProgressRow, Notice, Page, PageHeader, SkeletonList, TextLink, useToast,
+  BottomBar, Button, DayDots, EmptyState, IconButton, LinkButton, MemberTodayRow, Notice, Page, PageHeader, SectionHeader, SkeletonList, TextLink, useToast, type DayDot,
 } from "@/components/ui";
 import ShareCardSheet from "@/components/community/ShareCardSheet";
 import { daysBetween, monthDay, todayKst } from "@/lib/day";
 
 /**
- * 같이 하는 챌린지 진행표 (/community/challenges/g/[id]) — 같은 묶음 사람만 본다.
- * 사람마다 한 줄: 날짜 점 · 해낸 날/목표 · 응원(같은 사람에게 하루 한 번). 무엇을 먹었는지·성분 숫자는 없다.
- * 1순위: 오늘 아직이면 '오늘 기록하기', 하루라도 해냈으면 '인증 카드 만들기'(= 친구 초대 링크가 붙은 카드)
+ * 같이 하는 챌린지 보드 (/community/challenges/g/[id]) — 같은 묶음 사람만 본다.
+ * 사람끼리 비교하지 않는다: 날짜 점·해낸 날 수는 내 것만. 다른 사람은 '오늘 인증했는지'와 그 사진(볼 수 있는 글일 때) + 응원.
+ * 1순위: 오늘 아직이면 '오늘 인증 올리기'(사진 인증) 또는 '오늘 기록하기', 오늘 해냈으면 '인증 카드 만들기'(= 친구 초대 링크가 붙은 카드)
  * ?joined=1 — 링크로 막 들어왔을 때 한 번 안내
  */
-type Member = { user_id: string; nickname: string; is_me: boolean; is_host: boolean; days: { date: string; state: "done" | "missed" | "today" | "future" | "before" }[]; done_count: number; goal: number; reached: boolean; cheered: boolean };
+type Member = { user_id: string; nickname: string; is_me: boolean; is_host: boolean; cheered: boolean;
+  today: { proved: boolean; photo: string | null; post_id: string | null; album: boolean } };
 type Board = {
   group: { id: string; code: string; start_on: string; ends_on: string; member_count: number; max_members: number; is_host: boolean; finished: boolean };
-  challenge: { id: string; title: string; rule: string; days: number };
+  challenge: { id: string; title: string; rule: string; days: number; proof: "photo" | "none" };
+  me: { days: DayDot[]; done_count: number; goal: number; reached: boolean };
+  today: { total: number; proved: number };
   members: Member[]; cheers_received: number; logged_in: boolean;
 };
 
@@ -50,7 +53,7 @@ export default function GroupBoard() {
 
   useEffect(() => {
     if (!joined) return;
-    toast.show("같이 하기로 했어요. 식단을 기록하면 하루씩 채워져요");
+    toast.show("같이 하기로 했어요. 식단을 기록하고 사진을 올리면 하루씩 채워져요");
     router.replace(`/community/challenges/g/${id}`); // 새로 고쳐도 다시 뜨지 않게
   }, [joined, id, router, toast]);
 
@@ -96,11 +99,12 @@ export default function GroupBoard() {
   }
 
   const b = state.board;
-  const me = b.members.find((m) => m.is_me);
   const today = todayKst();
   const dayN = daysBetween(b.group.start_on, today) + 1;
   const when = today < b.group.start_on ? `${daysBetween(today, b.group.start_on)}일 뒤 시작` : b.group.finished ? "끝났어요" : `${dayN}일째`;
-  const todayDone = me?.days.find((d) => d.date === today)?.state === "done";
+  const myToday = b.me.days.find((d) => d.date === today)?.state;
+  const running = !b.group.finished && today >= b.group.start_on;
+  const photo = b.challenge.proof === "photo";
   const alone = b.members.length <= 1;
 
   return (
@@ -112,14 +116,19 @@ export default function GroupBoard() {
         description={<>{md(b.group.start_on)} ~ {md(b.group.ends_on)} · {when} · <span className="num">{b.group.member_count}</span>명이 같이 해요</>}
         actions={!b.group.finished ? <Button size="sm" variant="secondary" icon="users" onClick={() => setCard(true)}>친구 초대하기</Button> : undefined} />
 
-      {b.cheers_received > 0 && (
-        <p className="text-label text-ink mb-3">오늘 <span className="num font-bold text-brand-ink">{b.cheers_received}</span>명에게 응원을 받았어요</p>
-      )}
+      <section aria-label="내 진행" className="flex flex-col gap-2 mb-8">
+        <SectionHeader title="내 진행" className="mb-1" description={<>해낸 날 <span className="num font-bold text-ink">{b.me.done_count}</span> / 목표 <span className="num">{b.me.goal}</span>일</>} />
+        <DayDots days={b.me.days} label="내 날짜별 진행" />
+        {photo && myToday === "photo_needed" && <p className="text-label text-ink">식단 기준은 채웠어요. 오늘 사진을 올리면 인증돼요</p>}
+        {b.cheers_received > 0 && <p className="text-label text-ink">오늘 <span className="num font-bold text-brand-ink">{b.cheers_received}</span>명에게 응원을 받았어요</p>}
+      </section>
 
       <section aria-label="같이 하는 사람">
+        <SectionHeader title={running ? <>오늘 <span className="num">{b.today.total}</span>명 중 <span className="num">{b.today.proved}</span>명 인증</> : "같이 하는 사람"} className="mb-1" />
         <ul className="flex flex-col divide-y divide-line">
           {b.members.map((m) => (
-            <MemberProgressRow key={m.user_id} name={m.nickname} me={m.is_me} host={m.is_host} days={m.days} done={m.done_count} goal={m.goal} reached={m.reached}
+            <MemberTodayRow key={m.user_id} name={m.nickname} me={m.is_me} host={m.is_host}
+              proved={m.today.proved} photo={m.today.photo} href={m.today.post_id ? `/community/${m.today.post_id}` : null} album={m.today.album}
               action={m.is_me || b.group.finished ? undefined : (
                 <IconButton icon="heart" size="sm" active={m.cheered} disabled={m.cheered || cheering === m.user_id}
                   label={m.cheered ? `${m.nickname}님을 오늘 응원했어요` : `${m.nickname}님 응원하기`} onClick={() => cheer(m)} />
@@ -132,13 +141,17 @@ export default function GroupBoard() {
         )}
       </section>
 
-      <p className="text-caption text-ink-2 mt-5">{b.challenge.rule}을 채운 날이 해낸 날이에요. 같이 하는 사람에게는 닉네임과 해낸 날만 보이고, 무엇을 먹었는지는 보이지 않아요. <TextLink href="/community/challenges">챌린지 목록</TextLink></p>
-      {me && !b.logged_in && <Notice className="mt-3" icon="info">다른 기기나 홈 화면 앱에서 이어 하려면 로그인해 주세요. 로그인하면 이 기기의 기록이 계정으로 옮겨져요</Notice>}
+      <p className="text-caption text-ink-2 mt-5">
+        {b.challenge.rule}을 채우고{photo ? " 그날 사진을 올린" : ""} 날이 해낸 날이에요.{photo ? " 사진은 그날 밤 12시까지 올린 것만 인증돼요." : ""} 같이 하는 사람에게는 닉네임과 오늘 인증했는지만 보이고, 무엇을 먹었는지·몇 번 해냈는지는 보이지 않아요. <TextLink href="/community/challenges">챌린지 목록</TextLink>
+      </p>
+      {!b.logged_in && <Notice className="mt-3" icon="info">다른 기기나 홈 화면 앱에서 이어 하려면 로그인해 주세요. 로그인하면 이 기기의 기록이 계정으로 옮겨져요</Notice>}
 
       <BottomBar>
-        {me && (me.done_count > 0 || todayDone)
+        {myToday === "done" || b.group.finished
           ? <Button block icon="share" onClick={() => setCard(true)}>인증 카드 만들기</Button>
-          : <LinkButton block href="/diary">오늘 기록하기</LinkButton>}
+          : photo && running
+            ? <LinkButton block icon="camera" href="/community?compose=meal">오늘 인증 올리기</LinkButton>
+            : <LinkButton block href="/diary">오늘 기록하기</LinkButton>}
       </BottomBar>
 
       <ShareCardSheet target={card ? { kind: "challenge", id: b.challenge.id } : null} open={card} onClose={() => setCard(false)} />

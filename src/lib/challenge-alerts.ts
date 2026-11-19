@@ -2,8 +2,10 @@
  * 챌린지 같이 하기 알림 — /api/push/run 이 30분마다 부른다 (서버 전용).
  *  - 다 같이 해냈어요: 묶음(2명 이상) 전원이 그날을 해냈을 때 모두에게 한 번.
  *      채우면 바로 아는 규칙은 그날 안에, 하루가 끝나야 아는 규칙('…이하'·구간·비율)은 다음 날 아침 8~12시에 '어제'로.
- *  - 오늘 나만 남았어요: 저녁 7시대, 나머지가 다 해냈는데 한 사람만 남았을 때 그 사람에게만 (하루 한 번, 이름은 다른 사람에게 알리지 않는다).
- *      하루가 끝나야 아는 규칙은 '해냈는지' 대신 '오늘 기록이 있는지'로 본다 — "오늘 나만 기록이 없어요".
+ *  - 오늘 아직이에요: 저녁 7시대, 나머지가 다 해냈는데 한 사람만 남았을 때 그 사람에게만 (하루 한 번, 이름은 다른 사람에게 알리지 않는다).
+ *      사람끼리 비교하지 않는다 — 다른 사람이 몇 명 해냈는지는 문구에 넣지 않는다.
+ *      하루가 끝나야 아는 규칙은 '해냈는지' 대신 '오늘 기록이 있는지'로 본다 — "오늘 아직 기록이 없어요".
+ * 사진 인증 챌린지는 proofs(그날 인증 사진)를 넘기면 사진까지 있어야 해낸 것으로 본다. 넘기지 않으면 식단만 본다.
  * 숫자(열량·성분)는 알림에 넣지 않는다.
  */
 import { addDays } from "@/lib/day";
@@ -11,6 +13,7 @@ import { METRIC_META, judgeDay, type DiaryRow } from "@/lib/challenges";
 import { MEMBER_COLS, diaryOf, memberTarget, type ChallengeRow, type GroupRow, type MemberRow } from "@/lib/challenge-groups";
 import type { PushPayload } from "@/lib/push";
 import { selectAllIn } from "@/lib/supabase/all";
+import { proofDays } from "@/lib/challenge-proofs";
 
 type Sb = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 export type GroupAlert = { user: string; key: string; payload: PushPayload };
@@ -25,8 +28,10 @@ export function planGroupAlerts(opts: {
   diary: Map<string, DiaryRow[]>;
   today: string;
   hour: number;
+  /** `${challenge_id}:${user_id}` → 인증 사진이 있는 날 (lib/challenge-proofs proofDays) */
+  proofs?: Map<string, Set<string>>;
 }): GroupAlert[] {
-  const { groups, challenges, members, diary, today, hour } = opts;
+  const { groups, challenges, members, diary, today, hour, proofs } = opts;
   const yesterday = addDays(today, -1);
   const out: GroupAlert[] = [];
   for (const g of groups) {
@@ -36,6 +41,9 @@ export function planGroupAlerts(opts: {
     const now = METRIC_META[c.metric].decide === "now";
     const ms = members.filter((m) => m.group_id === g.id);
     const rowsOf = (m: MemberRow, day: string) => (diary.get(m.user_id) || []).filter((r) => r.date === day);
+    const photo = !!proofs && c.proof !== "none";
+    const hasPhoto = (m: MemberRow, day: string) => !photo || !!proofs!.get(`${c.id}:${m.user_id}`)?.has(day);
+    const doneOn = (m: MemberRow, day: string) => judgeDay(c.metric, memberTarget(c, m), rowsOf(m, day)).ok && hasPhoto(m, day);
     const url = `/community/challenges/g/${g.id}`;
 
     // ── 다 같이 해냈어요 ──
@@ -43,7 +51,7 @@ export function planGroupAlerts(opts: {
     const sendAll = now ? true : hour >= 8 && hour < 12;
     if (sendAll && day >= g.start_on && day <= ends) {
       const counted = ms.filter((m) => m.started_on <= day);
-      if (counted.length >= 2 && counted.every((m) => judgeDay(c.metric, memberTarget(c, m), rowsOf(m, day)).ok)) {
+      if (counted.length >= 2 && counted.every((m) => doneOn(m, day))) {
         const when = day === today ? "오늘" : "어제";
         for (const m of counted) {
           out.push({ user: m.user_id, key: `all:${g.id}:${day}`, payload: {
@@ -59,13 +67,12 @@ export function planGroupAlerts(opts: {
       if (counted.length >= 2) {
         const left = counted.filter((m) => {
           const rows = rowsOf(m, today);
-          return now ? !judgeDay(c.metric, memberTarget(c, m), rows).ok : rows.length === 0;
+          return now ? !doneOn(m, today) : rows.length === 0;
         });
         if (left.length === 1) {
-          const rest = counted.length - 1;
           out.push({ user: left[0].user_id, key: `alone:${today}`, payload: now
-            ? { title: "오늘 나만 남았어요", body: `${c.title} — 나머지 ${rest}명은 오늘 해냈어요. 채우면 다 같이 해내요`, url, tag: "challenge" }
-            : { title: "오늘 나만 기록이 없어요", body: `${c.title} — 나머지 ${rest}명은 오늘 기록했어요. 한 끼부터 적어 볼까요?`, url: "/diary", tag: "challenge" } });
+            ? { title: "오늘 아직 채우지 않았어요", body: `${c.title} — 밤 12시까지 ${photo ? "식단을 채우고 사진을 올리면" : "채우면"} 오늘이 해낸 날이 돼요`, url, tag: "challenge" }
+            : { title: "오늘 아직 기록이 없어요", body: `${c.title} — 한 끼부터 적어 볼까요?`, url: "/diary", tag: "challenge" } });
         }
       }
     }
@@ -83,12 +90,16 @@ export async function loadGroupAlerts(sb: Sb, today: string, hour: number): Prom
   if (!groups.length) return [];
   const cids = [...new Set(groups.map((g) => g.challenge_id))];
   const cs = await selectAllIn<ChallengeRow>(cids, 200, (p) => sb.from("community_challenges")
-    .select("id, slug, title, rule, metric, target, days, goal_days, is_active").in("id", p), "id");
+    .select("id, slug, title, rule, metric, target, days, goal_days, is_active, proof").in("id", p), "id");
   const challenges = new Map(cs.map((c) => [c.id, c]));
   const live = groups.filter((g) => { const c = challenges.get(g.challenge_id); return c && addDays(g.start_on, c.days - 1) >= yesterday; });
   if (!live.length) return [];
   const members = await selectAllIn<MemberRow>(live.map((g) => g.id), 200, (p) => sb.from("community_challenge_members")
     .select(MEMBER_COLS).in("group_id", p), ["challenge_id", "user_id"], 1_000_000);
-  const diary = await diaryOf(sb, [...new Set(members.map((m) => m.user_id))], yesterday, today);
-  return planGroupAlerts({ groups: live, challenges, members, diary, today, hour });
+  const users = [...new Set(members.map((m) => m.user_id))];
+  const [diary, proofs] = await Promise.all([
+    diaryOf(sb, users, yesterday, today),
+    proofDays(sb, [...new Set(live.map((g) => g.challenge_id))], users, yesterday, today),
+  ]);
+  return planGroupAlerts({ groups: live, challenges, members, diary, today, hour, proofs });
 }

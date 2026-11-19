@@ -7,9 +7,11 @@ import { Skeleton } from "./Skeleton";
  * 인증 카드 미리 보기 — 9:16 틀 안에 만든 카드 그림. 스티커 모양(투명 바탕)은 옅은 바탕 위에 보인다.
  * 그림이 만들어지는 동안은 같은 크기의 스켈레톤.
  */
-export function ShareCardPreview({ src, alt, sticker = false, className }: { src: string | null; alt: string; sticker?: boolean; className?: string }) {
+export function ShareCardPreview({ src, alt, sticker = false, feed = false, className }: { src: string | null; alt: string; sticker?: boolean;
+  /** 피드 게시물 4:5 카드 */
+  feed?: boolean; className?: string }) {
   return (
-    <div className={cn("mx-auto w-full max-w-56 aspect-9/16 rounded-lg border border-line bg-sunken overflow-hidden flex items-center justify-center", className)}>
+    <div className={cn("mx-auto w-full rounded-lg", feed ? "max-w-64 aspect-4/5" : "max-w-56 aspect-9/16", "border border-line bg-sunken overflow-hidden flex items-center justify-center", className)}>
       {src
         // eslint-disable-next-line @next/next/no-img-element
         ? <img src={src} alt={alt} className={cn("block w-full h-full object-contain", sticker && "p-3")} />

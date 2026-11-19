@@ -2,6 +2,7 @@ import { addDays, kstDay, todayKst } from "@/lib/day";
 import { imagePrefix } from "@/lib/community-images";
 import { DIARY_COLS, type DiaryRow } from "@/lib/challenges";
 import { memberRun, type ChallengeRow, type MemberRow } from "@/lib/challenge-groups";
+import { proofDays, proofKey } from "@/lib/challenge-proofs";
 import { enrichGroupBuys, type GroupBuyRow } from "@/lib/group-buy-server";
 import { bestOption, discountOf, readOffer } from "@/lib/group-buy";
 import { dayTarget } from "@/lib/share-links";
@@ -82,7 +83,7 @@ export async function cardFor(sb: Sb, actor: string, kind: string | null, id: st
     }
 
     if (kind === "meal") {
-      const { data: p, error } = await sb.from("community_feed").select("id, user_id, author_nickname, image_urls, video_poster, meal_type, meal_data, created_at, is_active")
+      const { data: p, error } = await sb.from("community_feed").select("id, user_id, author_nickname, image_urls, video_poster, meal_type, meal_data, created_at, is_active, day")
         .eq("id", id).maybeSingle();
       if (error) throw new Error(error.message);
       if (!p || !p.is_active) return { error: "글을 찾지 못했어요", status: 404 };
@@ -93,7 +94,7 @@ export async function cardFor(sb: Sb, actor: string, kind: string | null, id: st
         card: {
           kind: "meal", author: p.author_nickname, url: `/community/${p.id}`,
           photo: ownImage(p.video_poster) || ownImage((p.image_urls || [])[0]),
-          meal_type: p.meal_type, day: kstDay(p.created_at),
+          meal_type: p.meal_type, day: p.day || kstDay(p.created_at),
           foods: foods.map((f) => String(f.name || "").slice(0, 24)).filter(Boolean).slice(0, 3), food_count: foods.length,
           total: t ? { calories: Number(t.calories) || 0, protein_g: Number(t.protein_g) || 0, carbs_g: Number(t.carbs_g) || 0, fat_g: Number(t.fat_g) || 0 } : null,
           streak: await streakOf(sb, actor),
@@ -103,7 +104,7 @@ export async function cardFor(sb: Sb, actor: string, kind: string | null, id: st
 
     if (kind === "challenge") {
       const [{ data: c, error: cErr }, { data: m, error: mErr }, { data: prof, error: pErr }] = await Promise.all([
-        sb.from("community_challenges").select("id, slug, title, rule, metric, target, days, goal_days, is_active").eq("id", id).maybeSingle(),
+        sb.from("community_challenges").select("id, slug, title, rule, metric, target, days, goal_days, is_active, proof").eq("id", id).maybeSingle(),
         sb.from("community_challenge_members").select("challenge_id, user_id, started_on, joined_on, goal_days_eff, group_id, finished_runs, show_values, target_eff, challenge_groups(id, code, start_on, member_count)")
           .eq("challenge_id", id).eq("user_id", actor).maybeSingle(),
         sb.from("community_profiles").select("nickname").eq("actor_id", actor).maybeSingle(),
@@ -115,7 +116,8 @@ export async function cardFor(sb: Sb, actor: string, kind: string | null, id: st
       const g = m.challenge_groups as { id: string; code: string; start_on: string; member_count: number } | null;
       const rows = await selectAll(() => sb.from("meal_diary").select(DIARY_COLS)
         .eq("user_id", actor).gte("date", m.started_on).lte("date", today), "id");
-      const run = memberRun(c as ChallengeRow, g, m as MemberRow, (rows || []) as DiaryRow[], today);
+      const pd = await proofDays(sb, [c.id], [actor], m.started_on, today);
+      const run = memberRun(c as ChallengeRow, g, m as MemberRow, (rows || []) as DiaryRow[], today, pd.get(proofKey(c.id, actor)));
       return {
         card: {
           kind: "challenge", author: prof?.nickname || null, url: g ? `/j/${g.code}` : "/community/challenges",

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { IconButton, MealAttach, PhotoGrid, VideoClip, PlanAttach, PollAttach, PostAction, PostActions, PostCredits, ProductTagLinks, Sheet, ThreadItem, useToast, CertAttach, type CertView } from "@/components/ui";
+import { IconButton, MealAttach, PhotoCarousel, VideoClip, PlanAttach, PollAttach, PostAction, PostActions, PostCredits, ProductTagLinks, Sheet, ThreadItem, useToast, CertAttach, type CertView } from "@/components/ui";
 import { isTopic } from "@/lib/community-topics";
 import { pollRemaining, type PollView } from "@/lib/community-poll";
 import PostMenu, { type MenuDone } from "./PostMenu";
@@ -22,6 +22,10 @@ export type FeedPostData = {
   tags?: string[] | null;
   image_url?: string | null;
   image_urls?: string[] | null;
+  /** 사진마다 크기(첫 장 비율로 1:1·4:5) */
+  media?: { upload_id: string; w: number | null; h: number | null; album?: boolean }[] | null;
+  visibility?: "public" | "followers" | null;
+  show_kcal?: boolean | null;
   video_url?: string | null; video_poster?: string | null; video_seconds?: number | null;
   products?: { id: string; name: string }[];
   poll?: PollView | null;
@@ -97,6 +101,7 @@ export default function ThreadCard({ post, onLike, onCopy, onReply, onMenuDone, 
       nickname={post.author_nickname}
       topic={topic}
       createdAt={post.created_at}
+      followersOnly={post.visibility === "followers"}
       href={href}
       authorHref={`/community/u/${encodeURIComponent(post.user_id)}`}
       reply={!detail && latest ? { nickname: latest.author_nickname, content: latest.content, more: Math.max(0, post.comment_count - 1) } : null}
@@ -117,7 +122,7 @@ export default function ThreadCard({ post, onLike, onCopy, onReply, onMenuDone, 
       )}
       {post.video_url && post.video_poster && <VideoClip url={post.video_url} poster={post.video_poster} label={`${alt} 영상`} autoplay={detail} />}
       {post.cert && <CertAttach cert={post.cert} />}
-      <PhotoGrid urls={photos} alt={alt} onOpen={detail ? setViewing : undefined} />
+      <PhotoCarousel urls={photos} alt={alt} ratio={post.media?.[0]?.w && post.media[0].h ? post.media[0].w / post.media[0].h : null} onOpen={detail ? setViewing : undefined} />
       {detail && photos.length > 0 && (
         <Sheet open={viewing != null} onClose={() => setViewing(null)} size="lg"
           title={photos.length > 1 ? `사진 ${(viewing ?? 0) + 1} / ${photos.length}` : "사진"}>
@@ -138,7 +143,7 @@ export default function ThreadCard({ post, onLike, onCopy, onReply, onMenuDone, 
       {md?.plan ? (
         <PlanAttach title={md.plan.title || "저장한 식단"} dayKcal={md.plan.day_kcal || []} avgKcal={md.plan.avg_kcal} avgProtein={md.plan.avg_protein} />
       ) : md?.foods && md.foods.length > 0 ? (
-        <MealAttach mealType={post.meal_type} foods={md.foods} total={md.total} />
+        <MealAttach mealType={post.meal_type} foods={md.foods} total={md.total} showKcal={post.show_kcal !== false} />
       ) : null}
       <ProductTagLinks products={post.products} />
       <PostCredits people={post.people} source={post.source} together={post.together} />

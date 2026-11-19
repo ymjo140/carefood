@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
-  AvatarStack, BottomBar, Button, Card, EmptyState, LinkButton, Notice, Page, ShareCardPreview, Skeleton, useToast,
+  AvatarStack, BottomBar, Button, Card, EmptyState, LinkButton, Notice, Page, ShareCardPreview, Skeleton, TextLink, useToast,
 } from "@/components/ui";
 import { monthDay, weekday } from "@/lib/day";
 import { getOrCreateNickname } from "@/lib/nickname";
@@ -16,7 +16,7 @@ import { getOrCreateNickname } from "@/lib/nickname";
  */
 type Invite = {
   group: { id: string; code: string; start_on: string; ends_on: string; member_count: number; max_members: number };
-  challenge: { id: string; title: string; rule: string; days: number };
+  challenge: { id: string; title: string; rule: string; days: number; proof?: "photo" | "none"; listed?: boolean };
   host: string; members: string[];
   status: "member" | "open" | "closed" | "full" | "blocked";
   starts_in: number;
@@ -120,7 +120,10 @@ export default function InviteView() {
       {d.card_url && <ShareCardPreview src={d.card_url} alt={`${d.host}님의 인증 카드`} className="mb-5" />}
 
       <h1 className="text-title font-bold text-ink text-balance">{d.challenge.title}</h1>
-      <p className="text-label text-ink-2 mt-1">{d.challenge.rule}을 채워요. 식단을 기록하면 저절로 하루씩 채워져요</p>
+      <p className="text-label text-ink-2 mt-1">
+        {d.challenge.proof === "none" ? `${d.challenge.rule}을 채워요. 식단을 기록하면 저절로 하루씩 채워져요` : `${d.challenge.rule}을 채우고 그날 끼니 사진을 올리면 하루가 채워져요`}
+        {d.challenge.listed && <> · <TextLink href={`/community/challenges/${d.challenge.id}`}>인증 사진 보기</TextLink></>}
+      </p>
 
       <Card className="mt-5 flex flex-col gap-3">
         <div className="flex items-baseline justify-between gap-3">
@@ -155,7 +158,7 @@ export default function InviteView() {
             <Button block loading={busy} onClick={join}>같이 하기</Button>
           </div>
         )}
-        {d.status === "member" && <LinkButton block href={`/community/challenges/g/${d.group.id}`}>진행표 보기</LinkButton>}
+        {d.status === "member" && <LinkButton block href={`/community/challenges/g/${d.group.id}`}>같이 하는 보드 보기</LinkButton>}
         {(d.status === "closed" || d.status === "full") && <Button block loading={busy} onClick={startOwn}>오늘부터 시작하기</Button>}
         {d.status === "blocked" && <LinkButton block variant="secondary" href="/community/challenges">챌린지 보기</LinkButton>}
       </BottomBar>

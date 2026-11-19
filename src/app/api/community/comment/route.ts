@@ -1,3 +1,4 @@
+import { audienceOf, canSee } from "@/lib/community-visibility";
 import { NextRequest, NextResponse } from "next/server";
 import { connection } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
@@ -22,6 +23,14 @@ export async function GET(request: NextRequest) {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sb = createServiceRoleClient() as any;
+  // 팔로워만 글의 답글은 그 글을 볼 수 있는 사람에게만
+  {
+    const { data: post, error: pErr } = await sb.from("community_feed").select("id, user_id, visibility").eq("id", postId).maybeSingle();
+    if (pErr) return NextResponse.json({ error: pErr.message }, { status: 500 });
+    try {
+      if (post && !canSee(post, await audienceOf(sb, viewer))) return NextResponse.json({ error: "글을 찾을 수 없어요" }, { status: 404 });
+    } catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: 500 }); }
+  }
 
   const { data: comments, error } = await sb
     .from("community_feed_comments")
@@ -57,8 +66,9 @@ export async function POST(request: NextRequest) {
     if (limited) return limited;
 
     // 글쓴이가 나를 차단했으면 답글을 달 수 없다
-    const { data: post } = await sb.from("community_feed").select("user_id, is_active").eq("id", post_id).maybeSingle();
+    const { data: post } = await sb.from("community_feed").select("id, user_id, is_active, visibility").eq("id", post_id).maybeSingle();
     if (!post || !post.is_active) return NextResponse.json({ error: "글을 찾을 수 없어요" }, { status: 404 });
+    if (!canSee(post, await audienceOf(sb, user_id))) return NextResponse.json({ error: "글을 찾을 수 없어요" }, { status: 404 });
     const { data: blockedMe } = await sb.from("community_blocks").select("blocker_id").eq("blocker_id", post.user_id).eq("blocked_id", user_id).maybeSingle();
     if (blockedMe) return NextResponse.json({ error: "답글을 달 수 없는 글이에요" }, { status: 403 });
 

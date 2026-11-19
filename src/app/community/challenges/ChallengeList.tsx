@@ -1,7 +1,8 @@
 "use client";
 
+import Link from "@/components/ui/AppLink";
 import { useEffect, useState } from "react";
-import { Button, Card, Chip, ConfirmSheet, DayDots, EmptyState, Notice, Sheet, SkeletonList, TextButton, TextLink, useToast } from "@/components/ui";
+import { Button, Card, Chip, ConfirmSheet, DayDots, EmptyState, Icon, Notice, Sheet, SkeletonList, TextButton, TextLink, useToast } from "@/components/ui";
 import ShareCardSheet from "@/components/community/ShareCardSheet";
 import ChallengeCreateSheet from "@/components/community/ChallengeCreateSheet";
 import { getOrCreateNickname } from "@/lib/nickname";
@@ -27,7 +28,11 @@ type Item = {
   id: string; title: string; rule: string; metric: ChallengeMetric; target: number | null; days: number; active_count: number; finished_count: number; me: Run | null;
   /** user: 사람이 만든 챌린지(링크로만 들어옴) */
   kind?: "official" | "user" | "season"; mine_created?: boolean; note?: string | null; visibility?: "public" | "link" | null;
+  /** photo: 그날 사진 인증이 있어야 해낸 날 */
+  proof?: "photo" | "none";
 };
+
+const todayState = (run: { days: { date: string; state: string }[] }) => run.days.find((d) => d.date === todayKst())?.state;
 
 export function ChallengeList({ reloadKey = 0 }: { reloadKey?: number }) {
   const toast = useToast();
@@ -152,9 +157,11 @@ export function ChallengeList({ reloadKey = 0 }: { reloadKey?: number }) {
                     </p>
                   )}
                   {c.kind === "season" && <p className="text-caption text-brand-ink">시즌 챌린지</p>}
-                  <h2 className="text-body font-bold text-ink">{c.title}</h2>
+                  <h2 className="text-body font-bold text-ink">
+                    <Link href={`/community/challenges/${c.id}`} className="inline-flex items-center gap-0.5 min-h-8 hover:underline underline-offset-4">{c.title}<Icon name="chevron-right" size={16} className="text-ink-3" /></Link>
+                  </h2>
                   {c.note && <p className="text-label text-ink">“{c.note}”</p>}
-                  <p className="text-label text-ink-2">{c.rule}을 <span className="num">{c.days}</span>일 동안 채워요</p>
+                  <p className="text-label text-ink-2">{c.rule}을 <span className="num">{c.days}</span>일 동안 채워요{c.proof !== "none" && " · 그날 사진 인증"}</p>
                   {/* 0명이면 '지금 0명이 하고 있어요' 대신 아무것도 적지 않는다 — 참여 수는 사람이 있을 때만 */}
                   {(c.active_count > 0 || c.finished_count > 0) && (
                     <p className="text-caption text-ink-2">
@@ -176,16 +183,18 @@ export function ChallengeList({ reloadKey = 0 }: { reloadKey?: number }) {
                     {run.group && (
                       <p className="text-label text-ink-2">
                         {run.group.member_count > 1 ? <><span className="num">{run.group.member_count}</span>명이 같이 해요 · </> : "혼자 하고 있어요 · "}
-                        <TextLink href={`/community/challenges/g/${run.group.id}`}>진행표 보기</TextLink>
+                        <TextLink href={`/community/challenges/g/${run.group.id}`}>같이 하는 보드 보기</TextLink>
                       </p>
                     )}
                     {!run.finished && (
                       <p className="text-label text-ink-2">
                         {run.group && run.group.start_on > todayKst()
                           ? <><span className="num">{Number(run.group.start_on.slice(5, 7))}</span>월 <span className="num">{Number(run.group.start_on.slice(8, 10))}</span>일에 시작해요 · 그 전에 친구를 불러 보세요</>
+                          : todayState(run) === "photo_needed"
+                          ? <>식단 기준은 채웠어요 · <TextLink href="/community?compose=meal">오늘 사진 인증하기</TextLink></>
                           : run.today_value == null
                           ? <>오늘 아직 기록이 없어요 · <TextLink href="/diary">기록하기</TextLink></>
-                          : <span className="num">오늘 지금까지 {todayLine(c.metric, c.target ?? 0, run.today_value)}</span>}
+                          : <span className="num">오늘 지금까지 {todayLine(c.metric, c.target ?? 0, run.today_value)}{c.proof !== "none" && todayState(run) !== "done" ? " · 사진도 올려 주세요" : ""}</span>}
                       </p>
                     )}
                     {personal && !run.finished && (

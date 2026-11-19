@@ -15,6 +15,8 @@ export const REPORT_REASON_OPTIONS = [
   { value: "abuse", label: "욕설·비방" },
   { value: "medical", label: "근거 없는 의료·효능 주장" },
   { value: "privacy", label: "개인정보 노출" },
+  { value: "stolen_photo", label: "남의 사진으로 인증" },
+  { value: "body_photo", label: "몸·체중 사진" },
   { value: "other", label: "기타" },
 ] as const;
 type Reason = (typeof REPORT_REASON_OPTIONS)[number]["value"];

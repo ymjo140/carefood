@@ -5,6 +5,7 @@ import { adminOnly } from "@/lib/actor-server";
 import { addDays, kstDay, mondayOf, todayKst } from "@/lib/day";
 import { DIARY_COLS, type DiaryRow } from "@/lib/challenges";
 import { memberRun, type ChallengeRow, type GroupRow, type MemberRow } from "@/lib/challenge-groups";
+import { proofDays, proofKey } from "@/lib/challenge-proofs";
 import { asResult, selectAll, selectAllIn } from "@/lib/supabase/all";
 
 /**
@@ -49,7 +50,7 @@ export async function GET() {
     });
 
     // ── 완주율: 최근 28일 안에 끝난 묶음 ──
-    const gs = await selectAll(() => sb.from("challenge_groups").select("*, community_challenges(id, slug, title, rule, metric, target, days, goal_days, is_active)")
+    const gs = await selectAll(() => sb.from("challenge_groups").select("*, community_challenges(id, slug, title, rule, metric, target, days, goal_days, is_active, proof)")
       .gte("start_on", addDays(today, -28 - 30)).lte("start_on", today), "id", 1_000_000);
     const ended = (gs as (GroupRow & { community_challenges: ChallengeRow })[]).filter((g) => {
       const end = addDays(g.start_on, g.community_challenges.days - 1);
@@ -64,10 +65,11 @@ export async function GET() {
       const dr = await selectAllIn(users, 200, (p) => sb.from("meal_diary").select(`user_id, ${DIARY_COLS}`).in("user_id", p).gte("date", from).lte("date", today), "id", 2_000_000);
       const byUser = new Map<string, DiaryRow[]>();
       for (const r of (dr || []) as (DiaryRow & { user_id: string })[]) byUser.set(r.user_id, [...(byUser.get(r.user_id) || []), r]);
+      const pd = await proofDays(sb, [...new Set(ended.map((g) => g.challenge_id))], users, from, today);
       for (const m of members) {
         const g = ended.find((x) => x.id === m.group_id)!;
         const end = addDays(g.start_on, g.community_challenges.days - 1);
-        const run = memberRun(g.community_challenges, g, m, byUser.get(m.user_id) || [], end);
+        const run = memberRun(g.community_challenges, g, m, byUser.get(m.user_id) || [], end, pd.get(proofKey(g.challenge_id, m.user_id)));
         const bucket = g.member_count >= 2 ? comp.together : comp.solo;
         bucket.people += 1;
         if (run.reached) bucket.reached += 1;

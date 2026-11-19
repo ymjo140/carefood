@@ -12,7 +12,7 @@
  */
 import { BRAND } from "@/lib/brand";
 
-export type DayMark = { date: string; state: "done" | "missed" | "today" | "future" | "before" };
+export type DayMark = { date: string; state: "done" | "missed" | "today" | "future" | "before" | "photo_needed" };
 export type MealCardData = {
   kind: "meal"; author: string | null; url: string; photo: string | null; meal_type: string | null; day: string;
   foods: string[]; food_count: number; total: { calories: number; protein_g: number; carbs_g: number; fat_g: number } | null; streak: number;
@@ -31,9 +31,10 @@ export type GroupBuyCardData = {
 export type StreakCardData = { kind: "streak"; author: string | null; url: string; day: string; streak: number; days: DayMark[] };
 export type CardData = MealCardData | ChallengeCardData | GroupBuyCardData | StreakCardData;
 export type CardStyle = "photo" | "sticker" | "record";
-export type CardOptions = { style: CardStyle; showKcal: boolean; site: string };
+/** frame: story(9:16, 기본) · feed(4:5 — 인스타 피드 게시물). 스티커만 모양은 frame 과 상관없이 투명 스티커 */
+export type CardOptions = { style: CardStyle; showKcal: boolean; site: string; frame?: "story" | "feed" };
 
-const W = 1080, H = 1920;
+const W = 1080, H = 1920, FH = 1350;
 const MEAL_LABEL: Record<string, string> = { breakfast: "아침", lunch: "점심", dinner: "저녁", snack: "간식", day: "하루" };
 const WEEK = ["일", "월", "화", "수", "목", "금", "토"];
 
@@ -343,6 +344,17 @@ export async function renderCard(d: CardData, o: CardOptions): Promise<Blob> {
     const ctx = canvas.getContext("2d");
     if (!ctx) throw new Error("이 브라우저에서는 카드를 그릴 수 없어요");
     drawSticker(ctx, p, f, d, o, 12, 12);
+  } else if (o.frame === "feed") {
+    // 피드 4:5 — 사진을 꽉 채우고 아래에 스티커 (사진이 없으면 바탕 가운데 스티커)
+    canvas.width = W; canvas.height = FH;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("이 브라우저에서는 카드를 그릴 수 없어요");
+    ctx.fillStyle = p.canvas; ctx.fillRect(0, 0, W, FH);
+    const sh = stickerHeight(d);
+    if (style === "photo" && "photo" in d && d.photo) {
+      coverImage(ctx, await loadImage(d.photo), 0, 0, W, FH, 0);
+      drawSticker(ctx, p, f, d, o, (W - SW) / 2, FH - sh - 60);
+    } else drawSticker(ctx, p, f, d, o, (W - SW) / 2, (FH - sh) / 2);
   } else {
     canvas.width = W; canvas.height = H;
     const ctx = canvas.getContext("2d");

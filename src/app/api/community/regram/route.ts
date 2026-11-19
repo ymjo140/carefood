@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
   try {
     const limited = await rateLimit(sb, request, me, "post");
     if (limited) return limited;
-    const { data: o, error } = await sb.from("community_feed").select("id, user_id, is_active, hidden_by_reports, image_urls, video_poster, regram_of").eq("id", body.post_id).maybeSingle();
+    const { data: o, error } = await sb.from("community_feed").select("id, user_id, is_active, hidden_by_reports, image_urls, video_poster, regram_of, visibility").eq("id", body.post_id).maybeSingle();
     if (error) throw new Error(error.message);
     const origin = o as Origin | null;
     const [allow, blocked] = origin ? await Promise.all([regramAllowed(sb, [origin.user_id]), blockedBetween(sb, me, origin.user_id)]) : [new Map(), false];

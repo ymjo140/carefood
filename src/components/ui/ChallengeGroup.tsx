@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import Link from "@/components/ui/AppLink";
 import { cn } from "./cn";
 import { Avatar } from "./Misc";
 import { DayDots, type DayDot } from "./Challenge";
@@ -27,6 +28,37 @@ export function MemberProgressRow({ name, me = false, host = false, days, done, 
       <p className="shrink-0 whitespace-nowrap text-label text-ink-2 text-right">
         <span className={cn("num font-bold", reached ? "text-brand-ink" : "text-ink")}>{done}</span>/<span className="num">{goal}</span>일
       </p>
+      {action && <div className="shrink-0">{action}</div>}
+    </li>
+  );
+}
+
+/**
+ * 묶음 보드 한 줄 — 오늘 인증했는지와 그 사진만 (사람끼리 해낸 날 수·순위를 비교하지 않는다).
+ * photo 가 없고 proved 면 '인증했어요'(볼 수 없는 팔로워만 글), 아니면 '아직'. 사진을 누르면 그 글로 간다.
+ */
+export function MemberTodayRow({ name, me = false, host = false, proved, photo, href, album = false, action }: {
+  name: string; me?: boolean; host?: boolean; proved: boolean; photo?: string | null; href?: string | null; album?: boolean;
+  action?: ReactNode;
+}) {
+  const thumb = photo
+    // eslint-disable-next-line @next/next/no-img-element
+    ? <img src={photo} alt={`${name}의 오늘 인증 사진`} className="size-14 rounded-md border border-line object-cover" />
+    : null;
+  return (
+    <li className={cn("flex items-center gap-3 py-3", me && "-mx-3 px-3 rounded-md bg-sunken")}>
+      <Avatar name={name} size="sm" />
+      <div className="flex-1 min-w-0 flex flex-col gap-0.5">
+        <p className="flex items-baseline gap-1.5 min-w-0">
+          <span className="text-label font-bold text-ink truncate">{name}</span>
+          {me && <span className="text-caption text-brand-ink shrink-0">나</span>}
+          {host && <span className="text-caption text-ink-2 shrink-0">연 사람</span>}
+        </p>
+        <p className={cn("text-caption", proved ? "text-ink" : "text-ink-2")}>
+          {proved ? <>오늘 인증했어요{album && <span className="text-ink-2"> · 앨범에서 고름</span>}</> : "오늘 아직"}
+        </p>
+      </div>
+      {thumb && (href ? <Link href={href} className="press shrink-0 rounded-md" aria-label={`${name}의 오늘 인증 글 보기`}>{thumb}</Link> : <span className="shrink-0">{thumb}</span>)}
       {action && <div className="shrink-0">{action}</div>}
     </li>
   );
