@@ -156,6 +156,12 @@ function aiHelp(x: { hasRecords: boolean; remainKcal: number; remainProtein: num
   return { line: `${n(x.remainKcal)}kcal 남았어요`, ask: `${x.nextLabel}은 가볍게 뭘 먹을까?` };
 }
 
+/** 오늘이 아닌 날의 AI 줄 — 앞날은 미리 짜기, 지난날은 그날 숫자 한 줄. AI 는 오늘 하루·일주일을 짜 줄 수 있다 */
+function otherDayHelp(x: { future: boolean; hasRecords: boolean; kcal: number; label: string }): { line: string; ask: string } {
+  if (x.future) return { line: `${x.label} 식단을 AI에게 미리 짜 달라고 해 보세요`, ask: "일주일 식단 짜 줘" };
+  return { line: x.hasRecords ? `이 날 ${Math.round(x.kcal).toLocaleString("ko-KR")}kcal 기록했어요` : "이 날은 기록이 없어요. 다음 식단은 AI와 같이 짜 봐요", ask: "일주일 식단 짜 줘" };
+}
+
 /** 끼니별 영양소 경고 판단 — 가장 문제되는 영양소 하나 반환 */
 function getMealAlert(entries: DiaryEntry[]): { nutrient: string; label: string; cssClass: string } | null {
   const sums = {
@@ -1199,7 +1205,7 @@ export default function DiaryPage() {
         <IconButton icon="chevron-right" label="다음 주" size="sm" onClick={() => moveDate(7)} />
       </div>
 
-      {/* ━━ 하루 요약 — 남은 열량(링) · 영양소 목표 대비 · 끼니별 열량(계획은 점선) · AI에게 묻기 ━━ */}
+      {/* ━━ 하루 요약 — 남은 열량(링) · 영양소 목표 대비 · 끼니별 열량(계획은 점선) · AI에게 묻기(모든 날 — 오늘은 남은 양, 다른 날은 일주일 짜기) ━━ */}
       <Card className="mb-6">
         <div className="flex flex-col items-center mb-5">
           <CalorieRing consumed={consumed} goal={goalCalories} />
@@ -1223,8 +1229,8 @@ export default function DiaryPage() {
           const plan = plannedFor(m.key).reduce((a, f) => a + (Number(f.calories) || 0), 0);
           return { key: m.key, label: m.label, kcal: plan, planned: true };
         })} />
-        {isToday && data && (() => {
-          const ai = aiHelp({
+        {data && (() => {
+          const ai = !isToday ? otherDayHelp({ future: date > todayStr, hasRecords: allEntries.length > 0, kcal: consumed, label: formatDate(date) }) : aiHelp({
             hasRecords: allEntries.length > 0,
             remainKcal: goalCalories - consumed,
             remainProtein: goalProtein - (data.totals.protein_g || 0),

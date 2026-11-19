@@ -7,6 +7,7 @@
  *    파는 물건을 권하지 않음(광고 아님), 칭찬은 기록한 행동에만. 답이 선을 넘으면 버리고 정해진 말로 바꾼다.
  *  - 위기 말(죽고 싶다 등)에는 AI에 보내지 않고 정해진 말로 109를 알린다. 먹기 장애가 의심되는 말에는 숫자 없이 조심해서.
  */
+import { DAY_LABEL, MEAL_LABEL, type DayKey, type PlanPick } from "@/lib/chat-plans";
 import { BANK, buddyLine, type Situation } from "@/lib/buddy-lines";
 import { GROUP_NAME, ingredientOf, personalityOf, seedOf, type PersonalityKey } from "@/lib/buddy";
 import { checkLines, type DayGoals, type DayTotals } from "@/lib/buddy-check";
@@ -47,6 +48,8 @@ export type ChatCtx = {
   check: boolean;
   /** 추천을 물었을 때 우리 DB에서 고른 것 (lib/chat-recs.ts) — 화면에 카드로 같이 나간다 */
   recs?: { focus: Focus; meal: MealKey; picks: Pick[]; avoided?: string | null } | null;
+  /** 오늘 하루·일주일 추천 (화면에 카드로 같이 나간다) — lib/chat-plans.ts */
+  plan?: { kind: "day" | "week"; picks: PlanPick[]; focus?: Focus } | null;
   /** 내가 등록한 영양제와 오늘 먹었는지 (lib/supplements.ts) — 먹었는지만 챙긴다 */
   supps?: { name: string; timing: string; taken: boolean }[];
   /** 방금 이 말로 먹은 것으로 체크한 영양제 이름 */
@@ -100,6 +103,7 @@ export function systemPrompt(c: ChatCtx, careful = false): string {
     `- 오늘 합계: ${f(c.totals.kcal)}kcal · 단백질 ${f(c.totals.protein)}g · 나트륨 ${f(c.totals.sodium)}mg`,
     `- 하루 목표: ${f(c.goals.kcal)}kcal · 단백질 ${f(c.goals.protein)}g · 나트륨 ${f(c.goals.sodium)}mg 이하`,
     c.next && c.next.menus.length && !c.recs ? `- 다음 끼니(${MEAL_NAME[c.next.meal]}) 일반 메뉴 후보: ${c.next.menus.map((m) => `${m.name}(${m.facts})`).join(" / ")}` : "",
+    c.plan ? `- 이번 추천(${c.plan.kind === "week" ? "일주일 식단, 식단 탭 '추천으로 채우기'와 같은 방식" : "오늘 하루, 아직 기록하지 않은 끼니마다"} — 화면에 카드로 같이 나간다): ${planSummary(c.plan)}` : "",
     c.recs ? `- 이번 추천(오늘끼록 DB에서 ${c.recs.focus.reason.replace(/골랐어요$/, "고름")}${c.recs.avoided ? `, ${c.recs.avoided}와 겹치지 않게` : ""}, ${MEAL_NAME[c.recs.meal]}용 — 화면에 카드로 같이 나간다): ${c.recs.picks.length ? c.recs.picks.map((p) => `${p.name}${p.maker ? `(${p.maker})` : ""}: ${p.facts}${p.why ? ` [${p.why}]` : ""}`).join(" / ") : "조건에 맞는 것이 없음"}` : "",
   ].filter(Boolean).join("\n");
   return [
@@ -119,6 +123,7 @@ export function systemPrompt(c: ChatCtx, careful = false): string {
     "- 효능·진단·처방·치료·질환·다이어트 효과 같은 말을 쓰지 않는다. 약·질병·증상을 물으면 그건 의사나 약사에게 물어보자고 캐릭터답게 말한다.",
     "- 숫자는 위 사실에 있는 것만, 그대로 쓴다. 영양소를 짐작해서 만들지 않는다. 숫자를 물으면 사실만 말하고 평가하지 않는다.",
     "- 메뉴·제품은 위 '후보'·'이번 추천'에 있는 것만 말한다. 목록에 없는 음식을 지어내지 않는다. 값·할인·구매 이야기는 하지 않는다.",
+    "- 일주일 식단·하루 식단을 물어도 짜 주기 어렵다고 하지 않는다. '이번 추천'이 일주일이면 첫날 한두 끼만 짚고, 7일은 아래 카드에 있고 '일주일 식단에 담기'로 식단 탭에 담아 고칠 수 있다고 말한다. 오늘 하루면 끼니마다 하나씩 짧게 말하고 나머지는 카드에 있다고 한다.",
     "- '이번 추천'이 있으면: 첫 번째를 이름과 숫자로 말하고 고른 기준을 한 마디(예: 당류가 적은 쪽, 어제 점심과 겹치지 않게, [ ] 안의 입맛 이유). 나머지는 아래 카드에 있다고 한다. 없으면 조건에 맞는 게 없었다고 말한다.",
     "- 사용자가 혈당·혈압·체중·살을 말해도 그 말을 되풀이하거나 효과를 약속하지 않는다. 성분 사실(당류·나트륨·열량·단백질 숫자)로만 말한다.",
     "- 사용자가 먹은 걸 말하면 같이 먹은 척 맛을 표현하고, 식단 기록 화면에서 적어 주면 같이 기록된다고 알려 준다.",
@@ -168,6 +173,7 @@ export function ruleReply(text: string, c: ChatCtx, careful = false): string {
   const seed = seedOf(c.today, text);
   const line = (s: Situation, food?: string | null) => buddyLine(c.ingredient, c.personality, s, { food, days: c.streak, seed });
   if (c.suppJust) return `${c.suppJust} 오늘 먹은 걸로 체크했어요. 챙겨 줘서 고마워요`;
+  if (c.plan) return planLine(c.plan);
   if (c.recs) return recLine(c.recs.focus, c.recs.meal, c.recs.picks, c.recs.avoided);
   switch (intentOf(text)) {
     case "medical":
@@ -196,5 +202,24 @@ export function ruleReply(text: string, c: ChatCtx, careful = false): string {
   }
 }
 
+/** 하루·일주일 추천을 AI 에게 넘길 한 줄 요약 (이름·숫자만) */
+function planSummary(p: NonNullable<ChatCtx["plan"]>) {
+  if (!p.picks.length) return "조건에 맞는 것이 없음";
+  if (p.kind === "week") {
+    const first = p.picks.filter((x) => x.slot?.day === p.picks[0].slot?.day);
+    return `${DAY_LABEL[(p.picks[0].slot?.day || "mon") as DayKey]}요일: ${first.map((x) => `${MEAL_LABEL[x.slot?.meal || ""] || "끼니"} ${x.name}(${x.facts})`).join(" / ")} 외 7일 ${p.picks.length}끼`;
+  }
+  const seen = new Set<string>();
+  return p.picks.filter((x) => { const m = x.slot?.meal || ""; if (seen.has(m)) return false; seen.add(m); return true; })
+    .map((x) => `${MEAL_LABEL[x.slot?.meal || ""] || "끼니"} ${x.name}(${x.facts})`).join(" / ");
+}
+
+/** AI 없이 하루·일주일 추천 한 줄 */
+export function planLine(p: NonNullable<ChatCtx["plan"]>) {
+  if (!p.picks.length) return p.kind === "week" ? "지금은 일주일 식단을 짜지 못했어요. 식단 탭 '일주일'의 추천으로 채우기를 눌러 봐 주세요" : "지금 조건에 맞는 걸 찾지 못했어요. 끼니를 짚어서 물어봐 주세요";
+  if (p.kind === "week") return `일주일 식단을 짜 봤어요. ${planSummary(p).split(" 외 ")[0]}. 7일은 아래 카드에 있고, '일주일 식단에 담기'로 식단 탭에 담아 고칠 수 있어요`;
+  return `오늘 하루는 이렇게 어때요? ${planSummary(p)}. 끼니마다 하나 더 아래 카드에 있어요`;
+}
+
 /** 빠른 말 — 입력 줄 위 고르기 */
-export const QUICK_SAYS = ["오늘 어땠어요?", "다음 끼니 뭐 먹을까요?", "남은 열량 알려 줘요", "칭찬해 줘요"];
+export const QUICK_SAYS = ["오늘 하루 식단 추천해 줘요", "일주일 식단 짜 줘요", "다음 끼니 뭐 먹을까요?", "남은 열량 알려 줘요"];

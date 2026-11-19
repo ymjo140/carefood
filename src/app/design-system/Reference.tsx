@@ -9,7 +9,7 @@ import {
   Avatar, useToast, cn, type BadgeTone,
   BottomNavItems, SkeletonList, FoodEntryForm, DragArea, DragGhost, DragHandle, useDragItem, useDropTarget, type DragData, ChoiceCard, ChoiceList, LinkTabs, RatingStars, RatingInput, ScaleInput, QuickRating, PostAuthor, PostAction, PostActions, PostTags, ThreadItem, MealAttach, PlanAttach, CertAttach, ProductTagLinks, PostCredits, PhotoGrid, PollAttach, DayDots, Switch,
   ReelRow, ReelTile, ReelAddTile, ReelSkeleton, ReelMedia, CommentItem, VideoAttach, OfferOptionList, QtyStepper, UnitInput, RangeInput, Checkbox, FilePick,
-  MemberProgressRow, MemberTodayRow, PhotoPicker, CropFrame, PhotoCarousel, ProofGrid, CROP_CENTER, type CropValue, type CropAspect, AvatarStack, Mascot, MASCOTS, type MascotMood, StoryFrame, StoryProgress, StoryHeader, StoryMedia, StorySticker, StoryCaption, StoryAction, StoryReply, ShareCardPreview, ShareSteps, Buddy, ChatBubble, ChatTyping, ChatPicks, BackButton,
+  MemberProgressRow, MemberTodayRow, PhotoPicker, CropFrame, PhotoCarousel, ProofGrid, CROP_CENTER, type CropValue, type CropAspect, AvatarStack, Mascot, MASCOTS, type MascotMood, StoryFrame, StoryProgress, StoryHeader, StoryMedia, StorySticker, StoryCaption, StoryAction, StoryReply, ShareCardPreview, ShareSteps, Buddy, ChatBubble, ChatTyping, ChatPicks, ChatPlan, BackButton,
 } from "@/components/ui";
 
 // 서버(UTC)와 브라우저 시간대가 달라도 같은 글자가 나오도록 한국 시간으로 고정
@@ -683,7 +683,7 @@ export default function Reference({ status }: { status: DsStatus }) {
       </Section>
 
       {/* ───────────── 캐릭터와 이야기 ───────────── */}
-      <Section id="chat" title="캐릭터와 이야기" description="ChatBubble · ChatTyping · ChatPicks — /buddy. 추천은 우리 DB(제품·대표 메뉴)에서 고른 것만 말풍선 아래 카드로(제품은 상세로). 캐릭터는 왼쪽(얼굴 + 테두리 풍선), 나는 오른쪽(sunken 풍선). 이어지는 캐릭터 말은 얼굴을 한 번만. 색 바탕·그림자 없음. 입력 줄은 BottomBar + 빠른 말 Chip. 맨 위 왼쪽 BackButton(앱 안에서 왔으면 앞 화면, 바로 왔으면 fallback)">
+      <Section id="chat" title="캐릭터와 이야기" description="ChatBubble · ChatTyping · ChatPicks · ChatPlan — /buddy. 추천은 우리 DB(제품·대표 메뉴)에서 고른 것만 말풍선 아래 카드로(제품은 상세로). 캐릭터는 왼쪽(얼굴 + 테두리 풍선), 나는 오른쪽(sunken 풍선). 이어지는 캐릭터 말은 얼굴을 한 번만. 색 바탕·그림자 없음. 입력 줄은 BottomBar + 빠른 말 Chip. 맨 위 왼쪽 BackButton(앱 안에서 왔으면 앞 화면, 바로 왔으면 fallback)">
         <div className="grid gap-4">
           <Demo label="말풍선 · 답 쓰는 중" code={`<ChatBubble from="buddy" avatar={<Buddy … size={40} decorative />}>…</ChatBubble>\n<ChatBubble from="me">…</ChatBubble>\n<ChatTyping avatar={…} />`}>
             <div className="flex flex-col gap-2 max-w-sm">
@@ -696,6 +696,18 @@ export default function Reference({ status }: { status: DsStatus }) {
                 { id: "p", name: "연어 포케", maker: "예시 식단", image: null, facts: "당류 2g · 탄수화물 31g · 420kcal", href: "#chat" },
               ]} />
               <ChatTyping avatar={<Buddy ingredient="sweetpotato" personality="picky" size={40} decorative />} />
+            </div>
+          </Demo>
+          <Demo label="하루·일주일 추천 — 묶음(끼니·요일) 머리 줄 + 추천 줄, 맨 아래 행동 하나. 일주일은 '일주일 식단에 담기'로 식단 리스트에 저장" code="<ChatPlan groups label action />">
+            <div className="flex flex-col gap-2 max-w-sm">
+              <ChatPlan label="오늘 하루 예시" groups={[
+                { key: "l", title: "점심", items: [{ id: "a", name: "현미 비빔밥", facts: "단백질 18g · 520kcal" }, { id: "b", name: "닭가슴살 도시락", maker: "예시 식단", facts: "단백질 32g · 480kcal", href: "#chat" }] },
+                { key: "d", title: "저녁", items: [{ id: "c", name: "연어 포케", facts: "단백질 26g · 450kcal" }] },
+              ]} action={<LinkButton block variant="secondary" href="#chat">식단에 기록하러 가기</LinkButton>} />
+              <ChatPlan label="일주일 예시" compact groups={[
+                { key: "mon", title: "월요일", meta: "1,420kcal", items: [{ id: "1", name: "아침 그릭요거트 볼", facts: "310kcal" }, { id: "2", name: "점심 현미 비빔밥", facts: "520kcal" }, { id: "3", name: "저녁 연어 포케", facts: "590kcal" }] },
+                { key: "tue", title: "화요일", meta: "1,380kcal", items: [{ id: "4", name: "점심 닭가슴살 도시락", facts: "480kcal" }] },
+              ]} action={<Button block icon="calendar">일주일 식단에 담기</Button>} />
             </div>
           </Demo>
           <Demo label="뒤로" code={`<BackButton fallback="/diary" />`}>

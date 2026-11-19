@@ -2,10 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import {
-  BottomBar, Buddy, Button, ChatBubble, ChatPicks, ChatTyping, Chip, ChipRow, ConfirmSheet, EmptyState, Input, LinkButton, Skeleton, TextButton, TextLink, useToast,
+  BottomBar, Buddy, Button, ChatBubble, ChatPicks, ChatPlan, ChatTyping, Chip, ChipRow, ConfirmSheet, EmptyState, Input, LinkButton, Skeleton, TextButton, TextLink, useToast,
 } from "@/components/ui";
 import type { MascotMood } from "@/components/ui";
 import { SupplementSheet } from "./SupplementSheet";
+import { useRouter } from "next/navigation";
+import { DAY_KEYS, DAY_LABEL, MEAL_LABEL, dayKcal, planGrid, planKind, type PlanPick } from "@/lib/chat-plans";
 import { josa, type IngredientKey, type PersonalityKey, type StageKey } from "@/lib/buddy";
 
 /**
@@ -14,7 +16,7 @@ import { josa, type IngredientKey, type PersonalityKey, type StageKey } from "@/
  * 네 상태: 불러오는 중(말풍선 자리) · 비어 있음(캐릭터 없음·꺼 둠) · 실패(다시 불러오기) · 채워짐.
  * 늦게 온 불러오기 응답은 버리고(요청 번호), 보내는 동안은 다시 보내지 않는다.
  */
-type Msg = { id: string; role: "me" | "buddy"; text: string; items?: { id: string; name: string; maker: string | null; image: string | null; facts: string; href: string | null }[] | null };
+type Msg = { id: string; role: "me" | "buddy"; text: string; items?: PlanPick[] | null };
 type Data = {
   on: boolean; ai: boolean; mood: MascotMood; wraps: number; limit: number; left: number; quick: string[];
   stage: { key: StageKey; name: string };
@@ -26,6 +28,24 @@ type Data = {
 
 export function BuddyChat() {
   const toast = useToast();
+  const router = useRouter();
+  const [saving, setSaving] = useState<string | null>(null);
+  /** 일주일 추천 → 식단 리스트에 저장하고 일주일 화면에서 연다 (거기서 고치고 다시 저장) */
+  const saveWeek = async (m: Msg) => {
+    if (!m.items?.length || saving) return;
+    setSaving(m.id);
+    try {
+      const r = await fetch("/api/meal-plans", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: "AI 추천 일주일 식단", grid: planGrid(m.items), tags: ["AI 추천"] }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok || !d.id) throw new Error(d.error || "");
+      toast.show("일주일 식단에 담았어요. 고친 뒤 저장하면 돼요");
+      router.push(`/weekly-box?plan=${encodeURIComponent(d.id)}`);
+    } catch (e) {
+      console.error("일주일 식단에 담지 못했어요:", (e as Error).message);
+      toast.show("일주일 식단에 담지 못했어요. 다시 시도해 주세요", { tone: "danger" });
+    } finally { setSaving(null); }
+  };
   const [data, setData] = useState<Data | null>(null);
   const [status, setStatus] = useState<"loading" | "error" | "ready">("loading");
   const [reload, setReload] = useState(0);
@@ -171,8 +191,26 @@ export function BuddyChat() {
             {m.text}
           </ChatBubble>
         )).flatMap((el, i) => {
-          const items = data.messages[i].items;
-          return items?.length ? [el, <ChatPicks key={`${data.messages[i].id}-picks`} items={items} label={`${b.name}${josa(b.name, "이", "가")} 고른 추천`} />] : [el];
+          const msg = data.messages[i];
+          const items = msg.items;
+          if (!items?.length) return [el];
+          const kind = planKind(items);
+          const by = `${b.name}${josa(b.name, "이", "가")}`;
+          if (kind === "week") {
+            const groups = DAY_KEYS.map((d) => ({
+              key: d, title: `${DAY_LABEL[d]}요일`, meta: `${dayKcal(items, d).toLocaleString("ko-KR")}kcal`,
+              items: items.filter((x) => x.slot?.day === d).map((x) => ({ ...x, name: `${MEAL_LABEL[x.slot!.meal] || "끼니"} ${x.name}`, facts: x.cell?.calories != null ? `${x.cell.calories.toLocaleString("ko-KR")}kcal` : x.facts })),
+            })).filter((g) => g.items.length);
+            return [el, <ChatPlan key={`${msg.id}-plan`} compact groups={groups} label={`${by} 짠 일주일 식단`}
+              action={<Button block icon="calendar" loading={saving === msg.id} disabled={!!saving} onClick={() => void saveWeek(msg)}>일주일 식단에 담기</Button>} />];
+          }
+          if (kind === "day") {
+            const meals = [...new Set(items.map((x) => x.slot!.meal))];
+            const groups = meals.map((m) => ({ key: m, title: MEAL_LABEL[m] || "끼니", items: items.filter((x) => x.slot?.meal === m) }));
+            return [el, <ChatPlan key={`${msg.id}-plan`} groups={groups} label={`${by} 고른 오늘 하루 식단`}
+              action={<LinkButton block variant="secondary" href="/diary">식단에 기록하러 가기</LinkButton>} />];
+          }
+          return [el, <ChatPicks key={`${msg.id}-picks`} items={items} label={`${by} 고른 추천`} />];
         })}
         {sending && <ChatTyping avatar={face(40)} label={`${b.name}${josa(b.name, "이", "가")} 답을 쓰고 있어요`} />}
         {data.messages.length > 0 && (
