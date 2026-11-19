@@ -12,6 +12,7 @@ import { cropBox, dhash, takenAt } from "@/lib/photo-meta";
  * - 서버가 방향을 맞추고 긴 변 1600px 로 줄여 webp 로 다시 만든다 → 위치(GPS) 같은 메타데이터가 지워진다
  * - 공개 버킷 community 의 <actor>/<연월>/<무작위>.webp 에 올리고 주소를 돌려준다
  * - crop(선택): JSON {x,y,w,h} 0~1, 방향을 맞춘 사진 기준 — 서버가 자른다(원본 EXIF 를 읽은 뒤)
+ * - taken_at(선택): 기기가 사진을 줄이기 전에 읽은 촬영 시각. 파일 안 EXIF 가 있으면 그것을 쓴다
  * - 찍은 시각(EXIF)·지문(dHash)을 community_uploads 에 남기고 upload_id 를 돌려준다. 글·챌린지 인증은 이 id 로 붙인다
  */
 
@@ -31,6 +32,7 @@ export async function POST(request: NextRequest) {
 
   let file: File | null = null;
   let crop: { x: number; y: number; w: number; h: number } | null = null;
+  let claimed: string | null = null;
   try {
     const form = await request.formData();
     const f = form.get("file");
@@ -39,6 +41,12 @@ export async function POST(request: NextRequest) {
     if (typeof c === "string" && c) {
       const j = JSON.parse(c);
       crop = { x: Number(j.x), y: Number(j.y), w: Number(j.w), h: Number(j.h) };
+    }
+    // 기기가 줄이기 전에 읽은 촬영 시각 — 파일에 EXIF 가 남아 있지 않을 때만 쓴다
+    const t = form.get("taken_at");
+    if (typeof t === "string" && t) {
+      const ms = Date.parse(t);
+      if (Number.isFinite(ms) && ms <= Date.now() + 60_000 && ms >= Date.now() - 2 * 365 * 86400e3) claimed = new Date(ms).toISOString();
     }
   } catch {
     return NextResponse.json({ error: "사진을 읽지 못했어요" }, { status: 400 });
@@ -55,7 +63,8 @@ export async function POST(request: NextRequest) {
   if (!looksLikeImage(input)) return NextResponse.json({ error: "jpg·png·webp·heic 사진만 올릴 수 있어요" }, { status: 415 });
 
   // 다시 만들기 전에 원본에서 찍은 시각을 읽는다 (다시 만든 webp 에는 남지 않는다)
-  const taken = await takenAt(input);
+  const exif = await takenAt(input);
+  const taken = exif ?? claimed;
 
   let out: Buffer;
   let width = 0, height = 0, hash = "";
@@ -82,7 +91,7 @@ export async function POST(request: NextRequest) {
   const { data: pub } = sb.storage.from(IMAGE_BUCKET).getPublicUrl(path);
   const row = await sb.from("community_uploads").insert({
     user_id: actor, url: pub.publicUrl, path, width, height,
-    taken_at: taken, taken_source: taken ? "exif" : "none", phash: hash || null,
+    taken_at: taken, taken_source: exif ? "exif" : claimed ? "client" : "none", phash: hash || null,
   }).select("id, created_at").single();
   if (row.error) {
     const err = await removeImages(sb, [pub.publicUrl]);

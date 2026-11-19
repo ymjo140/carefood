@@ -39,9 +39,16 @@ import { kstDay, todayKst } from "@/lib/day";
  */
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function publicPost({ author_concerns, author_goals, author_age_group, ...rest }: Record<string, any>) {
-  void author_concerns; void author_goals; void author_age_group;
+function publicPost({ author_concerns, author_goals, author_age_group, client_key, diary_ids, ...rest }: Record<string, any>) {
+  void author_concerns; void author_goals; void author_age_group; void client_key; void diary_ids;
   return rest;
+}
+
+/** 열량 숨김 글 — 글쓴이 말고는 숫자를 보내지 않는다 (음식 이름만) */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function kcalFor<T extends Record<string, any>>(p: T, viewer: string | null): T {
+  if (p.show_kcal !== false || p.user_id === viewer || !p.meal_data?.foods) return p;
+  return { ...p, meal_data: { foods: p.meal_data.foods.map((f: { name: string }) => ({ name: f.name })), total: null } };
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -107,7 +114,7 @@ export async function GET(request: NextRequest) {
     const products = (post.product_ids || []).filter((id: string) => names.has(id)).map((id: string) => ({ id, name: names.get(id) }));
     let polled, ts, tg;
     try {
-      [polled] = await withPolls(sb, [publicPost(post) as { id: string; poll?: unknown }], userId);
+      [polled] = await withPolls(sb, [kcalFor(publicPost(post), userId) as { id: string; poll?: unknown }], userId);
       ts = await tagsAndSources(sb, [post], f.blocked);
       tg = await togetherCounts(sb, [post], ts.people);
     } catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: 500 }); }
@@ -252,7 +259,7 @@ export async function GET(request: NextRequest) {
   // 추천탭: 인기도 기반 재정렬
   const names = await productNames(sb, posts);
   const result = posts.map((p: { id: string; user_id: string; product_ids?: string[] | null }) => ({
-    ...publicPost(p),
+    ...kcalFor(publicPost(p), userId),
     products: (p.product_ids || []).filter((id) => names.has(id)).map((id) => ({ id, name: names.get(id) })),
     is_mine: !!userId && p.user_id === userId,
     is_liked: likedIds.has(p.id),
@@ -351,7 +358,7 @@ async function replayed(sb: any, user_id: string, client_key: string) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { post_type, topic } = body;
+    const { topic } = body;
     const user_id = await getActorId();
     if (!user_id) return noActor();
 

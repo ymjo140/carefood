@@ -35,7 +35,7 @@ export async function GET() {
   try {
     const [filters, audience] = await Promise.all([viewerFilters(sb, actor), audienceOf(sb, actor)]);
     const [posts, gbs] = await Promise.all([
-      sb.from("community_feed").select("id, user_id, author_nickname, image_urls, video_url, video_poster, video_seconds, meal_type, meal_data, content, created_at, sponsor, like_count, comment_count, cert, regram_of, visibility")
+      sb.from("community_feed").select("id, user_id, author_nickname, image_urls, video_url, video_poster, video_seconds, meal_type, meal_data, content, created_at, sponsor, like_count, comment_count, cert, regram_of, visibility, show_kcal")
         .eq("is_active", true).eq("hidden_by_reports", false).gte("created_at", since)
         .order("created_at", { ascending: false }).limit(LIMIT * 6),
       sb.from("group_buys").select("*").eq("status", "recruiting").gt("expires_at", new Date().toISOString())
@@ -47,13 +47,13 @@ export async function GET() {
     type Row = {
       id: string; user_id: string; author_nickname: string | null; image_urls: string[] | null; video_url: string | null; video_poster: string | null; video_seconds: number | null; meal_type: string | null;
       meal_data: { total?: Total; foods?: unknown[]; plan?: unknown } | null; content: string | null; created_at: string; sponsor: { partner_name?: string } | null; like_count: number | null; comment_count: number | null;
-      cert: CertSummary | null; regram_of: string | null; is_active?: boolean; hidden_by_reports?: boolean; visibility?: string | null;
+      cert: CertSummary | null; regram_of: string | null; is_active?: boolean; hidden_by_reports?: boolean; visibility?: string | null; show_kcal?: boolean | null;
     };
     const rows = ((posts.data || []) as Row[]).filter((p) => !filters.blocked.has(p.user_id) && !filters.hidden.has(p.id) && canSee(p, audience));
     // 리그램의 원본 — 보이는 것만
     const originIds = [...new Set(rows.map((p) => p.regram_of).filter((v): v is string => !!v))];
     const { data: originRows, error: oErr } = originIds.length
-      ? await sb.from("community_feed").select("id, user_id, author_nickname, image_urls, video_url, video_poster, video_seconds, meal_type, meal_data, content, created_at, sponsor, like_count, comment_count, cert, regram_of, is_active, hidden_by_reports, visibility").in("id", originIds)
+      ? await sb.from("community_feed").select("id, user_id, author_nickname, image_urls, video_url, video_poster, video_seconds, meal_type, meal_data, content, created_at, sponsor, like_count, comment_count, cert, regram_of, is_active, hidden_by_reports, visibility, show_kcal").in("id", originIds)
       : { data: [], error: null };
     if (oErr) throw new Error(oErr.message);
     const origins = new Map(((originRows || []) as Row[]).filter((o) => o.is_active && !o.hidden_by_reports && !filters.blocked.has(o.user_id) && (o.visibility || "public") === "public").map((o) => [o.id, o]));
@@ -80,7 +80,10 @@ export async function GET() {
         video: src.video_url && src.video_poster ? src.video_url : null,
         seconds: src.video_poster ? Number(src.video_seconds) || null : null,
         mine: !!actor && p.user_id === actor, like_count: p.like_count || 0, comment_count: p.comment_count || 0,
-        meal_type: src.meal_type, kcal: src.meal_data?.total?.calories ?? null, protein_g: src.meal_data?.total?.protein_g ?? null,
+        // 열량을 숨긴 글은 글쓴이 말고는 숫자 없이
+        meal_type: src.meal_type,
+        kcal: src.show_kcal === false && src.user_id !== actor ? null : src.meal_data?.total?.calories ?? null,
+        protein_g: src.show_kcal === false && src.user_id !== actor ? null : src.meal_data?.total?.protein_g ?? null,
         // 협업 글은 첫 부분에 협찬 표시 (lib/partner/collabs.ts sponsorFor) — 리그램은 원본의 협찬 표시를 그대로
         text: `${src.sponsor ? `협찬 · ${src.sponsor.partner_name || "입점 업체"} — ` : ""}${(origin ? p.content || origin.content : p.content) || ""}`.slice(0, 40),
         origin: origin ? { id: origin.id, author: origin.author_nickname || "익명" } : null,

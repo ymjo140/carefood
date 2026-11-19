@@ -111,9 +111,11 @@ export function PostActions({ children, className, variant = "card" }: { childre
  * href 가 있으면 빈 곳을 눌러 글로 간다 (버튼·링크를 누른 경우는 제외). 키보드는 시간 링크로 간다.
  */
 export function ThreadItem({
-  nickname, topic, createdAt, href, authorHref, children, actions, reply, menu, className,
+  nickname, topic, createdAt, href, authorHref, children, actions, reply, menu, followersOnly, className,
 }: {
   nickname: string; topic?: string | null; createdAt?: string; href?: string;
+  /** 팔로워에게만 보이는 글 — 시각 옆에 자물쇠 + '팔로워만' */
+  followersOnly?: boolean;
   /** 작성자 프로필로 가는 주소 — 있으면 아바타·이름을 누를 수 있다 */
   authorHref?: string;
   children?: ReactNode; actions?: ReactNode; menu?: ReactNode; className?: string;
@@ -145,6 +147,7 @@ export function ThreadItem({
           {createdAt && (href
             ? <Link href={href} className="inline-flex items-center min-h-8 px-1 -mx-1 text-caption text-ink-3 shrink-0 hover:underline">· {timeAgo(createdAt)}</Link>
             : <span className="text-caption text-ink-3 shrink-0">· {timeAgo(createdAt)}</span>)}
+          {followersOnly && <span className="inline-flex items-center gap-0.5 text-caption text-ink-2 shrink-0"><Icon name="lock" size={12} />팔로워만</span>}
           {menu && <span className="ml-auto shrink-0">{menu}</span>}
         </div>
         {children}
@@ -165,8 +168,10 @@ export function ThreadItem({
 }
 
 /** 글에 붙은 끼니 — 끼니 · 칼로리 · 음식(앞 3개) · 탄단지 */
-export function MealAttach({ mealType, foods, total, label, className }: {
+export function MealAttach({ mealType, foods, total, label, showKcal = true, className }: {
   mealType?: string | null; label?: string;
+  /** 글쓴이가 열량을 숨겼으면 false — 음식 이름만 */
+  showKcal?: boolean;
   foods: { name: string; calories?: number }[];
   total?: { calories: number; protein_g?: number; carbs_g?: number; fat_g?: number } | null;
   className?: string;
@@ -176,12 +181,12 @@ export function MealAttach({ mealType, foods, total, label, className }: {
     <div className={cn("rounded-md bg-sunken px-3 py-2.5 flex flex-col gap-1.5", className)}>
       <div className="flex items-center justify-between gap-3">
         <span className="text-caption text-ink-2">{label || (mealType ? `${mealMeta(mealType).label} 기록` : "식단")} · <span className="num">{foods.length}</span>가지</span>
-        {total && <Kcal value={Math.round(total.calories)} className="text-label" />}
+        {total && showKcal && <Kcal value={Math.round(total.calories)} className="text-label" />}
       </div>
       <p className="text-label text-ink line-clamp-2">
         {shown.map((f) => f.name).join(" · ")}{foods.length > 3 && <span className="text-ink-2"> 외 <span className="num">{foods.length - 3}</span>가지</span>}
       </p>
-      {total && <MacroInline values={{ protein: total.protein_g, carbs: total.carbs_g, fat: total.fat_g }} />}
+      {total && showKcal && <MacroInline values={{ protein: total.protein_g, carbs: total.carbs_g, fat: total.fat_g }} />}
     </div>
   );
 }
