@@ -11,13 +11,17 @@ import { ownVideo, removeVideos } from "@/lib/community-video";
 import { cleanPoll, withPolls } from "@/lib/community-poll";
 import { rateLimit } from "@/lib/rate-limit";
 import { ensureNickname } from "@/lib/community-profile";
-import { CANT_TAG, TAG_MAX, judgeTags, tagsAndSources } from "@/lib/community-tags";
+import { ACTOR_RE, CANT_TAG, TAG_MAX, judgeTags, tagsAndSources } from "@/lib/community-tags";
+import { togetherCounts } from "@/lib/community-regram";
 import { userPusher } from "@/lib/push";
 
 
 /**
  * GET /api/community/feed — 식단 피드
- *   ?tab=recommend(기본)|following|topic(&topic=모임 이름)|mine|user(&user_id=, &only=plan)   ?id= 글 하나
+ *   ?tab=recommend(기본)|following|topic(&topic=모임 이름)|mine|user(&user_id=, &only=plan)|credits(&user_id=)   ?id= 글 하나
+ *   credits: 그 사람 글을 따라 한 글(원본 출처) + 그 사람을 태그한 글(보이는 것) — 프로필 '따라 한 인증'
+ *   리그램(regram_of)은 스토리 줄에만 — 목록에는 나오지 않는다
+ *   together: 사진 글에서 두 사람이 서로 태그한 횟수 { nickname, nth } (같이 먹기 N번째)
  * POST /api/community/feed — 새 글 작성
  *
  * 작성자의 건강 관심사·목표·나이대는 응답에 넣지 않는다 (민감정보 — 예전 글에 남아 있어도 보이지 않게).
@@ -91,14 +95,16 @@ export async function GET(request: NextRequest) {
     }
     const names = await productNames(sb, [post]);
     const products = (post.product_ids || []).filter((id: string) => names.has(id)).map((id: string) => ({ id, name: names.get(id) }));
-    let polled, ts;
+    let polled, ts, tg;
     try {
       [polled] = await withPolls(sb, [publicPost(post) as { id: string; poll?: unknown }], userId);
       ts = await tagsAndSources(sb, [post], f.blocked);
+      tg = await togetherCounts(sb, [post], ts.people);
     } catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: 500 }); }
     return NextResponse.json({ post: {
       ...polled, products, is_mine: isMine, is_liked: isLiked, is_following: isFollowing,
       people: ts.people.get(post.id) || [], source: post.source_post_id ? ts.sources.get(post.source_post_id) ?? null : null,
+      together: tg.get(post.id) ?? null,
     } });
   }
 
@@ -111,7 +117,8 @@ export async function GET(request: NextRequest) {
   let query = sb
     .from("community_feed")
     .select("*", { count: "exact" })
-    .eq("is_active", true);
+    .eq("is_active", true)
+    .is("regram_of", null);
 
   // 보는 사람 기준으로 거르기 — 신고로 가려진 글(내 글 보기 빼고), 차단한 사람의 글, 숨긴 글
   let filters: Awaited<ReturnType<typeof viewerFilters>>;
@@ -142,6 +149,20 @@ export async function GET(request: NextRequest) {
     // 모임 탭 — 글쓴이가 고른 모임
     query = query.contains("tags", [topic]);
     query = query.order("created_at", { ascending: false });
+  } else if (tab === "credits") {
+    // 프로필 '따라 한 인증' — 이 사람 글을 원본으로 단 글 + 이 사람을 태그한 글 (이 사람이 쓴 글은 빼고)
+    const author = searchParams.get("user_id") || "";
+    if (!ACTOR_RE.test(author) || filters.blocked.has(author)) return NextResponse.json({ posts: [], total: 0, page, hasMore: false });
+    const [{ data: own, error: oErr }, { data: tagged, error: tErr }] = await Promise.all([
+      sb.from("community_feed").select("id").eq("user_id", author).eq("is_active", true).is("regram_of", null).order("created_at", { ascending: false }).limit(300),
+      sb.from("community_post_people").select("post_id").eq("tagged_id", author).eq("status", "shown").order("created_at", { ascending: false }).limit(300),
+    ]);
+    if (oErr || tErr) return NextResponse.json({ error: (oErr || tErr).message }, { status: 500 });
+    const ownIds = ((own || []) as { id: string }[]).map((r) => r.id);
+    const tagIds = ((tagged || []) as { post_id: string }[]).map((r) => r.post_id);
+    const ors = [ownIds.length ? `source_post_id.in.(${ownIds.join(",")})` : "", tagIds.length ? `id.in.(${tagIds.join(",")})` : ""].filter(Boolean);
+    if (!ors.length) return NextResponse.json({ posts: [], total: 0, page, hasMore: false });
+    query = query.or(ors.join(",")).neq("user_id", author).order("created_at", { ascending: false });
   } else if (tab === "mine") {
     if (!userId) return NextResponse.json({ posts: [], total: 0, page, hasMore: false });
     query = query.eq("user_id", userId).order("created_at", { ascending: false });
@@ -158,7 +179,7 @@ export async function GET(request: NextRequest) {
   }
 
   const from = (page - 1) * limit;
-  const recommend = !["following", "topic", "mine", "user"].includes(tab) || (tab === "topic" && !isTopic(topic));
+  const recommend = !["following", "topic", "mine", "user", "credits"].includes(tab) || (tab === "topic" && !isTopic(topic));
   query = recommend ? query.range(0, RECOMMEND_WINDOW - 1) : query.range(from, from + limit - 1);
 
   const { data: fetched, count: fetchedCount, error } = await query;
@@ -227,13 +248,15 @@ export async function GET(request: NextRequest) {
     preview_comments: commentMap[p.id] || [],
   }));
 
-  let polled, ts;
+  let polled, ts, tg: Awaited<ReturnType<typeof togetherCounts>>;
   try {
     polled = await withPolls(sb, result, userId);
     ts = await tagsAndSources(sb, posts, filters.blocked);
+    tg = await togetherCounts(sb, posts, ts.people);
   } catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: 500 }); }
   const withTags = polled.map((p: { id: string; source_post_id?: string | null }) => ({
     ...p, people: ts.people.get(p.id) || [], source: p.source_post_id ? ts.sources.get(p.source_post_id) ?? null : null,
+    together: tg.get(p.id) ?? null,
   }));
 
   return NextResponse.json({

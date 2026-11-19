@@ -39,6 +39,7 @@ export type FeedPostData = {
   /** 태그된 사람(보이는 것만) · 원본 출처 (따라 한 글) */
   people?: { id: string; nickname: string }[];
   source?: { id: string; nickname: string | null; gone: boolean } | null;
+  together?: { nickname: string; nth: number } | null;
 };
 
 /**
@@ -140,7 +141,7 @@ export default function ThreadCard({ post, onLike, onCopy, onReply, onMenuDone, 
         <MealAttach mealType={post.meal_type} foods={md.foods} total={md.total} />
       ) : null}
       <ProductTagLinks products={post.products} />
-      <PostCredits people={post.people} source={post.source} />
+      <PostCredits people={post.people} source={post.source} together={post.together} />
     </ThreadItem>
   );
 }

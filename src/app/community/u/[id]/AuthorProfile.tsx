@@ -1,21 +1,23 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import ThreadCard, { type FeedPostData } from "@/components/community/ThreadCard";
 import {
-  Avatar, Button, ConfirmSheet, EmptyState, Icon, IconButton, LinkButton, PageLoading, SkeletonPost, Spinner, Tabs, useToast,
+  Avatar, Button, ConfirmSheet, EmptyState, Icon, IconButton, LinkButton, PageLoading, SkeletonPost, Spinner, Tabs, TextLink, useToast,
 } from "@/components/ui";
 
 /**
- * 작성자 프로필 — 이름 · 글/팔로워/따라한 사람 · 팔로우하기 · 글 / 공유한 식단
+ * 작성자 프로필 — 이름 · 글/팔로워/따라한 사람 · 팔로우하기 · 글 / 공유한 식단 / 따라 한 인증
+ * 따라 한 인증: 이 사람 글을 원본으로 단 글 + 이 사람을 태그한 글 (인플루언서가 따라 한 사람들의 인증을 한곳에서)
+ * 내 프로필이면 '나를 태그한 글'(승인 기다림 수)로 가는 줄
  * 공개 글에서 나온 것만 보인다. 건강 관심사·나이대는 보이지 않는다.
  */
 type Head = {
   user_id: string; nickname: string; post_count: number; plan_count: number; follower_count: number; following_count: number;
-  copied_count: number; is_me: boolean; is_following: boolean; blocked: boolean;
+  copied_count: number; credit_count?: number; pending_tags?: number; is_me: boolean; is_following: boolean; blocked: boolean;
 };
-type View = "posts" | "plans";
+type View = "posts" | "plans" | "credits";
 
 export function AuthorProfile() {
   const { id } = useParams<{ id: string }>();
@@ -41,17 +43,21 @@ export function AuthorProfile() {
     return () => { alive = false; };
   }, [id, attempt]);
 
+  // 보기를 빨리 바꿔도 마지막 요청만 화면을 바꾼다
+  const seq = useRef(0);
   const loadPosts = useCallback(async (page: number, append: boolean) => {
-    setPosts((s) => ({ ...s, status: append ? s.status : "loading" }));
+    const my = ++seq.current;
+    setPosts((s) => ({ ...s, status: append ? s.status : "loading", ...(append ? {} : { items: [] }) }));
     try {
-      const q = new URLSearchParams({ tab: "user", user_id: id, page: String(page) });
+      const q = new URLSearchParams({ tab: view === "credits" ? "credits" : "user", user_id: id, page: String(page) });
       if (view === "plans") q.set("only", "plan");
       const r = await fetch(`/api/community/feed?${q}`);
       const d = await r.json();
       if (!r.ok) throw new Error(d.error);
+      if (my !== seq.current) return;
       setPosts((s) => ({ status: "done", items: append ? [...s.items, ...((d.posts || []) as FeedPostData[]).filter((p) => !s.items.some((q) => q.id === p.id))] : d.posts || [], hasMore: !!d.hasMore, page }));
     } catch {
-      setPosts((s) => ({ ...s, status: "error" }));
+      if (my === seq.current) setPosts((s) => ({ ...s, status: "error" }));
     }
   }, [id, view]);
 
@@ -151,6 +157,11 @@ export function AuthorProfile() {
             {h.is_following ? "팔로잉" : "팔로우하기"}
           </Button>
         )}
+        {h.is_me && (
+          <TextLink href="/community/tags" className="self-start">
+            나를 태그한 글{h.pending_tags ? <> · 승인 기다림 <span className="num font-bold">{h.pending_tags}</span></> : ""}
+          </TextLink>
+        )}
         <p className="flex items-center gap-1.5 text-caption text-ink-2">
           <Icon name="lock" size={14} className="shrink-0" />공개한 글·식단만 보여요. 건강 정보는 보이지 않아요
         </p>
@@ -161,16 +172,21 @@ export function AuthorProfile() {
       ) : (
         <>
           <Tabs variant="line" label="프로필 보기" className="mt-2" value={view} onChange={setView}
-            items={[{ value: "posts", label: `글 ${h.post_count}` }, { value: "plans", label: `공유한 식단 ${h.plan_count}` }]} />
+            items={[{ value: "posts", label: `글 ${h.post_count}` }, { value: "plans", label: `공유한 식단 ${h.plan_count}` }, { value: "credits", label: `따라 한 인증 ${h.credit_count ?? 0}` }]} />
           {posts.status === "loading" && <SkeletonPost count={2} />}
           {posts.status === "error" && posts.items.length === 0 && (
             <EmptyState className="mt-4" title="글을 불러오지 못했어요" description="연결이 잠깐 끊겼을 수 있어요"
               action={<Button size="sm" variant="secondary" icon="refresh" onClick={() => loadPosts(1, false)}>다시 불러오기</Button>} />
           )}
           {posts.status === "done" && posts.items.length === 0 && (
-            <EmptyState className="mt-4" title={view === "plans" ? "공유한 식단이 아직 없어요" : "아직 쓴 글이 없어요"}
-              description={h.is_me ? "피드에서 저장한 일주일 식단을 붙여 올릴 수 있어요" : "글을 올리면 여기에 모여요"}
-              action={<LinkButton href="/community" variant="secondary" size="sm">피드 보기</LinkButton>} />
+            view === "credits" ? (
+              <EmptyState className="mt-4" title="아직 따라 한 인증이 없어요"
+                description={h.is_me ? "누가 내 식단을 따라 하고 올리거나 나를 태그하면 여기에 모여요" : `${h.nickname} 님 식단을 따라 하고 올리면 여기에 모여요`} />
+            ) : (
+              <EmptyState className="mt-4" title={view === "plans" ? "공유한 식단이 아직 없어요" : "아직 쓴 글이 없어요"}
+                description={h.is_me ? "피드에서 저장한 일주일 식단을 붙여 올릴 수 있어요" : "글을 올리면 여기에 모여요"}
+                action={<LinkButton href="/community" variant="secondary" size="sm">피드 보기</LinkButton>} />
+            )
           )}
           {posts.items.map((p) => (
             <ThreadCard key={p.id} post={p} onLike={() => like(p.id)} onCopy={() => copy(p.id)}
