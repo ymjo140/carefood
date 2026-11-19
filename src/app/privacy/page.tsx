@@ -10,7 +10,7 @@ export default function PrivacyPage() {
   return (
     <Page width="default">
       <h1 className="text-title font-bold text-ink mb-1">개인정보처리방침</h1>
-      <p className="text-label text-ink-2 mb-8">시행일: 2026년 11월 14일</p>
+      <p className="text-label text-ink-2 mb-8">시행일: 2026년 11월 19일</p>
 
       <div className="flex flex-col gap-8 text-label text-ink-2">
         {/* 1조 */}
@@ -380,7 +380,12 @@ export default function PrivacyPage() {
         <section>
           <h2 className="text-body font-bold text-ink mb-2">제11조 (방침 변경)</h2>
           <p>
-            본 방침이 변경되는 경우 시행일 7일 전부터 서비스 내 공지를 통해 알립니다.
+            본 방침이 변경되는 경우 서비스 내 공지를 통해 알립니다. 수집 항목이 늘거나 이용자 권리에 중요한 변경이 있는 경우에는
+            시행일 7일 전부터 알립니다. 이용자가 따로 동의하거나 직접 켜야 쓰이는 새 기능을 더하는 변경은 해당 기능을 처음 쓸 때 동의를 받고 시행일부터 적용합니다.
+          </p>
+          <p className="mt-2 text-label text-ink-2">
+            변경 이력: 2026년 11월 19일 — 가족 연결 확대(먹은 음식 보기·대신 기록하기·추천 보내기), 친구 연결과 같이 먹기, 커뮤니티 사람 태그·원본 출처·스토리 올리기·같이 먹기 기록을 추가했습니다.
+            이전 시행일 2026년 11월 14일.
           </p>
         </section>
 
