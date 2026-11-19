@@ -1053,7 +1053,9 @@ export default function Reference({ status }: { status: DsStatus }) {
               <MacroInline values={{ protein: 32, carbs: 45, fat: 8 }} className="mt-1" />
             </MealSlot>
             <MealSlot meal="dinner" empty onAdd={() => toast.show("음식 고르기를 열었어요")} />
-            <span className="text-caption text-ink-2"><Code>{"<MealSlot meal right empty onAdd />"}</Code></span>
+            <MealSlot meal="snack" empty addLabel="기록하기" onAdd={() => toast.show("음식 고르기를 열었어요")}
+              aside={<Button variant="secondary" onClick={() => toast.show("간식을 AI 추천으로 채웠어요")}>AI로 채우기</Button>} />
+            <span className="text-caption text-ink-2"><Code>{"<MealSlot meal right empty onAdd aside />"}</Code> — 빈 칸은 44px, aside 는 칸 옆 동작 하나</span>
           </div>
         </div>
         <div className="grid gap-4 md:grid-cols-2 mt-6">

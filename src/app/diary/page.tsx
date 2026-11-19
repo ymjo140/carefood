@@ -18,6 +18,7 @@ import { PlanSheet } from "./PlanSheet";
 import { FamilyDay, PersonChips, type FamilyPerson } from "./FamilyDay";
 import { josa } from "@/lib/buddy";
 import type { PlannedMeal } from "@/lib/planned-meals";
+import { AI_PLAN_TITLE, skipKey } from "@/lib/ai-fill";
 
 /* ── 타입 ── */
 type DiaryEntry = {
@@ -338,6 +339,9 @@ export default function DiaryPage() {
   // 식단 리스트 화면에서 짜 둔 한 주 (이 기기) — 요일·끼니가 맞으면 '계획대로 기록하기'
   const [planGrid, setPlanGrid] = useState<PlanGrid | null>(null);
   const [recordingPlan, setRecordingPlan] = useState<string | null>(null);
+  /** 빈 끼니 'AI로 채우기' — 고르는 중인 끼니 · 끼니마다 이미 권한 것(다른 추천을 누르면 건너뛴다). 날짜가 바뀌면 비운다 */
+  const [aiFilling, setAiFilling] = useState<string | null>(null);
+  const [aiSkips, setAiSkips] = useState<{ date: string; byMeal: Record<string, string[]> }>({ date: "", byMeal: {} });
   /** 이 기기에 짜 둔 게 없어 서버에 저장한 식단을 쓸 때 그 이름 */
   const [planTitle, setPlanTitle] = useState<string | null>(null);
   /** 그 날짜에 담아 둔 예정 끼니 (/api/diary/planned) — 식단 불러오기가 담고, 기록하면 지운다. 요일 식단보다 먼저 */
@@ -735,6 +739,32 @@ export default function DiaryPage() {
     // 날짜에 담아 둔 예정이었으면 — 기록했으니 예정에서 뺀다
     if (datedPlans.some((p) => p.meal === meal)) void removeDated(meal, true);
     return true;
+  };
+
+  /** 빈 끼니를 AI 추천으로 채우기 — 그날 그 끼니의 예정('AI 추천')으로 담는다. 다시 누르면(다른 추천) 이미 권한 것은 건너뛴다 */
+  const aiFill = async (meal: string, label: string, current: PlanFood[] = []) => {
+    const prev = aiSkips.date === date ? aiSkips.byMeal[meal] || [] : [];
+    const skip = [...new Set([...prev, ...current.map(skipKey)])];
+    setAiFilling(meal);
+    try {
+      const r = await fetch("/api/diary/ai-fill", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ date, meal, skip }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        // 서버 오류 문구(DB 메시지)는 화면에 내지 않는다 — 기록만
+        if (r.status >= 500) console.error("AI로 채우지 못했어요:", d.error);
+        throw new Error(r.status < 500 && d.error ? d.error : "채우지 못했어요. 다시 시도해 주세요");
+      }
+      setAiSkips((s) => ({ date, byMeal: { ...(s.date === date ? s.byMeal : {}), [meal]: skip } }));
+      toast.show(current.length ? `${label}을 다른 추천으로 바꿨어요` : `${label}을 AI 추천으로 채웠어요`);
+    } catch (e) {
+      toast.show((e as Error).message, { tone: "danger" });
+    } finally {
+      setAiFilling(null);
+      setPlannedReload((k) => k + 1);
+    }
   };
 
   /** 예정 끼니 빼기 — quiet: 기록한 뒤 저절로 빼는 것(알림 없음) */
@@ -1269,7 +1299,7 @@ export default function DiaryPage() {
       {loading ? (
         <SkeletonList rows={4} thumb={false} />
       ) : (
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-2">
           {MEAL_TYPES.map((meal) => {
             const entries = data?.byMeal[meal.key] || [];
             const mealCal = entries.reduce((s, e) => s + (e.calories || 0), 0);
@@ -1303,12 +1333,20 @@ export default function DiaryPage() {
                             onClick={() => void recordPlanned(meal.key, foods, meal.label)}>계획대로 기록하기</Button>
                         )}
                         {!ahead && <Button size="sm" variant="ghost" onClick={toggleAdd}>다른 음식 기록하기</Button>}
-                        {dated && <Button size="sm" variant="ghost" onClick={() => void removeDated(meal.key)}>예정에서 빼기</Button>}
+                        {dated?.plan_title === AI_PLAN_TITLE && (
+                          <Button size="sm" variant="ghost" icon="refresh" loading={aiFilling === meal.key}
+                            onClick={() => void aiFill(meal.key, meal.label, foods)}>다른 추천</Button>
+                        )}
+                        {dated && <Button size="sm" variant="ghost" onClick={() => void removeDated(meal.key)}>{ahead ? "예정에서 빼기" : "계획에서 빼기"}</Button>}
                       </div>
                     </MealSlot>
                   );
                 })() : isEmpty && !isAdding ? (
-                  <MealSlot meal={meal.key} empty onAdd={toggleAdd} addLabel={`${meal.label} 기록하기`} />
+                  <MealSlot meal={meal.key} empty onAdd={toggleAdd} addLabel="기록하기"
+                    aside={date >= todayStr ? (
+                      <Button variant="secondary" loading={aiFilling === meal.key} disabled={!!aiFilling}
+                        onClick={() => void aiFill(meal.key, meal.label)}>AI로 채우기</Button>
+                    ) : undefined} />
                 ) : (
                   <MealSlot
                     meal={meal.key}
