@@ -3,7 +3,7 @@ import sharp from "sharp";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { getActorId, noActor } from "@/lib/actor-server";
 import { rateLimit } from "@/lib/rate-limit";
-import { IMAGE_BUCKET, imagePaths, removeImages } from "@/lib/community-images";
+import { IMAGE_BUCKET, imagePaths, removeImages, thumbPath } from "@/lib/community-images";
 import { cropBox, dhash, takenAt } from "@/lib/photo-meta";
 
 /**
@@ -13,6 +13,7 @@ import { cropBox, dhash, takenAt } from "@/lib/photo-meta";
  * - 공개 버킷 community 의 <actor>/<연월>/<무작위>.webp 에 올리고 주소를 돌려준다
  * - crop(선택): JSON {x,y,w,h} 0~1, 방향을 맞춘 사진 기준 — 서버가 자른다(원본 EXIF 를 읽은 뒤)
  * - taken_at(선택): 기기가 사진을 줄이기 전에 읽은 촬영 시각. 파일 안 EXIF 가 있으면 그것을 쓴다
+ * - 긴 변 400px 작게 보기 사진(<이름>.t.webp)도 같이 만든다 — 인증 사진 격자·보드용
  * - 찍은 시각(EXIF)·지문(dHash)을 community_uploads 에 남기고 upload_id 를 돌려준다. 글·챌린지 인증은 이 id 로 붙인다
  */
 
@@ -67,6 +68,7 @@ export async function POST(request: NextRequest) {
   const taken = exif ?? claimed;
 
   let out: Buffer;
+  let thumb: Buffer;
   let width = 0, height = 0, hash = "";
   try {
     const meta = await sharp(input, { limitInputPixels: 40_000_000 }).metadata();
@@ -76,6 +78,7 @@ export async function POST(request: NextRequest) {
     let base = sharp(input, { limitInputPixels: 40_000_000 }).rotate();
     if (box) base = base.extract(box);
     hash = await dhash(base.clone());
+    thumb = await base.clone().resize({ width: 400, height: 400, fit: "inside", withoutEnlargement: true }).webp({ quality: 72 }).toBuffer();
     const { data, info } = await base.resize({ width: 1600, height: 1600, fit: "inside", withoutEnlargement: true }).webp({ quality: 80 }).toBuffer({ resolveWithObject: true });
     out = data; width = info.width; height = info.height;
   } catch {
@@ -88,6 +91,9 @@ export async function POST(request: NextRequest) {
   const path = `${actor}/${now.getUTCFullYear()}${String(now.getUTCMonth() + 1).padStart(2, "0")}/${crypto.randomUUID()}.webp`;
   const { error } = await sb.storage.from(IMAGE_BUCKET).upload(path, out, { contentType: "image/webp", cacheControl: "31536000", upsert: false });
   if (error) return NextResponse.json({ error: `사진을 올리지 못했어요: ${error.message}` }, { status: 500 });
+  // 작게 보기(400px) — 격자·보드용. 못 올려도 원래 사진으로 보인다
+  const t = await sb.storage.from(IMAGE_BUCKET).upload(thumbPath(path), thumb, { contentType: "image/webp", cacheControl: "31536000", upsert: false });
+  if (t.error) console.error("[upload] 작게 보기 사진", t.error.message); // ds-allow: 화면은 원래 사진으로 돌아간다
   const { data: pub } = sb.storage.from(IMAGE_BUCKET).getPublicUrl(path);
   const row = await sb.from("community_uploads").insert({
     user_id: actor, url: pub.publicUrl, path, width, height,

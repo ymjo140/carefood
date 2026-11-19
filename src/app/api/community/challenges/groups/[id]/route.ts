@@ -8,6 +8,7 @@ import { viewerFilters } from "@/lib/community-safety";
 import { diaryOf, groupPeriod, memberRun, nicknames, type ChallengeRow, type GroupRow, type MemberRow } from "@/lib/challenge-groups";
 import { proofDays, proofKey } from "@/lib/challenge-proofs";
 import { audienceOf, canSee } from "@/lib/community-visibility";
+import { thumbOf } from "@/lib/community-images";
 
 /**
  * GET  /api/community/challenges/groups/[id] — 묶음 보드 (같은 묶음 사람만 본다)
@@ -60,17 +61,17 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     if (todays.error) throw new Error(todays.error.message);
     const cheerRows = (cheers.data || []) as { from_user: string; to_user: string }[];
     type P = { user_id: string; post_id: string; community_uploads: { url: string; taken_at: string | null } | null; community_feed: { id: string; user_id: string; visibility: string; is_active: boolean; hidden_by_reports: boolean } | null };
-    const proofOf = new Map<string, { photo: string | null; post_id: string | null; album: boolean }>();
+    const proofOf = new Map<string, { photo: string | null; full: string | null; post_id: string | null; album: boolean }>();
     for (const r of (todays.data || []) as P[]) {
       if (proofOf.has(r.user_id)) continue; // 가장 최근 것 하나
       const f = r.community_feed;
       const seen = !!f && f.is_active && (r.user_id === actor || (!f.hidden_by_reports && canSee(f, audience)));
-      proofOf.set(r.user_id, { photo: seen ? r.community_uploads?.url ?? null : null, post_id: seen ? r.post_id : null, album: !r.community_uploads?.taken_at });
+      proofOf.set(r.user_id, { photo: seen ? thumbOf(r.community_uploads?.url) : null, full: seen ? r.community_uploads?.url ?? null : null, post_id: seen ? r.post_id : null, album: !r.community_uploads?.taken_at });
     }
     const mine = memberRun(challenge, group, myMember, diary.get(actor) || [], today, pd.get(proofKey(challenge.id, actor)));
     const rows = shown.map((m) => ({
       user_id: m.user_id, nickname: names.get(m.user_id) || "익명", is_me: m.user_id === actor, is_host: m.user_id === group.host_id,
-      today: proofOf.has(m.user_id) ? { proved: true, ...proofOf.get(m.user_id)! } : { proved: false, photo: null, post_id: null, album: false },
+      today: proofOf.has(m.user_id) ? { proved: true, ...proofOf.get(m.user_id)! } : { proved: false, photo: null, full: null, post_id: null, album: false },
       cheered: cheerRows.some((x) => x.from_user === actor && x.to_user === m.user_id),
     })).sort((a, b) => Number(b.is_me) - Number(a.is_me) || a.nickname.localeCompare(b.nickname, "ko"));
     // 로그인 안 했으면 '다른 기기에서 이어 하려면 로그인' 안내를 띄운다

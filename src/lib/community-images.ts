@@ -16,12 +16,25 @@ export function imagePaths(urls: (string | null | undefined)[]) {
 }
 
 /**
+ * 작게 보기 사진 — 올릴 때 긴 변 400px 로 따로 만든다(<원래 이름>.t.webp). 격자·보드처럼 작게 보이는 곳에 쓴다.
+ * 이 규칙 전에 올린 사진에는 없다 → thumbOf 는 주소만 바꾸므로, 화면은 작게 보기가 없을 때 원래 사진으로 돌아간다(img onError).
+ */
+export const THUMB_SUFFIX = ".t.webp";
+export const thumbPath = (path: string) => path.replace(/\.webp$/, THUMB_SUFFIX);
+export function thumbOf(url: string | null | undefined): string | null {
+  if (!url || !url.startsWith(imagePrefix()) || !url.endsWith(".webp") || url.endsWith(THUMB_SUFFIX)) return url ?? null;
+  return url.replace(/\.webp$/, THUMB_SUFFIX);
+}
+
+/**
  * 사진 파일 지우기 — 실패해도 글 지우기는 막지 않고 오류를 돌려준다.
  * owner 를 주면 그 사람 폴더(<owner>/…)의 파일만 지운다 — 남의 사진 주소를 붙인 글을 지워도 원래 사진은 남는다.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function removeImages(sb: any, urls: (string | null | undefined)[], owner?: string | null): Promise<string | null> {
-  const paths = imagePaths(urls).filter((path) => owner === undefined || (!!owner && path.startsWith(`${owner}/`)));
+  const own = imagePaths(urls).filter((path) => owner === undefined || (!!owner && path.startsWith(`${owner}/`)));
+  // 작게 보기 사진도 같이 (없으면 저장소가 그냥 넘어간다)
+  const paths = [...own, ...own.filter((p) => p.endsWith(".webp") && !p.endsWith(THUMB_SUFFIX)).map(thumbPath)];
   if (!paths.length) return null;
   const { error } = await sb.storage.from(IMAGE_BUCKET).remove(paths);
   return error ? error.message : null;

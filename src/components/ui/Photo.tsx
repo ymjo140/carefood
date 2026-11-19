@@ -227,7 +227,8 @@ export function PhotoCarousel({ urls, alt, ratio, onOpen, className }: {
  * 숫자·순위는 없다. 찍은 시각을 모르는 사진은 '앨범에서 고름'.
  */
 export function ProofGrid({ items, className }: {
-  items: { id: string; photo: string; href: string; nickname: string; day: string; album?: boolean }[];
+  /** photo: 작게 보기 사진, full: 없을 때 돌아갈 원래 사진 */
+  items: { id: string; photo: string; full?: string; href: string; nickname: string; day: string; album?: boolean }[];
   className?: string;
 }) {
   return (
@@ -236,7 +237,7 @@ export function ProofGrid({ items, className }: {
         <li key={p.id} className="flex flex-col gap-1 min-w-0">
           <Link href={p.href} className="press relative block aspect-square overflow-hidden rounded-md border border-line bg-sunken" aria-label={`${p.nickname}의 ${p.day} 인증 글 보기`}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={p.photo} alt="" loading="lazy" className="size-full object-cover" />
+            <img src={p.photo} alt="" loading="lazy" className="size-full object-cover" onError={(e) => { if (p.full && e.currentTarget.src !== p.full) e.currentTarget.src = p.full; }} />
             {p.album && <span className="absolute inset-x-0 bottom-0 bg-media-scrim text-on-media text-caption px-1.5 py-0.5">앨범에서 고름</span>}
           </Link>
           <p className="text-caption text-ink-2 truncate">{p.nickname} · <span className="num">{Number(p.day.slice(5, 7))}/{Number(p.day.slice(8, 10))}</span></p>

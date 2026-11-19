@@ -81,3 +81,16 @@ describe("사진 지문·자르기", () => {
     expect(cropBox(null, 1000, 1000)).toBeNull();
   });
 });
+
+describe("작게 보기 사진 주소", () => {
+  it("우리 저장소 webp 만 .t.webp 로 바꾸고, 다른 주소는 그대로", async () => {
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "https://x.supabase.co";
+    const { thumbOf, thumbPath } = await import("@/lib/community-images");
+    const base = "https://x.supabase.co/storage/v1/object/public/community/a/202611/u.webp";
+    expect(thumbOf(base)).toBe(base.replace(/\.webp$/, ".t.webp"));
+    expect(thumbOf(base.replace(/\.webp$/, ".t.webp"))).toBe(base.replace(/\.webp$/, ".t.webp"));
+    expect(thumbOf("https://other.com/a.webp")).toBe("https://other.com/a.webp");
+    expect(thumbOf(null)).toBeNull();
+    expect(thumbPath("a/202611/u.webp")).toBe("a/202611/u.t.webp");
+  });
+});
