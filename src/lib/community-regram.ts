@@ -7,7 +7,7 @@
 type Sb = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
 export type Origin = {
-  id: string; user_id: string; is_active: boolean; hidden_by_reports: boolean; image_urls: string[] | null; video_poster: string | null; regram_of?: string | null;
+  id: string; user_id: string; is_active: boolean; hidden_by_reports: boolean; image_urls: string[] | null; video_poster: string | null; regram_of?: string | null; visibility?: string | null;
 };
 
 /** 이 글을 이 사람이 스토리에 올릴 수 없는 이유 — 없으면 null */
@@ -15,6 +15,7 @@ export function regramBlock(o: Origin | null, x: { me: string; allow: boolean; b
   if (!o || !o.is_active || o.hidden_by_reports) return "볼 수 없는 글이에요";
   if (o.user_id === x.me) return "내 글은 스토리에 올릴 수 없어요. 인증 카드로 나눠 주세요";
   if (o.regram_of) return "스토리에 올린 글은 다시 올릴 수 없어요. 원본 글에서 올려 주세요";
+  if ((o.visibility || "public") !== "public") return "팔로워에게만 보이는 글은 스토리에 올릴 수 없어요";
   if (!(o.image_urls || []).length && !o.video_poster) return "사진이나 영상이 있는 글만 스토리에 올릴 수 있어요";
   if (x.blocked || !x.allow) return "스토리에 올릴 수 없는 글이에요";
   return null;

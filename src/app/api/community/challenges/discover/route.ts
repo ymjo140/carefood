@@ -8,6 +8,7 @@ import { MEMBER_COLS, diaryOf, memberRun, type ChallengeRow, type MemberRow } fr
 import { nearestTier, ruleOf } from "@/lib/challenge-rules";
 import { seasonsAround } from "@/lib/seasons";
 import { selectAll } from "@/lib/supabase/all";
+import { proofDays, proofKey } from "@/lib/challenge-proofs";
 
 /**
  * GET /api/community/challenges/discover — 나에게 맞는 챌린지(최대 3개) + 챌린지 순위
@@ -31,7 +32,7 @@ export async function GET() {
   try {
     const { current } = seasonsAround(today);
     const { data: cs, error } = await sb.from("community_challenges")
-      .select("id, slug, title, rule, metric, target, days, goal_days, is_active, kind, visibility, season_id, challenge_seasons(title, start_on, days)")
+      .select("id, slug, title, rule, metric, target, days, goal_days, is_active, kind, visibility, season_id, proof, challenge_seasons(title, start_on, days)")
       .eq("is_active", true).or("kind.eq.official,kind.eq.season,and(kind.eq.user,visibility.eq.public)").limit(2000);
     if (error) throw new Error(error.message);
     const rows = ((cs || []) as Row[]).filter((c) => c.kind !== "season" || c.challenge_seasons?.start_on && addDays(c.challenge_seasons.start_on, c.challenge_seasons.days - 1) >= today);
@@ -55,11 +56,15 @@ export async function GET() {
     const completed: ReturnType<typeof row>[] = [];
     if (ended.length) {
       const from = ended.map((m) => m.challenge_groups?.start_on || m.started_on).sort()[0];
-      const diary = await diaryOf(sb, [...new Set(ended.map((m) => m.user_id))], from, addDays(today, -1));
+      const users = [...new Set(ended.map((m) => m.user_id))];
+      const [diary, pd] = await Promise.all([
+        diaryOf(sb, users, from, addDays(today, -1)),
+        proofDays(sb, [...new Set(ended.map((m) => m.challenge_id))], users, from, addDays(today, -1)),
+      ]);
       const by = new Map<string, { n: number; ok: number }>();
       for (const m of ended) {
         const c = byId.get(m.challenge_id)!;
-        const run = memberRun(c, m.challenge_groups ? { start_on: m.challenge_groups.start_on } : null, m, diary.get(m.user_id) || [], today);
+        const run = memberRun(c, m.challenge_groups ? { start_on: m.challenge_groups.start_on } : null, m, diary.get(m.user_id) || [], today, pd.get(proofKey(c.id, m.user_id)));
         const x = by.get(c.id) || { n: 0, ok: 0 };
         x.n++; if (run.reached) x.ok++;
         by.set(c.id, x);

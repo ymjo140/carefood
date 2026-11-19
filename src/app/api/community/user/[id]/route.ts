@@ -18,7 +18,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sb = createServiceRoleClient() as any;
 
-  const [posts, plans, followers, following, last, lastC, myFollow, myBlock] = await Promise.all([
+  const [posts, plans, followers, following, last, lastC, myFollow, myBlock, closed] = await Promise.all([
     sb.from("community_feed").select("id, copy_count", { count: "exact" }).eq("user_id", id).eq("is_active", true).eq("hidden_by_reports", false).is("regram_of", null).limit(1000),
     sb.from("community_feed").select("id", { count: "exact", head: true }).eq("user_id", id).eq("is_active", true).eq("hidden_by_reports", false).is("regram_of", null).not("meal_data->plan", "is", null),
     sb.from("community_follows").select("id", { count: "exact", head: true }).eq("following_id", id),
@@ -27,8 +27,11 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     sb.from("community_feed_comments").select("author_nickname, created_at").eq("user_id", id).order("created_at", { ascending: false }).limit(1),
     viewer ? sb.from("community_follows").select("id").eq("follower_id", viewer).eq("following_id", id).maybeSingle() : { data: null },
     viewer ? sb.from("community_blocks").select("blocked_id").eq("blocker_id", viewer).eq("blocked_id", id).maybeSingle() : { data: null },
+    // 팔로워만 글 수 — 팔로워가 아닌 사람에게는 빼고 센다 (목록과 같은 수)
+    sb.from("community_feed").select("id", { count: "exact", head: true }).eq("user_id", id).eq("is_active", true).eq("hidden_by_reports", false).is("regram_of", null).eq("visibility", "followers"),
   ]);
-  for (const r of [posts, plans, followers, following, last, lastC]) if (r.error) return NextResponse.json({ error: r.error.message }, { status: 500 });
+  for (const r of [posts, plans, followers, following, last, lastC, closed]) if (r.error) return NextResponse.json({ error: r.error.message }, { status: 500 });
+  const seesAll = !!viewer && (viewer === id || !!myFollow.data);
 
   // 따라 한 인증 — 원본으로 단 글 + 태그한 글 (같은 글은 한 번)
   const ownIds = ((posts.data || []) as { id: string }[]).map((p) => p.id).slice(0, 300);
@@ -52,7 +55,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   return NextResponse.json({
     user_id: id,
     nickname: prof?.nickname || cands[0].author_nickname || "이름 없음",
-    post_count: posts.count || 0,
+    post_count: Math.max(0, (posts.count || 0) - (seesAll ? 0 : closed.count || 0)),
     plan_count: plans.count || 0,
     follower_count: followers.count || 0,
     following_count: following.count || 0,

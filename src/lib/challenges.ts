@@ -11,7 +11,8 @@ import { addDays } from "./day";
 export type ChallengeMetric =
   | "sodium_max" | "protein_min" | "sugar_max" | "meals_min" | "kcal_max" | "fiber_min" | "breakfast" | "record_any"
   | "photo_meals" | "snack_max" | "protein_each" | "kcal_band" | "macro_type";
-export type DayState = "done" | "missed" | "today" | "future" | "before";
+/** photo_needed: 식단 기준은 채웠는데 그날 인증 사진이 없다 (사진 인증 챌린지) — 지난날이면 못 한 날로 센다 */
+export type DayState = "done" | "missed" | "today" | "future" | "before" | "photo_needed";
 
 export type DiaryRow = {
   date: string; meal_type: string | null; calories: number | null; protein_g: number | null; sugar_g: number | null; sodium_mg: number | null;
@@ -150,9 +151,11 @@ export type RunProgress = {
  * 한 번 도전한 기간의 날마다 상태.
  * from: 기간 첫날(묶음 시작일). startedOn 이 그보다 늦으면(늦게 들어옴) 그 앞 날은 'before' — 못 한 날로 세지 않는다.
  * 오늘: 채우면 바로 아는 규칙은 해낸 날, 하루가 끝나야 아는 규칙('…이하'·구간·비율)은 '오늘'로 둔다.
+ * 사진 인증(opts.proofs 가 있으면): 그날 인증 사진(challenge_proofs)이 있어야 해낸 날. 기준은 채웠는데 사진이 없으면 'photo_needed'.
+ *   사진은 그날 밤 12시까지 올린 것만 인증된다(늦은 인증 없음) — 지난날의 photo_needed 는 해낸 날로 세지 않는다.
  */
 export function runProgress(metric: ChallengeMetric, target: number, days: number, startedOn: string, rows: DiaryRow[], today: string,
-  opts: { from?: string; goal?: number | null } = {}): RunProgress {
+  opts: { from?: string; goal?: number | null; proofs?: Set<string> | null } = {}): RunProgress {
   const from = opts.from && opts.from < startedOn ? opts.from : startedOn;
   const byDay = new Map<string, DiaryRow[]>();
   for (const r of rows) byDay.set(r.date, [...(byDay.get(r.date) || []), r]);
@@ -161,11 +164,12 @@ export function runProgress(metric: ChallengeMetric, target: number, days: numbe
   const list = Array.from({ length: days }, (_, i) => {
     const date = addDays(from, i);
     const { value, ok } = judgeDay(metric, target, byDay.get(date) || []);
+    const photo = !opts.proofs || opts.proofs.has(date);
     let state: DayState;
     if (date < startedOn) state = "before";
     else if (date > today) state = "future";
-    else if (date === today) state = now && ok ? "done" : "today";
-    else state = ok ? "done" : "missed";
+    else if (date === today) state = now && ok ? (photo ? "done" : "photo_needed") : "today";
+    else state = ok ? (photo ? "done" : "photo_needed") : "missed";
     return { date, state, value };
   });
   const counted = list.filter((d) => d.state !== "before").length;

@@ -12,7 +12,7 @@
  */
 import { BRAND } from "@/lib/brand";
 
-export type DayMark = { date: string; state: "done" | "missed" | "today" | "future" | "before" };
+export type DayMark = { date: string; state: "done" | "missed" | "today" | "future" | "before" | "photo_needed" };
 export type MealCardData = {
   kind: "meal"; author: string | null; url: string; photo: string | null; meal_type: string | null; day: string;
   foods: string[]; food_count: number; total: { calories: number; protein_g: number; carbs_g: number; fat_g: number } | null; streak: number;

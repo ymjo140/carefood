@@ -8,6 +8,7 @@ import { bestOption, discountOf, readOffer } from "@/lib/group-buy";
 import type { CertSummary } from "@/lib/share-card-server";
 import { regramAllowed, togetherCounts } from "@/lib/community-regram";
 import { tagsAndSources } from "@/lib/community-tags";
+import { audienceOf, canSee } from "@/lib/community-visibility";
 
 /**
  * GET /api/community/reels — 피드 맨 위 '스토리' 줄
@@ -16,7 +17,7 @@ import { tagsAndSources } from "@/lib/community-tags";
  *   리그램(남의 글을 내 스토리에 올림)은 kind "regram" — 사진·영상·식단은 원본 것, origin { id, author }. 원본이 지워졌거나 가려졌거나
  *   원본 글쓴이가 허락을 껐거나 차단 관계면 빠진다. 식단이 붙은 글은 copyable(따라하기), 올릴 수 있으면 regram_ok(내 스토리에 올리기).
  *   사진 글에서 서로 태그한 두 사람은 together { nickname, nth } (같이 먹기 N번째)
- *   보는 사람이 차단한 사람·숨긴 글·신고로 가려진 글은 뺀다.
+ *   보는 사람이 차단한 사람·숨긴 글·신고로 가려진 글, 볼 수 없는 팔로워만 글은 뺀다. 팔로워만 글은 리그램할 수 없다(regram_ok false).
  *   응답: items[{ kind: "meal"|"cert"|"group_buy", id, image, video, author, created_at, mine, liked, like_count, comment_count, ...종류별 숫자 }]
  *   스토리 보기(/stories)가 이 목록을 그대로 넘겨 본다 — 영상 주소·좋아요 상태·내 것인지까지 같이 준다.
  */
@@ -32,9 +33,9 @@ export async function GET() {
   const since = new Date(Date.now() - 30 * 86400e3).toISOString();
 
   try {
-    const filters = await viewerFilters(sb, actor);
+    const [filters, audience] = await Promise.all([viewerFilters(sb, actor), audienceOf(sb, actor)]);
     const [posts, gbs] = await Promise.all([
-      sb.from("community_feed").select("id, user_id, author_nickname, image_urls, video_url, video_poster, video_seconds, meal_type, meal_data, content, created_at, sponsor, like_count, comment_count, cert, regram_of")
+      sb.from("community_feed").select("id, user_id, author_nickname, image_urls, video_url, video_poster, video_seconds, meal_type, meal_data, content, created_at, sponsor, like_count, comment_count, cert, regram_of, visibility")
         .eq("is_active", true).eq("hidden_by_reports", false).gte("created_at", since)
         .order("created_at", { ascending: false }).limit(LIMIT * 6),
       sb.from("group_buys").select("*").eq("status", "recruiting").gt("expires_at", new Date().toISOString())
@@ -46,16 +47,16 @@ export async function GET() {
     type Row = {
       id: string; user_id: string; author_nickname: string | null; image_urls: string[] | null; video_url: string | null; video_poster: string | null; video_seconds: number | null; meal_type: string | null;
       meal_data: { total?: Total; foods?: unknown[]; plan?: unknown } | null; content: string | null; created_at: string; sponsor: { partner_name?: string } | null; like_count: number | null; comment_count: number | null;
-      cert: CertSummary | null; regram_of: string | null; is_active?: boolean; hidden_by_reports?: boolean;
+      cert: CertSummary | null; regram_of: string | null; is_active?: boolean; hidden_by_reports?: boolean; visibility?: string | null;
     };
-    const rows = ((posts.data || []) as Row[]).filter((p) => !filters.blocked.has(p.user_id) && !filters.hidden.has(p.id));
+    const rows = ((posts.data || []) as Row[]).filter((p) => !filters.blocked.has(p.user_id) && !filters.hidden.has(p.id) && canSee(p, audience));
     // 리그램의 원본 — 보이는 것만
     const originIds = [...new Set(rows.map((p) => p.regram_of).filter((v): v is string => !!v))];
     const { data: originRows, error: oErr } = originIds.length
-      ? await sb.from("community_feed").select("id, user_id, author_nickname, image_urls, video_url, video_poster, video_seconds, meal_type, meal_data, content, created_at, sponsor, like_count, comment_count, cert, regram_of, is_active, hidden_by_reports").in("id", originIds)
+      ? await sb.from("community_feed").select("id, user_id, author_nickname, image_urls, video_url, video_poster, video_seconds, meal_type, meal_data, content, created_at, sponsor, like_count, comment_count, cert, regram_of, is_active, hidden_by_reports, visibility").in("id", originIds)
       : { data: [], error: null };
     if (oErr) throw new Error(oErr.message);
-    const origins = new Map(((originRows || []) as Row[]).filter((o) => o.is_active && !o.hidden_by_reports && !filters.blocked.has(o.user_id)).map((o) => [o.id, o]));
+    const origins = new Map(((originRows || []) as Row[]).filter((o) => o.is_active && !o.hidden_by_reports && !filters.blocked.has(o.user_id) && (o.visibility || "public") === "public").map((o) => [o.id, o]));
     const allow = await regramAllowed(sb, [...new Set([...rows.map((p) => p.user_id), ...[...origins.values()].map((o) => o.user_id)])]);
     const media = (p: Row) => !!p.video_poster || (p.image_urls || []).length > 0;
     const shown = rows.flatMap((p) => {
@@ -84,7 +85,7 @@ export async function GET() {
         text: `${src.sponsor ? `협찬 · ${src.sponsor.partner_name || "입점 업체"} — ` : ""}${(origin ? p.content || origin.content : p.content) || ""}`.slice(0, 40),
         origin: origin ? { id: origin.id, author: origin.author_nickname || "익명" } : null,
         copyable: !!(src.meal_data?.plan || (src.meal_data?.foods && src.meal_data.foods.length)),
-        regram_ok: !!actor && src.user_id !== actor && p.user_id !== actor && allow.get(src.user_id) !== false && !regrammed.has(src.id),
+        regram_ok: !!actor && src.user_id !== actor && p.user_id !== actor && allow.get(src.user_id) !== false && !regrammed.has(src.id) && (src.visibility || "public") === "public",
         together: origin ? null : together.get(p.id) ?? null,
       }));
 

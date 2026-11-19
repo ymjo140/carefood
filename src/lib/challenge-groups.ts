@@ -50,7 +50,9 @@ export async function openGroup(sb: Sb, challengeId: string, actor: string, star
 }
 
 export type GroupRow = { id: string; challenge_id: string; host_id: string; code: string; start_on: string; max_members: number; member_count: number; created_at: string };
-export type ChallengeRow = { id: string; slug: string; title: string; rule: string; metric: ChallengeMetric; target: number; days: number; goal_days: number | null; is_active: boolean };
+export type ChallengeRow = { id: string; slug: string; title: string; rule: string; metric: ChallengeMetric; target: number; days: number; goal_days: number | null; is_active: boolean;
+  /** 'photo'(기본): 그날 인증 사진이 있어야 해낸 날 · 'none': 식단 기록만으로 */
+  proof?: "photo" | "none" | null };
 export type MemberRow = { challenge_id: string; user_id: string; started_on: string; joined_on: string | null; goal_days_eff: number | null; group_id: string | null; finished_runs: number; show_values: boolean; target_eff?: number | null };
 /** 참여한 사람의 열을 고를 때 쓰는 칸 */
 export const MEMBER_COLS = "challenge_id, user_id, started_on, joined_on, goal_days_eff, group_id, finished_runs, show_values, target_eff";
@@ -66,9 +68,12 @@ export function memberTarget(c: Pick<ChallengeRow, "metric" | "target">, m: Pick
   return c.metric === "kcal_band" && m?.target_eff ? Number(m.target_eff) : Number(c.target);
 }
 
-export function memberRun(c: ChallengeRow, g: Pick<GroupRow, "start_on"> | null, m: MemberRow, diary: DiaryRow[], today = todayKst()): RunProgress {
+/**
+ * proofs: 이 사람이 이 챌린지에 인증 사진을 올린 날 (lib/challenge-proofs proofDays). 사진 인증 챌린지인데 넘기지 않으면 사진 없는 것으로 본다.
+ */
+export function memberRun(c: ChallengeRow, g: Pick<GroupRow, "start_on"> | null, m: MemberRow, diary: DiaryRow[], today = todayKst(), proofs?: Set<string>): RunProgress {
   return runProgress(c.metric, memberTarget(c, m), c.days, m.started_on, diary.filter((d) => d.date >= m.started_on), today,
-    { from: g?.start_on, goal: m.goal_days_eff });
+    { from: g?.start_on, goal: m.goal_days_eff, proofs: c.proof === "none" ? null : proofs ?? new Set() });
 }
 
 /** 여러 사람의 기간 안 식단 기록 (진행표용) */

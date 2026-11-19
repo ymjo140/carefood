@@ -9,6 +9,7 @@ import { DIARY_COLS, type DiaryRow } from "@/lib/challenges";
 import { JOIN_MESSAGES, ensurePersonalTarget, memberRun, memberTarget, openGroup, startDate, type ChallengeRow, type GroupRow, type MemberRow, type StartChoice } from "@/lib/challenge-groups";
 import { asResult, selectAll } from "@/lib/supabase/all";
 import { checkPersonalKcal } from "@/lib/challenge-rules";
+import { proofDays, proofKey } from "@/lib/challenge-proofs";
 
 /**
  * GET /api/community/challenges — 공식 챌린지 + 내가 하는 사람이 만든 챌린지(kind user, 위에) + 지금 하는 사람 수 + (참여했으면) 내 진행과 내 묶음(초대 코드·인원)
@@ -25,7 +26,7 @@ type Member = MemberRow & { challenge_groups: Pick<GroupRow, "start_on"> | null 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function load(sb: any, actor: string | null) {
   const today = todayKst();
-  const { data: rows, error } = await sb.from("community_challenges").select("id, slug, title, rule, metric, target, days, goal_days, is_active, sort")
+  const { data: rows, error } = await sb.from("community_challenges").select("id, slug, title, rule, metric, target, days, goal_days, is_active, sort, proof, cover_url, how_to")
     .eq("is_active", true).eq("kind", "official").order("sort");
   if (error) throw new Error(error.message);
   const challenges = (rows || []) as (Row & { kind?: string; creator_id?: string | null; note?: string | null; visibility?: string })[];
@@ -34,7 +35,7 @@ async function load(sb: any, actor: string | null) {
   // 내가 하는 '사람이 만든' 챌린지도 목록 위에 (링크로만 들어가는 것이라 공식 목록에는 없다)
   const myUserIds = actor ? [...new Set(members.filter((m) => m.user_id === actor).map((m) => m.challenge_id))].filter((id) => !challenges.some((c) => c.id === id)) : [];
   if (myUserIds.length) {
-    const { data: ur, error: uErr } = await sb.from("community_challenges").select("id, slug, title, rule, metric, target, days, goal_days, is_active, sort, kind, creator_id, note, visibility")
+    const { data: ur, error: uErr } = await sb.from("community_challenges").select("id, slug, title, rule, metric, target, days, goal_days, is_active, sort, kind, creator_id, note, visibility, proof, cover_url, how_to")
       .in("id", myUserIds).eq("is_active", true);
     if (uErr) throw new Error(uErr.message);
     challenges.unshift(...((ur || []) as typeof challenges));
@@ -44,6 +45,7 @@ async function load(sb: any, actor: string | null) {
   const mine = actor ? members.filter((m) => m.user_id === actor) : [];
   let diary: DiaryRow[] = [];
   const groups = new Map<string, GroupRow>();
+  let proofs = new Map<string, Set<string>>();
   if (mine.length) {
     const from = mine.map((m) => m.started_on).sort()[0];
     const gids = mine.map((m) => m.group_id).filter(Boolean) as string[];
@@ -55,6 +57,7 @@ async function load(sb: any, actor: string | null) {
     if (g.error) throw new Error(g.error.message);
     diary = (d.data || []) as DiaryRow[];
     for (const r of (g.data || []) as GroupRow[]) groups.set(r.id, r);
+    proofs = await proofDays(sb, mine.map((m) => m.challenge_id), [actor!], from, today);
   }
 
   return challenges.map((c) => {
@@ -67,11 +70,12 @@ async function load(sb: any, actor: string | null) {
       id: c.id, slug: c.slug, title: c.title, rule: c.rule, metric: c.metric,
       target: c.metric === "kcal_band" ? (me ? memberTarget(c, me) : null) : Number(c.target), days: c.days,
       kind: c.kind === "user" ? "user" : c.kind === "season" ? "season" : "official", mine_created: !!actor && c.creator_id === actor, note: c.note ?? null,
+      proof: c.proof === "none" ? "none" : "photo", cover_url: (c as { cover_url?: string | null }).cover_url ?? null, how_to: (c as { how_to?: string | null }).how_to ?? null,
       visibility: c.kind === "user" && actor && c.creator_id === actor ? (c.visibility === "public" ? "public" : "link") : null,
       active_count: active.length,
       finished_count: finishedPeople,
       me: me ? {
-        ...memberRun(c, g, me, diary, today), finished_runs: me.finished_runs,
+        ...memberRun(c, g, me, diary, today, proofs.get(proofKey(c.id, actor!))), finished_runs: me.finished_runs,
         group: g ? { id: g.id, code: g.code, start_on: g.start_on, member_count: g.member_count, is_host: g.host_id === actor } : null,
       } : null,
     };
