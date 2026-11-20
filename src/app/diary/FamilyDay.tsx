@@ -316,7 +316,7 @@ function AskSheet({ open, onClose, person, missing, onSent }: { open: boolean; o
   );
 }
 
-type Pick = { key: string; kind: "menu" | "product"; ref: string; name: string; calories: number; protein_g: number; sodium_mg: number; price: number | null; sub: string };
+type Pick = { key: string; kind: "menu" | "product"; ref: string; name: string; calories: number; protein_g: number; sodium_mg: number | null; price: number | null; sub: string };
 
 /** 추천 보내기 — 상대 기준(알레르기·남은 양)으로 서버가 고른 후보 중 하나를 그 끼니 예정으로
  *  같이 먹기(together) — 두 사람 모두에게 맞는 후보를 상대 예정으로 보내고 내 예정에도 담는다 */
@@ -342,9 +342,9 @@ function SendSheet({ meal, together, onClose, person, onSent }: {
         if (!r.ok) throw new Error(d.error || String(r.status));
         if (my !== seq.current) return;
         const picks: Pick[] = [
-          ...(d.menus || []).map((m: { id: string; name: string; category: string; calories: number; protein_g: number; sodium_mg: number }) =>
+          ...(d.menus || []).map((m: { id: string; name: string; category: string; calories: number; protein_g: number; sodium_mg: number | null }) =>
             ({ key: `m-${m.id}`, kind: "menu", ref: m.id, name: m.name, calories: m.calories, protein_g: m.protein_g, sodium_mg: m.sodium_mg, price: null, sub: `집밥·외식 · ${m.category}` })),
-          ...(d.items || []).map((i: { id: string; name: string; calories: number; protein_g: number; sodium_mg: number; price: number | null }) =>
+          ...(d.items || []).map((i: { id: string; name: string; calories: number; protein_g: number; sodium_mg: number | null; price: number | null }) =>
             ({ key: `p-${i.id}`, kind: "product", ref: i.id, name: i.name, calories: i.calories, protein_g: i.protein_g, sodium_mg: i.sodium_mg, price: i.price, sub: "살 수 있는 제품" })),
         ];
         setState({ status: "done", picks, mine: d.mine ?? null });
@@ -402,7 +402,7 @@ function SendSheet({ meal, together, onClose, person, onSent }: {
                 <span className="flex items-center justify-between gap-3 w-full">
                   <span className="flex flex-col min-w-0">
                     <span className="text-label font-medium text-ink truncate">{p.name}</span>
-                    <span className="text-caption text-ink-2">{p.sub} · 단백질 <span className="num">{p.protein_g}</span>g · 나트륨 <span className="num">{p.sodium_mg.toLocaleString("ko-KR")}</span>mg{p.price != null && <> · <span className="num">{p.price.toLocaleString("ko-KR")}</span>원</>}</span>
+                    <span className="text-caption text-ink-2">{p.sub} · 단백질 <span className="num">{p.protein_g}</span>g{p.sodium_mg != null && <> · 나트륨 <span className="num">{p.sodium_mg.toLocaleString("ko-KR")}</span>mg</>}{p.price != null && <> · <span className="num">{p.price.toLocaleString("ko-KR")}</span>원</>}</span>
                   </span>
                   <Kcal value={p.calories} className="text-label shrink-0" />
                 </span>

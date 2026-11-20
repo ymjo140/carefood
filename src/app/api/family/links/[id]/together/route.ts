@@ -52,7 +52,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const prices = await loadPrices(sb, items.map((i) => i.id));
     return NextResponse.json({
       mine: { recorded: mine.recorded, planned: !!plan },
-      menus: menus.map((m) => ({ id: m.id, name: m.name, category: m.category, calories: Math.round(Number(m.calories) || 0), protein_g: Math.round(Number(m.protein_g) || 0), sodium_mg: Math.round(Number(m.sodium_mg) || 0) })),
+      menus: menus.map((m) => ({ id: m.id, name: m.name, category: m.category, calories: Math.round(Number(m.calories) || 0), protein_g: Math.round(Number(m.protein_g) || 0), sodium_mg: m.sodium_mg == null ? null : Math.round(Number(m.sodium_mg)) })),
       items: items.map((i) => {
         const ps = (prices[i.id] || []).filter((p) => p.price > 0);
         return { id: i.id, name: i.name, calories: i.calories, protein_g: Math.round(i.protein_g), sodium_mg: i.sodium_mg, price: ps.length ? Math.min(...ps.map((p) => p.price)) : null };

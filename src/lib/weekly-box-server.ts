@@ -326,7 +326,9 @@ export async function buildWeeklyBox(body: WeeklyBoxRequest, user_id: string | n
       let score = 0;
       const tags: string[] = p.functional_tags || [];
       const cal = p.calories || 0;
-      const sodium = p.sodium_mg || 0;
+      // 나트륨을 모르면 null — 0 으로 치면 '저나트륨' 점수를 받아 버린다 (아래 나트륨 점수는 아는 값에만)
+      const naKnown = p.sodium_mg != null && Number.isFinite(Number(p.sodium_mg));
+      const sodium = naKnown ? Number(p.sodium_mg) : Infinity;
       const sugar = p.sugar_g ?? 999;
       const protein = p.protein_g || 0;
       const fiber = p.fiber_g || 0;
@@ -399,7 +401,7 @@ export async function buildWeeklyBox(body: WeeklyBoxRequest, user_id: string | n
 
       /* ── D. 맛 선호 (0~8점) ── */
       if (tastes) {
-        if (tastes.salty >= 7 && sodium >= 800) score += 2;
+        if (tastes.salty >= 7 && naKnown && sodium >= 800) score += 2;
         else if (tastes.salty <= 3 && sodium <= 400) score += 4;   // 저염 선호 = 건강 시너지
         if (tastes.sweet <= 3 && sugar <= 3) score += 2;
         else if (tastes.sweet >= 7 && sugar >= 8) score += 2;

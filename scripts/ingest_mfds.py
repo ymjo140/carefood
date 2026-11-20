@@ -55,9 +55,10 @@ SUPABASE_KEY   = os.getenv("SUPABASE_KEY", "")   # service_role key
 # ─── data.go.kr API 설정 ────────────────────────────────
 BASE_URL = "https://apis.data.go.kr/1471000"
 # 서비스 버전 후보 (02가 현재 주력, 03은 최신)
+# 02 는 2026-11 기준 응답하지 않는다(HTTP 오류) — 03 이 가공식품(P)·음식(D)·원재료(R) 34.7만 개를 모두 준다
 SERVICE_CANDIDATES = [
-    ("FoodNtrCpntDbInfo02", "getFoodNtrCpntDbInq02"),
     ("FoodNtrCpntDbInfo03", "getFoodNtrCpntDbInq03"),
+    ("FoodNtrCpntDbInfo02", "getFoodNtrCpntDbInq02"),
 ]
 ACTIVE_ENDPOINT = None   # 런타임에 자동 탐지
 PAGE_SIZE = 500          # 한 페이지당 최대 건수 (API 제한: 500)
@@ -543,7 +544,8 @@ def transform_row(row: dict) -> dict:
 
     운영 데이터로 확인한 필드:
       AMT_NUM7    = 당류 (g)
-      AMT_NUM8    = 나트륨 (mg)
+      AMT_NUM8    = 식이섬유 (g)  ← 예전에 나트륨으로 잘못 읽었다
+      AMT_NUM13   = 나트륨 (mg)  (2026-11-20 Info03 전체로 확인)
     쓰지 않는 필드 (값이 맞지 않음 — 20261110_clear_misread_nutrients.sql):
       AMT_NUM2 (수분으로 보임) · AMT_NUM9 (칼슘으로 보임) · AMT_NUM11
       FOOD_CD     = 식품코드
@@ -619,9 +621,10 @@ def transform_row(row: dict) -> dict:
                             or row.get("NUTR_CONT4")),
 
         # 확인한 필드만 넣는다 (2026-11 운영 데이터로 확인: 우유 나트륨 50mg · 신라면 1,455mg · 당류 정상)
-        # 다른 번호로 넘어가는 대체(or AMT_NUM13 …)는 다른 성분이 들어갈 수 있어 쓰지 않는다
+        # 다른 번호로 넘어가는 대체는 다른 성분이 들어갈 수 있어 쓰지 않는다
         "sugar_g":          safe_numeric(row.get("AMT_NUM7") or row.get("NUTR_CONT5")),
-        "sodium_mg":        safe_numeric(row.get("AMT_NUM8") or row.get("NUTR_CONT6")),
+        # 나트륨은 AMT_NUM13 (2026-11-20 Info03 전체로 확인 — AMT_NUM8 은 식이섬유: 김밥 A8 1.4 · A13 307)
+        "sodium_mg":        safe_numeric(row.get("AMT_NUM13") or row.get("NUTR_CONT6")),
         # 넣지 않는 필드 — 이 API 번호로는 값이 맞지 않았다 (supabase/migrations/20261110_clear_misread_nutrients.sql)
         #   AMT_NUM2(수분으로 보임) · AMT_NUM9(칼슘으로 보임) · AMT_NUM11
         #   식이섬유·콜레스테롤·트랜스지방·포화지방은 scripts/enrich_mfds03.py 가 Info03 에서 채운다 → 여기서는 키를 아예 넣지 않아 덮어쓰지 않는다

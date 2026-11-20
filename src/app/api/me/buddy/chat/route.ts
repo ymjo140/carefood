@@ -81,9 +81,13 @@ async function candsFor(sb: Sb, meal: MealKey, focus: Focus, base: Base, rb: Awa
       .select("id, name, manufacturer, image_url, calories, protein_g, carbs_g, sugar_g, fat_g, sodium_mg, serving_size_g, nutrient_base_g, dish_category, taste_salty, taste_sweet, taste_fatty, taste_spicy, spicy_score")
       .eq("is_purchasable", true).is("nutrition_flag", null).is("rec_hold", null).gt("calories", 0)
       .gt("serving_size_g", 0).lte("serving_size_g", 350).not(o.col, "is", null);
-    if (meal !== "snack") q = q.in("dish_category", MEAL_DISH);
+    // 종류를 DB 에서 먼저 거른 뒤 자른다 (lib/next-picks 와 같은 이유 — 자른 뒤 거르면 후보가 거의 남지 않는다)
+    // 끼니 역할로도 거른다 (lib/next-picks 와 같은 기준) — 간식은 간식만, 한 끼는 원물 재료·양념·영양제·음료 빼기
+    q = meal !== "snack"
+      ? q.in("dish_category", MEAL_DISH).not("meal_role", "in", "(ingredient,condiment,supplement,drink)")
+      : q.eq("meal_role", "snack").in("dish_category", ["snack", "dairy", "side", "salad", "grill"]);
     if (focus.key === "light") q = q.gte("calories", 40);
-    const { data, error } = await q.order(o.col, { ascending: o.asc, nullsFirst: false }).limit(500);
+    const { data, error } = await q.order(o.col, { ascending: o.asc, nullsFirst: false }).limit(1000);
     if (error) throw new Error(error.message);
     rb.prods.set(key, (data || []) as ProdRow[]);
   }
