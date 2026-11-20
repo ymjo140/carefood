@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "@/components/ui/AppLink";
-import HomePersonalized from "@/components/HomePersonalized";
+import HomeMealRecs from "@/components/HomeMealRecs";
 import HomeTodayWidget from "@/components/HomeTodayWidget";
 import { Card, Icon, LinkButton, Skeleton } from "@/components/ui";
 import { categoryHref, HOME_CATEGORIES } from "@/lib/home-categories";
@@ -49,7 +49,7 @@ export default function HomeTop() {
       ) : hasProfile ? (
         <>
           <HomeTodayWidget />
-          <HomePersonalized />
+          <HomeMealRecs />
         </>
       ) : (
         <Card className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -62,8 +62,8 @@ export default function HomeTop() {
           <LinkButton href="/onboarding" className="sm:shrink-0">목표 알려 주기</LinkButton>
         </Card>
       )}
-      {/* 첫 방문: 프로필 없이도 볼 수 있는 한 끼 */}
-      {hasProfile === false && <HomePersonalized cold />}
+      {/* 첫 방문: 프로필 없이도 끼니별 추천 (목표가 없으면 하루 2,000kcal 기준) */}
+      {hasProfile === false && <HomeMealRecs />}
     </>
   );
 }

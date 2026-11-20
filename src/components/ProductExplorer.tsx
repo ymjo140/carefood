@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import Link from "@/components/ui/AppLink";
 import type { ProductWithPrices, TasteLevel, DishCategory } from "@/types/database";
 import { DISH_CATEGORY_LABELS } from "@/types/database";
+import { DISH_ROLE_LABEL } from "@/lib/home-meal";
 import { useFavorites } from "@/hooks/useFavorites";
 import { defaultServingG, scaleNutrient } from "@/lib/serving";
 import { platformLabel } from "@/lib/platforms";
@@ -514,6 +515,8 @@ function ProductCard({ product, isFavorite, onToggleFavorite }: {
 export default function ProductExplorer({ variant = "page" }: { variant?: "page" | "home" }) {
   const { isFavorite, toggleFavorite } = useFavorites();
   const [kind, setKind] = useState<"meal_service" | null>(null);
+  // 홈 카테고리 메인 요리·밥·국·찌개·반찬 (products.dish_role)
+  const [role, setRole] = useState<string | null>(null);
   const seen = useImpressions("product_list");
   const [error, setError] = useState(false);
   const [autoFocus, setAutoFocus] = useState(false);
@@ -555,6 +558,8 @@ export default function ProductExplorer({ variant = "page" }: { variant?: "page"
       const proteinMin = Number(sp.get("protein_min") || 0);
       if (proteinMin > 0) setNutrition((n) => ({ ...n, protein_min: proteinMin }));
       if (sp.get("kind") === "meal_service") setKind("meal_service");
+      const r = sp.get("role");
+      if (r && r in DISH_ROLE_LABEL) setRole(r);
       setAutoFocus(sp.has("focus"));
     }
     setProfileLoaded(true);
@@ -582,6 +587,7 @@ export default function ProductExplorer({ variant = "page" }: { variant?: "page"
       if (selectedIngredients.length > 0) params.set("tags", selectedIngredients.join(","));
       if (hasPriceOnly) params.set("hasPrice", "1");
       if (kind) params.set("kind", kind);
+      if (role) params.set("role", role);
       if (priceMin > 0) params.set("price_min", String(priceMin));
       if (priceMax > 0) params.set("price_max", String(priceMax));
       if (nutrition.protein_min > 0) params.set("protein_min", String(nutrition.protein_min));
@@ -626,7 +632,7 @@ export default function ProductExplorer({ variant = "page" }: { variant?: "page"
     } finally {
       setLoading(false);
     }
-  }, [tastes, search, selectedCategories, selectedPurposes, selectedIngredients, hasPriceOnly, kind, priceMin, priceMax, nutrition, sortBy, page, profile]);
+  }, [tastes, search, selectedCategories, selectedPurposes, selectedIngredients, hasPriceOnly, kind, priceMin, priceMax, nutrition, sortBy, page, profile, role]);
 
   useEffect(() => { if (profileLoaded) fetchProducts(); }, [profileLoaded, fetchProducts]);
 
@@ -654,12 +660,12 @@ export default function ProductExplorer({ variant = "page" }: { variant?: "page"
     setTastes({ salty: 0, sweet: 0, spicy: 0, fatty: 0 });
     setSearch(""); setSearchInput("");
     setSelectedCategories([]); setSelectedPurposes([]); setSelectedIngredients([]);
-    setPriceMin(0); setPriceMax(0); setKind(null);
+    setPriceMin(0); setPriceMax(0); setKind(null); setRole(null);
     setNutrition(INITIAL_NUTRITION); setPage(1);
   };
 
   const activeFilterCount = selectedCategories.length + selectedPurposes.length + selectedIngredients.length
-    + (kind ? 1 : 0)
+    + (kind ? 1 : 0) + (role ? 1 : 0)
     + (priceMin > 0 || priceMax > 0 ? 1 : 0)
     + Object.values(nutrition).filter(v => v > 0).length
     + Object.values(tastes).filter(v => v > 0).length;
@@ -714,6 +720,11 @@ export default function ProductExplorer({ variant = "page" }: { variant?: "page"
         {kind && (
           <Chip size="sm" selected className="shrink-0" aria-label="건강식단 서비스 조건 빼기" onClick={() => { setKind(null); setPage(1); }}>
             건강식단 서비스 <Icon name="close" size={14} />
+          </Chip>
+        )}
+        {role && (
+          <Chip size="sm" selected className="shrink-0" aria-label={`${DISH_ROLE_LABEL[role]} 조건 빼기`} onClick={() => { setRole(null); setPage(1); }}>
+            {DISH_ROLE_LABEL[role]} <Icon name="close" size={14} />
           </Chip>
         )}
         <Tabs label="정렬" className="flex-1 min-w-0" value={sortBy}
