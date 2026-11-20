@@ -86,14 +86,14 @@ async function candsFor(sb: Sb, meal: MealKey, focus: Focus, base: Base, rb: Awa
     // 끼니 역할로도 거른다 (lib/next-picks 와 같은 기준) — 간식은 간식만, 한 끼는 원물 재료·양념·영양제·음료 빼기
     q = meal !== "snack"
       ? q.in("dish_category", MEAL_DISH).not("meal_role", "in", "(ingredient,condiment,supplement,drink)")
-      : q.eq("meal_role", "snack").in("dish_category", ["snack", "dairy", "side", "salad", "grill"]);
+      : q.or("meal_role.eq.snack,meal_times.cs.{snack}").in("dish_category", ["snack", "dairy", "side", "salad", "grill"]); // 구운란·소시지처럼 간식도 되는 반찬 포함
     if (focus.key === "light") q = q.gte("calories", 40);
     const { data, error } = await q.order(o.col, { ascending: o.asc, nullsFirst: false }).limit(1000);
     if (error) throw new Error(error.message);
     rb.prods.set(key, (data || []) as ProdRow[]);
   }
   const products: Cand[] = rb.prods.get(key)!
-    .filter((r) => meal !== "snack" || !NOT_SNACK.includes(r.dish_category || ""))
+    .filter((r) => meal !== "snack" || (!NOT_SNACK.includes(r.dish_category || "") && !["rice", "soup", "ingredient", "condiment"].includes(String(r.dish_role || ""))))
     .map((raw) => {
       const r = perServing(raw);
       // 맛 단계는 100g 기준 값으로 잰다 (perServing 전)

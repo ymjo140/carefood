@@ -27,3 +27,17 @@ alter table public.common_foods add column if not exists dish_role text check (d
 --   update products set dish_role = 'main' where dish_role = 'side' and name ~ '수제비$';
 --   update products set dish_role = 'main' where dish_role = 'soup'
 --     and name ~ '그라탕|떡국|만둣국|만두국|떡만두|수제비|칼국수|국수|짬뽕|우동|라면|쌀국수';  -- 그것만으로 한 끼 (29개)
+
+-- 사용자가 확인한 것 (같은 날 17시)
+--   역할에 condiment(소스·육수) 추가 — 육수 한포·농축액·냉면 육수 18개는 ingredient → condiment
+alter table public.products drop constraint if exists products_dish_role_check;
+alter table public.products add constraint products_dish_role_check check (dish_role in ('main', 'rice', 'soup', 'side', 'snack', 'ingredient', 'condiment'));
+alter table public.common_foods drop constraint if exists common_foods_dish_role_check;
+alter table public.common_foods add constraint common_foods_dish_role_check check (dish_role in ('main', 'rice', 'soup', 'side', 'snack', 'ingredient', 'condiment'));
+--   update products set dish_role = 'condiment' where dish_role = 'ingredient' and name ~ '육수';
+--   update products set meal_times = null, breakfast_pref = null where dish_role in ('ingredient', 'condiment');
+--   구운란·반숙란·훈제란·참숯란·초란·맥반석 계란, 부어스트·닭꼬치·소시지·후랑크·프랑크·비엔나 → 반찬 + 간식도 (129개, 볶음밥·김밥·도시락·찌개 등 음식 이름에 든 것은 그대로)
+--   update products set dish_role = 'side', meal_times = array['breakfast','lunch','dinner','snack'] where dish_role is not null
+--     and (name ~ '맥반석\s?(구운)?\s?(란|계란|달걀|유정란)|구운\s?(란|계란|달걀|유정란)|반숙란|훈제란|참숯란|초란|구운란' or name ~ '부어스트|닭꼬치|소시지|후랑크|프랑크|비엔나')
+--     and name !~ '볶음밥|김밥|도시락|찌개|핫도그$|덮밥|피자|파스타|떡볶이|버거|샌드위치|토스트|스테이크|닭꼬치맛|볶음$|전골|탕$|라면|면$';
+--   훈제 삼겹·목살·바비큐, 안심까스·롤까스·텐더 13개 → main · 미듬애부각(반찬용) → side · 달곰마토(스테비아토마토) → snack(간식만)

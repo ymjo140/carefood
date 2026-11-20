@@ -33,7 +33,8 @@ export function mealTimeBonus(name: string | null | undefined, meal: string) {
  * DB 칸이 있으면 그것을 먼저 (products·common_foods 의 meal_times · breakfast_pref · dish_role, 마이그레이션 20261120c).
  *   meal_times: 국민건강영양조사 2024 식품섭취조사의 끼니별 섭취 비율(아침 비중 8% 미만은 아침 빼기, 19% 이상은 아침 우선)
  *               + 조사에 없는 음식은 정해 둔 묶음 규칙. 칸이 비어 있으면 위의 이름 규칙으로.
- *   dish_role:  main(그것만으로 한 끼) · rice(밥) · soup(국·찌개) · side(반찬) · snack(간식) · ingredient(재료 — 권하지 않는다)
+ *   dish_role:  main(그것만으로 한 끼) · rice(밥) · soup(국·찌개) · side(반찬) · snack(간식) · ingredient(원재료) · condiment(소스·육수) — 재료·소스는 권하지 않는다
+ *   반찬이면서 간식도 되는 것(구운란·반숙란·소시지·부어스트·닭꼬치)은 역할 side + meal_times 에 snack — 간식 자리에도 나온다
  */
 export type MealClass = { name?: string | null; meal_times?: string[] | null; breakfast_pref?: boolean | null; dish_role?: string | null };
 
@@ -49,5 +50,5 @@ export function timeBonus(x: MealClass, meal: string) {
   return mealTimeBonus(x.name, meal);
 }
 
-/** 혼자서 한 끼로 권해도 되는가 — 밥·국·반찬·간식·재료는 한 끼 하나로 권하지 않는다 (역할을 모르면 지금처럼) */
+/** 혼자서 한 끼로 권해도 되는가 — 밥·국·반찬·간식·재료·소스는 한 끼 하나로 권하지 않는다 (역할을 모르면 지금처럼) */
 export const isMain = (x: MealClass) => !x.dish_role || x.dish_role === "main";

@@ -40,6 +40,8 @@ export const PICK_MEALS = new Set(["breakfast", "lunch", "dinner", "snack"]);
 const MEAL_CATS = ["rice", "soup", "noodle", "grill", "salad", "set", "bread", "side"];
 const NOT_SNACK = ["supplement", "powder", "sauce", "ingredient", "seafood", "rice", "soup", "noodle", "set"];
 const NOT_MEAL_ROLES = ["ingredient", "condiment", "supplement", "drink"];
+// 간식으로 권하지 않는 역할 (products.dish_role) — 밥·국·재료·소스·육수
+const NOT_SNACK_ROLES = ["rice", "soup", "ingredient", "condiment"];
 // 간식으로 권하는 제품 종류 — 분류가 없는 것(생선 원물이 많다)·빵 재료·면은 뺀다
 const SNACK_PRODUCT_CATS = ["snack", "dairy", "side", "salad", "grill"];
 
@@ -85,7 +87,7 @@ export async function loadNextPicks(sb: Sb, person: string | string[], o: { meal
 
   const picks = ((rows || []) as Row[])
     .filter((r) => !exclude.has(r.id))
-    .filter((r) => meal === "snack" ? !NOT_SNACK.includes(r.dish_category || "") : MEAL_CATS.includes(r.dish_category || ""))
+    .filter((r) => meal === "snack" ? !NOT_SNACK.includes(r.dish_category || "") && !NOT_SNACK_ROLES.includes(r.dish_role || "") : MEAL_CATS.includes(r.dish_category || ""))
     .filter((r) => !allergyWords.some((w) => (r.name || "").includes(w)))
     .filter((r) => fitsMeal(r, meal))
     .map((r) => perServing(r))
@@ -186,7 +188,8 @@ function candidateQuery(sb: Sb, meal: MealKey) {
   // 끼니 역할(products.meal_role, scripts/build_taste_profile.py)로도 거른다 — 간식은 간식으로 먹는 것만,
   //   한 끼는 원물 재료·양념·영양제·음료를 뺀다 (예: 간식 자리에 생선 원물·콜라겐 분말이 오던 것)
   q = meal === "snack"
-    ? q.eq("meal_role", "snack").in("dish_category", SNACK_PRODUCT_CATS)
+    // 간식: 지금 끼니 역할이 간식이거나, 끼니 때 칸이 간식을 열어 둔 것(구운란·소시지·닭꼬치처럼 반찬이면서 간식도 되는 것)
+    ? q.or("meal_role.eq.snack,meal_times.cs.{snack}").in("dish_category", SNACK_PRODUCT_CATS)
     : q.in("dish_category", MEAL_CATS).not("meal_role", "in", `(${NOT_MEAL_ROLES.join(",")})`)
       // 하나로 권하는 것은 메인만 (밥·국·반찬은 한 상으로) — 역할을 아직 모르면(null) 지금처럼
       .or("dish_role.is.null,dish_role.eq.main");
