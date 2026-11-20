@@ -17,6 +17,7 @@ import { buildWeeklyBox } from "@/lib/weekly-box-server";
 import { cleanTastes, tasteFit, tasteReason } from "@/lib/recommend/taste";
 import { ALLERGEN_KEYWORDS } from "@/lib/recommend/constants";
 import { addDays, kstDayStartIso, kstHour } from "@/lib/day";
+import { loadSignals, logRec } from "@/lib/rec-events";
 import { CRISIS_REPLY, QUICK_SAYS, nextSlot, reactPrompt, riskOf, ruleReply, systemPrompt, type ChatCtx } from "@/lib/buddy-chat";
 import { aiReady, askBuddy, type Turn } from "@/lib/buddy-ai";
 import { dueNow, suppNames, takenFromText } from "@/lib/supplements";
@@ -78,26 +79,27 @@ async function candsFor(sb: Sb, meal: MealKey, focus: Focus, base: Base, rb: Awa
   const key = `${meal === "snack" ? "snack" : "meal"}:${focus.key}`;
   if (!rb.prods.has(key)) {
     let q = sb.from("products")
-      .select("id, name, manufacturer, image_url, calories, protein_g, carbs_g, sugar_g, fat_g, sodium_mg, serving_size_g, nutrient_base_g, dish_category, taste_salty, taste_sweet, taste_fatty, taste_spicy, spicy_score")
+      .select("id, name, manufacturer, image_url, calories, protein_g, carbs_g, sugar_g, fat_g, sodium_mg, serving_size_g, nutrient_base_g, dish_category, taste_salty, taste_sweet, taste_fatty, taste_spicy, spicy_score, meal_times, breakfast_pref, dish_role")
       .eq("is_purchasable", true).is("nutrition_flag", null).is("rec_hold", null).gt("calories", 0)
       .gt("serving_size_g", 0).lte("serving_size_g", 350).not(o.col, "is", null);
     // 종류를 DB 에서 먼저 거른 뒤 자른다 (lib/next-picks 와 같은 이유 — 자른 뒤 거르면 후보가 거의 남지 않는다)
     // 끼니 역할로도 거른다 (lib/next-picks 와 같은 기준) — 간식은 간식만, 한 끼는 원물 재료·양념·영양제·음료 빼기
     q = meal !== "snack"
       ? q.in("dish_category", MEAL_DISH).not("meal_role", "in", "(ingredient,condiment,supplement,drink)")
-      : q.eq("meal_role", "snack").in("dish_category", ["snack", "dairy", "side", "salad", "grill"]);
+      : q.or("meal_role.eq.snack,meal_times.cs.{snack}").in("dish_category", ["snack", "dairy", "side", "salad", "grill"]); // 구운란·소시지처럼 간식도 되는 반찬 포함
     if (focus.key === "light") q = q.gte("calories", 40);
     const { data, error } = await q.order(o.col, { ascending: o.asc, nullsFirst: false }).limit(1000);
     if (error) throw new Error(error.message);
     rb.prods.set(key, (data || []) as ProdRow[]);
   }
   const products: Cand[] = rb.prods.get(key)!
-    .filter((r) => meal !== "snack" || !NOT_SNACK.includes(r.dish_category || ""))
+    .filter((r) => meal !== "snack" || (!NOT_SNACK.includes(r.dish_category || "") && !["rice", "soup", "ingredient", "condiment"].includes(String(r.dish_role || ""))))
     .map((raw) => {
       const r = perServing(raw);
       // 맛 단계는 100g 기준 값으로 잰다 (perServing 전)
       return { kind: "product" as const, id: r.id, name: r.name, maker: r.manufacturer, image: r.image_url, category: r.dish_category,
-        calories: r.calories, protein_g: r.protein_g, carbs_g: r.carbs_g, sugar_g: r.sugar_g, sodium_mg: r.sodium_mg, ...rb.fit(raw) };
+        calories: r.calories, protein_g: r.protein_g, carbs_g: r.carbs_g, sugar_g: r.sugar_g, sodium_mg: r.sodium_mg, ...rb.fit(raw),
+        meal_times: raw.meal_times as string[] | null, breakfast_pref: raw.breakfast_pref as boolean | null, dish_role: raw.dish_role as string | null };
     });
   const cats = meal === "snack" ? SNACK_CATS : MEAL_CATS;
   const menus: Cand[] = base.foods.filter((f) => cats.has(f.category)).map((f) => {
@@ -106,6 +108,7 @@ async function candsFor(sb: Sb, meal: MealKey, focus: Focus, base: Base, rb: Awa
     return {
       kind: "menu" as const, id: f.id, name: f.name, maker: null, image: null, category: f.category,
       calories: f.calories, protein_g: f.protein_g, carbs_g: f.carbs_g, sugar_g: f.sugar_g, sodium_mg: f.sodium_mg,
+      meal_times: f.meal_times, breakfast_pref: f.breakfast_pref, dish_role: f.dish_role,
       ...rb.fit({ sodium_mg: per100(f.sodium_mg), sugar_g: per100(f.sugar_g), fat_g: per100(f.fat_g) }),
     };
   });
@@ -124,13 +127,14 @@ async function loadRecs(sb: Sb, actor: string, text: string, t: TodayMood, base:
   const prof = base.profile;
   const focus = focusOf(text, prof);
   const named = mealOfText(text);
-  const rb = await recBase(sb, actor, t, base);
+  const [rb, signals] = await Promise.all([recBase(sb, actor, t, base), loadSignals(sb, actor, addDays(t.today, -30))]);
   const opts = (shown: string[]) => ({ today: t.today, recent: rb.recent, shown, vegetarian: prof?.diet_type === "vegetarian" });
   if (!isDayAsk(text, !!named)) {
     const meal: MealKey = named ?? base.slot.meal;
     const b = budgetOf(t, meal, meal === base.slot.meal ? base.slot.mainLeft : Math.max(1, base.slot.mainLeft));
-    const picks = rankRecs(await candsFor(sb, meal, focus, base, rb), focus.key, { meal, ...b, avoid: base.avoid },
+    const picks = rankRecs(await candsFor(sb, meal, focus, base, rb), focus.key, { meal, ...b, avoid: base.avoid, signals },
       `${actor}:${t.today}:${text}`, 3, opts(rb.shown));
+    await logShown(sb, actor, t.today, picks.map((p) => ({ ...p, meal })));
     return { kind: "meal" as const, focus, meal, picks, avoided: avoidedNote(rb.recent, meal, t.today) };
   }
   // 오늘 하루 — 끼니끼리 같은 것을 권하지 않게 고른 것을 쌓아 간다
@@ -140,12 +144,17 @@ async function loadRecs(sb: Sb, actor: string, text: string, t: TodayMood, base:
   const shown = [...rb.shown];
   for (const meal of meals) {
     const b = budgetOf(t, meal, mainLeft);
-    const got = rankRecs(await candsFor(sb, meal, focus, base, rb), focus.key, { meal, ...b, avoid: base.avoid },
+    const got = rankRecs(await candsFor(sb, meal, focus, base, rb), focus.key, { meal, ...b, avoid: base.avoid, signals },
       `${actor}:${t.today}:${text}:${meal}`, 2, opts([...shown, ...picks.map((p) => p.id)]));
     picks.push(...got.map((p) => ({ ...p, slot: { day: null, meal } })));
   }
+  await logShown(sb, actor, t.today, picks.map((p) => ({ ...p, meal: p.slot?.meal ?? meals[0] })));
   return { kind: "day" as const, focus, meal: meals[0], picks, avoided: null };
 }
+
+/** 대화에서 권한 것 — 반응 기록(rec_events, shown). 기록하면 recorded 로 이어진다 (lib/rec-events) */
+const logShown = (sb: Sb, actor: string, day: string, picks: { kind: string; id: string; name: string; meal: string }[]) =>
+  logRec(sb, picks.map((p) => ({ user_id: actor, surface: "chat" as const, item_key: p.kind === "product" ? p.id : `menu:${p.name}`, meal: p.meal, day, action: "shown" as const })));
 
 /** 일주일 — 식단 탭 '추천으로 채우기'와 같은 7일 짜기. 내 목표·질환 관심·알레르기·입맛은 서버 프로필에서 (AI 에는 보내지 않는다) */
 async function loadWeek(sb: Sb, actor: string, base: Base) {
@@ -175,7 +184,7 @@ async function loadCtx(sb: Sb, actor: string, t: TodayMood, access: Access, budd
   const [dRes, pRes, fRes] = await Promise.all([
     sb.from("meal_diary").select("id, meal_type, food_name, created_at").eq("user_id", actor).eq("date", t.today).order("created_at", { ascending: true }).limit(40),
     sb.from("user_profiles").select("allergies, goals, conditions, concerns, diet_type, taste_salty, taste_sweet, taste_fatty, taste_spicy").eq("user_id", actor).maybeSingle(),
-    sb.from("common_foods").select("id, name, category, serving_desc, serving_size_g, calories, protein_g, carbs_g, fat_g, sodium_mg, sugar_g"),
+    sb.from("common_foods").select("id, name, category, serving_desc, serving_size_g, calories, protein_g, carbs_g, fat_g, sodium_mg, sugar_g, meal_times, breakfast_pref, dish_role"),
   ]);
   if (dRes.error) throw new Error(dRes.error.message);
   if (pRes.error) throw new Error(pRes.error.message);

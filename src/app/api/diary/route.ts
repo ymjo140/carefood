@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { limitRequest } from "@/lib/rate-limit";
-import { isDay, todayKst } from "@/lib/day";
+import { addDays, isDay, todayKst } from "@/lib/day";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { getActorId, noActor } from "@/lib/actor-server";
 import { DIARY_MEALS, MULTS, NUTRIENTS, givenNutrients, gramsOf, productNutrients, round, type Nutrients } from "@/lib/diary-values";
 import { photoTokenOk } from "@/lib/photo-token";
+import { markRecorded } from "@/lib/rec-events";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -172,6 +173,9 @@ export async function POST(req: NextRequest) {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+  // 최근 3일 안에 권했던 음식을 기록했으면 반응 기록에 이어 붙인다 (lib/rec-events — 추천이 맞았는지 재고, 다음 추천 점수에 쓴다)
+  const day = isDay(body.date) ? body.date : todayKst();
+  await markRecorded(sb, user_id, [product_id || "", `menu:${food_name}`], day, addDays(day, -3));
 
   return NextResponse.json({ success: true, id: data.id });
 }

@@ -32,7 +32,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     if (!l) return NextResponse.json({ error: "연결을 찾지 못했어요" }, { status: 404 });
     const owner = l.owner_id as string;
     const budget = await personMealBudget(sb, owner, meal, today);
-    const { menus, items } = await loadNextPicks(sb, owner, { meal, kcal: budget.kcal, protein: budget.protein, sodium: budget.sodium, menus: 3, seed: seedOf(owner, today, meal) });
+    const { menus, items } = await loadNextPicks(sb, owner, { meal, kcal: budget.kcal, protein: budget.protein, sodium: budget.sodium, sodiumCap: budget.sodiumCap, menus: 3, seed: seedOf(owner, today, meal) });
     const prices = await loadPrices(sb, items.map((i) => i.id));
     return NextResponse.json({
       menus: menus.map((m) => ({ id: m.id, name: m.name, category: m.category, serving_desc: m.serving_desc, calories: Math.round(Number(m.calories) || 0), protein_g: Math.round(Number(m.protein_g) || 0), sodium_mg: m.sodium_mg == null ? null : Math.round(Number(m.sodium_mg)) })),

@@ -1,6 +1,6 @@
 /** 추천 잣대 (lib/rec-fit) · 다음 끼니 제품 점수 (lib/next-picks pickScore) · 대표 메뉴 (lib/menu-pick) — 몫에 맞는 것이 먼저 */
 import { describe, expect, it } from "vitest";
-import { budgetFit, known, sodiumTerm } from "@/lib/rec-fit";
+import { budgetFit, known, sodiumCap, sodiumTerm, underCap } from "@/lib/rec-fit";
 import { pickScore } from "@/lib/next-picks";
 import { menuFacts, pickMenus, type Menu } from "@/lib/menu-pick";
 
@@ -18,12 +18,29 @@ describe("몫 맞춤", () => {
   });
 });
 
-describe("나트륨은 모르면 모름", () => {
-  it("몫 안 +0.3 · 넘으면 −1 · 모르면 0 · 몫이 없으면 보지 않음", () => {
-    expect(sodiumTerm(400, 800)).toBe(0.3);
-    expect(sodiumTerm(900, 800)).toBe(-1);
-    expect(sodiumTerm(null, 800)).toBe(0);
+describe("나트륨은 하루 기준 · 모르면 모름", () => {
+  it("몫 안 +0.3 · 몫~상한은 넘은 만큼 0→−1.5 · 상한 밖 −3 · 모르면 0 · 몫이 없으면 보지 않음", () => {
+    expect(sodiumTerm(400, 800, 1200)).toBe(0.3);
+    expect(sodiumTerm(1000, 800, 1200)).toBeCloseTo(-0.75);
+    expect(sodiumTerm(1200, 800, 1200)).toBeCloseTo(-1.5);
+    expect(sodiumTerm(1300, 800, 1200)).toBe(-3);
+    expect(sodiumTerm(null, 800, 1200)).toBe(0);
     expect(sodiumTerm(900, 0)).toBe(0);
+  });
+  it("상한 = 남은 나트륨 − 이후 끼니마다 400mg (몫보다 작지 않게) · 간식은 500mg 까지", () => {
+    expect(sodiumCap({ meal: "breakfast", remainSodium: 2000, share: 667, mainLeft: 3 })).toBe(1200);
+    expect(sodiumCap({ meal: "dinner", remainSodium: 900, share: 900, mainLeft: 1 })).toBe(900);
+    expect(sodiumCap({ meal: "lunch", remainSodium: 700, share: 350, mainLeft: 2 })).toBe(350);
+    expect(sodiumCap({ meal: "snack", remainSodium: 2000, share: 1000, mainLeft: 2 })).toBe(500);
+  });
+  it("한식 한 끼(나트륨 1,000mg)는 아침 몫 667mg 을 넘어도 후보에 남는다 — 하루 상한 1,200mg 안", () => {
+    expect(underCap(1000, 667, 1200)).toBe(true);
+    expect(underCap(1300, 667, 1200)).toBe(false);
+    expect(underCap(null, 667, 1200)).toBe(true);
+  });
+  it("몫에 맞는 짠 한 끼(650kcal·1,000mg)가 몫에 한참 못 미치는 싱거운 것(380kcal·550mg)보다 먼저", () => {
+    const b = { kcal: 667, protein: 27, sodium: 667, sodiumCap: 1200 };
+    expect(pickScore({ calories: 650, protein_g: 28, sodium_mg: 1000 }, b)).toBeGreaterThan(pickScore({ calories: 380, protein_g: 30, sodium_mg: 550 }, b));
   });
   it("known: 빈 값은 null, 0 은 0", () => {
     expect(known(null)).toBeNull();

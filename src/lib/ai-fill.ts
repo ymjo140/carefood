@@ -1,12 +1,13 @@
 /**
  * 식단 탭 빈 끼니의 'AI 추천' — 계산만 (DB 없이, 시험: tests/ai-fill.test.ts). 서버는 /api/diary/ai-fill.
  *  - 그날 목표에서 이미 기록한 것 + 다른 끼니에 담아 둔 예정을 빼고, 아직 비어 있는 끼니(이 끼니 포함)로 나눠 이 끼니 몫을 정한다.
- *  - 후보는 '다음 끼니'와 같은 규칙(lib/next-picks: 대표 메뉴 + 살 수 있는 제품)에서 하나 — 메뉴와 제품을 번갈아 보고, 이미 권했던 것(skip)은 건너뛴다.
+ *  - 후보는 '다음 끼니'와 같은 규칙(lib/next-picks: 대표 메뉴 + 살 수 있는 메인 제품 + 한 상(밥·국·반찬))에서 하나 — 같은 점수로 한 줄에 세워 높은 것부터,
+ *    이미 권했던 것(skip)은 건너뛴다. 최고 점수와 0.5점 안쪽(4개까지)은 날마다 시작점을 돌린다(매일 같은 것만 나오지 않게).
  *  - 채운 것은 그날 그 끼니의 예정(planned_meals, plan_title "AI 추천")으로 담는다 — 먹었다는 기록이 아니다. 먹은 뒤 '계획대로 기록하기'.
  *  순서는 영양 기준뿐 — 광고비로 바꾸지 않는다. "성분 정보 + 통계적 매칭" — 처방이 아니다.
  */
 import { mealBudget, type MealKey, type Menu } from "@/lib/menu-pick";
-import type { PickItem } from "@/lib/next-picks";
+import type { PickCombo, PickItem } from "@/lib/next-picks";
 import type { PlanFood } from "@/lib/weekly-plan";
 
 export const AI_PLAN_TITLE = "AI 추천";
@@ -37,31 +38,44 @@ export function fillBudget(meal: MealKey, goals: Goals, rows: DayRow[], plans: D
   return b.kcal >= 120 ? b : { ...b, kcal: floor };
 }
 
-export type FillPick = { food: PlanFood; facts: string };
+export type FillPick = { foods: PlanFood[]; facts: string };
 const r1 = (v: number | null | undefined) => (v == null || !Number.isFinite(Number(v)) ? undefined : Math.round(Number(v) * 10) / 10);
 
-/** 하나 고르기 — 메뉴·제품을 번갈아(메뉴 먼저) 보고 skip 에 든 것은 건너뛴다. 다 건너뛰면 처음 것으로 돌아간다 */
-export function pickOne(menus: Menu[], items: PickItem[], skip: string[] = []): FillPick | null {
-  const order: ({ kind: "menu"; m: Menu } | { kind: "product"; p: PickItem })[] = [];
-  for (let i = 0; i < Math.max(menus.length, items.length); i++) {
+type Slot = { kind: "menu"; m: Menu } | { kind: "product"; p: PickItem } | { kind: "combo"; c: PickCombo };
+
+const productFood = (p: PickItem): PlanFood => ({ product_id: p.id, name: p.name, calories: r1(p.calories), protein_g: r1(p.protein_g), sodium_mg: r1(p.sodium_mg), type: "product" });
+
+/** 하나 고르기 — 점수(menuScore·PickItem.score·PickCombo.score)가 있으면 메뉴·제품·한 상을 한 줄로 세워 높은 것부터, 없으면 번갈아(메뉴 먼저).
+ *  skip 에 든 것은 건너뛰고(한 상은 국·찌개로 가린다 — 밥은 여러 상이 같이 쓴다), 다 건너뛰면 처음 것으로 돌아간다 */
+export function pickOne(menus: Menu[], items: PickItem[], skip: string[] = [], menuScore?: (m: Menu) => number, seed = 0, combos: PickCombo[] = []): FillPick | null {
+  let order: Slot[] = [];
+  for (let i = 0; i < Math.max(menus.length, items.length, combos.length); i++) {
     if (menus[i]) order.push({ kind: "menu", m: menus[i] });
     if (items[i]) order.push({ kind: "product", p: items[i] });
+    if (combos[i]) order.push({ kind: "combo", c: combos[i] });
   }
   if (!order.length) return null;
+  if (menuScore) {
+    const sc = (x: Slot) => (x.kind === "menu" ? menuScore(x.m) : x.kind === "product" ? x.p.score ?? 0 : x.c.score);
+    order = order.map((x, i) => ({ x, i, s: sc(x) })).sort((a, z) => z.s - a.s || a.i - z.i).map((o) => o.x);
+    const best = sc(order[0]);
+    const near = order.slice(0, 4).filter((x) => sc(x) >= best - 0.5).length;
+    const start = near > 1 ? Math.abs(seed) % near : 0;
+    order = [...order.slice(start, near), ...order.slice(0, start), ...order.slice(near)];
+  }
   const seen = new Set(skip);
-  const idOf = (x: (typeof order)[number]) => (x.kind === "menu" ? `menu:${x.m.name}` : x.p.id);
+  const idOf = (x: Slot) => (x.kind === "menu" ? `menu:${x.m.name}` : x.kind === "product" ? x.p.id : (x.c.foods.find((f) => f.role === "soup") ?? x.c.foods[0]).id);
   const hit = order.find((x) => !seen.has(idOf(x))) ?? order[0];
-  if (hit.kind === "product") {
-    const p = hit.p;
-    return {
-      food: { product_id: p.id, name: p.name, calories: r1(p.calories), protein_g: r1(p.protein_g), sodium_mg: r1(p.sodium_mg), type: "product" },
-      facts: factLine(p.calories, p.protein_g),
-    };
+  if (hit.kind === "product") return { foods: [productFood(hit.p)], facts: factLine(hit.p.calories, hit.p.protein_g) };
+  if (hit.kind === "combo") {
+    const fs = hit.c.foods;
+    const kcal = fs.reduce((a, f) => a + (f.calories || 0), 0), protein = fs.reduce((a, f) => a + (f.protein_g || 0), 0);
+    return { foods: fs.map(productFood), facts: `${fs.length === 3 ? "밥·국·반찬" : "밥·국"} ${fs.length}가지 · ${factLine(kcal, protein)}` };
   }
   const m = hit.m;
   return {
     // 대표 메뉴는 제품 DB 에 없다 — 이름과 대표 1인분 값을 담아 둔다 (기록할 때 이 값으로)
-    food: { name: m.name, calories: r1(m.calories), protein_g: r1(m.protein_g), carbs_g: r1(m.carbs_g), fat_g: r1(m.fat_g), sodium_mg: r1(m.sodium_mg) },
+    foods: [{ name: m.name, calories: r1(m.calories), protein_g: r1(m.protein_g), carbs_g: r1(m.carbs_g), fat_g: r1(m.fat_g), sodium_mg: r1(m.sodium_mg) }],
     facts: factLine(m.calories, m.protein_g),
   };
 }

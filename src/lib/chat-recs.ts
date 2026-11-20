@@ -15,6 +15,8 @@ import { josa, seedOf } from "@/lib/buddy";
 import { daysBetween } from "@/lib/day";
 import type { MealKey } from "@/lib/menu-pick";
 import { budgetFit, sodiumTerm } from "@/lib/rec-fit";
+import { fitsMeal, isMain, timeBonus, type MealClass } from "@/lib/meal-time";
+import { signalTerm, type Signals } from "@/lib/rec-events";
 
 export type FocusKey = "sugar" | "sodium" | "protein" | "light" | "budget";
 export type Focus = { key: FocusKey; reason: string };
@@ -67,7 +69,7 @@ export function mealOfText(text: string): MealKey | null {
   return null;
 }
 
-export type Cand = {
+export type Cand = MealClass & {
   kind: "menu" | "product"; id: string; name: string; maker: string | null; image: string | null; category: string | null;
   calories: number | null; protein_g: number | null; carbs_g: number | null; sugar_g: number | null; sodium_mg: number | null;
   /** 입맛 가까움 0~100 (모르면 null) — lib/recommend/taste.ts tasteFit */
@@ -134,7 +136,8 @@ export function repeatOf(c: Pick | Cand, recent: RecentMeal[], meal: MealKey, to
 
 const MEAT = /고기|소고기|한우|돼지|제육|삼겹|족발|보쌈|불고기|닭|치킨|오리|햄|베이컨|소시지|스테이크|갈비|육포|연어|참치|고등어|갈치|삼치|새우|오징어|주꾸미|멸치|어묵|게맛살|굴|조개|홍합|장어/;
 
-export type RecBudget = { meal: MealKey; kcal: number; protein: number; sodium: number; avoid: string[] };
+/** sodiumCap: 이번 끼니 나트륨 상한(하루 기준, lib/rec-fit) · signals: 본인 반응(넘김·기록·찜, lib/rec-events) */
+export type RecBudget = { meal: MealKey; kcal: number; protein: number; sodium: number; sodiumCap?: number; avoid: string[]; signals?: Signals };
 export type RecOpts = {
   today?: string;
   /** 최근 3일 기록 (바로 전 끼니 · 점심·저녁 겹침) */
@@ -157,6 +160,8 @@ export function rankRecs(cands: Cand[], focus: FocusKey, b: RecBudget, seed: str
     if (kcal == null || kcal < minKcal || kcal > maxKcal) return false;
     if (!snack && (n(c.protein_g) ?? 0) < 8) return false;
     if (b.avoid.some((w) => w && c.name.includes(w))) return false;
+    if (!fitsMeal(c, b.meal)) return false; // 그 끼니에 먹지 않는 것은 권하지 않는다 — 아침에 보쌈·족발·치킨 (lib/meal-time)
+    if (!snack && !isMain(c)) return false; // 밥·국·반찬만으로는 한 끼로 권하지 않는다
     if (o.vegetarian && MEAT.test(c.name)) return false;
     if ((n(c.protein_g) ?? 0) > 60) return false; // 한 번에 이보다 많으면 데이터 오류일 가능성
     if (today && repeatOf(c, recent, b.meal, today)) return false;
@@ -176,10 +181,12 @@ export function rankRecs(cands: Cand[], focus: FocusKey, b: RecBudget, seed: str
     if (focus === "protein") return protein(c) / 5 + fit(c) * 1.5;
     if (focus === "light") return (protein(c) * 4) / kcal * 5 + fit(c) * 0.5; // 가볍게를 물었으면 몫보다 가벼운 쪽이 맞다
     const fill = b.protein > 0 ? Math.min(1, protein(c) / b.protein) : 0;
-    return fit(c) * 3 + fill * 2 + Math.min(1.5, (protein(c) * 4) / kcal) + sodiumTerm(n(c.sodium_mg), b.sodium);
+    return fit(c) * 3 + fill * 2 + Math.min(1.5, (protein(c) * 4) / kcal) + sodiumTerm(n(c.sodium_mg), b.sodium, b.sodiumCap);
   };
-  // 입맛이 가까우면 앞으로 (0~100 → -2~+2), 최근 권한 것은 뒤로
-  const score = (c: Cand) => base(c) + (c.taste != null ? (c.taste - 50) / 25 : 0) - (shown.has(c.id) ? 3 : 0);
+  // 입맛이 가까우면 앞으로 (0~100 → -2~+2), 최근 권한 것은 뒤로, 끼니 때에 맞으면 조금 앞으로, 본인 반응(넘김 −·기록 +·찜 +)
+  const key = (c: Cand) => (c.kind === "product" ? c.id : `menu:${c.name}`);
+  const score = (c: Cand) => base(c) + (c.taste != null ? (c.taste - 50) / 25 : 0) - (shown.has(c.id) ? 3 : 0)
+    + timeBonus(c, b.meal) + signalTerm(b.signals, key(c));
   const sorted = [...ok].sort((a, z) => score(z) - score(a) || a.name.localeCompare(z.name));
   // 위쪽 6개 안에서 날마다 시작점을 돌린다 (매번 같은 것만 나오지 않게)
   // 최고 점수와 1점 안쪽(6개까지)에서만 돌린다 — 몫에 한참 못 미치는 것이 날짜 때문에 앞에 오지 않게

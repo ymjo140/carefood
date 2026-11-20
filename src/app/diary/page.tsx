@@ -770,7 +770,8 @@ export default function DiaryPage() {
   /** 예정 끼니 빼기 — quiet: 기록한 뒤 저절로 빼는 것(알림 없음) */
   const removeDated = async (meal: string, quiet = false) => {
     try {
-      const r = await fetch(`/api/diary/planned?date=${date}&meal=${meal}`, { method: "DELETE" });
+      // quiet = 기록해서 빼는 것 — 서버가 'AI 추천을 넘김'으로 세지 않게 done=1
+      const r = await fetch(`/api/diary/planned?date=${date}&meal=${meal}${quiet ? "&done=1" : ""}`, { method: "DELETE" });
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || String(r.status));
       if (!quiet) toast.show("예정에서 뺐어요");
     } catch (e) {

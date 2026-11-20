@@ -4,6 +4,7 @@
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { perServing } from "@/lib/nutrition";
 import { foodType } from "@/lib/recommend/diversity";
+import { fitsMeal, isMain } from "@/lib/meal-time";
 
 /**
  * 주간 식단 추천 API v3 — 영양사 방식
@@ -231,7 +232,7 @@ export async function buildWeeklyBox(body: WeeklyBoxRequest, user_id: string | n
     let mealProducts: any[] = [];
     {
       let query = supabase.from("products")
-        .select("id, name, manufacturer, calories, protein_g, carbs_g, fat_g, sugar_g, sodium_mg, fiber_g, functional_tags, dish_category, health_score, serving_size_g, nutrient_base_g, meal_role")
+        .select("id, name, manufacturer, calories, protein_g, carbs_g, fat_g, sugar_g, sodium_mg, fiber_g, functional_tags, dish_category, health_score, serving_size_g, nutrient_base_g, meal_role, meal_times, breakfast_pref, dish_role")
         .eq("is_active", true).eq("category_large", "상용제품")
         .eq("is_purchasable", true).eq("meal_role", "meal").is("nutrition_flag", null).is("rec_hold", null); // 끼니 역할(scripts/meal_role.py) — 예전 is_meal 은 사탕·냉동 과일까지 한 끼로 잡았다
 
@@ -533,6 +534,10 @@ export async function buildWeeklyBox(body: WeeklyBoxRequest, user_id: string | n
         if (nutritionExclusions.sodium_max && p.sodium_mg > nutritionExclusions.sodium_max) continue;
         if (nutritionExclusions.sugar_max && p.sugar_g != null && p.sugar_g > nutritionExclusions.sugar_max) continue;
         if (nutritionExclusions.calories_max && p.calories > nutritionExclusions.calories_max) continue;
+        // 그 끼니에 먹지 않는 것은 넣지 않는다 — 아침에 보쌈·족발·치킨 (lib/meal-time, products.meal_times — 다음 끼니·AI 추천·대화와 같은 규칙)
+        if (slot && !fitsMeal(p, slot)) continue;
+        // 밥·반찬·간식·재료 하나로 한 끼를 채우지 않는다 (국·찌개는 지금처럼 국/탕 끼니로)
+        if (!isMain(p) && p.dish_role !== "soup") continue;
         // 같은 이름 반복 방지
         const base = getBaseName(p.name);
         if (usedBaseNames.has(base)) continue;

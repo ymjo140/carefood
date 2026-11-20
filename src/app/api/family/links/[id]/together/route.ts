@@ -47,6 +47,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     if (pErr) throw new Error(pErr.message);
     const { menus, items } = await loadNextPicks(sb, [who.actor, l.owner_id], {
       meal, kcal: Math.min(mine.kcal, theirs.kcal), protein: Math.min(mine.protein, theirs.protein), sodium: Math.min(mine.sodium, theirs.sodium),
+      sodiumCap: Math.min(mine.sodiumCap, theirs.sodiumCap),
       menus: 3, seed: seedOf(`${who.actor}:${l.owner_id}`, today, meal),
     });
     const prices = await loadPrices(sb, items.map((i) => i.id));
