@@ -30,11 +30,14 @@ export const SNACK_CATS = new Set(["간식", "카페"]);
 /** 이번 끼니 예산 — 남은 열량을 남은 끼니로 나누되, 한 끼는 하루 목표의 45%를 넘기지 않는다 (식단 기록 화면과 같은 계산) */
 export function mealBudget(o: { meal: MealKey; mainLeft: number; goalKcal: number; remainKcal: number; remainProtein: number; remainSodium: number }) {
   const left = Math.max(1, o.mainLeft);
+  const kcal = Math.round(o.meal === "snack" ? Math.min(o.remainKcal, 300) : Math.min(o.remainKcal / left, o.goalKcal * 0.45));
+  // 간식의 단백질·나트륨 몫은 열량 비율만큼 (남은 양 × 간식 kcal ÷ 남은 kcal) — 끼니 몫(20g)을 그대로 쓰면 단백질 많은 것(계란)만 올라왔다
+  const part = o.meal === "snack" ? Math.min(1 / left, Math.max(0, kcal) / Math.max(1, o.remainKcal)) : 1 / left;
   return {
-    kcal: Math.round(o.meal === "snack" ? Math.min(o.remainKcal, 300) : Math.min(o.remainKcal / left, o.goalKcal * 0.45)),
-    protein: Math.round(Math.max(0, o.remainProtein) / left),
-    sodium: Math.round(Math.max(0, o.remainSodium) / left),
-    sodiumCap: sodiumCap({ meal: o.meal, remainSodium: o.remainSodium, share: Math.round(Math.max(0, o.remainSodium) / left), mainLeft: o.mainLeft }),
+    kcal,
+    protein: Math.round(Math.max(0, o.remainProtein) * part),
+    sodium: Math.round(Math.max(0, o.remainSodium) * part),
+    sodiumCap: sodiumCap({ meal: o.meal, remainSodium: o.remainSodium, share: Math.round(Math.max(0, o.remainSodium) * part), mainLeft: o.mainLeft }),
   };
 }
 

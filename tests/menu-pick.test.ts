@@ -43,6 +43,11 @@ describe("다음 끼니 메뉴", () => {
     expect(mealBudget({ meal: "lunch", mainLeft: 2, goalKcal: 1900, remainKcal: 1590, remainProtein: 64, remainSodium: 1660 }))
       .toEqual({ kcal: 795, protein: 32, sodium: 830, sodiumCap: 1260 }); // 상한 = 남은 1,660 − 저녁 몫 400
     expect(mealBudget({ meal: "dinner", mainLeft: 1, goalKcal: 1900, remainKcal: 1590, remainProtein: 0, remainSodium: -200 }).kcal).toBe(855);
+    // 간식: 단백질·나트륨 몫은 열량 비율만큼 (300 ÷ 2,000 = 15%) — 한 끼 몫(20g)을 쓰면 단백질 많은 계란만 올라왔다
+    const snack = mealBudget({ meal: "snack", mainLeft: 3, goalKcal: 2000, remainKcal: 2000, remainProtein: 60, remainSodium: 2000 });
+    expect(snack).toMatchObject({ kcal: 300, protein: 9, sodium: 300, sodiumCap: 500 });
+    // 남은 kcal 이 적으면 간식이 남은 양의 큰 몫이 되지만 한 끼 몫(남은 ÷ 남은 끼니)을 넘지 않는다
+    expect(mealBudget({ meal: "snack", mainLeft: 1, goalKcal: 2000, remainKcal: 300, remainProtein: 30, remainSodium: 900 }).protein).toBe(30);
   });
   it("숫자 한 줄과 고른 이유", () => {
     expect(menuFacts(FOODS[0])).toBe("단백질 21g · 나트륨 640mg · 520kcal");

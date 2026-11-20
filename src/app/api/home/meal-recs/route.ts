@@ -7,7 +7,7 @@ import { loadNextPicks, type PickItem } from "@/lib/next-picks";
 import { seedOf } from "@/lib/buddy";
 import { fillBudget, type DayPlan, type DayRow } from "@/lib/ai-fill";
 import { saveAiPlan } from "@/lib/ai-fill-server";
-import { HOME_MEALS, mealsToAvoid, shareOf } from "@/lib/home-meal";
+import { HOME_MEALS, mealsToAvoid } from "@/lib/home-meal";
 import { perServing } from "@/lib/nutrition";
 import type { MealKey } from "@/lib/menu-pick";
 import type { PlanFood } from "@/lib/weekly-plan";
@@ -91,14 +91,12 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       meal,
       budget: { kcal: b.kcal, sodiumCap: b.sodiumCap },
-      products: got.items.map((i) => ({ ...view(i), share: shareOf(i.calories, b.kcal) })),
+      products: got.items.map(view),
       combos: got.combos.map((c) => {
-        const kcal = sum(c.foods, "calories");
         return {
           foods: c.foods.map(view),
-          calories: kcal, protein_g: sum(c.foods, "protein_g"),
+          calories: sum(c.foods, "calories"), protein_g: sum(c.foods, "protein_g"),
           sodium_mg: c.foods.some((f) => f.sodium_mg == null) ? null : c.foods.reduce((a, f) => a + (f.sodium_mg || 0), 0),
-          share: shareOf(kcal, b.kcal),
         };
       }),
     });

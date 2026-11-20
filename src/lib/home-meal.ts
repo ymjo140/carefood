@@ -28,11 +28,6 @@ export function mealsToAvoid(meal: MealKey, taken: Set<string>): MealKey[] {
   return meal === "dinner" && !taken.has("lunch") ? ["lunch"] : [];
 }
 
-/** 몫에 대한 비율 (반올림 %) — 몫이 없으면 null */
-export function shareOf(kcal: number, budget: number) {
-  return budget > 0 ? Math.round((kcal / budget) * 100) : null;
-}
-
 /** 역할 이름 — products.dish_role */
 export const DISH_ROLE_LABEL: Record<string, string> = { main: "메인 요리", rice: "밥", soup: "국·찌개", side: "반찬", snack: "간식" };
 export const DISH_ROLES = Object.keys(DISH_ROLE_LABEL);

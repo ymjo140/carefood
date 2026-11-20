@@ -20,6 +20,25 @@ export function budgetFit(kcal: number | null | undefined, target: number): numb
   return Math.max(0, 1 - (r - 1.05) / 0.45);
 }
 
+/** 간식 몫 맞춤 — 간식은 몫(300kcal)이 '많아야 이만큼'이다. 몫의 40~105%(120~315kcal)면 1, 그보다 작으면 20%에서 0.
+ *  끼니처럼 90%부터 1로 두면 300kcal 가까운 큰 것(구운란 여러 알 묶음 등)만 위로 왔다 */
+export function snackFit(kcal: number | null | undefined, target: number): number {
+  const k = Number(kcal);
+  if (!Number.isFinite(k) || k <= 0 || !(target > 0)) return 0;
+  const r = k / target;
+  if (r >= 0.4 && r <= 1.05) return 1;
+  if (r < 0.4) return Math.max(0, (r - 0.2) / 0.2);
+  return Math.max(0, 1 - (r - 1.05) / 0.45);
+}
+
+/** 영양 값이 물리적으로 될 수 있는가 — 1회 제공량(g) 1g 에 9kcal(지방)를 넘거나, 단백질이 무게보다 많으면 표기 오류.
+ *  예: 그래놀라 20g 에 273kcal(포장 전체 값을 1회분 칸에 넣은 것). 무게를 모르면 거르지 않는다 */
+export function plausible(r: { calories?: number | null; protein_g?: number | null; serving_size_g?: number | null }) {
+  const g = Number(r.serving_size_g);
+  if (!Number.isFinite(g) || g <= 0) return true;
+  return (Number(r.calories) || 0) <= g * 9.2 && (Number(r.protein_g) || 0) <= g;
+}
+
 /** 남은 끼니 하나에 남겨 둘 나트륨 (가벼운 한 끼) */
 export const SODIUM_RESERVE = 400;
 
