@@ -41,7 +41,7 @@ describe("다음 끼니 메뉴", () => {
   });
   it("한 끼 예산은 남은 끼니로 나누고, 하루 목표의 45%를 넘지 않는다", () => {
     expect(mealBudget({ meal: "lunch", mainLeft: 2, goalKcal: 1900, remainKcal: 1590, remainProtein: 64, remainSodium: 1660 }))
-      .toEqual({ kcal: 795, protein: 32, sodium: 830 });
+      .toEqual({ kcal: 795, protein: 32, sodium: 830, sodiumCap: 1260 }); // 상한 = 남은 1,660 − 저녁 몫 400
     expect(mealBudget({ meal: "dinner", mainLeft: 1, goalKcal: 1900, remainKcal: 1590, remainProtein: 0, remainSodium: -200 }).kcal).toBe(855);
   });
   it("숫자 한 줄과 고른 이유", () => {

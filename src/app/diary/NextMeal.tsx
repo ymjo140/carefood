@@ -43,7 +43,8 @@ export function NextMeal({ remainKcal, remainProtein, remainSodium, goalKcal, me
     if (perMealKcal < 120) return;
     let alive = true;
     setState((s) => ({ ...s, status: "loading" })); // eslint-disable-line react-hooks/set-state-in-effect -- 조건이 바뀔 때마다 다시 고른다
-    const q = new URLSearchParams({ meal, kcal: String(perMealKcal), protein: String(perMealProtein), sodium: String(perMealSodium), exclude: excludeKey });
+    // 나트륨은 하루 기준으로 본다 — 남은 하루 나트륨·남은 끼니 수도 같이 보낸다 (서버가 이번 끼니 상한을 계산, lib/rec-fit sodiumCap)
+    const q = new URLSearchParams({ meal, kcal: String(perMealKcal), protein: String(perMealProtein), sodium: String(perMealSodium), sodium_left: String(Math.round(Math.max(0, remainSodium))), left: String(mainLeft), exclude: excludeKey });
     fetch(`/api/diary/next?${q}`)
       .then(async (r) => {
         const d = await r.json();
@@ -52,7 +53,7 @@ export function NextMeal({ remainKcal, remainProtein, remainSodium, goalKcal, me
       })
       .catch(() => { if (alive) setState({ status: "error", items: [], menus: [], reason: null }); });
     return () => { alive = false; };
-  }, [meal, perMealKcal, perMealProtein, perMealSodium, excludeKey, version, attempt]);
+  }, [meal, perMealKcal, perMealProtein, perMealSodium, remainSodium, mainLeft, excludeKey, version, attempt]);
 
   if (perMealKcal < 120) return null;
 

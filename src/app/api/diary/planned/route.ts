@@ -5,12 +5,15 @@ import { addDays, isDay, todayKst } from "@/lib/day";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { getActorId, noActor } from "@/lib/actor-server";
 import { cleanPlanFoods, PLANNED_MEALS } from "@/lib/planned-meals";
+import { AI_PLAN_TITLE, skipKey } from "@/lib/ai-fill";
+import { logRec } from "@/lib/rec-events";
+import type { PlanFood } from "@/lib/weekly-plan";
 
 /**
  * 날짜에 담아 둔 끼니 계획(예정) — 식단 탭의 '식단 불러오기'가 담고, 하루 보기에서 '먹었어요'로 기록하면 지운다.
  * GET    /api/diary/planned?from=YYYY-MM-DD&to=YYYY-MM-DD  (to 포함, 최대 14일) → { planned: [{date, meal, foods, plan_title}], ready }
  * POST   /api/diary/planned { date, meals: { breakfast?: PlanFood[], … }, plan_title? } — 끼니마다 바꿔 담는다
- * DELETE /api/diary/planned?date=…&meal=…                   — 한 끼 빼기
+ * DELETE /api/diary/planned?date=…&meal=…[&done=1]          — 한 끼 빼기. 'AI 추천' 예정을 사람이 뺐으면(done 없이) 반응 기록에 넘김(skipped)
  * 표(planned_meals)가 아직 없으면(마이그레이션 적용 전) 읽기는 빈 목록 + ready:false, 쓰기는 503.
  */
 
@@ -83,10 +86,15 @@ export async function DELETE(req: NextRequest) {
   if (!isDay(date) || !PLANNED_MEALS.includes(meal as never)) return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sb = createServiceRoleClient() as any;
-  const { error } = await sb.from("planned_meals").delete().eq("user_id", userId).eq("date", date).eq("meal", meal);
+  const { data: gone, error } = await sb.from("planned_meals").delete().eq("user_id", userId).eq("date", date).eq("meal", meal).select("foods, plan_title");
   if (error) {
     if (notReady(error)) return NextResponse.json({ ok: true }); // 표가 없으면 뺄 예정도 없다 — 빼기는 이미 된 것과 같다
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+  // 기록해서 저절로 빠진 것(done=1)이 아니라 사람이 'AI 추천' 예정을 뺐으면 — 그 추천은 넘긴 것으로 (lib/rec-events)
+  if (req.nextUrl.searchParams.get("done") !== "1") {
+    const ai = ((gone || []) as { foods: PlanFood[] | null; plan_title: string | null }[]).filter((p) => p.plan_title === AI_PLAN_TITLE);
+    await logRec(sb, ai.flatMap((p) => (p.foods || []).map((f) => ({ user_id: userId, surface: "ai_fill" as const, item_key: skipKey(f), meal, day: date as string, action: "skipped" as const }))));
   }
   return NextResponse.json({ ok: true });
 }

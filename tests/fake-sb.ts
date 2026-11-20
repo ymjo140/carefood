@@ -110,6 +110,8 @@ class Builder {
         if (this.table === "flow_sends" && all.some((r) => r.partner_id === p.partner_id && r.kind === p.kind && r.user_id === p.user_id && r.trigger_key === p.trigger_key)) {
           return { data: null, error: { message: "duplicate key", code: "23505" } };
         }
+        // 고유 키 흉내: rec_events(user_id, surface, item_key, day, action) — upsert(ignoreDuplicates) 는 겹치면 건너뛴다
+        if (this.table === "rec_events" && all.some((r) => ["user_id", "surface", "item_key", "day", "action"].every((k) => r[k] === p[k]))) continue;
         const row = { id: p.id ?? `${this.table}-${all.length + 1}`, ...p };
         all.push(row); out.push(row);
       }

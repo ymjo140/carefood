@@ -8,9 +8,13 @@ import { seedOf } from "@/lib/buddy";
 import { loadAccess } from "@/lib/subscription";
 import { hasPerk } from "@/lib/plans";
 import { todayKst } from "@/lib/day";
+import { sodiumCap } from "@/lib/rec-fit";
+import { logRec } from "@/lib/rec-events";
 
 /**
- * GET /api/diary/next?meal=dinner&kcal=650&protein=25&sodium=800&exclude=id,id
+ * GET /api/diary/next?meal=dinner&kcal=650&protein=25&sodium=800&sodium_left=1600&left=2&exclude=id,id
+ *   sodium 은 이번 끼니 몫, sodium_left·left 는 남은 하루 나트륨·남은 큰 끼니 수 — 나트륨은 하루 기준 상한으로 거른다(lib/rec-fit).
+ *   권한 것은 반응 기록(rec_events, shown)에 남긴다 — 나중에 기록하면 recorded 로 이어진다.
  * 기록 직후 '다음 끼니' — 일반 메뉴 2개(대표 메뉴 common_foods, lib/menu-pick.ts) + 제품 1개(메뉴가 없으면 제품 3개).
  * 오늘 남은 칼로리·단백질·나트륨에 맞춰 (1회 제공량 기준). 순서는 영양 기준뿐 — 광고비로 바꾸지 않는다.
  * 구독을 연 뒤 매 끼니 추천(recs)이 없는 무료는 메뉴 1개 + 제품 1개.
@@ -29,6 +33,9 @@ export async function GET(request: NextRequest) {
   const protein = Math.max(0, Number(sp.get("protein")) || 0);
   const sodium = Math.max(0, Number(sp.get("sodium")) || 0);
   const exclude = new Set((sp.get("exclude") || "").split(",").filter(Boolean));
+  const left = Math.max(1, Math.min(3, Number(sp.get("left")) || 1));
+  const sodiumLeft = Number(sp.get("sodium_left"));
+  const cap = Number.isFinite(sodiumLeft) && sp.has("sodium_left") ? sodiumCap({ meal, remainSodium: Math.max(0, sodiumLeft), share: sodium, mainLeft: left }) : undefined;
 
   // 남은 칼로리가 거의 없으면 제안하지 않는다
   if (kcal < 120) return NextResponse.json({ items: [], menus: [], reason: null });
@@ -39,10 +46,16 @@ export async function GET(request: NextRequest) {
   try {
     access = await loadAccess(sb, me);
     const recs = hasPerk(access, "recs");
-    ({ menus, items } = await loadNextPicks(sb, me, { meal: meal as MealKey, kcal, protein, sodium, exclude, menus: recs ? 2 : 1, seed: seedOf(me, todayKst(), meal) }));
+    ({ menus, items } = await loadNextPicks(sb, me, { meal: meal as MealKey, kcal, protein, sodium, sodiumCap: cap, exclude, menus: recs ? 2 : 1, seed: seedOf(me, todayKst(), meal) }));
   } catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: 500 }); }
+  const shown = menus.length ? items.slice(0, 1) : items;
+  const day = todayKst();
+  await logRec(sb, [
+    ...menus.map((m) => ({ user_id: me, surface: "next" as const, item_key: `menu:${m.name}`, meal, day, action: "shown" as const })),
+    ...shown.map((p) => ({ user_id: me, surface: "next" as const, item_key: p.id, meal, day, action: "shown" as const })),
+  ]);
   return NextResponse.json({
-    menus, items: menus.length ? items.slice(0, 1) : items,
+    menus, items: shown,
     reason: budgetReason({ kcal, protein, sodium }),
   });
 }

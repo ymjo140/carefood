@@ -4,6 +4,7 @@
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { perServing } from "@/lib/nutrition";
 import { foodType } from "@/lib/recommend/diversity";
+import { offMeal } from "@/lib/meal-time";
 
 /**
  * 주간 식단 추천 API v3 — 영양사 방식
@@ -533,6 +534,8 @@ export async function buildWeeklyBox(body: WeeklyBoxRequest, user_id: string | n
         if (nutritionExclusions.sodium_max && p.sodium_mg > nutritionExclusions.sodium_max) continue;
         if (nutritionExclusions.sugar_max && p.sugar_g != null && p.sugar_g > nutritionExclusions.sugar_max) continue;
         if (nutritionExclusions.calories_max && p.calories > nutritionExclusions.calories_max) continue;
+        // 아침에 보쌈·족발·치킨 같은 것은 넣지 않는다 (lib/meal-time — 다음 끼니·AI 추천·대화와 같은 규칙)
+        if (slot && offMeal(p.name, slot)) continue;
         // 같은 이름 반복 방지
         const base = getBaseName(p.name);
         if (usedBaseNames.has(base)) continue;

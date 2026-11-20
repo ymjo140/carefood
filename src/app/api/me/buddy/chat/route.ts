@@ -17,6 +17,7 @@ import { buildWeeklyBox } from "@/lib/weekly-box-server";
 import { cleanTastes, tasteFit, tasteReason } from "@/lib/recommend/taste";
 import { ALLERGEN_KEYWORDS } from "@/lib/recommend/constants";
 import { addDays, kstDayStartIso, kstHour } from "@/lib/day";
+import { loadSignals, logRec } from "@/lib/rec-events";
 import { CRISIS_REPLY, QUICK_SAYS, nextSlot, reactPrompt, riskOf, ruleReply, systemPrompt, type ChatCtx } from "@/lib/buddy-chat";
 import { aiReady, askBuddy, type Turn } from "@/lib/buddy-ai";
 import { dueNow, suppNames, takenFromText } from "@/lib/supplements";
@@ -124,13 +125,14 @@ async function loadRecs(sb: Sb, actor: string, text: string, t: TodayMood, base:
   const prof = base.profile;
   const focus = focusOf(text, prof);
   const named = mealOfText(text);
-  const rb = await recBase(sb, actor, t, base);
+  const [rb, signals] = await Promise.all([recBase(sb, actor, t, base), loadSignals(sb, actor, addDays(t.today, -30))]);
   const opts = (shown: string[]) => ({ today: t.today, recent: rb.recent, shown, vegetarian: prof?.diet_type === "vegetarian" });
   if (!isDayAsk(text, !!named)) {
     const meal: MealKey = named ?? base.slot.meal;
     const b = budgetOf(t, meal, meal === base.slot.meal ? base.slot.mainLeft : Math.max(1, base.slot.mainLeft));
-    const picks = rankRecs(await candsFor(sb, meal, focus, base, rb), focus.key, { meal, ...b, avoid: base.avoid },
+    const picks = rankRecs(await candsFor(sb, meal, focus, base, rb), focus.key, { meal, ...b, avoid: base.avoid, signals },
       `${actor}:${t.today}:${text}`, 3, opts(rb.shown));
+    await logShown(sb, actor, t.today, picks.map((p) => ({ ...p, meal })));
     return { kind: "meal" as const, focus, meal, picks, avoided: avoidedNote(rb.recent, meal, t.today) };
   }
   // 오늘 하루 — 끼니끼리 같은 것을 권하지 않게 고른 것을 쌓아 간다
@@ -140,12 +142,17 @@ async function loadRecs(sb: Sb, actor: string, text: string, t: TodayMood, base:
   const shown = [...rb.shown];
   for (const meal of meals) {
     const b = budgetOf(t, meal, mainLeft);
-    const got = rankRecs(await candsFor(sb, meal, focus, base, rb), focus.key, { meal, ...b, avoid: base.avoid },
+    const got = rankRecs(await candsFor(sb, meal, focus, base, rb), focus.key, { meal, ...b, avoid: base.avoid, signals },
       `${actor}:${t.today}:${text}:${meal}`, 2, opts([...shown, ...picks.map((p) => p.id)]));
     picks.push(...got.map((p) => ({ ...p, slot: { day: null, meal } })));
   }
+  await logShown(sb, actor, t.today, picks.map((p) => ({ ...p, meal: p.slot?.meal ?? meals[0] })));
   return { kind: "day" as const, focus, meal: meals[0], picks, avoided: null };
 }
+
+/** 대화에서 권한 것 — 반응 기록(rec_events, shown). 기록하면 recorded 로 이어진다 (lib/rec-events) */
+const logShown = (sb: Sb, actor: string, day: string, picks: { kind: string; id: string; name: string; meal: string }[]) =>
+  logRec(sb, picks.map((p) => ({ user_id: actor, surface: "chat" as const, item_key: p.kind === "product" ? p.id : `menu:${p.name}`, meal: p.meal, day, action: "shown" as const })));
 
 /** 일주일 — 식단 탭 '추천으로 채우기'와 같은 7일 짜기. 내 목표·질환 관심·알레르기·입맛은 서버 프로필에서 (AI 에는 보내지 않는다) */
 async function loadWeek(sb: Sb, actor: string, base: Base) {

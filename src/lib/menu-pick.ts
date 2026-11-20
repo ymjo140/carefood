@@ -5,7 +5,9 @@
  */
 import type { CommonFoodRow } from "@/lib/dishes";
 import { seedOf } from "@/lib/buddy";
-import { budgetFit } from "@/lib/rec-fit";
+import { budgetFit, sodiumCap, sodiumTerm, underCap } from "@/lib/rec-fit";
+import { mealTimeBonus, offMeal } from "@/lib/meal-time";
+import { signalTerm, type Signals } from "@/lib/rec-events";
 
 export type Menu = Omit<CommonFoodRow, "source">;
 export type MealKey = "breakfast" | "lunch" | "dinner" | "snack";
@@ -13,8 +15,12 @@ export type Budget = {
   meal: MealKey;
   /** 이번 끼니에 쓸 열량·단백질·나트륨 (남은 양을 남은 끼니로 나눈 값) */
   kcal: number; protein: number; sodium: number;
+  /** 이번 끼니 나트륨 상한 — 하루 기준(lib/rec-fit sodiumCap). 없으면 몫의 1.6배 */
+  sodiumCap?: number;
   /** 이름에 들어 있으면 뺀다 (알레르기) */
   avoid: string[];
+  /** 본인 반응(넘김·기록·찜) — lib/rec-events */
+  signals?: Signals;
 };
 
 export const MEAL_CATS = new Set(["한식", "양식", "일식", "분식", "편의점", "중식", "패스트푸드"]);
@@ -27,7 +33,17 @@ export function mealBudget(o: { meal: MealKey; mainLeft: number; goalKcal: numbe
     kcal: Math.round(o.meal === "snack" ? Math.min(o.remainKcal, 300) : Math.min(o.remainKcal / left, o.goalKcal * 0.45)),
     protein: Math.round(Math.max(0, o.remainProtein) / left),
     sodium: Math.round(Math.max(0, o.remainSodium) / left),
+    sodiumCap: sodiumCap({ meal: o.meal, remainSodium: o.remainSodium, share: Math.round(Math.max(0, o.remainSodium) / left), mainLeft: o.mainLeft }),
   };
+}
+
+/** 대표 메뉴 한 개의 점수 — 몫 맞춤×3 + 단백질 채움×2 + kcal 당 단백질(최대 1.5) + 나트륨(하루 기준) + 끼니 때 + 본인 반응.
+ *  다음 끼니 제품(lib/next-picks pickScore)과 같은 식이라 메뉴·제품을 한 줄로 견줄 수 있다 */
+export function menuScore(f: Menu, b: Budget) {
+  const kcal = f.calories || 1, p = f.protein_g || 0;
+  const fill = b.protein > 0 ? Math.min(1, p / b.protein) : 0;
+  return budgetFit(kcal, b.kcal) * 3 + fill * 2 + Math.min(1.5, (p * 4) / kcal) + sodiumTerm(f.sodium_mg, b.sodium, b.sodiumCap)
+    + mealTimeBonus(f.name, b.meal) + signalTerm(b.signals, `menu:${f.name}`);
 }
 
 /** 남은 양에 맞는 메뉴 n개 — 같은 종류(한식·양식…)는 한 번씩, 날마다 조금씩 다르게(seed) */
@@ -40,19 +56,14 @@ export function pickMenus(foods: Menu[], b: Budget, n = 2, seed = 0): Menu[] {
   const fits = foods.filter((f) =>
     cats.has(f.category) &&
     (f.calories || 0) >= minKcal && (f.calories || 0) <= maxKcal &&
-    !b.avoid.some((w) => w && f.name.includes(w)));
+    !b.avoid.some((w) => w && f.name.includes(w)) && !offMeal(f.name, b.meal));
   const meaty = b.meal === "snack" ? fits : fits.filter((f) => (f.protein_g || 0) >= 8);
   const ok = meaty.length ? meaty : fits;
-  // 몫 맞춤×3 + 단백질 채움×2 + kcal 당 단백질(최대 1.5) — 다음 끼니 제품과 같은 식 (lib/rec-fit, lib/next-picks pickScore)
-  const score = (f: Menu) => {
-    const kcal = f.calories || 1, p = f.protein_g || 0;
-    const fill = b.protein > 0 ? Math.min(1, p / b.protein) : 0;
-    return budgetFit(kcal, b.kcal) * 3 + fill * 2 + Math.min(1.5, (p * 4) / kcal);
-  };
+  const score = (f: Menu) => menuScore(f, b);
   const byScore = (a: Menu, z: Menu) => score(z) - score(a) || a.name.localeCompare(z.name);
-  // 남은 나트륨 안에 드는 것 먼저(점수순), 모자라면 나트륨이 적은 순으로 채운다
-  const under = ok.filter((f) => (f.sodium_mg || 0) <= b.sodium).sort(byScore);
-  const over = ok.filter((f) => (f.sodium_mg || 0) > b.sodium).sort((a, z) => (a.sodium_mg || 0) - (z.sodium_mg || 0) || byScore(a, z));
+  // 하루 기준 나트륨 상한 안에 드는 것 먼저(점수순 — 몫을 넘은 만큼은 점수에서 깎인다), 모자라면 나트륨이 적은 순으로 채운다
+  const under = ok.filter((f) => underCap(f.sodium_mg, b.sodium, b.sodiumCap)).sort(byScore);
+  const over = ok.filter((f) => !underCap(f.sodium_mg, b.sodium, b.sodiumCap)).sort((a, z) => (a.sodium_mg || 0) - (z.sodium_mg || 0) || byScore(a, z));
   const scored = [...under, ...over].map((f) => ({ f }));
   // 위쪽(최고 점수와 1점 안쪽, 6개까지)에서 날마다 시작점을 돌린다 — 매일 같은 메뉴만 나오지 않게.
   //   1점 밖은 돌리지 않는다: 몫에 한참 못 미치는 것이 날짜 때문에 맨 앞에 오지 않게

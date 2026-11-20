@@ -10,13 +10,13 @@ const goals = { kcal: 1800, protein: 90, sodium: 2000 };
 
 describe("이 끼니 몫", () => {
   it("아무것도 없으면 하루를 세 끼로 나눈다", () => {
-    expect(fillBudget("lunch", goals, [], [])).toEqual({ kcal: 600, protein: 30, sodium: 667 });
+    expect(fillBudget("lunch", goals, [], [])).toEqual({ kcal: 600, protein: 30, sodium: 667, sodiumCap: 1200 }); // 상한 = 2,000 − 남은 두 끼 × 400
   });
   it("기록한 끼니와 다른 끼니에 담아 둔 예정을 빼고, 남은 끼니로 나눈다", () => {
     const rows = [{ meal_type: "breakfast", calories: 400, protein_g: 20, sodium_mg: 500 }];
     const plans = [{ meal: "dinner", foods: [{ calories: 700, protein_g: 40, sodium_mg: 900 }] }];
     // 남은 1800-400-700=700, 비어 있는 큰 끼니는 점심 하나
-    expect(fillBudget("lunch", goals, rows, plans)).toEqual({ kcal: 700, protein: 30, sodium: 600 });
+    expect(fillBudget("lunch", goals, rows, plans)).toEqual({ kcal: 700, protein: 30, sodium: 600, sodiumCap: 600 }); // 남은 끼니가 이것뿐 — 상한 = 남은 나트륨
   });
   it("다시 고를 때는 그 끼니의 지금 예정을 빼지 않는다", () => {
     const plans = [{ meal: "lunch", foods: [{ calories: 900, protein_g: 10, sodium_mg: 100 }] }];
@@ -46,6 +46,11 @@ describe("하나 고르기", () => {
     expect(second.food).toMatchObject({ product_id: "11111111-1111-4111-8111-111111111111", name: "연어 포케", calories: 410.4, protein_g: 31.3, type: "product" });
     const third = pickOne(menus, items, [skipKey(first.food), skipKey(second.food)])!;
     expect(third.food.name).toBe("두부 샐러드");
+  });
+  it("점수가 있으면 메뉴·제품을 한 줄로 — 제품 점수가 높으면 제품이 먼저", () => {
+    const scored = [{ ...items[0], score: 6 }];
+    expect(pickOne(menus, scored, [], () => 4)!.food.name).toBe("연어 포케");
+    expect(pickOne(menus, [{ ...items[0], score: 2 }], [], () => 4)!.food.name).toBe("닭가슴살 덮밥");
   });
   it("다 권했으면 처음 것으로 돌아가고, 후보가 없으면 null", () => {
     const all = ["menu:닭가슴살 덮밥", "menu:두부 샐러드", "11111111-1111-4111-8111-111111111111"];
