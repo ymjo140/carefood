@@ -1,0 +1,87 @@
+고구마,snack,snack,t,survey
+두유,snack,snack,t,survey
+바나나,snack,snack,t,survey
+사과,snack,snack,t,survey
+삶은 달걀,snack,snack,t,survey
+요거트,snack,snack,t,survey
+우유,snack,snack,f,review
+프로틴 쉐이크,snack,snack,f,review
+붕어빵,snack,snack,t,survey
+호떡,snack,snack,f,review
+떡볶이,main,lunch|dinner,f,survey
+라면 (봉지),main,breakfast|lunch|dinner,f,survey
+만두,main,lunch|dinner,f,survey
+순대,main,breakfast|lunch|dinner,f,survey
+컵라면,main,breakfast|lunch|dinner,f,survey
+튀김 (모둠),main,lunch|dinner,f,rule
+떡볶이 + 튀김,main,lunch|dinner,f,survey
+치킨 + 맥주,main,lunch|dinner,f,survey
+피자 + 콜라,main,lunch|dinner,f,survey
+리조또,main,lunch|dinner,f,rule
+샌드위치,main,breakfast|lunch|dinner,t,survey
+샐러드,main,breakfast|lunch|dinner,t,survey
+스테이크,main,lunch|dinner,f,rule
+파스타 (오일),main,lunch|dinner,f,survey
+파스타 (크림),main,lunch|dinner,f,survey
+파스타 (토마토),main,lunch|dinner,f,survey
+피자,main,lunch|dinner,f,survey
+햄버거,main,lunch|dinner,f,survey
+규동,main,breakfast|lunch|dinner,f,review
+돈카츠,main,lunch|dinner,f,survey
+라멘,main,breakfast|lunch|dinner,f,survey
+오니기리,main,breakfast|lunch|dinner,t,survey
+우동,main,lunch|dinner,f,survey
+초밥,main,lunch|dinner,f,survey
+카레라이스,main,lunch|dinner,f,rule
+마라탕,main,lunch|dinner,f,rule
+볶음밥 (중식),main,breakfast|lunch|dinner,f,survey
+짜장면,main,lunch|dinner,f,survey
+짬뽕,main,lunch|dinner,f,survey
+탕수육,main,lunch|dinner,f,survey
+마카롱,snack,snack,f,rule
+버블티,snack,snack,f,review
+아메리카노,snack,snack,f,review
+카페라떼,snack,snack,f,review
+카페모카,snack,snack,f,review
+카푸치노,snack,snack,f,review
+케이크 (조각),snack,snack,t,survey
+크로와상,snack,snack,f,review
+프라푸치노,snack,snack,f,review
+감자튀김 (중),main,lunch|dinner,f,survey
+빅맥,main,lunch|dinner,f,review
+치즈버거,main,lunch|dinner,f,survey
+치킨너겟,main,lunch|dinner,f,survey
+삼각김밥,main,breakfast|lunch|dinner,t,survey
+컵밥,main,breakfast|lunch|dinner,f,rule
+토스트,main,breakfast|lunch|dinner|snack,t,survey
+편의점 도시락,main,breakfast|lunch|dinner,f,rule
+핫도그,main,breakfast|lunch|dinner|snack,t,survey
+갈비탕,main,breakfast|lunch|dinner,t,survey
+김밥,main,breakfast|lunch|dinner,t,survey
+김치볶음밥,main,breakfast|lunch|dinner,f,survey
+김치찌개,main,breakfast|lunch|dinner,t,survey
+냉면,main,lunch|dinner,f,survey
+닭갈비,main,lunch|dinner,f,survey
+덮밥 (평균),main,breakfast|lunch|dinner,f,survey
+된장찌개,main,breakfast|lunch|dinner,t,survey
+떡국,main,breakfast|lunch|dinner,t,survey
+미역국,main,breakfast|lunch|dinner,t,survey
+보쌈,main,lunch|dinner,f,survey
+볶음밥,main,breakfast|lunch|dinner,f,survey
+부대찌개,main,lunch|dinner,f,survey
+비빔냉면,main,lunch|dinner,f,survey
+비빔밥,main,breakfast|lunch|dinner,f,survey
+삼겹살 구이,main,lunch|dinner,f,survey
+삼계탕,main,breakfast|lunch|dinner,f,survey
+설렁탕,main,breakfast|lunch|dinner,t,survey
+소불고기,main,breakfast|lunch|dinner,f,survey
+순두부찌개,main,breakfast|lunch|dinner,f,survey
+쌀밥,rice,breakfast|lunch|dinner,f,survey
+육개장,main,breakfast|lunch|dinner,f,survey
+잔치국수,main,lunch|dinner,f,survey
+제육덮밥,main,breakfast|lunch|dinner,f,survey
+제육볶음,main,breakfast|lunch|dinner,f,survey
+족발,main,lunch|dinner,f,survey
+치킨 (양념),main,lunch|dinner,f,survey
+치킨 (후라이드),main,lunch|dinner,f,survey
+칼국수,main,lunch|dinner,f,survey
