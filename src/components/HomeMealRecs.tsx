@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "@/components/ui/AppLink";
 import { PLATFORM_LABELS } from "@/lib/platforms";
-import { Badge, Button, Card, EmptyState, Price, ProductImage, SectionHeader, Select, Skeleton, TextLink, Thumb, useToast } from "@/components/ui";
+import { Button, Card, EmptyState, Price, ProductImage, SectionHeader, Select, Skeleton, TextLink, Thumb, useToast } from "@/components/ui";
 import { defaultMeal, HOME_MEAL_LABEL, HOME_MEALS, hourKst } from "@/lib/home-meal";
 import type { MealKey } from "@/lib/menu-pick";
 
@@ -22,8 +22,8 @@ type Food = {
 };
 type Recs = {
   meal: MealKey; budget: { kcal: number; sodiumCap: number };
-  products: (Food & { share: number | null })[];
-  combos: { foods: Food[]; calories: number; protein_g: number; sodium_mg: number | null; share: number | null }[];
+  products: Food[];
+  combos: { foods: Food[]; calories: number; protein_g: number; sodium_mg: number | null }[];
 };
 const ROLE_SHORT: Record<string, string> = { rice: "밥", soup: "국", side: "반찬" };
 const fmt = (n: number) => Math.round(n).toLocaleString("ko-KR");
@@ -119,9 +119,8 @@ export default function HomeMealRecs() {
                 {recs.products.map((p, i) => (
                   <div key={p.id} className="w-44 shrink-0 rounded-lg border border-line bg-surface overflow-hidden flex flex-col">
                     <Link href={`/products/${p.id}`} className="block transition-colors hover:bg-sunken">
-                      <div className="h-28 relative">
+                      <div className="h-28">
                         <ProductImage src={p.image_url} />
-                        {p.share != null && <Badge className="absolute top-2 left-2 bg-surface">몫의 <span className="num">{p.share}%</span></Badge>}
                       </div>
                       <div className="p-3 pb-2">
                         <p className="text-caption font-medium text-brand-ink mb-0.5">{i === 0 ? "가장 잘 맞아요" : "잘 맞아요"}</p>
@@ -167,10 +166,7 @@ export default function HomeMealRecs() {
                           ))}
                         </ul>
                         <div className="pt-3 border-t border-line text-label">
-                          <div className="flex items-center justify-between gap-3">
-                            <span><span className="num text-title font-bold text-ink">{fmt(c.calories)}</span> kcal</span>
-                            {c.share != null && <Badge>몫의 <span className="num">{c.share}%</span></Badge>}
-                          </div>
+                          <p><span className="num text-title font-bold text-ink">{fmt(c.calories)}</span> kcal</p>
                           <p className="flex flex-wrap gap-x-4 mt-1 text-ink-2">
                             <span>단백질 <span className="num font-bold text-protein">{Math.round(c.protein_g)}g</span></span>
                             {c.sodium_mg != null && <span>나트륨 <span className="num font-bold text-sodium">{fmt(c.sodium_mg)}mg</span></span>}
