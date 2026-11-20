@@ -68,7 +68,7 @@ def push(msg):
         subprocess.run(["git", "pull", "-q", "--rebase"], check=False)
 
 
-def pull_all(svc, rows, fields, chunk=300, minutes=100):
+def pull_all(svc, rows, fields, chunk=300, minutes=100, start=1):
     """chunk 쪽씩 {svc}.part-{첫쪽}.csv.gz 로 나눠 쓰고, 이미 있는 조각은 건너뛴다(다시 돌리면 이어 받기)."""
     started = time.time()
     total, _ = page(svc, 1, rows)
@@ -80,7 +80,7 @@ def pull_all(svc, rows, fields, chunk=300, minutes=100):
     def one(n):
         try: return n, page(svc, n, rows)[1]
         except RuntimeError as e: return n, e
-    for a in range(1, pages + 1, chunk):
+    for a in range(start, pages + 1, chunk):
         b = min(pages, a + chunk - 1)
         path = f"{OUT}/{svc}.part-{a:05d}.csv.gz"
         if os.path.exists(path): continue
@@ -98,12 +98,12 @@ def pull_all(svc, rows, fields, chunk=300, minutes=100):
         parts = sorted(p for p in os.listdir(OUT) if p.startswith(f"{svc}.part-") and p.endswith(".csv.gz"))
         with open(meta_path, "w") as f:
             json.dump({"svc": svc, "total": total, "rows": rows, "pages": pages, "chunk": chunk, "parts": len(parts),
-                       "parts_needed": (pages + chunk - 1) // chunk, "failed_pages": sorted(fail), "fields": fields}, f)
+                       "parts_needed": (pages - start + chunk) // chunk, "start": start, "failed_pages": sorted(fail), "fields": fields}, f)
         print(f"{b}/{pages}쪽 · 실패 {len(fail)} · {round((time.time() - started) / 60)}분", flush=True)
         push(f"식약처 받은 값 {svc} {a}~{b}쪽")
     # 조각을 다 받았으면 실패한 쪽만 다시 받아 따로 쓴다
     parts = [p for p in os.listdir(OUT) if p.startswith(f"{svc}.part-") and p.endswith(".csv.gz")]
-    if fail and len(parts) >= (pages + chunk - 1) // chunk and (time.time() - started) / 60 <= minutes:
+    if fail and len(parts) >= (pages - start + chunk) // chunk and (time.time() - started) / 60 <= minutes:
         n_retry = 0
         path = f"{OUT}/{svc}.retry-{int(time.time())}.csv.gz"
         with gzip.open(path, "wt", newline="") as gz:
@@ -126,7 +126,8 @@ if __name__ == "__main__":
     os.makedirs(OUT, exist_ok=True)
     req = json.load(open("data/mfds/request.json"))
     if req.get("mode") == "all":
-        pull_all(req.get("svc", "02"), int(req.get("rows", 100)), req.get("fields") or ["AMT_NUM1", "AMT_NUM3", "AMT_NUM7", "AMT_NUM8", "AMT_NUM13"])
+        pull_all(req.get("svc", "02"), int(req.get("rows", 100)), req.get("fields") or ["AMT_NUM1", "AMT_NUM3", "AMT_NUM7", "AMT_NUM8", "AMT_NUM13"],
+                 start=int(req.get("from", 1)))
     else:
         svcs = req.get("svc") or ["02", "03"]
         probe(svcs if isinstance(svcs, list) else [svcs])

@@ -1,1 +1,1 @@
-{"mode": "all", "svc": "03", "rows": 100, "fields": ["AMT_NUM1", "AMT_NUM3", "AMT_NUM7", "AMT_NUM8", "AMT_NUM13", "SERVING_SIZE"]}
+{"mode": "all", "svc": "03", "rows": 100, "fields": ["AMT_NUM1", "AMT_NUM3", "AMT_NUM7", "AMT_NUM8", "AMT_NUM13", "SERVING_SIZE"], "from": 3312}
