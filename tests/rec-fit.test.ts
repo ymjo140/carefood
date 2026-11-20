@@ -1,6 +1,6 @@
 /** 추천 잣대 (lib/rec-fit) · 다음 끼니 제품 점수 (lib/next-picks pickScore) · 대표 메뉴 (lib/menu-pick) — 몫에 맞는 것이 먼저 */
 import { describe, expect, it } from "vitest";
-import { budgetFit, known, sodiumCap, sodiumTerm, underCap } from "@/lib/rec-fit";
+import { budgetFit, known, plausible, snackFit, sodiumCap, sodiumTerm, underCap } from "@/lib/rec-fit";
 import { pickScore } from "@/lib/next-picks";
 import { menuFacts, pickMenus, type Menu } from "@/lib/menu-pick";
 
@@ -72,5 +72,29 @@ describe("대표 메뉴도 몫에 맞게", () => {
   it("나트륨을 모르면 0mg 이라고 쓰지 않는다", () => {
     expect(menuFacts({ calories: 520, protein_g: 21, sodium_mg: null })).toBe("단백질 21g · 520kcal");
     expect(menuFacts({ calories: 520, protein_g: 21, sodium_mg: 640 })).toBe("단백질 21g · 나트륨 640mg · 520kcal");
+  });
+});
+
+describe("간식 (홈 간식이 계란만 나오던 것)", () => {
+  it("간식 몫은 '많아야 이만큼' — 몫의 40~105%(300kcal 기준 120~315)면 다 1", () => {
+    expect(snackFit(120, 300)).toBe(1);
+    expect(snackFit(200, 300)).toBe(1);
+    expect(snackFit(300, 300)).toBe(1);
+    expect(snackFit(90, 300)).toBeCloseTo(0.5);
+    expect(snackFit(60, 300)).toBeCloseTo(0);
+    expect(snackFit(450, 300)).toBeCloseTo(0);
+    expect(budgetFit(150, 300)).toBeCloseTo(0); // 끼니 잣대로는 반 이하라 0 이었다
+  });
+  it("간식 점수: 단백질 몫(9g)을 채우면 그 이상은 더 쳐주지 않는다", () => {
+    const b = { meal: "snack" as const, kcal: 300, protein: 9, sodium: 300, sodiumCap: 500 };
+    const egg = pickScore({ calories: 248, protein_g: 31, sodium_mg: 280 }, b);
+    const yogurt = pickScore({ calories: 150, protein_g: 10, sodium_mg: 80 }, b);
+    expect(Math.abs(egg - yogurt)).toBeLessThan(0.3);
+  });
+  it("물리적으로 안 되는 값(1g 에 9kcal 넘음 · 단백질이 무게보다 많음)은 거른다", () => {
+    expect(plausible({ calories: 273, protein_g: 8, serving_size_g: 20 })).toBe(false); // 그래놀라 20g 273kcal
+    expect(plausible({ calories: 20, protein_g: 25, serving_size_g: 20 })).toBe(false);
+    expect(plausible({ calories: 118, protein_g: 8, serving_size_g: 30 })).toBe(true);
+    expect(plausible({ calories: 500, protein_g: 20, serving_size_g: null })).toBe(true); // 무게를 모르면 두기
   });
 });

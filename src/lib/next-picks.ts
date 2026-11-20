@@ -1,7 +1,7 @@
 import { perServing } from "@/lib/nutrition";
 import { ALLERGEN_KEYWORDS } from "@/lib/recommend/constants";
 import { mealBudget, pickMenus, type MealKey, type Menu } from "@/lib/menu-pick";
-import { budgetFit, known, sodiumTerm, underCap } from "@/lib/rec-fit";
+import { budgetFit, known, plausible, snackFit, sodiumTerm, underCap } from "@/lib/rec-fit";
 import { fitsMeal, timeBonus, type MealClass } from "@/lib/meal-time";
 import { loadSignals, signalTerm, type Signals } from "@/lib/rec-events";
 import { addDays, todayKst } from "@/lib/day";
@@ -91,6 +91,7 @@ export async function loadNextPicks(sb: Sb, person: string | string[], o: { meal
     .filter((r) => !allergyWords.some((w) => (r.name || "").includes(w)))
     .filter((r) => fitsMeal(r, meal))
     .map((r) => perServing(r))
+    .filter(plausible)
     .filter((r) => (r.calories || 0) >= minKcal && (r.calories || 0) <= maxKcal)
     // 나트륨은 하루 기준 상한으로만 거른다 (몫을 넘은 만큼은 점수에서) — 모르는 것은 남기되 아는 것(몫 안)보다 뒤로
     .filter((r) => underCap(r.sodium_mg, sodium, sodiumCap))
@@ -99,12 +100,17 @@ export async function loadNextPicks(sb: Sb, person: string | string[], o: { meal
     .sort((a, b) => b.score - a.score || a.r.name.localeCompare(b.r.name));
 
   // 같은 제조사가 줄줄이 나오지 않게
+  // 간식은 한 종류(분류)에서 둘까지 — 계란처럼 비슷한 것이 줄을 다 채우지 않게
   const seen = new Set<string>();
+  const perCat = new Map<string, number>();
   const items: PickItem[] = [];
   for (const { r, score } of picks) {
     const key = r.manufacturer || r.id;
     if (seen.has(key)) continue;
+    const cat = r.dish_category || "";
+    if (meal === "snack" && (perCat.get(cat) || 0) >= 2) continue;
     seen.add(key);
+    perCat.set(cat, (perCat.get(cat) || 0) + 1);
     items.push({
       id: r.id, name: r.name, manufacturer: r.manufacturer, image_url: r.image_url,
       calories: Math.round(r.calories || 0), protein_g: Math.round((r.protein_g || 0) * 10) / 10,
@@ -182,6 +188,7 @@ async function loadCombos(sb: Sb, b: Parameters<typeof pickScore>[1] & { meal: M
   const pool = (rows: Row[], role: "rice" | "soup" | "side", lo: number, hi: number) => rows
     .filter((x) => keep(x, role) && fitsMeal(x, b.meal))
     .map((x) => perServing(x))
+    .filter(plausible)
     // 1회 제공량 단백질이 40g 을 넘으면 원물(건멸치 등)이거나 데이터 오류일 가능성
     .filter((x) => (x.calories || 0) >= lo && (x.calories || 0) <= hi && (x.protein_g || 0) <= 40)
     .map((x) => ({ ...toItem(x, role), pref: !!x.breakfast_pref }));
@@ -221,6 +228,6 @@ export function pickScore(
 ) {
   const c = Number(r.calories) || 1, p = Number(r.protein_g) || 0;
   const fill = b.protein > 0 ? Math.min(1, p / b.protein) : 0;
-  return budgetFit(c, b.kcal) * 3 + fill * 2 + Math.min(1.5, (p * 4) / c) + sodiumTerm(known(r.sodium_mg), b.sodium, b.sodiumCap)
+  return (b.meal === "snack" ? snackFit(c, b.kcal) : budgetFit(c, b.kcal)) * 3 + fill * 2 + Math.min(b.meal === "snack" ? 0.5 : 1.5, (p * 4) / c) + sodiumTerm(known(r.sodium_mg), b.sodium, b.sodiumCap)
     + (b.meal ? timeBonus(r, b.meal) : 0) + (r.id ? signalTerm(b.signals, r.id) : 0);
 }
