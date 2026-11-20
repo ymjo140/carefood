@@ -17,6 +17,13 @@ describe("한 상 고르기", () => {
     expect(new Set(got.map((c) => c.foods[1].id)).size).toBe(got.length);
     expect(got[0].foods.map((f) => f.id)).toEqual(["r1", "s2", "d1"]); // 300+180+120 = 600kcal, 단백질 36g
   });
+  it("국만 다르고 반찬이 같은 한 상은 뒤로 — 반찬이 겹치지 않는 것을 먼저 고른다", () => {
+    const soups = [it_("s1", "사골 순대국", 140, 12, 200, "soup"), it_("s2", "얼큰 순대국", 140, 12, 200, "soup"), it_("s3", "북엇국", 130, 11, 250, "soup")];
+    const sides = [it_("d1", "두부", 160, 14, 10, "side"), it_("d2", "구운계란", 140, 12, 300, "side")];
+    const got = bestCombos({ rice, soup: soups, side: sides }, b);
+    expect(got.length).toBe(3);
+    expect(new Set(got.map((c) => c.foods[2]?.id)).size).toBe(2); // 예전에는 셋 다 두부
+  });
   it("나트륨을 모르는 것이 하나라도 있으면 합도 모름 — 상한으로 빼지 않는다", () => {
     const got = bestCombos({ rice, soup: [it_("s9", "북엇국", 120, 15, null, "soup")], side: [] }, b);
     expect(got.length).toBe(1);

@@ -67,7 +67,7 @@ export async function personMealBudget(sb: Sb, person: string, meal: "breakfast"
   return { ...budget, sodiumCap: b.kcal >= 120 ? b.sodiumCap : Math.max(b.sodium, b.sodiumCap), recorded: recorded.has(meal) };
 }
 
-export async function loadNextPicks(sb: Sb, person: string | string[], o: { meal: MealKey; kcal: number; protein: number; sodium: number; sodiumCap?: number; exclude?: Set<string>; menus: number; seed: number; combos?: boolean }) {
+export async function loadNextPicks(sb: Sb, person: string | string[], o: { meal: MealKey; kcal: number; protein: number; sodium: number; sodiumCap?: number; exclude?: Set<string>; menus: number; seed: number; combos?: boolean; count?: number }) {
   const { meal, kcal, protein, sodium, sodiumCap } = o;
   const exclude = o.exclude || new Set<string>();
   const [{ data: rows, error }, { data: prof, error: pErr }, { data: foods, error: fErr }, signals] = await Promise.all([
@@ -111,7 +111,7 @@ export async function loadNextPicks(sb: Sb, person: string | string[], o: { meal
       sodium_mg: known(r.sodium_mg) == null ? null : Math.round(Number(r.sodium_mg)), serving_size_g: r.serving_size_g, nutrient_base_g: r.nutrient_base_g,
       score,
     });
-    if (items.length >= 3) break;
+    if (items.length >= (o.count ?? 3)) break;
   }
   // 날마다·끼니마다 조금씩 다른 메뉴가 위로 오게 (같은 날 같은 끼니는 같은 결과)
   const mb = { meal, kcal, protein, sodium, sodiumCap, avoid: allergyWords, signals };
@@ -140,17 +140,34 @@ export function bestCombos(pools: { rice: PickItem[]; soup: PickItem[]; side: Pi
     sodium_mg: xs.some((x) => x.sodium_mg == null) ? null : xs.reduce((a, x) => a + (x.sodium_mg || 0), 0),
   });
   const extra = (xs: PickItem[]) => xs.reduce((a, x) => a + signalTerm(b.signals, x.id), 0) / xs.length;
-  const bySoup = new Map<string, PickCombo>();
+  // 국마다 반찬이 다른 한 상을 몇 개씩 남겨 둔다 (반찬이 겹치면 다음 것으로 바꾸려고)
+  const bySoup = new Map<string, Map<string, PickCombo>>();
   for (const rice of pools.rice.slice(0, 6)) for (const soup of pools.soup.slice(0, 60)) for (const side of [null, ...pools.side.slice(0, 25)]) {
     const foods = side ? [rice, soup, side] : [rice, soup];
     const t = sum(foods);
     if (!underCap(t.sodium_mg, b.sodium, b.sodiumCap)) continue;
     const score = pickScore({ calories: t.calories, protein_g: t.protein_g, sodium_mg: t.sodium_mg }, { ...b, signals: undefined }) + extra(foods)
       + (b.meal === "breakfast" ? Math.max(...foods.map((x) => (x as PickItem & { pref?: boolean }).pref ? 0.6 : 0)) : 0);
-    const prev = bySoup.get(soup.id);
-    if (!prev || score > prev.score) bySoup.set(soup.id, { foods, score });
+    const bySide = bySoup.get(soup.id) ?? new Map<string, PickCombo>();
+    bySoup.set(soup.id, bySide);
+    const k = side?.id ?? "";
+    const prev = bySide.get(k);
+    if (!prev || score > prev.score) bySide.set(k, { foods, score });
   }
-  return [...bySoup.values()].sort((a, z) => z.score - a.score).slice(0, top);
+  // 국만 달라도(사골·얼큰 순대국) 밥·반찬이 같으면 같은 한 상처럼 보인다 — 국은 하나씩, 반찬은 겹치지 않게.
+  // 국은 그 국의 가장 좋은 한 상 점수 순서로 보고, 가장 좋은 반찬이 이미 쓰였으면 그 국의 다음 반찬으로 (점수 차 0.5 안에서만). 모자라면 점수 순으로 채운다.
+  const soups = [...bySoup.values()].map((m) => [...m.values()].sort((a, z) => z.score - a.score)).sort((a, z) => z[0].score - a[0].score);
+  const sideOf = (c: PickCombo) => c.foods[2]?.id ?? "";
+  const out: PickCombo[] = [];
+  const usedSides = new Set<string>();
+  const rest: PickCombo[] = [];
+  for (const opts of soups) {
+    if (out.length >= top) break;
+    const pick = opts.find((c) => c.score >= opts[0].score - 0.5 && !(sideOf(c) && usedSides.has(sideOf(c))));
+    if (pick) { out.push(pick); usedSides.add(sideOf(pick)); } else rest.push(opts[0]);
+  }
+  for (const c of rest) if (out.length < top) out.push(c);
+  return out.sort((a, z) => z.score - a.score);
 }
 
 /** 한 상 후보 읽기 — 역할(dish_role)이 밥·국·반찬인 살 수 있는 제품, 그 끼니에 먹는 것만 (lib/meal-time) */

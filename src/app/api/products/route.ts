@@ -1,3 +1,4 @@
+import { DISH_ROLES } from "@/lib/home-meal";
 import { NextRequest, NextResponse } from "next/server";
 import { limitRequest } from "@/lib/rate-limit";
 import { createServiceRoleClient } from "@/lib/supabase/server";
@@ -78,6 +79,8 @@ function parseSearchParams(searchParams: URLSearchParams) {
     limit: Math.min(Number(searchParams.get("limit") || 20), 50),
     source: searchParams.get("source") || null,
     kind: searchParams.get("kind") === "meal_service" ? "meal_service" : null,
+    // 한 끼에서 맡는 몫 (products.dish_role) — 홈 카테고리 메인 요리·밥·국·찌개·반찬
+    role: (searchParams.get("role") || "").split(",").filter((r) => DISH_ROLES.includes(r)),
     allergies: (searchParams.get("allergies") || "").split(",").filter(Boolean),
   };
 }
@@ -92,7 +95,7 @@ function parseSearchParams(searchParams: URLSearchParams) {
  */
 function mealsOnly(params: ReturnType<typeof parseSearchParams>) {
   return params.sort === "recommend" && !params.dishCategory && !params.search && !params.kind
-    && !params.tag && !params.tags && !params.purpose;
+    && !params.tag && !params.tags && !params.purpose && !params.role.length;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -100,7 +103,7 @@ function buildProductQuery(supabase: any, params: ReturnType<typeof parseSearchP
   const {
     salty, sweet, fatty, spicy,
     search, tag, tags, purpose, dishCategory,
-    hasPriceOnly, kind,
+    hasPriceOnly, kind, role,
     proteinMin, caloriesMax, sodiumMax, sugarMax, fiberMin, healthScoreMin,
     sort, page, limit,
   } = params;
@@ -174,6 +177,10 @@ function buildProductQuery(supabase: any, params: ReturnType<typeof parseSearchP
     if (allTags.size === 1) query = query.contains("functional_tags", [[...allTags][0]]);
     else if (allTags.size > 1) query = query.or([...allTags].map(t => `functional_tags.cs.{${t}}`).join(","));
   }
+
+  // 역할 필터 (메인 요리·밥·국·찌개·반찬)
+  if (role.length === 1) query = query.eq("dish_role", role[0]);
+  else if (role.length > 1) query = query.in("dish_role", role);
 
   // 음식 종류 필터
   if (dishCategory) {
