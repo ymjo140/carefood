@@ -1,0 +1,39 @@
+name: 식약처 영양 받기 (나트륨)
+
+# data/mfds-sodium 갈래에 data/mfds/request.json 을 올리면 돈다 — DB 는 바꾸지 않고, 받은 값을 같은 갈래의 data/mfds/out/ 에 올린다.
+# 반영(DB)은 사람이 숫자를 확인한 뒤 따로 한다. 키는 비밀값 MFDS_API_KEY.
+on:
+  push:
+    branches: ["data/mfds-sodium"]
+    paths: ["data/mfds/request.json"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: mfds-sodium
+  cancel-in-progress: false
+
+jobs:
+  pull:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: 받기
+        env:
+          MFDS_API_KEY: ${{ secrets.MFDS_API_KEY }}
+        run: python scripts/mfds_pull.py 2>&1 | tee data/mfds/out-log.txt
+      - name: 결과 올리기
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898299+github-actions[bot]@users.noreply.github.com"
+          mkdir -p data/mfds/out
+          cp data/mfds/out-log.txt data/mfds/out/log.txt || true
+          git add data/mfds/out
+          git commit -m "식약처 받은 값 ($(date -u +%FT%TZ))" || echo "바뀐 것 없음"
+          git push
