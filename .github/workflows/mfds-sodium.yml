@@ -23,17 +23,20 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: 받기
+      - name: git 준비
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898299+github-actions[bot]@users.noreply.github.com"
+      - name: 받기 (조각마다 올림 · 100분이 지나면 멈추고 다음 번에 이어 받기)
         env:
           MFDS_API_KEY: ${{ secrets.MFDS_API_KEY }}
         run: python scripts/mfds_pull.py 2>&1 | tee data/mfds/out-log.txt
       - name: 결과 올리기
         if: always()
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898299+github-actions[bot]@users.noreply.github.com"
           mkdir -p data/mfds/out
           cp data/mfds/out-log.txt data/mfds/out/log.txt || true
           git add data/mfds/out
           git commit -m "식약처 받은 값 ($(date -u +%FT%TZ))" || echo "바뀐 것 없음"
+          git pull -q --rebase || true
           git push
