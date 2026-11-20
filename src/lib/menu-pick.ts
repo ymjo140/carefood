@@ -6,10 +6,11 @@
 import type { CommonFoodRow } from "@/lib/dishes";
 import { seedOf } from "@/lib/buddy";
 import { budgetFit, sodiumCap, sodiumTerm, underCap } from "@/lib/rec-fit";
-import { mealTimeBonus, offMeal } from "@/lib/meal-time";
+import { fitsMeal, isMain, timeBonus, type MealClass } from "@/lib/meal-time";
 import { signalTerm, type Signals } from "@/lib/rec-events";
 
-export type Menu = Omit<CommonFoodRow, "source">;
+/** 대표 메뉴 — 끼니 때·역할 칸(meal_times·breakfast_pref·dish_role)은 있으면 쓴다 (lib/meal-time) */
+export type Menu = Omit<CommonFoodRow, "source"> & MealClass;
 export type MealKey = "breakfast" | "lunch" | "dinner" | "snack";
 export type Budget = {
   meal: MealKey;
@@ -43,7 +44,7 @@ export function menuScore(f: Menu, b: Budget) {
   const kcal = f.calories || 1, p = f.protein_g || 0;
   const fill = b.protein > 0 ? Math.min(1, p / b.protein) : 0;
   return budgetFit(kcal, b.kcal) * 3 + fill * 2 + Math.min(1.5, (p * 4) / kcal) + sodiumTerm(f.sodium_mg, b.sodium, b.sodiumCap)
-    + mealTimeBonus(f.name, b.meal) + signalTerm(b.signals, `menu:${f.name}`);
+    + timeBonus(f, b.meal) + signalTerm(b.signals, `menu:${f.name}`);
 }
 
 /** 남은 양에 맞는 메뉴 n개 — 같은 종류(한식·양식…)는 한 번씩, 날마다 조금씩 다르게(seed) */
@@ -56,7 +57,8 @@ export function pickMenus(foods: Menu[], b: Budget, n = 2, seed = 0): Menu[] {
   const fits = foods.filter((f) =>
     cats.has(f.category) &&
     (f.calories || 0) >= minKcal && (f.calories || 0) <= maxKcal &&
-    !b.avoid.some((w) => w && f.name.includes(w)) && !offMeal(f.name, b.meal));
+    !b.avoid.some((w) => w && f.name.includes(w)) &&
+    fitsMeal(f, b.meal) && (b.meal === "snack" || isMain(f)));
   const meaty = b.meal === "snack" ? fits : fits.filter((f) => (f.protein_g || 0) >= 8);
   const ok = meaty.length ? meaty : fits;
   const score = (f: Menu) => menuScore(f, b);

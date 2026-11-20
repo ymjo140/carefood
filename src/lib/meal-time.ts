@@ -28,3 +28,26 @@ export function offMeal(name: string | null | undefined, meal: string) {
 export function mealTimeBonus(name: string | null | undefined, meal: string) {
   return meal === "breakfast" && BREAKFAST_LIKE.test(name || "") ? 0.6 : 0;
 }
+
+/**
+ * DB 칸이 있으면 그것을 먼저 (products·common_foods 의 meal_times · breakfast_pref · dish_role, 마이그레이션 20261120c).
+ *   meal_times: 국민건강영양조사 2024 식품섭취조사의 끼니별 섭취 비율(아침 비중 8% 미만은 아침 빼기, 19% 이상은 아침 우선)
+ *               + 조사에 없는 음식은 정해 둔 묶음 규칙. 칸이 비어 있으면 위의 이름 규칙으로.
+ *   dish_role:  main(그것만으로 한 끼) · rice(밥) · soup(국·찌개) · side(반찬) · snack(간식) · ingredient(재료 — 권하지 않는다)
+ */
+export type MealClass = { name?: string | null; meal_times?: string[] | null; breakfast_pref?: boolean | null; dish_role?: string | null };
+
+/** 이 끼니에 권해도 되는가 */
+export function fitsMeal(x: MealClass, meal: string) {
+  if (x.meal_times && x.meal_times.length) return x.meal_times.includes(meal);
+  return !offMeal(x.name, meal);
+}
+
+/** 이 끼니에 맞으면 더하는 점수 — 아침 우선이면 +0.6 */
+export function timeBonus(x: MealClass, meal: string) {
+  if (x.meal_times && x.meal_times.length) return meal === "breakfast" && x.breakfast_pref ? 0.6 : 0;
+  return mealTimeBonus(x.name, meal);
+}
+
+/** 혼자서 한 끼로 권해도 되는가 — 밥·국·반찬·간식·재료는 한 끼 하나로 권하지 않는다 (역할을 모르면 지금처럼) */
+export const isMain = (x: MealClass) => !x.dish_role || x.dish_role === "main";

@@ -37,24 +37,24 @@ describe("하나 고르기", () => {
   const items = [item("11111111-1111-4111-8111-111111111111", "연어 포케")];
   it("메뉴부터 — 대표 메뉴는 제품 번호 없이 이름과 1인분 값으로 담는다", () => {
     const p = pickOne(menus, items)!;
-    expect(p.food).toEqual({ name: "닭가슴살 덮밥", calories: 520, protein_g: 28, carbs_g: 60, fat_g: 12, sodium_mg: 800 });
+    expect(p.foods[0]).toEqual({ name: "닭가슴살 덮밥", calories: 520, protein_g: 28, carbs_g: 60, fat_g: 12, sodium_mg: 800 });
     expect(p.facts).toBe("520kcal · 단백질 28g");
   });
   it("다른 추천 — 권한 것은 건너뛰고 메뉴·제품을 번갈아 본다", () => {
     const first = pickOne(menus, items)!;
-    const second = pickOne(menus, items, [skipKey(first.food)])!;
-    expect(second.food).toMatchObject({ product_id: "11111111-1111-4111-8111-111111111111", name: "연어 포케", calories: 410.4, protein_g: 31.3, type: "product" });
-    const third = pickOne(menus, items, [skipKey(first.food), skipKey(second.food)])!;
-    expect(third.food.name).toBe("두부 샐러드");
+    const second = pickOne(menus, items, [skipKey(first.foods[0])])!;
+    expect(second.foods[0]).toMatchObject({ product_id: "11111111-1111-4111-8111-111111111111", name: "연어 포케", calories: 410.4, protein_g: 31.3, type: "product" });
+    const third = pickOne(menus, items, [skipKey(first.foods[0]), skipKey(second.foods[0])])!;
+    expect(third.foods[0].name).toBe("두부 샐러드");
   });
   it("점수가 있으면 메뉴·제품을 한 줄로 — 제품 점수가 높으면 제품이 먼저", () => {
     const scored = [{ ...items[0], score: 6 }];
-    expect(pickOne(menus, scored, [], () => 4)!.food.name).toBe("연어 포케");
-    expect(pickOne(menus, [{ ...items[0], score: 2 }], [], () => 4)!.food.name).toBe("닭가슴살 덮밥");
+    expect(pickOne(menus, scored, [], () => 4)!.foods[0].name).toBe("연어 포케");
+    expect(pickOne(menus, [{ ...items[0], score: 2 }], [], () => 4)!.foods[0].name).toBe("닭가슴살 덮밥");
   });
   it("다 권했으면 처음 것으로 돌아가고, 후보가 없으면 null", () => {
     const all = ["menu:닭가슴살 덮밥", "menu:두부 샐러드", "11111111-1111-4111-8111-111111111111"];
-    expect(pickOne(menus, items, all)!.food.name).toBe("닭가슴살 덮밥");
+    expect(pickOne(menus, items, all)!.foods[0].name).toBe("닭가슴살 덮밥");
     expect(pickOne([], [])).toBeNull();
   });
 });

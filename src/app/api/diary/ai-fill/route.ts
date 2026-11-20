@@ -13,7 +13,7 @@ import { saveAiPlan } from "@/lib/ai-fill-server";
 
 /**
  * POST /api/diary/ai-fill { date, meal, skip?: string[] } — 식단 탭 빈 끼니의 'AI 추천' (규칙: lib/ai-fill.ts)
- *   그날 남은 양에 맞는 음식 하나를 골라 그 끼니의 예정(planned_meals, plan_title "AI 추천")으로 담는다. 먹었다는 기록은 아니다.
+ *   그날 남은 양에 맞는 음식 하나(또는 밥·국·반찬 한 상)를 골라 그 끼니의 예정(planned_meals, plan_title "AI 추천")으로 담는다. 먹었다는 기록은 아니다.
  *   오늘부터 두 달 안의 날짜만 (지난 날은 무엇을 먹었는지 AI 가 알 수 없다).
  *   이미 기록했거나 다른 계획(식단 불러오기·가족이 보낸 것)이 담긴 끼니는 덮지 않는다 — 409.
  *   'AI 추천' 예정이 있으면 다시 고른다(skip: 지금까지 권한 것) — 그 줄이 그대로 'AI 추천'일 때만 바꾼다(조건부 update).
@@ -65,22 +65,23 @@ export async function POST(req: NextRequest) {
       ...plans.filter((p) => p.meal !== meal).flatMap((p) => (p.foods || []).map((f) => (f as { product_id?: string }).product_id)).filter((x): x is string => !!x),
     ]);
     const seed = seedOf(me, date, meal);
-    let got = await loadNextPicks(sb, me, { meal, ...b, exclude, menus: 3, seed });
+    let got = await loadNextPicks(sb, me, { meal, ...b, exclude, menus: 3, seed, combos: true });
     // 남은 나트륨이 빠듯해 아무것도 안 맞으면 나트륨 조건 없이 한 번 더
-    if (!got.menus.length && !got.items.length) got = await loadNextPicks(sb, me, { meal, ...b, sodium: 0, sodiumCap: 0, exclude, menus: 3, seed });
+    if (!got.menus.length && !got.items.length && !got.combos.length) got = await loadNextPicks(sb, me, { meal, ...b, sodium: 0, sodiumCap: 0, exclude, menus: 3, seed, combos: true });
     // 메뉴·제품을 같은 점수로 견준다 (높은 쪽 먼저)
-    const pick = pickOne(got.menus, got.items, skip, (m) => menuScore(m, got.menuBudget), seed);
+    const pick = pickOne(got.menus, got.items, skip, (m) => menuScore(m, got.menuBudget), seed, got.combos);
     if (!pick) return NextResponse.json({ error: "지금 조건에 맞는 음식을 찾지 못했어요. 직접 기록해 주세요" }, { status: 404 });
 
-    if (await saveAiPlan(sb, me, date, meal, [pick.food], !!mine) === "conflict") {
+    if (await saveAiPlan(sb, me, date, meal, pick.foods, !!mine) === "conflict") {
       return NextResponse.json({ error: "그 사이 다른 계획이 담겼어요. 새로고침해 주세요" }, { status: 409 });
     }
     const before = mine ? ((mine.foods || []) as PlanFood[]).map(skipKey) : [];
+    const now = pick.foods.map(skipKey);
     await logRec(sb, [
-      ...before.filter((k) => k !== skipKey(pick.food)).map((k) => ({ user_id: me, surface: "ai_fill" as const, item_key: k, meal, day: date, action: "skipped" as const })),
-      { user_id: me, surface: "ai_fill", item_key: skipKey(pick.food), meal, day: date, action: "shown" },
+      ...before.filter((k) => !now.includes(k)).map((k) => ({ user_id: me, surface: "ai_fill" as const, item_key: k, meal, day: date, action: "skipped" as const })),
+      ...now.map((k) => ({ user_id: me, surface: "ai_fill" as const, item_key: k, meal, day: date, action: "shown" as const })),
     ]);
-    return NextResponse.json({ foods: [pick.food], facts: pick.facts });
+    return NextResponse.json({ foods: pick.foods, facts: pick.facts });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });
   }

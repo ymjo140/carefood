@@ -1,6 +1,6 @@
 /** 끼니 때 (lib/meal-time) — 아침에 보쌈·족발·치킨을 권하지 않는다 · 점심·저녁은 가르지 않는다 */
 import { describe, expect, it } from "vitest";
-import { mealTimeBonus, offMeal } from "@/lib/meal-time";
+import { fitsMeal, isMain, mealTimeBonus, offMeal, timeBonus } from "@/lib/meal-time";
 import { pickMenus, type Menu } from "@/lib/menu-pick";
 
 const m = (name: string, calories: number, protein_g: number, sodium_mg: number): Menu =>
@@ -25,5 +25,31 @@ describe("아침에 맞는 음식", () => {
     const b = { kcal: 667, protein: 27, sodium: 667, sodiumCap: 1200, avoid: [] };
     expect(pickMenus(foods, { ...b, meal: "breakfast" }, 2).map((f) => f.name)).toEqual(["김밥"]);
     expect(pickMenus(foods, { ...b, meal: "dinner" }, 1)[0].name).toBe("보쌈");
+  });
+});
+
+describe("DB 칸(끼니 때·역할)이 있으면 그것이 먼저", () => {
+  it("meal_times 에 없는 끼니는 권하지 않고, 아침 우선이면 아침에만 +0.6", () => {
+    const bossam = { name: "보쌈", meal_times: ["lunch", "dinner"] };
+    expect(fitsMeal(bossam, "breakfast")).toBe(false);
+    expect(fitsMeal(bossam, "dinner")).toBe(true);
+    // 이름 규칙으로는 빠질 이름이어도 칸이 열어 두면 따른다 (케이준치킨샌드위치 — 조사로는 샌드위치)
+    expect(fitsMeal({ name: "케이준치킨샌드위치", meal_times: ["breakfast", "lunch", "dinner"] }, "breakfast")).toBe(true);
+    expect(timeBonus({ name: "미역국", meal_times: ["breakfast", "lunch", "dinner"], breakfast_pref: true }, "breakfast")).toBe(0.6);
+    expect(timeBonus({ name: "미역국", meal_times: ["breakfast", "lunch", "dinner"], breakfast_pref: true }, "lunch")).toBe(0);
+  });
+  it("칸이 비어 있으면 이름 규칙으로", () => {
+    expect(fitsMeal({ name: "족발" }, "breakfast")).toBe(false);
+    expect(fitsMeal({ name: "족발", meal_times: [] }, "breakfast")).toBe(false);
+  });
+  it("메인만 하나로 권한다 — 밥·국·반찬·간식·재료는 아니다, 역할을 모르면 지금처럼", () => {
+    expect(isMain({ dish_role: "main" })).toBe(true);
+    expect(isMain({})).toBe(true);
+    for (const r of ["rice", "soup", "side", "snack", "ingredient"]) expect(isMain({ dish_role: r })).toBe(false);
+  });
+  it("대표 메뉴 — 쌀밥(밥)은 한 끼로 나오지 않는다", () => {
+    const foods = [{ ...m("쌀밥", 650, 12, 5), dish_role: "rice" }, m("비빔밥", 600, 20, 900)];
+    const b = { meal: "lunch" as const, kcal: 667, protein: 27, sodium: 667, sodiumCap: 1200, avoid: [] };
+    expect(pickMenus(foods, b, 2).map((f) => f.name)).toEqual(["비빔밥"]);
   });
 });

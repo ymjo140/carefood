@@ -79,7 +79,7 @@ async function candsFor(sb: Sb, meal: MealKey, focus: Focus, base: Base, rb: Awa
   const key = `${meal === "snack" ? "snack" : "meal"}:${focus.key}`;
   if (!rb.prods.has(key)) {
     let q = sb.from("products")
-      .select("id, name, manufacturer, image_url, calories, protein_g, carbs_g, sugar_g, fat_g, sodium_mg, serving_size_g, nutrient_base_g, dish_category, taste_salty, taste_sweet, taste_fatty, taste_spicy, spicy_score")
+      .select("id, name, manufacturer, image_url, calories, protein_g, carbs_g, sugar_g, fat_g, sodium_mg, serving_size_g, nutrient_base_g, dish_category, taste_salty, taste_sweet, taste_fatty, taste_spicy, spicy_score, meal_times, breakfast_pref, dish_role")
       .eq("is_purchasable", true).is("nutrition_flag", null).is("rec_hold", null).gt("calories", 0)
       .gt("serving_size_g", 0).lte("serving_size_g", 350).not(o.col, "is", null);
     // 종류를 DB 에서 먼저 거른 뒤 자른다 (lib/next-picks 와 같은 이유 — 자른 뒤 거르면 후보가 거의 남지 않는다)
@@ -98,7 +98,8 @@ async function candsFor(sb: Sb, meal: MealKey, focus: Focus, base: Base, rb: Awa
       const r = perServing(raw);
       // 맛 단계는 100g 기준 값으로 잰다 (perServing 전)
       return { kind: "product" as const, id: r.id, name: r.name, maker: r.manufacturer, image: r.image_url, category: r.dish_category,
-        calories: r.calories, protein_g: r.protein_g, carbs_g: r.carbs_g, sugar_g: r.sugar_g, sodium_mg: r.sodium_mg, ...rb.fit(raw) };
+        calories: r.calories, protein_g: r.protein_g, carbs_g: r.carbs_g, sugar_g: r.sugar_g, sodium_mg: r.sodium_mg, ...rb.fit(raw),
+        meal_times: raw.meal_times as string[] | null, breakfast_pref: raw.breakfast_pref as boolean | null, dish_role: raw.dish_role as string | null };
     });
   const cats = meal === "snack" ? SNACK_CATS : MEAL_CATS;
   const menus: Cand[] = base.foods.filter((f) => cats.has(f.category)).map((f) => {
@@ -107,6 +108,7 @@ async function candsFor(sb: Sb, meal: MealKey, focus: Focus, base: Base, rb: Awa
     return {
       kind: "menu" as const, id: f.id, name: f.name, maker: null, image: null, category: f.category,
       calories: f.calories, protein_g: f.protein_g, carbs_g: f.carbs_g, sugar_g: f.sugar_g, sodium_mg: f.sodium_mg,
+      meal_times: f.meal_times, breakfast_pref: f.breakfast_pref, dish_role: f.dish_role,
       ...rb.fit({ sodium_mg: per100(f.sodium_mg), sugar_g: per100(f.sugar_g), fat_g: per100(f.fat_g) }),
     };
   });
@@ -182,7 +184,7 @@ async function loadCtx(sb: Sb, actor: string, t: TodayMood, access: Access, budd
   const [dRes, pRes, fRes] = await Promise.all([
     sb.from("meal_diary").select("id, meal_type, food_name, created_at").eq("user_id", actor).eq("date", t.today).order("created_at", { ascending: true }).limit(40),
     sb.from("user_profiles").select("allergies, goals, conditions, concerns, diet_type, taste_salty, taste_sweet, taste_fatty, taste_spicy").eq("user_id", actor).maybeSingle(),
-    sb.from("common_foods").select("id, name, category, serving_desc, serving_size_g, calories, protein_g, carbs_g, fat_g, sodium_mg, sugar_g"),
+    sb.from("common_foods").select("id, name, category, serving_desc, serving_size_g, calories, protein_g, carbs_g, fat_g, sodium_mg, sugar_g, meal_times, breakfast_pref, dish_role"),
   ]);
   if (dRes.error) throw new Error(dRes.error.message);
   if (pRes.error) throw new Error(pRes.error.message);
