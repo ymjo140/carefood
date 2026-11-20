@@ -41,3 +41,9 @@ alter table public.common_foods add constraint common_foods_dish_role_check chec
 --     and (name ~ '맥반석\s?(구운)?\s?(란|계란|달걀|유정란)|구운\s?(란|계란|달걀|유정란)|반숙란|훈제란|참숯란|초란|구운란' or name ~ '부어스트|닭꼬치|소시지|후랑크|프랑크|비엔나')
 --     and name !~ '볶음밥|김밥|도시락|찌개|핫도그$|덮밥|피자|파스타|떡볶이|버거|샌드위치|토스트|스테이크|닭꼬치맛|볶음$|전골|탕$|라면|면$';
 --   훈제 삼겹·목살·바비큐, 안심까스·롤까스·텐더 13개 → main · 미듬애부각(반찬용) → side · 달곰마토(스테비아토마토) → snack(간식만)
+
+-- 확인 필요 336개 — 사용자가 확인함 (17:35, "BBQ 오징어 → 간식, 나머지는 맞음")
+alter table public.products drop constraint if exists products_meal_class_src_check;
+alter table public.products add constraint products_meal_class_src_check check (meal_class_src in ('survey', 'rule', 'review', 'checked'));
+--   update products set dish_role = 'snack', meal_times = array['snack'], breakfast_pref = false where name = 'BBQ 오징어';
+--   update products set meal_class_src = 'checked' where meal_class_src = 'review';
