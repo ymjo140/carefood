@@ -5,6 +5,7 @@
  */
 import type { CommonFoodRow } from "@/lib/dishes";
 import { seedOf } from "@/lib/buddy";
+import { budgetFit } from "@/lib/rec-fit";
 
 export type Menu = Omit<CommonFoodRow, "source">;
 export type MealKey = "breakfast" | "lunch" | "dinner" | "snack";
@@ -42,19 +43,23 @@ export function pickMenus(foods: Menu[], b: Budget, n = 2, seed = 0): Menu[] {
     !b.avoid.some((w) => w && f.name.includes(w)));
   const meaty = b.meal === "snack" ? fits : fits.filter((f) => (f.protein_g || 0) >= 8);
   const ok = meaty.length ? meaty : fits;
+  // 몫 맞춤×3 + 단백질 채움×2 + kcal 당 단백질(최대 1.5) — 다음 끼니 제품과 같은 식 (lib/rec-fit, lib/next-picks pickScore)
   const score = (f: Menu) => {
     const kcal = f.calories || 1, p = f.protein_g || 0;
     const fill = b.protein > 0 ? Math.min(1, p / b.protein) : 0;
-    return fill * 2 + (p * 4) / kcal;
+    return budgetFit(kcal, b.kcal) * 3 + fill * 2 + Math.min(1.5, (p * 4) / kcal);
   };
   const byScore = (a: Menu, z: Menu) => score(z) - score(a) || a.name.localeCompare(z.name);
   // 남은 나트륨 안에 드는 것 먼저(점수순), 모자라면 나트륨이 적은 순으로 채운다
   const under = ok.filter((f) => (f.sodium_mg || 0) <= b.sodium).sort(byScore);
   const over = ok.filter((f) => (f.sodium_mg || 0) > b.sodium).sort((a, z) => (a.sodium_mg || 0) - (z.sodium_mg || 0) || byScore(a, z));
   const scored = [...under, ...over].map((f) => ({ f }));
-  // 위쪽 6개 안에서 날마다 시작점을 돌린다 — 매일 같은 메뉴만 나오지 않게
+  // 위쪽(최고 점수와 1점 안쪽, 6개까지)에서 날마다 시작점을 돌린다 — 매일 같은 메뉴만 나오지 않게.
+  //   1점 밖은 돌리지 않는다: 몫에 한참 못 미치는 것이 날짜 때문에 맨 앞에 오지 않게
   // 나트륨 안에 드는 것이 n개 이상이면 그 안에서만 돌린다 (넘는 것이 위로 올라오지 않게)
-  const top = scored.slice(0, Math.max(n, Math.min(6, under.length)));
+  const best = under.length ? score(under[0]) : 0;
+  const near = under.slice(0, 6).filter((f) => score(f) >= best - 1).length;
+  const top = scored.slice(0, Math.max(n, near));
   const start = top.length ? seedOf(seed) % top.length : 0;
   const ordered = [...top.slice(start), ...top.slice(0, start), ...scored.slice(top.length)];
   const out: Menu[] = [];
@@ -71,7 +76,9 @@ export function pickMenus(foods: Menu[], b: Budget, n = 2, seed = 0): Menu[] {
 /** 메뉴 한 줄 숫자 — "단백질 21g · 나트륨 640mg · 520kcal" */
 export function menuFacts(m: Pick<Menu, "calories" | "protein_g" | "sodium_mg">) {
   const f = (v: number | null) => Math.round(v || 0).toLocaleString("ko-KR");
-  return `단백질 ${f(m.protein_g)}g · 나트륨 ${f(m.sodium_mg)}mg · ${f(m.calories)}kcal`;
+  // 나트륨을 모르면 0mg 이라고 쓰지 않고 뺀다
+  const na = m.sodium_mg == null ? "" : ` · 나트륨 ${f(m.sodium_mg)}mg`;
+  return `단백질 ${f(m.protein_g)}g${na} · ${f(m.calories)}kcal`;
 }
 
 /** 무엇을 기준으로 골랐는지 한 줄 — 단백질이 많이 남았으면 단백질, 나트륨이 빠듯하면 나트륨, 아니면 열량 */

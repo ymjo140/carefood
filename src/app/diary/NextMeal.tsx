@@ -7,7 +7,7 @@ import { menuFacts, type Menu } from "@/lib/menu-pick";
 
 export type NextCandidate = {
   id: string; name: string; manufacturer: string | null; image_url: string | null;
-  calories: number; protein_g: number; sodium_mg: number; serving_size_g: number | null;
+  calories: number; protein_g: number; sodium_mg: number | null; serving_size_g: number | null;
 };
 
 const MEAL_LABEL: Record<string, string> = { breakfast: "아침", lunch: "점심", dinner: "저녁", snack: "간식" };
@@ -102,7 +102,7 @@ export function NextMeal({ remainKcal, remainProtein, remainSodium, goalKcal, me
               <Thumb src={c.image_url} size={44} />
               <div className="flex-1 min-w-0">
                 <Link href={`/products/${c.id}`} className="block text-label font-medium text-ink line-clamp-1 hover:underline">{c.name}</Link>
-                <p className="text-caption text-ink-2"><span className="num">{c.calories}</span>kcal · 단백질 <span className="num">{c.protein_g}</span>g · 나트륨 <span className="num">{c.sodium_mg}</span>mg</p>
+                <p className="text-caption text-ink-2"><span className="num">{c.calories}</span>kcal · 단백질 <span className="num">{c.protein_g}</span>g{c.sodium_mg != null && <> · 나트륨 <span className="num">{c.sodium_mg}</span>mg</>}</p>
               </div>
               <Button size="sm" variant="secondary" loading={busy === c.id} disabled={!!busy}
                 onClick={async () => { setBusy(c.id); try { await onLog(c, meal); } finally { setBusy(null); } }}>

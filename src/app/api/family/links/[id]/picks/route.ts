@@ -35,7 +35,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const { menus, items } = await loadNextPicks(sb, owner, { meal, kcal: budget.kcal, protein: budget.protein, sodium: budget.sodium, menus: 3, seed: seedOf(owner, today, meal) });
     const prices = await loadPrices(sb, items.map((i) => i.id));
     return NextResponse.json({
-      menus: menus.map((m) => ({ id: m.id, name: m.name, category: m.category, serving_desc: m.serving_desc, calories: Math.round(Number(m.calories) || 0), protein_g: Math.round(Number(m.protein_g) || 0), sodium_mg: Math.round(Number(m.sodium_mg) || 0) })),
+      menus: menus.map((m) => ({ id: m.id, name: m.name, category: m.category, serving_desc: m.serving_desc, calories: Math.round(Number(m.calories) || 0), protein_g: Math.round(Number(m.protein_g) || 0), sodium_mg: m.sodium_mg == null ? null : Math.round(Number(m.sodium_mg)) })),
       items: items.map((i) => {
         const ps = (prices[i.id] || []).filter((p) => p.price > 0);
         return { id: i.id, name: i.name, image_url: i.image_url || ps.find((p) => p.image_url)?.image_url || null, calories: i.calories, protein_g: Math.round(i.protein_g), sodium_mg: i.sodium_mg, price: ps.length ? Math.min(...ps.map((p) => p.price)) : null };

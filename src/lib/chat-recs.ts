@@ -14,6 +14,7 @@
 import { josa, seedOf } from "@/lib/buddy";
 import { daysBetween } from "@/lib/day";
 import type { MealKey } from "@/lib/menu-pick";
+import { budgetFit, sodiumTerm } from "@/lib/rec-fit";
 
 export type FocusKey = "sugar" | "sodium" | "protein" | "light" | "budget";
 export type Focus = { key: FocusKey; reason: string };
@@ -166,24 +167,28 @@ export function rankRecs(cands: Cand[], focus: FocusKey, b: RecBudget, seed: str
     return true;
   });
   const protein = (c: Cand) => n(c.protein_g) ?? 0;
+  // 몫 맞춤 (lib/rec-fit) — 물은 초점이 있으면 그 초점이 먼저이고 몫은 거들기만(×1.5), 없으면 다음 끼니와 같은 식(×3)
+  const fit = (c: Cand) => budgetFit(n(c.calories), b.kcal);
   const base = (c: Cand): number => {
     const kcal = n(c.calories) || 1;
-    if (focus === "sugar") return -(n(c.sugar_g) ?? 99) * 2 + protein(c) / 10;
-    if (focus === "sodium") return -(n(c.sodium_mg) ?? 9999) / 100 + protein(c) / 10;
-    if (focus === "protein") return protein(c) / 5;
-    if (focus === "light") return (protein(c) * 4) / kcal * 5;
+    if (focus === "sugar") return -(n(c.sugar_g) ?? 99) * 2 + protein(c) / 10 + fit(c) * 1.5;
+    if (focus === "sodium") return -(n(c.sodium_mg) ?? 9999) / 100 + protein(c) / 10 + fit(c) * 1.5;
+    if (focus === "protein") return protein(c) / 5 + fit(c) * 1.5;
+    if (focus === "light") return (protein(c) * 4) / kcal * 5 + fit(c) * 0.5; // 가볍게를 물었으면 몫보다 가벼운 쪽이 맞다
     const fill = b.protein > 0 ? Math.min(1, protein(c) / b.protein) : 0;
-    const over = (n(c.sodium_mg) ?? 0) > b.sodium ? -1 : 0;
-    return fill * 2 + (protein(c) * 4) / kcal + over;
+    return fit(c) * 3 + fill * 2 + Math.min(1.5, (protein(c) * 4) / kcal) + sodiumTerm(n(c.sodium_mg), b.sodium);
   };
   // 입맛이 가까우면 앞으로 (0~100 → -2~+2), 최근 권한 것은 뒤로
   const score = (c: Cand) => base(c) + (c.taste != null ? (c.taste - 50) / 25 : 0) - (shown.has(c.id) ? 3 : 0);
   const sorted = [...ok].sort((a, z) => score(z) - score(a) || a.name.localeCompare(z.name));
   // 위쪽 6개 안에서 날마다 시작점을 돌린다 (매번 같은 것만 나오지 않게)
+  // 최고 점수와 1점 안쪽(6개까지)에서만 돌린다 — 몫에 한참 못 미치는 것이 날짜 때문에 앞에 오지 않게
   const rotate = (list: Cand[]) => {
-    const top = list.slice(0, 6);
+    const best = list.length ? score(list[0]) : 0;
+    const top = list.slice(0, 6).filter((c) => score(c) >= best - 1);
+    if (!top.length) return list;
     const s = top.length ? seedOf(seed, focus) % top.length : 0;
-    return [...top.slice(s), ...top.slice(0, s), ...list.slice(6)];
+    return [...top.slice(s), ...top.slice(0, s), ...list.slice(top.length)];
   };
   const menus = rotate(sorted.filter((c) => c.kind === "menu"));
   const products = rotate(sorted.filter((c) => c.kind === "product"));
