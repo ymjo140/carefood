@@ -1,10 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "@/components/ui/AppLink";
 import { PLATFORM_LABELS } from "@/lib/platforms";
-import { Button, Card, EmptyState, Price, ProductImage, SectionHeader, Select, Skeleton, TextLink, Thumb, useToast } from "@/components/ui";
+import { Button, Card, EmptyState, Price, ProductImage, SectionHeader, Select, Skeleton, TextButton, TextLink, Thumb, useToast } from "@/components/ui";
+import HomeMealPlaceSheet, { type PlaceTarget } from "@/components/HomeMealPlaceSheet";
 import { defaultMeal, HOME_MEAL_LABEL, HOME_MEALS, hourKst } from "@/lib/home-meal";
+import { todayKst } from "@/lib/day";
 import type { MealKey } from "@/lib/menu-pick";
 
 /**
@@ -12,7 +14,9 @@ import type { MealKey } from "@/lib/menu-pick";
  *   1) 제품 추천: 그것만으로 한 끼인 메인 제품
  *   2) 식단 추천: 밥 + 국·찌개 + 반찬 한 상 (간식은 없음)
  * 서버: /api/home/meal-recs (규칙: lib/home-meal · lib/next-picks — 식단 탭 'AI 추천'과 같다)
- * 처음 끼니는 지금 시각으로 (lib/home-meal defaultMeal). '담기'는 오늘 그 끼니의 예정으로 — 먹었다는 기록이 아니다.
+ * 처음 끼니는 지금 시각으로 (lib/home-meal defaultMeal). '담기'는 날짜·끼니를 골라(HomeMealPlaceSheet) 그날의 예정으로 — 먹었다는 기록이 아니다.
+ * 한 상은 세 상이 서로 겹치지 않는다. '다른 한 상 보기'는 다음 세 상으로 바꾸고, '더보기'는 세 상씩 더 붙인다(최대 9) —
+ *   이미 보여 준 음식(seen)을 서버에 보내 겹치지 않게 고른다. 더 고를 것이 없으면 처음부터 다시.
  * 순서는 영양 기준뿐 — 광고비로 바꾸지 않는다.
  */
 type Food = {
@@ -20,11 +24,13 @@ type Food = {
   calories: number; protein_g: number; sodium_mg: number | null;
   image_url: string | null; price: number | null; platform: string | null;
 };
+type Combo = { foods: Food[]; calories: number; protein_g: number; sodium_mg: number | null };
 type Recs = {
   meal: MealKey; budget: { kcal: number; sodiumCap: number };
   products: Food[];
-  combos: { foods: Food[]; calories: number; protein_g: number; sodium_mg: number | null }[];
+  combos: Combo[];
 };
+const MAX_COMBOS = 9;
 const ROLE_SHORT: Record<string, string> = { rice: "밥", soup: "국", side: "반찬" };
 const fmt = (n: number) => Math.round(n).toLocaleString("ko-KR");
 
@@ -33,9 +39,16 @@ export default function HomeMealRecs() {
   const [meal, setMeal] = useState<MealKey | null>(null);
   const [recs, setRecs] = useState<Recs | null>(null);
   const [failed, setFailed] = useState(false);
-  const [saving, setSaving] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
   const req = useRef(0);
+  // 한 상 — 처음 세 상은 recs 와 같이 오고, 바꾸기·더보기는 따로 부른다
+  const [combos, setCombos] = useState<Combo[]>([]);
+  const [comboBusy, setComboBusy] = useState<"refresh" | "more" | null>(null);
+  const [moreFailed, setMoreFailed] = useState(false);
+  const [noMore, setNoMore] = useState(false);
+  const seen = useRef(new Set<string>());
+  const comboReq = useRef(0);
+  const [place, setPlace] = useState<PlaceTarget | null>(null);
 
   // 처음 끼니는 지금 시각으로 (화면을 그린 뒤 — 서버와 기기 시각이 달라도 어긋나지 않게)
   useEffect(() => { setMeal(defaultMeal(hourKst())); }, []); // eslint-disable-line react-hooks/set-state-in-effect -- 시각은 기기에서만 안다
@@ -43,12 +56,15 @@ export default function HomeMealRecs() {
   useEffect(() => {
     if (!meal) return;
     const n = ++req.current; // 끼니를 빨리 바꾸면 늦게 온 앞 응답이 덮지 않게 — 마지막 요청만 반영
-    setRecs(null); setFailed(false); // eslint-disable-line react-hooks/set-state-in-effect -- 끼니를 바꾸면 불러오는 중으로
+    comboReq.current++;       // 끼니가 바뀌면 진행 중이던 바꾸기·더보기 응답도 버린다
+    setRecs(null); setFailed(false); setComboBusy(null); setMoreFailed(false); setNoMore(false); // eslint-disable-line react-hooks/set-state-in-effect -- 끼니를 바꾸면 불러오는 중으로
     fetch(`/api/home/meal-recs?meal=${meal}`)
       .then(async (r) => {
         const data = await r.json();
         if (!r.ok) throw new Error(data.error || String(r.status));
-        if (n === req.current) setRecs(data);
+        if (n !== req.current) return;
+        setRecs(data); setCombos(data.combos);
+        seen.current = new Set((data.combos as Combo[]).flatMap((c) => c.foods.map((f) => f.id)));
       })
       .catch((e) => {
         console.error("홈 끼니 추천:", e);
@@ -58,24 +74,43 @@ export default function HomeMealRecs() {
 
   const label = meal ? HOME_MEAL_LABEL[meal] : "";
 
-  const add = useCallback(async (key: string, ids: string[]) => {
-    if (!meal || saving) return;
-    setSaving(key);
+  /** 다른 한 상 보기(refresh): 지금 세 상을 다음 세 상으로 · 더보기(more): 세 상을 아래에 더 */
+  async function moreCombos(kind: "refresh" | "more") {
+    if (!meal || comboBusy) return;
+    const n = ++comboReq.current;
+    setComboBusy(kind); setMoreFailed(false);
+    const shown = combos.flatMap((c) => c.foods.map((f) => f.id));
+    const ask = async (skip: string[]) => {
+      const q = new URLSearchParams({ meal, part: "combos" });
+      if (skip.length) q.set("skip", skip.join(","));
+      if (kind === "refresh" && shown.length) q.set("prev", shown.join(","));
+      const r = await fetch(`/api/home/meal-recs?${q}`);
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || String(r.status));
+      return d.combos as Combo[];
+    };
     try {
-      const r = await fetch("/api/home/meal-recs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ meal, product_ids: ids }) });
-      const data = await r.json().catch(() => ({}));
-      if (!r.ok) {
-        toast.show(r.status >= 500 ? "담지 못했어요. 다시 시도해 주세요" : data.error || "담지 못했어요", { tone: "danger" });
-        return;
+      let got = await ask([...seen.current]);
+      if (kind === "refresh" && got.length === 0) {
+        // 다 보여 줬으면 처음부터 다시 돈다
+        seen.current = new Set();
+        got = await ask(shown);
       }
-      toast.show(`오늘 ${label} 예정에 담았어요. 식단 탭에서 볼 수 있어요`);
+      if (n !== comboReq.current) return;
+      for (const c of got) for (const f of c.foods) seen.current.add(f.id);
+      if (kind === "refresh") { setCombos(got); setNoMore(false); }
+      else { setCombos((prev) => [...prev, ...got].slice(0, MAX_COMBOS)); if (got.length < 3) setNoMore(true); }
     } catch (e) {
-      console.error("홈 끼니 담기:", e);
-      toast.show("담지 못했어요. 다시 시도해 주세요", { tone: "danger" });
+      console.error("한 상 더 불러오기:", e);
+      if (n !== comboReq.current) return;
+      if (kind === "more") setMoreFailed(true);
+      else toast.show("다른 한 상을 불러오지 못했어요. 다시 시도해 주세요", { tone: "danger" });
     } finally {
-      setSaving(null);
+      if (n === comboReq.current) setComboBusy(null);
     }
-  }, [meal, saving, toast, label]);
+  }
+
+  const openPlace = (ids: string[], summary: string, calories: number) => setPlace({ ids, summary, calories });
 
   return (
     <section aria-labelledby="home-meal-title" className="pt-8 flex flex-col gap-6">
@@ -131,8 +166,7 @@ export default function HomeMealRecs() {
                       </div>
                     </Link>
                     <div className="px-3 pb-3 mt-auto">
-                      <Button variant="secondary" size="sm" block loading={saving === p.id} disabled={!!saving && saving !== p.id}
-                        onClick={() => add(p.id, [p.id])}>{label}에 담기</Button>
+                      <Button variant="secondary" size="sm" block onClick={() => openPlace([p.id], p.name, p.calories)}>{label}에 담기</Button>
                     </div>
                   </div>
                 ))}
@@ -142,47 +176,71 @@ export default function HomeMealRecs() {
 
           {meal !== "snack" && (
             <div>
-              <SectionHeader title="식단 추천" description="밥 · 국 · 반찬을 한 상으로" />
-              {recs.combos.length === 0 ? (
+              <SectionHeader title="식단 추천" description="밥 · 국 · 반찬을 한 상으로 — 세 상 모두 다른 음식으로"
+                action={combos.length > 0 && (
+                  <Button variant="secondary" size="sm" icon="refresh" loading={comboBusy === "refresh"} disabled={!!comboBusy}
+                    onClick={() => moreCombos("refresh")}>다른 한 상 보기</Button>
+                )} />
+              {combos.length === 0 ? (
                 <p className="text-label text-ink-2">이 끼니 몫에 맞는 한 상을 찾지 못했어요. 위 제품에서 골라 주세요</p>
               ) : (
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {recs.combos.map((c) => {
-                    const key = c.foods.map((f) => f.id).join("+");
-                    return (
-                      <Card key={key} className="flex flex-col gap-3">
-                        <ul className="flex flex-col gap-2">
-                          {c.foods.map((f) => (
-                            <li key={f.id}>
-                              <Link href={`/products/${f.id}`} className="flex items-center gap-3 rounded-md transition-colors hover:bg-sunken">
-                                <Thumb src={f.image_url} size={44} />
-                                <span className="min-w-0 flex-1">
-                                  <span className="block text-caption text-ink-2">{ROLE_SHORT[f.role] || "메인"}</span>
-                                  <span className="block text-label text-ink truncate">{f.name}</span>
-                                </span>
-                                <span className="text-caption text-ink-2 num whitespace-nowrap">{fmt(f.calories)}kcal</span>
-                              </Link>
-                            </li>
-                          ))}
-                        </ul>
-                        <div className="pt-3 border-t border-line text-label">
-                          <p><span className="num text-title font-bold text-ink">{fmt(c.calories)}</span> kcal</p>
-                          <p className="flex flex-wrap gap-x-4 mt-1 text-ink-2">
-                            <span>단백질 <span className="num font-bold text-protein">{Math.round(c.protein_g)}g</span></span>
-                            {c.sodium_mg != null && <span>나트륨 <span className="num font-bold text-sodium">{fmt(c.sodium_mg)}mg</span></span>}
-                          </p>
-                        </div>
-                        <Button variant="secondary" block loading={saving === key} disabled={!!saving && saving !== key}
-                          onClick={() => add(key, c.foods.map((f) => f.id))}>{label}에 담기</Button>
-                      </Card>
-                    );
-                  })}
-                </div>
+                <>
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" aria-busy={comboBusy === "refresh"}>
+                    {combos.map((c) => {
+                      const key = c.foods.map((f) => f.id).join("+");
+                      return (
+                        <Card key={key} className="flex flex-col gap-3 animate-fade-in">
+                          <ul className="flex flex-col gap-2">
+                            {c.foods.map((f) => (
+                              <li key={f.id}>
+                                <Link href={`/products/${f.id}`} className="flex items-center gap-3 rounded-md transition-colors hover:bg-sunken">
+                                  <Thumb src={f.image_url} size={44} />
+                                  <span className="min-w-0 flex-1">
+                                    <span className="block text-caption text-ink-2">{ROLE_SHORT[f.role] || "메인"}</span>
+                                    <span className="block text-label text-ink truncate">{f.name}</span>
+                                  </span>
+                                  <span className="text-caption text-ink-2 num whitespace-nowrap">{fmt(f.calories)}kcal</span>
+                                </Link>
+                              </li>
+                            ))}
+                          </ul>
+                          <div className="pt-3 border-t border-line text-label">
+                            <p><span className="num text-title font-bold text-ink">{fmt(c.calories)}</span> kcal</p>
+                            <p className="flex flex-wrap gap-x-4 mt-1 text-ink-2">
+                              <span>단백질 <span className="num font-bold text-protein">{Math.round(c.protein_g)}g</span></span>
+                              {c.sodium_mg != null && <span>나트륨 <span className="num font-bold text-sodium">{fmt(c.sodium_mg)}mg</span></span>}
+                            </p>
+                          </div>
+                          <Button variant="secondary" block
+                            onClick={() => openPlace(c.foods.map((f) => f.id), c.foods.map((f) => f.name).join(" · "), c.calories)}>{label}에 담기</Button>
+                        </Card>
+                      );
+                    })}
+                    {comboBusy === "more" && Array.from({ length: 3 }, (_, i) => (
+                      <Skeleton key={`more-${i}`} className="h-56 rounded-lg" />
+                    ))}
+                  </div>
+                  <div className="flex justify-center mt-3">
+                    {moreFailed ? (
+                      <p className="text-label text-ink-2 flex items-center gap-2">한 상을 더 불러오지 못했어요
+                        <TextButton onClick={() => moreCombos("more")}>다시 불러오기</TextButton></p>
+                    ) : combos.length < MAX_COMBOS && !noMore ? (
+                      <TextButton disabled={!!comboBusy} onClick={() => moreCombos("more")}>더보기</TextButton>
+                    ) : noMore ? (
+                      <p className="text-caption text-ink-2">이 끼니 몫에 맞는 한 상은 여기까지예요</p>
+                    ) : null}
+                  </div>
+                </>
               )}
             </div>
           )}
           {meal === "snack" && <p className="text-label text-ink-2 -mt-2">간식은 한 상 대신 하나씩 권해요</p>}
         </>
+      )}
+      {meal && (
+        <HomeMealPlaceSheet target={place} initialMeal={meal} onClose={() => setPlace(null)}
+          // 오늘에 담았으면 오늘 몫이 바뀐다 — 추천을 다시 불러온다
+          onPlaced={(date) => { if (date === todayKst()) setAttempt((n) => n + 1); }} />
       )}
     </section>
   );

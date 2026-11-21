@@ -2,6 +2,7 @@ import { perServing } from "@/lib/nutrition";
 import { ALLERGEN_KEYWORDS } from "@/lib/recommend/constants";
 import { mealBudget, pickMenus, type MealKey, type Menu } from "@/lib/menu-pick";
 import { budgetFit, known, plausible, snackFit, sodiumTerm, underCap } from "@/lib/rec-fit";
+import { dishFamily } from "@/lib/dish-family";
 import { fitsMeal, timeBonus, type MealClass } from "@/lib/meal-time";
 import { loadSignals, signalTerm, type Signals } from "@/lib/rec-events";
 import { addDays, todayKst } from "@/lib/day";
@@ -67,7 +68,7 @@ export async function personMealBudget(sb: Sb, person: string, meal: "breakfast"
   return { ...budget, sodiumCap: b.kcal >= 120 ? b.sodiumCap : Math.max(b.sodium, b.sodiumCap), recorded: recorded.has(meal) };
 }
 
-export async function loadNextPicks(sb: Sb, person: string | string[], o: { meal: MealKey; kcal: number; protein: number; sodium: number; sodiumCap?: number; exclude?: Set<string>; menus: number; seed: number; combos?: boolean; count?: number }) {
+export async function loadNextPicks(sb: Sb, person: string | string[], o: { meal: MealKey; kcal: number; protein: number; sodium: number; sodiumCap?: number; exclude?: Set<string>; menus: number; seed: number; combos?: boolean; count?: number; comboCount?: number; comboAvoid?: Set<string> }) {
   const { meal, kcal, protein, sodium, sodiumCap } = o;
   const exclude = o.exclude || new Set<string>();
   const [{ data: rows, error }, { data: prof, error: pErr }, { data: foods, error: fErr }, signals] = await Promise.all([
@@ -124,7 +125,7 @@ export async function loadNextPicks(sb: Sb, person: string | string[], o: { meal
   const menus = pickMenus((foods || []) as Menu[], mb, o.menus, o.seed);
   const combos = o.combos && meal !== "snack"
     // 밥은 그날 다른 끼니와 같아도 된다(같은 즉석밥을 또 먹는 것은 흔하다) — 국·반찬만 겹치지 않게
-    ? await loadCombos(sb, { meal, kcal, protein, sodium, sodiumCap, signals }, (r, role) => (role === "rice" || !exclude.has(r.id)) && !allergyWords.some((w) => (r.name || "").includes(w)))
+    ? await loadCombos(sb, { meal, kcal, protein, sodium, sodiumCap, signals }, (r, role) => (role === "rice" || !exclude.has(r.id)) && !allergyWords.some((w) => (r.name || "").includes(w)), o.comboCount ?? 3, o.comboAvoid)
     : [];
   return { menus, items, menuBudget: mb, combos };
 }
@@ -135,9 +136,11 @@ const toItem = (r: Row & { calories: number | null }, role?: PickItem["role"]): 
   sodium_mg: known(r.sodium_mg) == null ? null : Math.round(Number(r.sodium_mg)), serving_size_g: r.serving_size_g, nutrient_base_g: r.nutrient_base_g, role,
 });
 
-/** 한 상 고르기 — 밥 + 국·찌개 (+ 반찬 하나)를 합친 영양으로 몫에 맞춘다. 같은 국이 두 번 나오지 않게 국마다 가장 좋은 한 상, 높은 순 3개.
- *  계산만 (시험: tests/meal-combo.test.ts) — DB 읽기는 loadCombos */
-export function bestCombos(pools: { rice: PickItem[]; soup: PickItem[]; side: PickItem[] }, b: Parameters<typeof pickScore>[1], top = 3): PickCombo[] {
+/** 한 상 고르기 — 밥 + 국·찌개 (+ 반찬 하나)를 합친 영양으로 몫에 맞춘다. 계산만 (시험: tests/meal-combo.test.ts) — DB 읽기는 loadCombos
+ *  여러 상을 낼 때 밥·국·반찬이 서로 겹치지 않게 — 같은 음식(lib/dish-family: 사골·얼큰 순대국은 같은 순대국)도 한 번만.
+ *  avoid: 이미 보여 준 음식 id (홈 '다른 한 상 보기'·'더보기') — 그 국·반찬과 같은 음식은 빼고, 밥은 모자라면 다시 쓴다.
+ *  점수 높은 한 상부터 담되, 겹치면 건너뛴다. 모자라면 밥 → 반찬 순으로 겹침을 풀어 채운다. */
+export function bestCombos(pools: { rice: PickItem[]; soup: PickItem[]; side: PickItem[] }, b: Parameters<typeof pickScore>[1], top = 3, avoid?: Set<string>): PickCombo[] {
   const sum = (xs: PickItem[]) => ({
     id: xs.map((x) => x.id).join("+"),
     calories: xs.reduce((a, x) => a + (x.calories || 0), 0),
@@ -146,38 +149,49 @@ export function bestCombos(pools: { rice: PickItem[]; soup: PickItem[]; side: Pi
     sodium_mg: xs.some((x) => x.sodium_mg == null) ? null : xs.reduce((a, x) => a + (x.sodium_mg || 0), 0),
   });
   const extra = (xs: PickItem[]) => xs.reduce((a, x) => a + signalTerm(b.signals, x.id), 0) / xs.length;
-  // 국마다 반찬이 다른 한 상을 몇 개씩 남겨 둔다 (반찬이 겹치면 다음 것으로 바꾸려고)
-  const bySoup = new Map<string, Map<string, PickCombo>>();
-  for (const rice of pools.rice.slice(0, 6)) for (const soup of pools.soup.slice(0, 60)) for (const side of [null, ...pools.side.slice(0, 25)]) {
-    const foods = side ? [rice, soup, side] : [rice, soup];
-    const t = sum(foods);
-    if (!underCap(t.sodium_mg, b.sodium, b.sodiumCap)) continue;
-    const score = pickScore({ calories: t.calories, protein_g: t.protein_g, sodium_mg: t.sodium_mg }, { ...b, signals: undefined }) + extra(foods)
-      + (b.meal === "breakfast" ? Math.max(...foods.map((x) => (x as PickItem & { pref?: boolean }).pref ? 0.6 : 0)) : 0);
-    const bySide = bySoup.get(soup.id) ?? new Map<string, PickCombo>();
-    bySoup.set(soup.id, bySide);
-    const k = side?.id ?? "";
-    const prev = bySide.get(k);
-    if (!prev || score > prev.score) bySide.set(k, { foods, score });
+  const fam = new Map<string, string>();
+  for (const x of [...pools.rice, ...pools.soup, ...pools.side]) fam.set(x.id, dishFamily(x.name, x.manufacturer));
+  const famOf = (x: PickItem | undefined) => (x ? fam.get(x.id) || x.id : "");
+  const avoidFam = new Set([...(avoid || [])].map((id) => fam.get(id)).filter((f): f is string => !!f));
+  const banned = (x: PickItem) => !!avoid?.has(x.id) || avoidFam.has(famOf(x));
+
+  const all: PickCombo[] = [];
+  for (const rice of pools.rice.slice(0, 12)) for (const soup of pools.soup.slice(0, 60)) {
+    if (banned(soup)) continue;
+    for (const side of [null, ...pools.side.slice(0, 25)]) {
+      if (side && banned(side)) continue;
+      const foods = side ? [rice, soup, side] : [rice, soup];
+      const t = sum(foods);
+      if (!underCap(t.sodium_mg, b.sodium, b.sodiumCap)) continue;
+      const score = pickScore({ calories: t.calories, protein_g: t.protein_g, sodium_mg: t.sodium_mg }, { ...b, signals: undefined }) + extra(foods)
+        + (b.meal === "breakfast" ? Math.max(...foods.map((x) => (x as PickItem & { pref?: boolean }).pref ? 0.6 : 0)) : 0);
+      all.push({ foods, score });
+    }
   }
-  // 국만 달라도(사골·얼큰 순대국) 밥·반찬이 같으면 같은 한 상처럼 보인다 — 국은 하나씩, 반찬은 겹치지 않게.
-  // 국은 그 국의 가장 좋은 한 상 점수 순서로 보고, 가장 좋은 반찬이 이미 쓰였으면 그 국의 다음 반찬으로 (점수 차 0.5 안에서만). 모자라면 점수 순으로 채운다.
-  const soups = [...bySoup.values()].map((m) => [...m.values()].sort((a, z) => z.score - a.score)).sort((a, z) => z[0].score - a[0].score);
-  const sideOf = (c: PickCombo) => c.foods[2]?.id ?? "";
+  all.sort((a, z) => z.score - a.score || a.foods.map((f) => f.id).join().localeCompare(z.foods.map((f) => f.id).join()));
+
   const out: PickCombo[] = [];
-  const usedSides = new Set<string>();
-  const rest: PickCombo[] = [];
-  for (const opts of soups) {
-    if (out.length >= top) break;
-    const pick = opts.find((c) => c.score >= opts[0].score - 0.5 && !(sideOf(c) && usedSides.has(sideOf(c))));
-    if (pick) { out.push(pick); usedSides.add(sideOf(pick)); } else rest.push(opts[0]);
-  }
-  for (const c of rest) if (out.length < top) out.push(c);
+  const used = { rice: new Set<string>(), soup: new Set<string>(), side: new Set<string>() };
+  for (const f of avoidFam) used.rice.add(f);
+  const take = (strictRice: boolean, strictSide: boolean) => {
+    for (const c of all) {
+      if (out.length >= top) return;
+      if (out.includes(c)) continue;
+      const [r, s, d] = c.foods;
+      if (used.soup.has(famOf(s))) continue;
+      if (strictRice && used.rice.has(famOf(r))) continue;
+      if (strictSide && d && used.side.has(famOf(d))) continue;
+      out.push(c); used.rice.add(famOf(r)); used.soup.add(famOf(s)); if (d) used.side.add(famOf(d));
+    }
+  };
+  take(true, true);    // 밥·국·반찬 모두 다르게
+  take(false, true);   // 밥이 모자라면 밥은 다시
+  take(false, false);  // 그래도 모자라면 반찬도 — 국은 늘 다르게
   return out.sort((a, z) => z.score - a.score);
 }
 
 /** 한 상 후보 읽기 — 역할(dish_role)이 밥·국·반찬인 살 수 있는 제품, 그 끼니에 먹는 것만 (lib/meal-time) */
-async function loadCombos(sb: Sb, b: Parameters<typeof pickScore>[1] & { meal: MealKey }, keep: (r: Row, role: "rice" | "soup" | "side") => boolean): Promise<PickCombo[]> {
+async function loadCombos(sb: Sb, b: Parameters<typeof pickScore>[1] & { meal: MealKey }, keep: (r: Row, role: "rice" | "soup" | "side") => boolean, top = 3, avoid?: Set<string>): Promise<PickCombo[]> {
   const read = (role: "rice" | "soup" | "side", n: number) => sb.from("products")
     .select("id, name, manufacturer, calories, protein_g, sodium_mg, serving_size_g, nutrient_base_g, dish_category, image_url, meal_times, breakfast_pref, dish_role")
     .eq("is_purchasable", true).is("nutrition_flag", null).is("rec_hold", null).gt("calories", 0)
@@ -199,7 +213,7 @@ async function loadCombos(sb: Sb, b: Parameters<typeof pickScore>[1] & { meal: M
   // 같은 제조사의 밥만 줄줄이 나오지 않게 — 밥은 제조사마다 하나
   const seen = new Set<string>();
   const riceOne = rice.filter((x) => { const k = x.manufacturer || x.id; if (seen.has(k)) return false; seen.add(k); return true; });
-  return bestCombos({ rice: riceOne, soup, side }, b);
+  return bestCombos({ rice: riceOne, soup, side }, b, top, avoid);
 }
 
 /** 후보 읽기 — 끼니 종류를 DB 에서 먼저 거른 뒤 건강 점수 순으로 자른다 (자른 뒤 거르면 한 끼 후보가 거의 남지 않는다) */

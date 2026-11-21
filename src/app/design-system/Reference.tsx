@@ -5,7 +5,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Badge, Button, Card, CardActions, CardButton, Chip, ChipRow, ConfirmSheet, EmptyState, Field, Icon, ICON_NAMES, IconButton, IconLink,
   Input, KakaoButton, Kcal, LinkButton, ListRow, MacroGrid, MacroInline, MealSlot, MealSplit, MealTag, Notice, Estimate, HowCounted, AsOf, CodeBlock, TrendChart, BarList, GapChart, Page, PageHeader, Price,
-  ProgressBar, SearchField, SectionHeader, Select, Sheet, Disclosure, Spinner, Stat, Steps, Tabs, Textarea, TextLink, TextButton, Thumb, ProductImage,
+  ProgressBar, SearchField, SectionHeader, Select, Sheet, Disclosure, DayChoice, Spinner, Stat, Steps, Tabs, Textarea, TextLink, TextButton, Thumb, ProductImage,
   Avatar, useToast, cn, type BadgeTone,
   BottomNavItems, SkeletonList, FoodEntryForm, DragArea, DragGhost, DragHandle, useDragItem, useDropTarget, type DragData, ChoiceCard, ChoiceList, LinkTabs, RatingStars, RatingInput, ScaleInput, QuickRating, PostAuthor, PostAction, PostActions, PostTags, ThreadItem, MealAttach, PlanAttach, CertAttach, ProductTagLinks, PostCredits, PhotoGrid, PollAttach, DayDots, Switch,
   ReelRow, ReelTile, ReelAddTile, ReelSkeleton, ReelMedia, CommentItem, VideoAttach, OfferOptionList, QtyStepper, UnitInput, RangeInput, Checkbox, FilePick,
@@ -231,6 +231,7 @@ export default function Reference({ status }: { status: DsStatus }) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [tabA, setTabA] = useState<"rec" | "follow" | "mine">("rec");
   const [tabB, setTabB] = useState<"search" | "fav" | "list" | "manual">("search");
+  const [dayPick, setDayPick] = useState<string | null>("23");
   const [chips, setChips] = useState<string[]>(["고단백"]);
   const [q, setQ] = useState("");
   const [range, setRange] = useState(6);
@@ -756,6 +757,13 @@ export default function Reference({ status }: { status: DsStatus }) {
                 <p className="text-label text-ink-2">짠맛 · 단맛 · 매운맛 · 고소한맛</p>
               </Disclosure>
             </div>
+          </Demo>
+          <Demo label="날짜 하나 고르기 — 담을 날(오늘~6일 뒤). 고를 수 없는 날은 흐리게, 이유는 아래 글자로" code="<DayChoice items value onChange label />">
+            <DayChoice label="담을 날" value={dayPick} onChange={setDayPick} items={[
+              { key: "21", top: "토", mid: "21", sub: "기록", disabled: true }, { key: "22", top: "일", mid: "22", sub: "비어" },
+              { key: "23", top: "월", mid: "23", sub: "비어" }, { key: "24", top: "화", mid: "24", sub: "계획" },
+              { key: "25", top: "수", mid: "25", sub: "비어" }, { key: "26", top: "목", mid: "26", sub: "비어" }, { key: "27", top: "금", mid: "27", sub: "비어" },
+            ]} />
           </Demo>
           <Demo label="링크 탭 — 페이지 사이 이동 (관리자 메뉴)" code="<LinkTabs items current />">
             <LinkTabs current="#labels" items={[{ href: "#labels", label: "데이터 현황" }, { href: "#labels-2", label: "시장 인사이트" }, { href: "#labels-3", label: "발주 관리" }]} />
