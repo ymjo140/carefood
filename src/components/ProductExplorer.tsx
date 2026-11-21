@@ -8,7 +8,7 @@ import { FOOD_TYPES, FOOD_TYPE_LABEL, legacyFoodTypes, type FoodType } from "@/l
 import { useFavorites } from "@/hooks/useFavorites";
 import { defaultServingG, scaleNutrient } from "@/lib/serving";
 import { platformLabel } from "@/lib/platforms";
-import { Badge, Button, Card, Chip, cn, Disclosure, EmptyState, Icon, IconButton, Input, Kcal, MACRO_META, Notice, Price, ProductImage, ProgressBar, RangeInput, SearchField, SectionHeader, Sheet, SkeletonList, Tabs, TextLink, type BadgeTone, type Macro } from "@/components/ui";
+import { Badge, Button, Card, Chip, cn, Disclosure, EmptyState, Icon, IconButton, Input, dailyRefNote, Kcal, MacroBars, Notice, Price, ProductImage, RangeInput, SearchField, SectionHeader, Sheet, SkeletonList, Tabs, TextLink, type BadgeTone } from "@/components/ui";
 
 /* ───── 타입 ───── */
 type TasteFilters = {
@@ -176,26 +176,6 @@ function nutritionText(f: (typeof NUTRITION_FIELDS)[number], v: number) {
 }
 
 /* ───── 매크로 미니 바 (100g당 값의 하루 기준 대비) ───── */
-function MacroMiniBars({ protein, carbs, fat, sodium }: {
-  protein: number | null; carbs: number | null; fat: number | null; sodium: number | null;
-}) {
-  const items: { macro: Macro; value: number | null; max: number }[] = [
-    { macro: "protein", value: protein, max: 80 },
-    { macro: "carbs", value: carbs, max: 260 },
-    { macro: "fat", value: fat, max: 60 },
-    { macro: "sodium", value: sodium, max: 2000 },
-  ];
-  if (items.every(i => i.value == null)) return null;
-  return (
-    <div className="flex gap-1.5 mt-2.5">
-      {items.map(item => (
-        <ProgressBar key={item.macro} className="flex-1 min-w-0 h-1" value={item.value ?? 0} max={item.max}
-          tone={item.macro} label={`${MACRO_META[item.macro].label} 하루 기준 대비`} />
-      ))}
-    </div>
-  );
-}
-
 /* ───── 건강점수 원형 배지 ───── */
 const HEALTH_TONE = {
   high: { stroke: "stroke-positive", text: "text-positive" },
@@ -436,11 +416,8 @@ function ProductCard({ product, isFavorite, onToggleFavorite }: {
           )}
         </div>
 
-        <MacroMiniBars
-          protein={per(product.protein_g)}
-          carbs={per(extra.carbs_g)}
-          fat={per(extra.fat_g)}
-          sodium={per(product.sodium_mg)}
+        <MacroBars className="mt-2.5"
+          values={{ protein: per(product.protein_g), carbs: per(extra.carbs_g), fat: per(extra.fat_g), sodium: per(product.sodium_mg) }}
         />
       </div>
     </Card>
@@ -688,11 +665,12 @@ export default function ProductExplorer({ variant = "page" }: { variant?: "page"
               ))}
             </div>
           )}
-          <p className="text-label text-ink-2 mb-3">
+          <p className="text-label text-ink-2 mb-1">
             {data ? (
               <><span className="num font-bold text-ink">{(data.total ?? 0).toLocaleString()}</span>개 {data.meals_only ? "한 끼·반찬" : "제품"}{search && <> · &quot;{search}&quot; 검색 결과</>}</>
             ) : error ? "" : "불러오는 중"}
           </p>
+          <p className="text-caption text-ink-2 mb-3">{dailyRefNote()}</p>
 
           {error && !loading ? (
             <Card className="flex flex-col items-start gap-3">

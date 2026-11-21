@@ -84,6 +84,41 @@ export function MacroInline({ values, className }: { values: Partial<Record<Macr
   );
 }
 
+/** 목록 막대의 기준 — 하루 기준량 (단백질·탄수화물·지방·나트륨). 막대 길이 = 1회분 ÷ 이 값 */
+export const DAILY_REF: Record<Macro, number> = { protein: 80, carbs: 260, fat: 60, sodium: 2000 };
+/** 좁은 칸용 짧은 이름 — 탄수화물만 줄인다 */
+const SHORT: Record<Macro, string> = { protein: "단백질", carbs: "탄수", fat: "지방", sodium: "나트륨" };
+/** "막대는 하루 기준량 대비예요 (…)" — 목록 위에 한 번만 */
+export function dailyRefNote() {
+  return `막대는 하루 기준량 대비예요 (${(Object.keys(DAILY_REF) as Macro[]).map((k) => `${SHORT[k]} ${DAILY_REF[k].toLocaleString("ko-KR")}${MACRO_META[k].unit}`).join(" · ")})`;
+}
+
+/**
+ * 목록 카드의 영양 4칸 — 이름 · 1회분 숫자(영양소 색) · 하루 기준량 대비 막대.
+ * 색만으로 뜻을 전하지 않게 이름과 숫자를 붙인다. 값이 모두 없으면 그리지 않는다.
+ */
+export function MacroBars({ values, className }: { values: Partial<Record<Macro, number | null | undefined>>; className?: string }) {
+  const keys = Object.keys(MACRO_META) as Macro[];
+  if (keys.every((k) => values[k] == null)) return null;
+  return (
+    <div className={cn("grid grid-cols-4 gap-2", className)}>
+      {keys.map((k) => {
+        const m = MACRO_META[k];
+        const v = values[k];
+        return (
+          <div key={k} className="min-w-0">
+            <span className="block text-caption text-ink-2 whitespace-nowrap">{SHORT[k]}</span>
+            <span className={cn("block num text-label font-bold whitespace-nowrap leading-tight", v == null ? "text-ink-3" : m.text)}>
+              {fmt(v)}{v != null && <span className="text-caption font-medium">{m.unit}</span>}
+            </span>
+            <ProgressBar className="h-1 mt-1" value={v ?? 0} max={DAILY_REF[k]} tone={k} label={`${m.label} 하루 기준량 대비`} />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 /** 핵심 숫자 — emphasis 는 한 화면에 하나 (형광펜) */
 export function Stat({ label, value, unit, emphasis = false, size = "md", className }: {
   label: ReactNode; value: ReactNode; unit?: string; emphasis?: boolean; size?: "md" | "lg"; className?: string;
