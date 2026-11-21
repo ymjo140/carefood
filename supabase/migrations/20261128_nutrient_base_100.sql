@@ -5,6 +5,7 @@
 --       100g 기준으로 보면 정상(열량 920 이하, 탄·단·지 100g 이하)이고 열량과 탄단지(4·4·9) 합이 맞는 것(0.75~1.3) — 값이 없으면 맞춤은 보지 않음.
 -- 나머지 140개(당알코올 제품 등)는 '확인 필요'로 두었다 — 영양_기준량_오류_수정대상.xlsx
 -- health_score 는 원래 값을 100g 기준으로 보고 매겨서(scripts/health_score.py) 바뀌지 않는다.
+-- ※ 2026-11-21 밤사이 누군가 아래 되돌리기 줄을 실행해 원래대로 돌아갔다가 다시 적용함. 사용자 확인 없이 실행하지 말 것.
 -- 되돌리기: update public.products p set nutrient_base_g = b.old_base from public.products_base_fix_20261128 b where b.id = p.id;
 
 create table if not exists public.products_base_fix_20261128 (
