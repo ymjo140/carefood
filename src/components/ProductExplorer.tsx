@@ -3,13 +3,12 @@
 import { useImpressions } from "@/lib/impressions";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import Link from "@/components/ui/AppLink";
-import type { ProductWithPrices, TasteLevel, DishCategory } from "@/types/database";
-import { DISH_CATEGORY_LABELS } from "@/types/database";
-import { DISH_ROLE_LABEL } from "@/lib/home-meal";
+import type { ProductWithPrices, TasteLevel } from "@/types/database";
+import { FOOD_TYPES, FOOD_TYPE_LABEL, legacyFoodTypes, type FoodType } from "@/lib/food-types";
 import { useFavorites } from "@/hooks/useFavorites";
 import { defaultServingG, scaleNutrient } from "@/lib/serving";
 import { platformLabel } from "@/lib/platforms";
-import { Badge, Button, Card, Chip, cn, EmptyState, Icon, IconButton, Input, Kcal, MACRO_META, Notice, Price, ProductImage, ProgressBar, SearchField, SectionHeader, Sheet, SkeletonList, Tabs, TextLink, type BadgeTone, type Macro } from "@/components/ui";
+import { Badge, Button, Card, Chip, cn, Disclosure, EmptyState, Icon, IconButton, Input, Kcal, MACRO_META, Notice, Price, ProductImage, ProgressBar, RangeInput, SearchField, SectionHeader, Sheet, SkeletonList, Tabs, TextLink, type BadgeTone, type Macro } from "@/components/ui";
 
 /* ───── 타입 ───── */
 type TasteFilters = {
@@ -78,40 +77,22 @@ const GOAL_LABELS: Record<string, string> = {
   diabetes: "당뇨관심", blood_pressure: "혈압관심", kidney: "신장관심",
 };
 
-/* ───── 음식 종류 ───── */
-const CATEGORY_FILTERS: DishCategory[] = [
-  "set", "soup", "noodle", "rice", "grill", "stew", "side",
-  "seafood", "salad", "dairy", "bread", "snack", "beverage", "supplement", "powder",
-];
+/* ───── 목적 — 영양 조건 바로가기 ─────
+ * 효능이 아니라 숫자 조건이다. 고르면 영양 조건(1회분)이 채워지고, 영양 조건에서 값을 바꾸면 풀린다.
+ * (예전 '목적'·'성분'은 기능 태그로 걸렀는데 태그가 붙은 제품이 4%뿐이라 뺐다 — 2026-11-21)
+ */
+const GOAL_SHORTCUTS = [
+  { key: "weight", label: "체중 관리", field: "calories_max", value: 400, rule: "1회 400kcal 이하" },
+  { key: "protein", label: "단백질 챙기기", field: "protein_min", value: 20, rule: "1회 단백질 20g 이상" },
+  { key: "sugar", label: "당 줄이기", field: "sugar_max", value: 5, rule: "1회 당류 5g 이하" },
+  { key: "sodium", label: "싱겁게", field: "sodium_max", value: 600, rule: "1회 나트륨 600mg 이하" },
+] as const;
 
-const PURPOSE_OPTIONS = [
-  { key: "gut_health", label: "장건강" },
-  { key: "skin", label: "피부건강" },
-  { key: "weight", label: "체중관리" },
-  { key: "muscle", label: "근력/운동" },
-  { key: "immunity", label: "면역력" },
-  { key: "bone", label: "뼈건강" },
-  { key: "eye", label: "눈건강" },
-];
-
-const INGREDIENT_OPTIONS = [
-  { key: "probiotics", label: "유산균" },
-  { key: "collagen", label: "콜라겐" },
-  { key: "prebiotic", label: "식이섬유" },
-  { key: "vitamin", label: "비타민" },
-  { key: "omega3", label: "오메가3" },
-  { key: "calcium", label: "칼슘" },
-  { key: "iron", label: "철분" },
-  { key: "zinc", label: "아연" },
-  { key: "lutein", label: "루테인" },
-];
-
-const ALL_TAG_LABELS: Record<string, string> = {};
-[...PURPOSE_OPTIONS, ...INGREDIENT_OPTIONS,
-  { key: "protein", label: "고단백" },
-  { key: "sugar_free", label: "무설탕" },
-  { key: "diet", label: "다이어트" },
-].forEach(t => { ALL_TAG_LABELS[t.key] = t.label; });
+/** 제품 카드의 기능 태그 이름 (functional_tags — 있는 제품만) */
+const ALL_TAG_LABELS: Record<string, string> = {
+  probiotics: "유산균", collagen: "콜라겐", prebiotic: "식이섬유", vitamin: "비타민", omega3: "오메가3",
+  calcium: "칼슘", iron: "철분", zinc: "아연", lutein: "루테인", protein: "고단백", sugar_free: "무설탕", diet: "다이어트",
+};
 
 const PRICE_PRESETS = [
   { label: "1만원 이하", min: 0, max: 10000 },
@@ -137,9 +118,6 @@ const NUTRITION_PRESETS = {
   sugar_max: [
     { label: "5g 이하", value: 5 },
     { label: "무설탕", value: 1 },
-  ],
-  fiber_min: [
-    { label: "고섬유 5g+", value: 5 },
   ],
 };
 
@@ -168,21 +146,34 @@ type NutritionFilters = {
   calories_max: number;
   sodium_max: number;
   sugar_max: number;
-  fiber_min: number;
   // 100g당 기준
   per100g_sugar_max: number;
   per100g_sodium_max: number;
   per100g_protein_min: number;
   per100g_calories_max: number;
-  // 건강 점수
-  health_min: number;
 };
 
 const INITIAL_NUTRITION: NutritionFilters = {
-  protein_min: 0, calories_max: 0, sodium_max: 0, sugar_max: 0, fiber_min: 0,
+  protein_min: 0, calories_max: 0, sodium_max: 0, sugar_max: 0,
   per100g_sugar_max: 0, per100g_sodium_max: 0, per100g_protein_min: 0, per100g_calories_max: 0,
-  health_min: 0,
 };
+
+/** 영양 조건 한 줄씩 — 요약·고른 조건 칩·입력 줄이 같은 목록을 쓴다 */
+const NUTRITION_FIELDS: { key: keyof NutritionFilters; label: string; unit: string; op: "≥" | "≤"; per100: boolean; presets: { label: string; value: number }[] }[] = [
+  { key: "protein_min", label: "단백질", unit: "g", op: "≥", per100: false, presets: NUTRITION_PRESETS.protein_min },
+  { key: "calories_max", label: "칼로리", unit: "kcal", op: "≤", per100: false, presets: NUTRITION_PRESETS.calories_max },
+  { key: "sodium_max", label: "나트륨", unit: "mg", op: "≤", per100: false, presets: NUTRITION_PRESETS.sodium_max },
+  { key: "sugar_max", label: "당류", unit: "g", op: "≤", per100: false, presets: NUTRITION_PRESETS.sugar_max },
+  { key: "per100g_protein_min", label: "단백질", unit: "g", op: "≥", per100: true, presets: PER100G_PRESETS.per100g_protein_min },
+  { key: "per100g_calories_max", label: "칼로리", unit: "kcal", op: "≤", per100: true, presets: PER100G_PRESETS.per100g_calories_max },
+  { key: "per100g_sodium_max", label: "나트륨", unit: "mg", op: "≤", per100: true, presets: PER100G_PRESETS.per100g_sodium_max },
+  { key: "per100g_sugar_max", label: "당류", unit: "g", op: "≤", per100: true, presets: PER100G_PRESETS.per100g_sugar_max },
+];
+
+/** "단백질 20g 이상" · "100g당 당류 5g 이하" */
+function nutritionText(f: (typeof NUTRITION_FIELDS)[number], v: number) {
+  return `${f.per100 ? "100g당 " : ""}${f.label} ${v.toLocaleString()}${f.unit} ${f.op === "≥" ? "이상" : "이하"}`;
+}
 
 /* ───── 매크로 미니 바 (100g당 값의 하루 기준 대비) ───── */
 function MacroMiniBars({ protein, carbs, fat, sodium }: {
@@ -231,19 +222,6 @@ function HealthBadge({ score }: { score: number | null }) {
   );
 }
 
-/* ───── 필터 구역 ───── */
-function FilterGroup({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
-  return (
-    <section className="flex flex-col gap-2">
-      <div>
-        <h3 className="text-label font-bold text-ink">{title}</h3>
-        {description && <p className="text-caption text-ink-2 mt-0.5">{description}</p>}
-      </div>
-      {children}
-    </section>
-  );
-}
-
 /* ───── 영양 조건 한 줄 ───── */
 function NutritionRow({ label, op, unit, value, presets, onChange }: {
   label: string; op: string; unit: string; value: number;
@@ -267,22 +245,16 @@ function NutritionRow({ label, op, unit, value, presets, onChange }: {
   );
 }
 
-/* ───── 사이드바 필터 패널 ───── */
+/* ───── 필터 패널 — 묶음마다 접고, 누르면 펼쳐 고른다 (넓은 화면 왼쪽 열 · 휴대폰 시트 같은 구성) ───── */
 function FilterPanel({
-  categories, onCategoryToggle,
-  purposes, onPurposeToggle,
-  ingredients, onIngredientToggle,
+  types, onTypeToggle,
   priceMin, priceMax, onPriceChange,
   nutrition, onNutritionChange,
   tastes, onTasteChange,
   onReset,
 }: {
-  categories: DishCategory[];
-  onCategoryToggle: (key: DishCategory) => void;
-  purposes: string[];
-  onPurposeToggle: (key: string) => void;
-  ingredients: string[];
-  onIngredientToggle: (key: string) => void;
+  types: FoodType[];
+  onTypeToggle: (key: FoodType) => void;
   priceMin: number;
   priceMax: number;
   onPriceChange: (min: number, max: number) => void;
@@ -292,105 +264,55 @@ function FilterPanel({
   onTasteChange: (t: TasteFilters) => void;
   onReset?: () => void;
 }) {
+  const [basis, setBasis] = useState<"serving" | "per100">("serving");
   const isPriceActive = (p: typeof PRICE_PRESETS[number]) =>
     priceMin === p.min && priceMax === p.max && (p.min > 0 || p.max > 0);
+  const priceLabel = PRICE_PRESETS.find(isPriceActive)?.label
+    ?? (priceMin > 0 || priceMax > 0 ? `${priceMin ? priceMin.toLocaleString() : ""}~${priceMax ? priceMax.toLocaleString() : ""}원` : null);
 
-  const updateNutrition = <K extends keyof NutritionFilters>(key: K, value: number) => {
-    onNutritionChange({ ...nutrition, [key]: value });
-  };
+  const goals = GOAL_SHORTCUTS.filter((g) => nutrition[g.field] === g.value);
+  const nutritionOn = NUTRITION_FIELDS.filter((f) => nutrition[f.key] > 0);
+  const tastesOn = TASTE_CONFIG.filter((t) => tastes[t.key] > 0);
+
+  const toggleGoal = (g: (typeof GOAL_SHORTCUTS)[number]) =>
+    onNutritionChange({ ...nutrition, [g.field]: nutrition[g.field] === g.value ? 0 : g.value });
 
   return (
-    <div className="flex flex-col gap-6">
-      <FilterGroup title="음식 종류">
+    <div className="flex flex-col border-t border-line">
+      <Disclosure title="음식 종류" defaultOpen
+        summary={types.length ? types.map((t) => FOOD_TYPE_LABEL[t]).join(" · ") : "전체"} active={types.length > 0}>
         <div className="flex flex-wrap gap-1.5">
-          {CATEGORY_FILTERS.map(cat => (
-            <Chip key={cat} size="sm" selected={categories.includes(cat)} onClick={() => onCategoryToggle(cat)}>
-              {DISH_CATEGORY_LABELS[cat]}
-            </Chip>
+          {FOOD_TYPES.map((t) => (
+            <Chip key={t.key} size="sm" selected={types.includes(t.key)} onClick={() => onTypeToggle(t.key)}>{t.label}</Chip>
           ))}
         </div>
-      </FilterGroup>
+      </Disclosure>
 
-      <FilterGroup title="목적">
+      <Disclosure title="목적" summary={goals.length ? goals.map((g) => g.label).join(" · ") : "전체"} active={goals.length > 0}>
         <div className="flex flex-wrap gap-1.5">
-          {PURPOSE_OPTIONS.map(opt => (
-            <Chip key={opt.key} size="sm" selected={purposes.includes(opt.key)} onClick={() => onPurposeToggle(opt.key)}>{opt.label}</Chip>
+          {GOAL_SHORTCUTS.map((g) => (
+            <Chip key={g.key} size="sm" selected={nutrition[g.field] === g.value} onClick={() => toggleGoal(g)}>{g.label}</Chip>
           ))}
         </div>
-      </FilterGroup>
+        <p className="text-caption text-ink-2 mt-2">
+          고르면 영양 조건이 채워져요{goals.length > 0 && <> · {goals.map((g) => `${g.label} = ${g.rule}`).join(" · ")}</>}
+        </p>
+      </Disclosure>
 
-      <FilterGroup title="성분">
-        <div className="flex flex-wrap gap-1.5">
-          {INGREDIENT_OPTIONS.map(opt => (
-            <Chip key={opt.key} size="sm" selected={ingredients.includes(opt.key)} onClick={() => onIngredientToggle(opt.key)}>{opt.label}</Chip>
-          ))}
-        </div>
-      </FilterGroup>
-
-      <FilterGroup title="가격대">
-        <div className="flex items-center gap-2">
-          <Input type="number" inputMode="numeric" value={priceMin || ""} placeholder="최소" aria-label="최소 가격"
-            onChange={e => onPriceChange(Number(e.target.value) || 0, priceMax)} className="flex-1 min-w-0 text-center num" />
-          <span className="text-caption text-ink-2">~</span>
-          <Input type="number" inputMode="numeric" value={priceMax || ""} placeholder="최대" aria-label="최대 가격"
-            onChange={e => onPriceChange(priceMin, Number(e.target.value) || 0)} className="flex-1 min-w-0 text-center num" />
-          <span className="text-caption text-ink-2">원</span>
-        </div>
-        <div className="flex flex-wrap gap-1.5">
-          {PRICE_PRESETS.map(p => (
-            <Chip key={p.label} size="sm" selected={isPriceActive(p)}
-              onClick={() => { if (isPriceActive(p)) onPriceChange(0, 0); else onPriceChange(p.min, p.max); }}>
-              {p.label}
-            </Chip>
-          ))}
-        </div>
-      </FilterGroup>
-
-      <FilterGroup title="영양 조건" description="1회 제공량 기준">
+      <Disclosure title="영양 조건" summary={nutritionOn.length ? nutritionOn.map((f) => nutritionText(f, nutrition[f.key])).join(" · ") : "전체"}
+        active={nutritionOn.length > 0}>
+        <Tabs variant="line" label="영양 기준" className="mb-3" value={basis} onChange={setBasis}
+          items={[{ value: "serving", label: "1회분" }, { value: "per100", label: "100g당" }]} />
         <div className="flex flex-col gap-4">
-          {([
-            { key: "protein_min" as const, label: "단백질", unit: "g", op: "≥", presets: NUTRITION_PRESETS.protein_min },
-            { key: "calories_max" as const, label: "칼로리", unit: "kcal", op: "≤", presets: NUTRITION_PRESETS.calories_max },
-            { key: "sodium_max" as const, label: "나트륨", unit: "mg", op: "≤", presets: NUTRITION_PRESETS.sodium_max },
-            { key: "sugar_max" as const, label: "당류", unit: "g", op: "≤", presets: NUTRITION_PRESETS.sugar_max },
-            // 식이섬유 거르기는 뺐다 — DB 에 믿을 만한 값이 없다(2026-11 정리). URL 의 fiber_min 은 계속 받는다
-          ]).map(n => (
-            <NutritionRow key={n.key} label={n.label} op={n.op} unit={n.unit} value={nutrition[n.key]} presets={n.presets}
-              onChange={v => updateNutrition(n.key, v)} />
+          {NUTRITION_FIELDS.filter((f) => f.per100 === (basis === "per100")).map((f) => (
+            <NutritionRow key={f.key} label={f.label} op={f.op} unit={f.unit} value={nutrition[f.key]} presets={f.presets}
+              onChange={(v) => onNutritionChange({ ...nutrition, [f.key]: v })} />
           ))}
         </div>
-      </FilterGroup>
+      </Disclosure>
 
-      <FilterGroup title="100g당 기준" description="제품 크기와 무관하게 영양 밀도로 비교">
-        <div className="flex flex-col gap-4">
-          {([
-            { key: "per100g_sugar_max" as const, label: "당류", unit: "g", op: "≤", presets: PER100G_PRESETS.per100g_sugar_max },
-            { key: "per100g_sodium_max" as const, label: "나트륨", unit: "mg", op: "≤", presets: PER100G_PRESETS.per100g_sodium_max },
-            { key: "per100g_protein_min" as const, label: "단백질", unit: "g", op: "≥", presets: PER100G_PRESETS.per100g_protein_min },
-            { key: "per100g_calories_max" as const, label: "칼로리", unit: "kcal", op: "≤", presets: PER100G_PRESETS.per100g_calories_max },
-          ]).map(n => (
-            <NutritionRow key={n.key} label={n.label} op={n.op} unit={n.unit} value={nutrition[n.key]} presets={n.presets}
-              onChange={v => updateNutrition(n.key, v)} />
-          ))}
-        </div>
-      </FilterGroup>
-
-      <FilterGroup title="건강 점수">
-        <div className="flex flex-wrap gap-1.5">
-          {[
-            { label: "60점 이상", value: 60 },
-            { label: "70점 이상 (우수)", value: 70 },
-            { label: "80점 이상 (최상)", value: 80 },
-          ].map(p => (
-            <Chip key={p.value} size="sm" selected={nutrition.health_min === p.value}
-              onClick={() => updateNutrition("health_min", nutrition.health_min === p.value ? 0 : p.value)}>
-              {p.label}
-            </Chip>
-          ))}
-        </div>
-      </FilterGroup>
-
-      <FilterGroup title="맛">
+      <Disclosure title="맛" summary={tastesOn.length ? tastesOn.map((t) => `${t.label} ${getTasteBenchmarkLabel(t.key, tastes[t.key])}`).join(" · ") : "전체"}
+        active={tastesOn.length > 0}>
         <div className="flex flex-col gap-3">
           {TASTE_CONFIG.map(taste => (
             <div key={taste.key}>
@@ -400,20 +322,37 @@ function FilterPanel({
                   {getTasteBenchmarkLabel(taste.key, tastes[taste.key])}
                 </span>
               </div>
-              <input
-                type="range" min={0} max={10} step={1}
-                value={tastes[taste.key]}
-                aria-label={taste.label}
-                onChange={e => onTasteChange({ ...tastes, [taste.key]: Number(e.target.value) as TasteLevel | 0 })}
-                className="ds-range"
-              />
+              <RangeInput min={0} max={10} step={1} value={tastes[taste.key]} aria-label={taste.label}
+                onChange={e => onTasteChange({ ...tastes, [taste.key]: Number(e.target.value) as TasteLevel | 0 })} />
             </div>
           ))}
+          <p className="text-caption text-ink-2">맛은 영양값과 이름으로 짐작한 값이에요</p>
         </div>
-      </FilterGroup>
+      </Disclosure>
+
+      <Disclosure title="가격대" summary={priceLabel ?? "전체"} active={!!priceLabel}>
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center gap-2">
+            <Input type="number" inputMode="numeric" value={priceMin || ""} placeholder="최소" aria-label="최소 가격"
+              onChange={e => onPriceChange(Number(e.target.value) || 0, priceMax)} className="flex-1 min-w-0 text-center num" />
+            <span className="text-caption text-ink-2">~</span>
+            <Input type="number" inputMode="numeric" value={priceMax || ""} placeholder="최대" aria-label="최대 가격"
+              onChange={e => onPriceChange(priceMin, Number(e.target.value) || 0)} className="flex-1 min-w-0 text-center num" />
+            <span className="text-caption text-ink-2">원</span>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {PRICE_PRESETS.map(p => (
+              <Chip key={p.label} size="sm" selected={isPriceActive(p)}
+                onClick={() => { if (isPriceActive(p)) onPriceChange(0, 0); else onPriceChange(p.min, p.max); }}>
+                {p.label}
+              </Chip>
+            ))}
+          </div>
+        </div>
+      </Disclosure>
 
       {onReset && (
-        <Button variant="ghost" size="sm" block icon="refresh" onClick={onReset}>필터 초기화하기</Button>
+        <Button variant="ghost" size="sm" block icon="refresh" className="mt-3" onClick={onReset}>필터 초기화하기</Button>
       )}
     </div>
   );
@@ -514,18 +453,14 @@ function ProductCard({ product, isFavorite, onToggleFavorite }: {
  */
 export default function ProductExplorer({ variant = "page" }: { variant?: "page" | "home" }) {
   const { isFavorite, toggleFavorite } = useFavorites();
-  const [kind, setKind] = useState<"meal_service" | null>(null);
-  // 홈 카테고리 메인 요리·밥·국·찌개·반찬 (products.dish_role)
-  const [role, setRole] = useState<string | null>(null);
+  // 음식 종류 (lib/food-types — 홈 카테고리와 같은 이름·조건)
+  const [types, setTypes] = useState<FoodType[]>([]);
   const seen = useImpressions("product_list");
   const [error, setError] = useState(false);
   const [autoFocus, setAutoFocus] = useState(false);
   const [tastes, setTastes] = useState<TasteFilters>({ salty: 0, sweet: 0, spicy: 0, fatty: 0 });
   const [search, setSearch] = useState("");
   const [searchInput, setSearchInput] = useState("");
-  const [selectedCategories, setSelectedCategories] = useState<DishCategory[]>([]);
-  const [selectedPurposes, setSelectedPurposes] = useState<string[]>([]);
-  const [selectedIngredients, setSelectedIngredients] = useState<string[]>([]);
   // 가격이 있는 제품만 — 가격 비교가 목적이라 늘 켜 둔다 (11/15, 끄는 선택지를 뺐다)
   const hasPriceOnly = true;
   const [priceMin, setPriceMin] = useState(0);
@@ -553,13 +488,11 @@ export default function ProductExplorer({ variant = "page" }: { variant?: "page"
       const sp = new URLSearchParams(window.location.search);
       const q = sp.get("q");
       if (q) { setSearch(q); setSearchInput(q); }
-      const cat = (sp.get("cat") || "").split(",").filter((c): c is DishCategory => c in DISH_CATEGORY_LABELS);
-      if (cat.length) setSelectedCategories(cat);
+      // type (예전 주소의 role · kind · cat 도 음식 종류로 바꿔 읽는다)
+      const t = legacyFoodTypes(sp);
+      if (t.length) setTypes(t);
       const proteinMin = Number(sp.get("protein_min") || 0);
       if (proteinMin > 0) setNutrition((n) => ({ ...n, protein_min: proteinMin }));
-      if (sp.get("kind") === "meal_service") setKind("meal_service");
-      const r = sp.get("role");
-      if (r && r in DISH_ROLE_LABEL) setRole(r);
       setAutoFocus(sp.has("focus"));
     }
     setProfileLoaded(true);
@@ -573,7 +506,10 @@ export default function ProductExplorer({ variant = "page" }: { variant?: "page"
     return labels.length > 0 ? labels.join(" · ") : null;
   }, [profile]);
 
+  // 필터를 빨리 바꾸면 늦게 온 앞 응답이 덮지 않게 — 마지막 요청만 반영
+  const reqNo = useRef(0);
   const fetchProducts = useCallback(async () => {
+    const n = ++reqNo.current;
     setLoading(true);
     try {
       const params = new URLSearchParams();
@@ -582,24 +518,18 @@ export default function ProductExplorer({ variant = "page" }: { variant?: "page"
       if (tastes.spicy) params.set("spicy", String(tastes.spicy));
       if (tastes.fatty) params.set("fatty", String(tastes.fatty));
       if (search) params.set("q", search);
-      if (selectedCategories.length > 0) params.set("dish_category", selectedCategories.join(","));
-      if (selectedPurposes.length > 0) params.set("purpose", selectedPurposes.join(","));
-      if (selectedIngredients.length > 0) params.set("tags", selectedIngredients.join(","));
+      if (types.length > 0) params.set("type", types.join(","));
       if (hasPriceOnly) params.set("hasPrice", "1");
-      if (kind) params.set("kind", kind);
-      if (role) params.set("role", role);
       if (priceMin > 0) params.set("price_min", String(priceMin));
       if (priceMax > 0) params.set("price_max", String(priceMax));
       if (nutrition.protein_min > 0) params.set("protein_min", String(nutrition.protein_min));
       if (nutrition.calories_max > 0) params.set("calories_max", String(nutrition.calories_max));
       if (nutrition.sodium_max > 0) params.set("sodium_max", String(nutrition.sodium_max));
       if (nutrition.sugar_max > 0) params.set("sugar_max", String(nutrition.sugar_max));
-      if (nutrition.fiber_min > 0) params.set("fiber_min", String(nutrition.fiber_min));
       if (nutrition.per100g_sugar_max > 0) params.set("per100g_sugar_max", String(nutrition.per100g_sugar_max));
       if (nutrition.per100g_sodium_max > 0) params.set("per100g_sodium_max", String(nutrition.per100g_sodium_max));
       if (nutrition.per100g_protein_min > 0) params.set("per100g_protein_min", String(nutrition.per100g_protein_min));
       if (nutrition.per100g_calories_max > 0) params.set("per100g_calories_max", String(nutrition.per100g_calories_max));
-      if (nutrition.health_min > 0) params.set("health_min", String(nutrition.health_min));
       // 알레르기 필터 (프로필에서 자동 적용)
       const userAllergies: string[] = profile?.allergies || [];
       if (userAllergies.length > 0) params.set("allergies", userAllergies.join(","));
@@ -623,16 +553,16 @@ export default function ProductExplorer({ variant = "page" }: { variant?: "page"
       }
       if (!res.ok) throw new Error(`제품 목록 ${res.status}`);
       const json: ApiResponse = await res.json();
-
+      if (n !== reqNo.current) return;
       setData(json);
       setError(false);
     } catch (err) {
       console.error("제품 목록을 불러오지 못했어요:", err);
-      setError(true);
+      if (n === reqNo.current) setError(true);
     } finally {
-      setLoading(false);
+      if (n === reqNo.current) setLoading(false);
     }
-  }, [tastes, search, selectedCategories, selectedPurposes, selectedIngredients, hasPriceOnly, kind, priceMin, priceMax, nutrition, sortBy, page, profile, role]);
+  }, [tastes, search, types, hasPriceOnly, priceMin, priceMax, nutrition, sortBy, page, profile]);
 
   useEffect(() => { if (profileLoaded) fetchProducts(); }, [profileLoaded, fetchProducts]);
 
@@ -653,30 +583,33 @@ export default function ProductExplorer({ variant = "page" }: { variant?: "page"
     }
   };
 
-  const toggleList = (list: string[], key: string) =>
-    list.includes(key) ? list.filter(k => k !== key) : [...list, key];
-
   const resetAll = () => {
     setTastes({ salty: 0, sweet: 0, spicy: 0, fatty: 0 });
     setSearch(""); setSearchInput("");
-    setSelectedCategories([]); setSelectedPurposes([]); setSelectedIngredients([]);
-    setPriceMin(0); setPriceMax(0); setKind(null); setRole(null);
+    setTypes([]);
+    setPriceMin(0); setPriceMax(0);
     setNutrition(INITIAL_NUTRITION); setPage(1);
   };
 
-  const activeFilterCount = selectedCategories.length + selectedPurposes.length + selectedIngredients.length
-    + (kind ? 1 : 0) + (role ? 1 : 0)
-    + (priceMin > 0 || priceMax > 0 ? 1 : 0)
-    + Object.values(nutrition).filter(v => v > 0).length
-    + Object.values(tastes).filter(v => v > 0).length;
+  // 고른 조건 — 목록 위 한 줄(눌러서 빼기)과 필터 버튼 숫자가 같은 목록을 쓴다
+  const applied: { key: string; label: string; clear: () => void }[] = [
+    ...types.map((t) => ({ key: `type-${t}`, label: FOOD_TYPE_LABEL[t], clear: () => setTypes((p) => p.filter((x) => x !== t)) })),
+    ...NUTRITION_FIELDS.filter((f) => nutrition[f.key] > 0).map((f) => {
+      const goal = GOAL_SHORTCUTS.find((g) => g.field === f.key && g.value === nutrition[f.key]);
+      return { key: f.key, label: goal ? goal.label : nutritionText(f, nutrition[f.key]), clear: () => setNutrition((n) => ({ ...n, [f.key]: 0 })) };
+    }),
+    ...TASTE_CONFIG.filter((t) => tastes[t.key] > 0).map((t) => ({
+      key: `taste-${t.key}`, label: `${t.label} ${getTasteBenchmarkLabel(t.key, tastes[t.key])}`, clear: () => setTastes((x) => ({ ...x, [t.key]: 0 })),
+    })),
+    ...(priceMin > 0 || priceMax > 0 ? [{
+      key: "price", label: `${priceMin ? priceMin.toLocaleString() : ""}~${priceMax ? priceMax.toLocaleString() : ""}원`, clear: () => { setPriceMin(0); setPriceMax(0); },
+    }] : []),
+  ];
+  const activeFilterCount = applied.length;
 
   const filterProps = {
-    categories: selectedCategories,
-    onCategoryToggle: (k: DishCategory) => { setSelectedCategories(prev => prev.includes(k) ? prev.filter(c => c !== k) : [...prev, k]); setPage(1); },
-    purposes: selectedPurposes,
-    onPurposeToggle: (k: string) => { setSelectedPurposes(toggleList(selectedPurposes, k)); setPage(1); },
-    ingredients: selectedIngredients,
-    onIngredientToggle: (k: string) => { setSelectedIngredients(toggleList(selectedIngredients, k)); setPage(1); },
+    types,
+    onTypeToggle: (k: FoodType) => { setTypes(prev => prev.includes(k) ? prev.filter(c => c !== k) : [...prev, k]); setPage(1); },
     priceMin, priceMax,
     onPriceChange: (min: number, max: number) => { setPriceMin(min); setPriceMax(max); setPage(1); },
     nutrition,
@@ -717,16 +650,6 @@ export default function ProductExplorer({ variant = "page" }: { variant?: "page"
         <Button variant="secondary" size="sm" icon="filter" className="lg:hidden shrink-0" onClick={() => setMobileFilterOpen(true)}>
           필터{activeFilterCount > 0 && <span className="num text-brand-ink">{activeFilterCount}</span>}
         </Button>
-        {kind && (
-          <Chip size="sm" selected className="shrink-0" aria-label="건강식단 서비스 조건 빼기" onClick={() => { setKind(null); setPage(1); }}>
-            건강식단 서비스 <Icon name="close" size={14} />
-          </Chip>
-        )}
-        {role && (
-          <Chip size="sm" selected className="shrink-0" aria-label={`${DISH_ROLE_LABEL[role]} 조건 빼기`} onClick={() => { setRole(null); setPage(1); }}>
-            {DISH_ROLE_LABEL[role]} <Icon name="close" size={14} />
-          </Chip>
-        )}
         <Tabs label="정렬" className="flex-1 min-w-0" value={sortBy}
           onChange={(v) => { setSortBy(v); setPage(1); }}
           items={SORT_OPTIONS.map(o => ({ value: o.value, label: o.label }))} />
@@ -740,7 +663,7 @@ export default function ProductExplorer({ variant = "page" }: { variant?: "page"
         footer={
           <>
             <Button variant="secondary" block onClick={() => { resetAll(); setMobileFilterOpen(false); }}>초기화하기</Button>
-            <Button block onClick={() => setMobileFilterOpen(false)}>결과 보기</Button>
+            <Button block onClick={() => setMobileFilterOpen(false)}>{data ? `${(data.total ?? 0).toLocaleString()}개 보기` : "결과 보기"}</Button>
           </>
         }
       >
@@ -756,6 +679,15 @@ export default function ProductExplorer({ variant = "page" }: { variant?: "page"
         </aside>
 
         <div className="flex-1 min-w-0">
+          {applied.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mb-3">
+              {applied.map((a) => (
+                <Chip key={a.key} size="sm" aria-label={`${a.label} 조건 빼기`} onClick={() => { a.clear(); setPage(1); }}>
+                  {a.label} <Icon name="close" size={14} />
+                </Chip>
+              ))}
+            </div>
+          )}
           <p className="text-label text-ink-2 mb-3">
             {data ? (
               <><span className="num font-bold text-ink">{(data.total ?? 0).toLocaleString()}</span>개 {data.meals_only ? "한 끼·반찬" : "제품"}{search && <> · &quot;{search}&quot; 검색 결과</>}</>

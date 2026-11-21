@@ -5,7 +5,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Badge, Button, Card, CardActions, CardButton, Chip, ChipRow, ConfirmSheet, EmptyState, Field, Icon, ICON_NAMES, IconButton, IconLink,
   Input, KakaoButton, Kcal, LinkButton, ListRow, MacroGrid, MacroInline, MealSlot, MealSplit, MealTag, Notice, Estimate, HowCounted, AsOf, CodeBlock, TrendChart, BarList, GapChart, Page, PageHeader, Price,
-  ProgressBar, SearchField, SectionHeader, Select, Sheet, Spinner, Stat, Steps, Tabs, Textarea, TextLink, TextButton, Thumb, ProductImage,
+  ProgressBar, SearchField, SectionHeader, Select, Sheet, Disclosure, Spinner, Stat, Steps, Tabs, Textarea, TextLink, TextButton, Thumb, ProductImage,
   Avatar, useToast, cn, type BadgeTone,
   BottomNavItems, SkeletonList, FoodEntryForm, DragArea, DragGhost, DragHandle, useDragItem, useDropTarget, type DragData, ChoiceCard, ChoiceList, LinkTabs, RatingStars, RatingInput, ScaleInput, QuickRating, PostAuthor, PostAction, PostActions, PostTags, ThreadItem, MealAttach, PlanAttach, CertAttach, ProductTagLinks, PostCredits, PhotoGrid, PollAttach, DayDots, Switch,
   ReelRow, ReelTile, ReelAddTile, ReelSkeleton, ReelMedia, CommentItem, VideoAttach, OfferOptionList, QtyStepper, UnitInput, RangeInput, Checkbox, FilePick,
@@ -746,6 +746,16 @@ export default function Reference({ status }: { status: DsStatus }) {
           <Demo label='탭 · line — 카드·시트 안 입력 방법 전환' code='<Tabs variant="line">' className="p-0 overflow-hidden">
             <Tabs variant="line" value={tabB} onChange={setTabB} items={[{ value: "search", label: "검색" }, { value: "fav", label: "즐겨찾기", count: 4 }, { value: "list", label: "식단 리스트", count: 2 }, { value: "manual", label: "직접 입력" }]} />
             <p className="p-4 text-label text-ink-2">선택한 탭: {tabB}</p>
+          </Demo>
+          <Demo label="접는 묶음 — 필터처럼 고를 것이 많을 때. 제목 아래 지금 고른 값 한 줄, 누르면 펼쳐 고름" code='<Disclosure title summary active defaultOpen>'>
+            <div className="border-t border-line">
+              <Disclosure title="음식 종류" summary="메인 요리" active defaultOpen>
+                <div className="flex flex-wrap gap-1.5"><Chip size="sm" selected>메인 요리</Chip><Chip size="sm">밥</Chip><Chip size="sm">국·찌개</Chip><Chip size="sm">반찬</Chip></div>
+              </Disclosure>
+              <Disclosure title="맛" summary="전체">
+                <p className="text-label text-ink-2">짠맛 · 단맛 · 매운맛 · 고소한맛</p>
+              </Disclosure>
+            </div>
           </Demo>
           <Demo label="링크 탭 — 페이지 사이 이동 (관리자 메뉴)" code="<LinkTabs items current />">
             <LinkTabs current="#labels" items={[{ href: "#labels", label: "데이터 현황" }, { href: "#labels-2", label: "시장 인사이트" }, { href: "#labels-3", label: "발주 관리" }]} />

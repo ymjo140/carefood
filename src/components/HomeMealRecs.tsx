@@ -111,7 +111,7 @@ export default function HomeMealRecs() {
       ) : (
         <>
           <div>
-            <SectionHeader title="제품 추천" action={<TextLink href={`/products?role=${meal === "snack" ? "snack" : "main"}`}>더보기</TextLink>} />
+            <SectionHeader title="제품 추천" action={<TextLink href={`/products?type=${meal === "snack" ? "snack" : "main"}`}>더보기</TextLink>} />
             {recs.products.length === 0 ? (
               <p className="text-label text-ink-2">이 끼니 몫에 맞는 메인 제품을 찾지 못했어요. 아래 한 상을 봐 주세요</p>
             ) : (
