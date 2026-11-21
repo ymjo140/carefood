@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  Button, Field, Icon, Input, Notice, Select, Sheet, Skeleton, TextLink, Textarea, timeAgo, useToast,
+  Button, Chip, ChipRow, Field, Icon, Input, Notice, Select, Sheet, Skeleton, TextLink, Textarea, timeAgo, useToast,
 } from "@/components/ui";
 import { FIELDS, REVIEW_LABELS, CHANNELS, type Field as FieldDef } from "@/lib/partner/schema";
 
@@ -44,7 +44,9 @@ const STATUS_LINE: Record<Detail["item"]["status"], string> = {
   rejected: "반려됐어요 — 아래 이유를 고쳐 다시 저장하면 다시 검수해요",
   discontinued: "판매 종료예요 — 앱에서 살 수 없어요",
 };
-const show = (f: FieldDef, v: string | undefined) => !v ? "—" : f.enumOf ? f.enumOf[v] || v : v;
+const show = (f: FieldDef, v: string | undefined) => !v ? "—"
+  : f.type === "list" && f.enumOf ? v.split(/,\s*/).map((x) => f.enumOf![x] || x).join(", ")
+  : f.enumOf ? f.enumOf[v] || v : v;
 
 /**
  * 제품 상세 (v3 7.2) — 상태와 이유, 추천에서 빠진 이유, 표현 점검, 판매처별 가격·확인일, 양식 칸 전체.
@@ -210,13 +212,31 @@ export function ProductSheet({ qs, isDemo = false, id, onClose, onSaved }: { qs:
   );
 }
 
+/** "점심, dinner" 같은 목록 값 → 코드 (이름·코드 둘 다) */
+function listCodes(value: string, enumOf: Record<string, string>): string[] {
+  return value.split(/[,，·/]/).map((x) => x.trim()).filter(Boolean)
+    .map((x) => (x in enumOf ? x : Object.entries(enumOf).find(([, v]) => v === x)?.[0]))
+    .filter((x): x is string => !!x);
+}
+
 /** 양식 칸 하나 — 칸 종류에 맞는 입력 */
 function FieldInput({ f, value, error, disabled, onChange }: { f: FieldDef; value: string; error?: string; disabled?: boolean; onChange: (v: string) => void }) {
   const label = <>{f.label}{f.need !== "선택" && <span className="text-ink-2 font-regular"> · {f.need}</span>}</>;
   const long = f.key === "ingredients_raw" || f.key === "description" || f.key === "cross_contact";
   return (
     <Field label={label} hint={f.help || undefined} error={error} className={long ? "sm:col-span-2" : undefined}>
-      {f.type === "enum" && f.enumOf ? (
+      {f.type === "list" && f.enumOf && f.key !== "allergens" ? (
+        <ChipRow className="mx-0 px-0">
+          {Object.entries(f.enumOf).map(([k, v]) => {
+            const picked = listCodes(value, f.enumOf!);
+            const on = picked.includes(k);
+            return (
+              <Chip key={k} selected={on} disabled={disabled}
+                onClick={() => onChange(Object.keys(f.enumOf!).filter((x) => (x === k ? !on : picked.includes(x))).join(", "))}>{v}</Chip>
+            );
+          })}
+        </ChipRow>
+      ) : f.type === "enum" && f.enumOf ? (
         <Select value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)}>
           <option value="">{f.need === "선택" || f.need === "권장" ? "고르지 않음" : "골라 주세요"}</option>
           {Object.entries(f.enumOf).map(([k, v]) => <option key={k} value={k}>{v}</option>)}

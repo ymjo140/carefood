@@ -41,6 +41,8 @@ const PUT_EXAMPLE = `curl -X PUT "${BASE}/products/GR-2611-014" \\
     "name": "닭가슴살 현미 볶음밥 도시락",
     "brand": "예시브랜드",
     "category": "lunchbox",
+    "dish_role": "main",
+    "meal_times": ["lunch", "dinner"],
     "total_weight": { "value": 300, "unit": "g" },
     "serving_size": { "value": 300 },
     "pack_count": 1,

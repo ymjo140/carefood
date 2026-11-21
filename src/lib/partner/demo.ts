@@ -31,7 +31,7 @@ type Sample = Record<string, string>;
 function base(i: number, over: Sample): Sample {
   const now = Date.now();
   return {
-    brand: "예시브랜드", manufacturer: "예시식품(주)", food_type: "즉석조리식품", category: "lunchbox", meal_role_hint: "meal",
+    brand: "예시브랜드", manufacturer: "예시식품(주)", food_type: "즉석조리식품", category: "lunchbox", dish_role: "main", meal_times: "점심, 저녁",
     total_weight: "300", weight_unit: "g", serving_size: "300", pack_count: "1",
     nutrition_basis: "serving", nutrition_source: "label",
     calories_kcal: "420", sodium_mg: "640", carbs_g: "52", sugars_g: "6", fat_g: "11", trans_fat_g: "0", saturated_fat_g: "3",
@@ -52,8 +52,8 @@ export function excelSamples(): Sample[] {
     base(2, { partner_sku: "EX-002", name: "연어 퀴노아 샐러드 도시락", calories_kcal: "380", sodium_mg: "420", protein_g: "24", fat_g: "14", ingredients_raw: "퀴노아, 연어(노르웨이산), 양상추, 올리브유, 레몬즙", allergens: "없음", price: "7900", list_price: "8900" }),
     base(3, { partner_sku: "EX-003", name: "두부 버섯 덮밥", calories_kcal: "450", sodium_mg: "580", protein_g: "19", ingredients_raw: "현미밥(국산), 두부(대두), 표고버섯, 간장(대두, 밀)", allergens: "대두, 밀", price: "5500", list_price: "5500" }),
     base(4, { partner_sku: "EX-004", name: "쇠고기 곤약 비빔밥", calories_kcal: "390", sodium_mg: "610", protein_g: "22", ingredients_raw: "곤약밥, 쇠고기(호주산), 시금치, 고사리, 고추장(밀)", allergens: "쇠고기, 밀", price: "6500", list_price: "7200" }),
-    base(5, { partner_sku: "EX-005", name: "그릭요거트 그래놀라 컵", category: "dairy", meal_role_hint: "snack", total_weight: "150", serving_size: "150", calories_kcal: "210", sodium_mg: "80", carbs_g: "24", sugars_g: "9", fat_g: "7", saturated_fat_g: "3", cholesterol_mg: "10", protein_g: "12", fiber_g: "3", storage: "chilled", shelf_life_days: "14", ingredients_raw: "그릭요거트(우유), 귀리, 아몬드, 꿀", allergens: "우유", price: "3900", list_price: "3900" }),
-    base(6, { partner_sku: "EX-006", name: "닭가슴살 스테이크 3팩", pack_count: "3", total_weight: "100", serving_size: "100", calories_kcal: "140", sodium_mg: "390", carbs_g: "3", sugars_g: "1", fat_g: "3", saturated_fat_g: "1", cholesterol_mg: "60", protein_g: "24", fiber_g: "0", category: "protein", meal_role_hint: "side", ingredients_raw: "닭가슴살(국산), 정제소금, 마늘, 후추", allergens: "닭고기", price: "8900", list_price: "9900" }),
+    base(5, { partner_sku: "EX-005", name: "그릭요거트 그래놀라 컵", category: "dairy", dish_role: "snack", meal_times: "아침, 간식", total_weight: "150", serving_size: "150", calories_kcal: "210", sodium_mg: "80", carbs_g: "24", sugars_g: "9", fat_g: "7", saturated_fat_g: "3", cholesterol_mg: "10", protein_g: "12", fiber_g: "3", storage: "chilled", shelf_life_days: "14", ingredients_raw: "그릭요거트(우유), 귀리, 아몬드, 꿀", allergens: "우유", price: "3900", list_price: "3900" }),
+    base(6, { partner_sku: "EX-006", name: "닭가슴살 스테이크 3팩", pack_count: "3", total_weight: "100", serving_size: "100", calories_kcal: "140", sodium_mg: "390", carbs_g: "3", sugars_g: "1", fat_g: "3", saturated_fat_g: "1", cholesterol_mg: "60", protein_g: "24", fiber_g: "0", category: "protein", dish_role: "side", ingredients_raw: "닭가슴살(국산), 정제소금, 마늘, 후추", allergens: "닭고기", price: "8900", list_price: "9900" }),
   ];
 }
 
@@ -122,7 +122,7 @@ type Prod = { sku: string; name: string; price: number; meal: string };
 /** 예시 주문 만들기 — 이미 있던 예시 주문은 지우고 다시 만든다 */
 export async function seedDemoOrders(sb: Sb, partner: Partner) {
   await clearDemoOrders(sb, partner.id);
-  const prods: Prod[] = excelSamples().map((s) => ({ sku: s.partner_sku, name: s.name, price: Number(s.price), meal: s.meal_role_hint === "snack" ? "snack" : "lunch" }));
+  const prods: Prod[] = excelSamples().map((s) => ({ sku: s.partner_sku, name: s.name, price: Number(s.price), meal: s.dish_role === "snack" ? "snack" : "lunch" }));
   const rand = rng(20261115);
   const now = Date.now();
   const days = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
