@@ -66,3 +66,87 @@ export function fixPlausible(next: { nutrient_base_g?: number | null; calories?:
   if ((Number(next.protein_g) || 0) + (Number(next.carbs_g) || 0) + (Number(next.fat_g) || 0) > base * 1.02) return "탄수화물·단백질·지방 합이 기준량보다 무거워요";
   return null;
 }
+
+/* ───── 신고 받은 제품이 DB 어디에 있는지 (관리 화면 'DB에서 보기') ───── */
+
+/** products.data_source → 사람이 읽는 출처 */
+export const DATA_SOURCE_LABEL: Record<string, string> = {
+  mfds_api: "식약처 품목제조보고 영양성분 API",
+  partner: "입점 업체가 올린 값",
+  crawler: "판매 페이지에서 모은 값",
+  manual: "직접 넣은 값",
+};
+/** 저장된 칸 — 영양 값은 nutrient_base_g(기준량) 당으로 저장된다 */
+export const TRACE_COLUMNS: { col: string; label: string; unit: string; nutrient: boolean }[] = [
+  { col: "nutrient_base_g", label: "영양 기준량", unit: "g", nutrient: false },
+  { col: "serving_size_g", label: "1회 제공량", unit: "g", nutrient: false },
+  { col: "total_weight_g", label: "총 내용량", unit: "g", nutrient: false },
+  { col: "calories", label: "열량", unit: "kcal", nutrient: true },
+  { col: "protein_g", label: "단백질", unit: "g", nutrient: true },
+  { col: "carbs_g", label: "탄수화물", unit: "g", nutrient: true },
+  { col: "sugar_g", label: "당류", unit: "g", nutrient: true },
+  { col: "fat_g", label: "지방", unit: "g", nutrient: true },
+  { col: "sodium_mg", label: "나트륨", unit: "mg", nutrient: true },
+];
+/** 신고 종류마다 먼저 볼 칸 */
+export const KIND_COLUMNS: Record<ReportKind, string[]> = {
+  nutrition: ["nutrient_base_g", "calories", "protein_g", "carbs_g", "sugar_g", "fat_g", "sodium_mg"],
+  serving: ["serving_size_g", "total_weight_g", "nutrient_base_g"],
+  wrong_page: [],
+  price: [],
+  other: [],
+};
+
+export type TraceRow = { col: string; label: string; unit: string; stored: number | null; serving: number | null; per100: number | null; flagged: boolean };
+export type TraceHistory = { at: string; what: string; by: string | null };
+export type DbTrace = {
+  id: string; source: string; data_source: string | null;
+  food_code: string | null; report_no: string | null; barcode: string | null;
+  created_at: string | null; updated_at: string | null;
+  base_g: number; serving_g: number;
+  rows: TraceRow[];
+  history: TraceHistory[];
+  partner: { name: string; sku: string; status: string } | null;
+  /** 다시 불러오기로 덮일 수 있는지 — 고친 칸은 식약처 다시 불러오기에서 건너뛴다(scripts/ingest_mfds.py) */
+  overwrite: string | null;
+  sql: string;
+};
+
+const n = (v: unknown) => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
+const r1 = (v: number | null) => (v == null ? null : Math.round(v * 10) / 10);
+
+/** 제품 한 줄 + 고친 이력 + 업체 연결 → 관리 화면이 그대로 그리는 모양 (계산만, 시험: tests/product-reports.test.ts) */
+export function buildDbTrace(p: Record<string, unknown>, kind: ReportKind, opts: {
+  fixes?: { field: string; old_value: string | null; new_value: string | null; fixed_by: string | null; fixed_at: string }[];
+  baseFixes?: { old_base: unknown; fixed_at: string; reason?: string | null }[];
+  partner?: { name: string; sku: string; status: string } | null;
+  servingG: number;
+}): DbTrace {
+  const base = n(p.nutrient_base_g) && Number(p.nutrient_base_g) > 0 ? Number(p.nutrient_base_g) : 100;
+  const look = new Set(KIND_COLUMNS[kind]);
+  const rows: TraceRow[] = TRACE_COLUMNS.map((c) => {
+    const stored = n(p[c.col]);
+    return {
+      col: c.col, label: c.label, unit: c.unit, stored,
+      serving: c.nutrient && stored != null ? r1(stored * opts.servingG / base) : null,
+      per100: c.nutrient && stored != null ? r1(stored * 100 / base) : null,
+      flagged: look.has(c.col),
+    };
+  });
+  const label = (f: string) => TRACE_COLUMNS.find((c) => c.col === f)?.label ?? f;
+  const history: TraceHistory[] = [
+    ...(opts.fixes || []).map((f) => ({ at: f.fixed_at, what: `${label(f.field)} ${f.old_value ?? "없음"} → ${f.new_value ?? "없음"}`, by: f.fixed_by })),
+    ...(opts.baseFixes || []).map((b) => ({ at: b.fixed_at, what: `영양 기준량 일괄 수정 ${n(b.old_base) ?? "없음"}g → ${base}g${b.reason ? ` (${b.reason})` : ""}`, by: "일괄 수정" })),
+  ].sort((a, z) => z.at.localeCompare(a.at));
+  const src = String(p.data_source || "");
+  const overwrite = src === "mfds_api" ? "식약처 자료를 다시 불러와도 여기서 고친 칸은 건너뛰어요. 고치지 않은 칸은 새 값으로 바뀔 수 있어요"
+    : src === "partner" ? "업체가 같은 제품 코드로 다시 올리면 업체 값으로 바뀌어요. 업체에도 알려 주세요" : null;
+  const id = String(p.id);
+  return {
+    id, source: DATA_SOURCE_LABEL[src] || (src ? src : "출처 기록 없음"), data_source: src || null,
+    food_code: (p.food_code as string) || null, report_no: (p.report_no as string) || null, barcode: (p.barcode as string) || null,
+    created_at: (p.created_at as string) || null, updated_at: (p.updated_at as string) || null,
+    base_g: base, serving_g: opts.servingG, rows, history, partner: opts.partner ?? null, overwrite,
+    sql: `select ${TRACE_COLUMNS.map((c) => c.col).join(", ")}\nfrom products where id = '${id}';${p.food_code ? `\n-- 식약처 식품코드: ${p.food_code}` : ""}`,
+  };
+}

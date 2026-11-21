@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { adminOnly, getAdminUser } from "@/lib/actor-server";
-import { cleanFix, fixPlausible, REPORT_KINDS, type ReportKind, type ReportStatus } from "@/lib/product-reports";
+import { buildDbTrace, cleanFix, fixPlausible, REPORT_KINDS, type ReportKind, type ReportStatus } from "@/lib/product-reports";
+import { defaultServingG } from "@/lib/serving";
 
 /**
  * 관리 › 정보 신고 (화면: app/admin/product-reports)
  * GET  ?status=open|fixed|rejected — 제품·종류별로 묶어 건수 · 맞는 값 · 메모 · 사진(1시간 서명 주소) · 지금 제품 값
+ *      · db: 그 제품이 DB 어디에 있는지 (출처·식품코드·품목보고번호·바코드·id, 저장 칸 값과 1회분·100g당, 고친 이력, 업체 연결, 찾는 SQL)
  * PATCH { product_id, kind, status, fix?, hide_links? }
  *   fix: 제품 칸 고치기(1회 제공량·기준량·열량·탄단지·당류·나트륨 — lib/product-reports FIX_FIELDS) → product_fixes 에 전·후 값을 남긴다.
  *        고친 값이 물리적으로 안 되면(기준량 1g 에 9.2kcal 초과 등) 거절. 1회분·100g당 값은 DB 트리거가 다시 계산한다.
@@ -29,10 +31,32 @@ export async function GET(req: NextRequest) {
   const rows = (data || []) as Row[];
   const pids = [...new Set(rows.map((r) => r.product_id))];
   const [pRes, lRes] = await Promise.all([
-    pids.length ? sb.from("products").select("id, name, manufacturer, serving_size_g, nutrient_base_g, calories, protein_g, carbs_g, sugar_g, fat_g, sodium_mg, serving_g, serving_kcal").in("id", pids) : { data: [], error: null },
+    pids.length ? sb.from("products").select("id, name, manufacturer, meal_role, data_source, food_code, report_no, barcode, created_at, updated_at, serving_size_g, total_weight_g, nutrient_base_g, calories, protein_g, carbs_g, sugar_g, fat_g, sodium_mg, serving_g, serving_kcal").in("id", pids) : { data: [], error: null },
     pids.length ? sb.from("product_prices").select("product_id, platform, url, price, is_available").in("product_id", pids) : { data: [], error: null },
   ]);
   if (pRes.error || lRes.error) return NextResponse.json({ error: "제품을 불러오지 못했어요" }, { status: 500 });
+  // 고친 이력 · 기준량 일괄 수정 기록 · 업체 연결
+  const [fRes, b28, b30, piRes] = await Promise.all([
+    pids.length ? sb.from("product_fixes").select("product_id, field, old_value, new_value, fixed_by, fixed_at").in("product_id", pids).order("fixed_at", { ascending: false }) : { data: [], error: null },
+    pids.length ? sb.from("products_base_fix_20261128").select("id, old_base, fixed_at").in("id", pids) : { data: [], error: null },
+    pids.length ? sb.from("products_base_fix_20261130").select("id, old_base, reason, fixed_at").in("id", pids) : { data: [], error: null },
+    pids.length ? sb.from("partner_items").select("product_id, partner_sku, status, partners(name)").in("product_id", pids) : { data: [], error: null },
+  ]);
+  if (fRes.error || piRes.error) return NextResponse.json({ error: "제품 이력을 불러오지 못했어요" }, { status: 500 });
+  // 기준량 일괄 수정 기록 표는 일회성 백업이라 없을 수도 있다 — 없으면 그 이력만 빼고 보여 준다
+  if (b28.error) console.error("기준량 수정 기록(11/28):", b28.error.message); // ds-allow: 이력 한 줄만 빠진다
+  if (b30.error) console.error("기준량 수정 기록(11/30):", b30.error.message); // ds-allow: 이력 한 줄만 빠진다
+  const byPid = <T extends { product_id?: string; id?: string }>(xs: T[] | null) => {
+    const m = new Map<string, T[]>();
+    for (const x of xs || []) { const k = (x.product_id || x.id)!; m.set(k, [...(m.get(k) || []), x]); }
+    return m;
+  };
+  const fixes = byPid((fRes.data || []) as { product_id: string; field: string; old_value: string | null; new_value: string | null; fixed_by: string | null; fixed_at: string }[]);
+  const baseFixes = byPid([...((b28.data || []) as { id: string; old_base: number; fixed_at: string }[]), ...((b30.data || []) as { id: string; old_base: number; reason: string; fixed_at: string }[])]);
+  const partnerOf = new Map<string, { name: string; sku: string; status: string }>();
+  for (const x of (piRes.data || []) as { product_id: string; partner_sku: string; status: string; partners: { name: string } | null }[]) {
+    partnerOf.set(x.product_id, { name: x.partners?.name || "업체", sku: x.partner_sku, status: x.status });
+  }
   const products = new Map(((pRes.data || []) as { id: string }[]).map((p) => [p.id, p]));
   const links = new Map<string, unknown[]>();
   for (const l of (lRes.data || []) as { product_id: string }[]) links.set(l.product_id, [...(links.get(l.product_id) || []), l]);
@@ -58,7 +82,14 @@ export async function GET(req: NextRequest) {
     groups.set(k, g);
   }
   const items = [...groups.values()].sort((a, z) => z.count - a.count || z.last_at.localeCompare(a.last_at))
-    .map((g) => ({ ...g, product: products.get(g.product_id) ?? null, links: links.get(g.product_id) ?? [] }));
+    .map((g) => {
+      const p = products.get(g.product_id) as Record<string, unknown> | undefined;
+      const db = p ? buildDbTrace(p, g.kind, {
+        fixes: fixes.get(g.product_id), baseFixes: baseFixes.get(g.product_id), partner: partnerOf.get(g.product_id) ?? null,
+        servingG: defaultServingG(p as { serving_size_g?: unknown; meal_role?: unknown; name?: unknown }),
+      }) : null;
+      return { ...g, product: p ?? null, links: links.get(g.product_id) ?? [], db };
+    });
   return NextResponse.json({ items });
 }
 

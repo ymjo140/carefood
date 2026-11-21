@@ -387,6 +387,27 @@ class StatsAccumulator:
             log.warning("나트륨 데이터가 0건입니다 — 필드 매핑을 확인하세요 (--discover)")
 
 
+def load_fixed_fields(supabase: Optional[Client]) -> dict:
+    """관리자가 신고를 보고 고친 칸 (product_fixes) → {식품코드: {칸, …}}.
+    다시 불러올 때 이 칸은 식약처 값으로 덮지 않는다 — 식약처 자료가 틀려서 고친 것이므로."""
+    out: dict = {}
+    if not supabase:
+        return out
+    start = 0
+    while True:
+        res = supabase.table("product_fixes").select("field, products(food_code)").range(start, start + 999).execute()
+        rows = res.data or []
+        for r in rows:
+            code = (r.get("products") or {}).get("food_code")
+            if code:
+                out.setdefault(code, set()).add(r["field"])
+        if len(rows) < 1000:
+            break
+        start += 1000
+    log.info(f"관리자가 고친 제품 {len(out):,}개 — 고친 칸은 덮지 않음")
+    return out
+
+
 def ingest_streaming(api_key: str, supabase: Optional[Client]) -> StatsAccumulator:
     """스트리밍 적재: 페이지별로 fetch → transform → upsert → 메모리 해제.
 
@@ -399,6 +420,7 @@ def ingest_streaming(api_key: str, supabase: Optional[Client]) -> StatsAccumulat
     total_fetched = 0
 
     log.info(f"총 {total:,}건, {total_pages}페이지 스트리밍 처리 시작")
+    fixed = load_fixed_fields(supabase)
 
     for page_no in range(1, total_pages + 1):
         # ── fetch ──
@@ -428,10 +450,14 @@ def ingest_streaming(api_key: str, supabase: Optional[Client]) -> StatsAccumulat
 
         # ── upsert (페이지 단위) ──
         if supabase and page_products:
+            # 고친 칸이 있는 제품은 그 칸을 빼고 한 줄씩 (한 번에 올리는 줄들은 칸이 모두 같아야 한다)
+            normal = [x for x in page_products if x.get("food_code") not in fixed]
+            kept = [{k: v for k, v in x.items() if k not in fixed[x["food_code"]]} for x in page_products if x.get("food_code") in fixed]
             try:
-                supabase.table("products").upsert(
-                    page_products, on_conflict="food_code"
-                ).execute()
+                if normal:
+                    supabase.table("products").upsert(normal, on_conflict="food_code").execute()
+                for x in kept:
+                    supabase.table("products").upsert(x, on_conflict="food_code").execute()
                 stats.upserted += len(page_products)
             except Exception as e:
                 stats.upsert_errors += len(page_products)
