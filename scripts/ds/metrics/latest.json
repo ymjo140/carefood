@@ -1,6 +1,6 @@
 {
-  "measuredAt": "2026-11-19T13:39:51.146Z",
-  "files": 172,
+  "measuredAt": "2026-11-21T12:22:39.120Z",
+  "files": 175,
   "distinctColors": 2,
   "gradients": 3,
   "shadows": 1,
@@ -21,19 +21,19 @@
   "fontSizes": [
     [
       "ds:label",
-      515
+      526
     ],
     [
       "ds:caption",
-      423
+      433
     ],
     [
       "ds:body",
-      143
+      146
     ],
     [
       "ds:title",
-      40
+      42
     ],
     [
       "ds:display",
@@ -43,11 +43,11 @@
   "radii": [
     [
       "lg",
-      46
+      49
     ],
     [
       "md",
-      42
+      43
     ],
     [
       "full",

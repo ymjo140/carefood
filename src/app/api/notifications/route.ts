@@ -4,6 +4,7 @@ import { createServiceRoleClient } from "@/lib/supabase/server";
 import { getActorId, noActor } from "@/lib/actor-server";
 import { adNotifications, buildNotifications } from "@/lib/notifications";
 import { consentNotifications } from "@/lib/consent-notice";
+import { reportNotifications } from "@/lib/product-reports-server";
 import { couponNotifications } from "@/lib/partner/coupons";
 import { flowNotifications } from "@/lib/partner/flows";
 import { collabNotifications } from "@/lib/partner/collabs";
@@ -42,12 +43,13 @@ export async function GET(request: NextRequest) {
   try {
     // 업체 광고(고객층 발송)는 알림함에만 — 커뮤니티 웹 푸시와 섞지 않는다
     // 업체 쿠폰·자동 알림도 광고라 같은 자리 — 받기로 한 사람에게만 들어간다
-    const [community, ads, consent, coupons, flows, collabs, inquiries, nudges, tags] = await Promise.all([
+    const [community, ads, consent, coupons, flows, collabs, inquiries, nudges, tags, reports] = await Promise.all([
       buildNotifications(sb, actor), adNotifications(sb, actor), consentNotifications(sb, actor), couponNotifications(sb, actor), flowNotifications(sb, actor), collabNotifications(sb, actor),
       inquiryNotifications(sb, actor), nudgeNotifications(sb, actor),
       viewerFilters(sb, actor).then((f) => tagNotifications(sb, actor, f.blocked)),
+      reportNotifications(sb, actor),
     ]);
-    items = [...community, ...ads, ...consent, ...coupons, ...flows, ...collabs, ...inquiries, ...nudges, ...tags].sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+    items = [...community, ...ads, ...consent, ...coupons, ...flows, ...collabs, ...inquiries, ...nudges, ...tags, ...reports].sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
   } catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: 500 }); }
   if (latestOnly) {
     const body = { latest_at: items[0]?.at ?? null, seen_at };

@@ -5,10 +5,10 @@ import Link from "@/components/ui/AppLink";
 import { Button, Card, EmptyState, Icon, LinkButton, SkeletonList, cn, type IconName } from "@/components/ui";
 import { timeAgo } from "@/components/ui/FeedPost";
 
-type Item = { id: string; type: "comment" | "reply" | "like" | "follow" | "gb_question" | "gb_answer" | "gb_reached" | "gb_requested" | "ad" | "consent" | "collab" | "inquiry" | "ch_cheer" | "ch_join" | "ch_start" | "nudge" | "family_request" | "family_answer" | "tag" | "tag_pending" | "source" | "regram"; at: string; who: string; count?: number; text?: string; post_id?: string; post_excerpt?: string; user_id?: string; url?: string };
+type Item = { id: string; type: "comment" | "reply" | "like" | "follow" | "gb_question" | "gb_answer" | "gb_reached" | "gb_requested" | "ad" | "consent" | "collab" | "inquiry" | "ch_cheer" | "ch_join" | "ch_start" | "nudge" | "family_request" | "family_answer" | "tag" | "tag_pending" | "source" | "regram" | "report_fixed"; at: string; who: string; count?: number; text?: string; post_id?: string; post_excerpt?: string; user_id?: string; url?: string };
 
 const ICON: Record<Item["type"], IconName> = {
-  comment: "message", reply: "message", like: "heart", follow: "user", gb_question: "message", gb_answer: "message", gb_reached: "users", gb_requested: "bell", ad: "tag", consent: "bell", collab: "users", inquiry: "message", ch_cheer: "heart", ch_join: "users", ch_start: "calendar", nudge: "bell", family_request: "lock", family_answer: "users", tag: "user", tag_pending: "user", source: "copy", regram: "repost",
+  comment: "message", reply: "message", like: "heart", follow: "user", gb_question: "message", gb_answer: "message", gb_reached: "users", gb_requested: "bell", ad: "tag", consent: "bell", collab: "users", inquiry: "message", ch_cheer: "heart", ch_join: "users", ch_start: "calendar", nudge: "bell", family_request: "lock", family_answer: "users", tag: "user", tag_pending: "user", source: "copy", regram: "repost", report_fixed: "check",
 };
 
 export function NotificationList() {
@@ -74,6 +74,7 @@ export function NotificationList() {
                 {n.type === "gb_requested" && <>알림 받는 공구를 판매처에 요청했어요. 판매가 열리면 알려 드려요</>}
                 {n.type === "ad" && <>(광고) <b className="font-bold">{n.who}</b> 소식이에요</>}
                 {n.type === "consent" && <>업체 소식(광고) 받기 동의를 확인해 주세요</>}
+                {n.type === "report_fixed" && <>알려 주신 <b className="font-bold">{n.text}</b> 정보를 고쳤어요. 고마워요</>}
                 {n.type === "ch_cheer" && (n.count && n.count > 1
                   ? <><b className="font-bold">{n.who}</b> 님 외 <b className="num font-bold">{n.count - 1}</b>명이 응원했어요</>
                   : <><b className="font-bold">{n.who}</b> 님이 응원했어요</>)}
@@ -89,7 +90,7 @@ export function NotificationList() {
                 {n.type === "source" && <><b className="font-bold">{n.who}</b> 님이 내 식단을 따라 하고 글을 올렸어요</>}
                 {n.type === "regram" && <><b className="font-bold">{n.who}</b> 님이 내 글을 스토리에 올렸어요</>}
               </span>
-              {n.text && n.type !== "ad" && n.type !== "nudge" && n.type !== "family_request" && n.type !== "family_answer" && <span className="text-label text-ink-2 line-clamp-2">“{n.text}”</span>}
+              {n.text && n.type !== "ad" && n.type !== "nudge" && n.type !== "family_request" && n.type !== "family_answer" && n.type !== "report_fixed" && <span className="text-label text-ink-2 line-clamp-2">“{n.text}”</span>}
               {(n.type === "ad" || n.type === "consent") && <span className="text-label text-ink-2 line-clamp-3">{n.text}</span>}
               {n.type === "ad" && <span className="text-caption text-ink-3">받지 않으려면 마이 &gt; 알림 설정에서 끌 수 있어요</span>}
               {n.post_excerpt && n.type !== "comment" && n.type !== "reply" && <span className="text-caption text-ink-2 line-clamp-1">{n.post_excerpt}</span>}

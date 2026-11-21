@@ -12,6 +12,7 @@ import FavoriteButton from "@/components/FavoriteButton";
 import TrackableLink from "@/components/TrackableLink";
 import { checkedLabel, packLabel, usablePrices } from "@/lib/prices";
 import AllergenWarning from "@/components/AllergenWarning";
+import ProductReportButton from "@/components/ProductReportButton";
 import ProductGroupBuy from "@/components/ProductGroupBuy";
 import {
   Page, SectionHeader, Card, Badge, Icon, MacroStat, Stat, EmptyState, Estimate, Notice, Thumb, Price,
@@ -367,6 +368,7 @@ export default async function ProductDetailPage(props: PageProps<"/products/[id]
       ) : (
         <EmptyState className="mb-5" title="영양 정보 수집 중" description="해당 제품의 상세 영양 성분을 수집하고 있어요." />
       )}
+      <ProductReportButton productId={product.id} productName={product.name} />
 
       {/* ── 상세 영양 성분표 (접는 형태) ── */}
       {(product.saturated_fat_g != null || product.cholesterol_mg != null || product.fiber_g != null || product.sugar_g != null) && (
