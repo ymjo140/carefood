@@ -108,17 +108,19 @@ function buildProductQuery(supabase: any, params: ReturnType<typeof parseSearchP
     search, tag, tags, purpose, dishCategory,
     hasPriceOnly, kind, role, types,
     proteinMin, caloriesMax, sodiumMax, sugarMax, fiberMin, healthScoreMin,
+    per100gSugarMax, per100gSodiumMax, per100gProteinMin, per100gCaloriesMax,
     sort, page, limit,
   } = params;
 
   // 정렬 매핑
-  type OrderCol = "name" | "protein_g" | "calories" | "health_score";
+  type OrderCol = "name" | "serving_protein_g" | "serving_kcal" | "health_score";
   const sortMap: Record<string, { column: OrderCol; ascending: boolean }> = {
     name: { column: "name", ascending: true },
     price_asc: { column: "health_score", ascending: false }, // 후보 POOL 개를 받아 가격으로 다시 정렬
     price_desc: { column: "health_score", ascending: false },
-    protein_desc: { column: "protein_g", ascending: false },
-    calories_asc: { column: "calories", ascending: true },
+    // 고단백순·저칼로리순은 한 번 먹는 양(1회분) 기준 — 20261130b serving_* 칸
+    protein_desc: { column: "serving_protein_g", ascending: false },
+    calories_asc: { column: "serving_kcal", ascending: true },
     health_desc: { column: "health_score", ascending: false },
     recommend: { column: "health_score", ascending: false }, // 후보 POOL 개를 받아 점수로 다시 정렬
   };
@@ -134,15 +136,15 @@ function buildProductQuery(supabase: any, params: ReturnType<typeof parseSearchP
   // 맛 필터
   if (salty >= 1 && salty <= 10) {
     const [min, max] = TASTE_RANGES.salty[salty];
-    query = query.gte("sodium_mg", min).lt("sodium_mg", max);
+    query = query.gte("per100_sodium_mg", min).lt("per100_sodium_mg", max); // 맛은 농도 — 100g당
   }
   if (sweet >= 1 && sweet <= 10) {
     const [min, max] = TASTE_RANGES.sweet[sweet];
-    query = query.gte("sugar_g", min).lt("sugar_g", max);
+    query = query.gte("per100_sugar_g", min).lt("per100_sugar_g", max);
   }
   if (fatty >= 1 && fatty <= 10) {
     const [min, max] = TASTE_RANGES.fatty[fatty];
-    query = query.gte("fat_g", min).lt("fat_g", max);
+    query = query.gte("per100_fat_g", min).lt("per100_fat_g", max);
   }
   if (spicy >= 1 && spicy <= 10) {
     // 매운맛 단계(1~10) → spicy_score(0~5) 가운데 ±1. 전에는 '이상'만 걸려 '덜 맵게'를 고르면 매운 제품만 남았다
@@ -195,11 +197,16 @@ function buildProductQuery(supabase: any, params: ReturnType<typeof parseSearchP
     else if (cats.length > 1) query = query.in("dish_category", cats);
   }
 
-  // 영양 조건 필터
-  if (proteinMin > 0) query = query.gte("protein_g", proteinMin);
-  if (caloriesMax > 0) query = query.lte("calories", caloriesMax);
-  if (sodiumMax > 0) query = query.lte("sodium_mg", sodiumMax);
-  if (sugarMax > 0) query = query.lte("sugar_g", sugarMax);
+  // 영양 조건 — 1회분은 한 번 먹는 양에 든 그램 수, 100g당은 제품끼리 비교 (20261130b: serving_* · per100_* 칸, 판매 제품만 채워짐)
+  // 전에는 기준량(30g·80g·200g …)당 저장값을 그대로 비교해 화면의 1회분과 어긋났다
+  if (proteinMin > 0) query = query.gte("serving_protein_g", proteinMin);
+  if (caloriesMax > 0) query = query.lte("serving_kcal", caloriesMax);
+  if (sodiumMax > 0) query = query.lte("serving_sodium_mg", sodiumMax);
+  if (sugarMax > 0) query = query.lte("serving_sugar_g", sugarMax);
+  if (per100gProteinMin > 0) query = query.gte("per100_protein_g", per100gProteinMin);
+  if (per100gCaloriesMax > 0) query = query.lte("per100_kcal", per100gCaloriesMax);
+  if (per100gSodiumMax > 0) query = query.lte("per100_sodium_mg", per100gSodiumMax);
+  if (per100gSugarMax > 0) query = query.lte("per100_sugar_g", per100gSugarMax);
   if (fiberMin > 0) query = query.gte("fiber_g", fiberMin);
   if (healthScoreMin > 0) query = query.gte("health_score", healthScoreMin);
 
@@ -226,7 +233,6 @@ function buildProductQuery(supabase: any, params: ReturnType<typeof parseSearchP
 async function attachPricesAndFilter(supabase: any, products: any[], params: ReturnType<typeof parseSearchParams>) {
   const {
     source, priceMin, priceMax, sort,
-    per100gSugarMax, per100gSodiumMax, per100gProteinMin, per100gCaloriesMax,
   } = params;
 
   const productIds = products.map((p: { id: string }) => p.id);
@@ -280,10 +286,6 @@ async function attachPricesAndFilter(supabase: any, products: any[], params: Ret
   }
 
   // 100g당 기준 후처리
-  if (per100gSugarMax > 0) result = result.filter((p: { per100g_sugar: number | null }) => p.per100g_sugar != null && p.per100g_sugar <= per100gSugarMax);
-  if (per100gSodiumMax > 0) result = result.filter((p: { per100g_sodium: number | null }) => p.per100g_sodium != null && p.per100g_sodium <= per100gSodiumMax);
-  if (per100gProteinMin > 0) result = result.filter((p: { per100g_protein: number | null }) => p.per100g_protein != null && p.per100g_protein >= per100gProteinMin);
-  if (per100gCaloriesMax > 0) result = result.filter((p: { per100g_calories: number | null }) => p.per100g_calories != null && p.per100g_calories <= per100gCaloriesMax);
 
   // 가격 필터
   if (priceMin > 0 || priceMax > 0) {
@@ -307,7 +309,7 @@ async function attachPricesAndFilter(supabase: any, products: any[], params: Ret
     });
   }
 
-  const postFiltered = priceMin > 0 || priceMax > 0 || per100gSugarMax > 0 || per100gSodiumMax > 0 || per100gProteinMin > 0 || per100gCaloriesMax > 0;
+  const postFiltered = priceMin > 0 || priceMax > 0;
   return { result, postFiltered };
 }
 
@@ -396,7 +398,7 @@ export async function POST(request: NextRequest) {
   const allergies = profile.allergies.length ? profile.allergies : params.allergies;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let rows: any[] = filterAllergens(data, allergies);
-  const needsPricesFirst = params.priceMin > 0 || params.priceMax > 0 || params.per100gSugarMax > 0 || params.per100gSodiumMax > 0 || params.per100gProteinMin > 0 || params.per100gCaloriesMax > 0;
+  const needsPricesFirst = params.priceMin > 0 || params.priceMax > 0;
   try {
     if (needsPricesFirst) rows = (await attachPricesAndFilter(supabase, rows, params)).result;
   } catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: 500 }); }
