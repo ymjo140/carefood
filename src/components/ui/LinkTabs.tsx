@@ -48,5 +48,6 @@ export const ADMIN_TABS = [
   { href: "/admin/group-buys", label: "공구" },
   { href: "/admin/challenges", label: "챌린지" },
   { href: "/admin/reports", label: "신고" },
+  { href: "/admin/product-reports", label: "정보 신고" },
   { href: "/admin/partners", label: "입점" },
 ];
