@@ -1,0 +1,12 @@
+-- 간식 역할 분류 (2026-11-21 적용함 — 기록)
+-- 기준량을 100g로 고친 제품(20261128) 중 meal_role=간식이고 dish_role 이 비어 있던 7,857개.
+-- 값이 정상이 되며 추천 후보로 돌아와 재료·소스·영양제가 간식으로 섞여 나왔다(예: 가다랑어포).
+-- 제품명 규칙으로 나눈 안(간식_역할_분류안.xlsx)을 사용자가 확인: 간식 6,814 · 재료 792(영양제·조리용 치즈·버터·건어물·면)
+--   · 소스·양념 165(땅콩버터·잼·식초) · 메인 49(오트밀·뮤즐리, 아침) · 반찬 37(진미채·김·소시지).
+-- 목록: supabase/data/20261129_snack_roles.csv (id,role). 적용은 그 파일을 pg_net 으로 읽어 아래와 같이:
+--   update products p set dish_role = s.role,
+--          meal_times = case s.role when 'snack' then '{snack}' when 'side' then '{breakfast,lunch,dinner}' when 'main' then '{breakfast}' else null end,
+--          breakfast_pref = case when s.role = 'main' then true end, meal_class_src = 'rule'
+--     from <csv> s where p.id = s.id and p.dish_role is null;   -- 그 사이 사람이 정한 것은 덮지 않음
+-- 가다랑어포(f3c36368-de10-4a88-b60b-513ca7ea14cc)는 따로 재료로 (meal_class_src = 'checked').
+select 1;
