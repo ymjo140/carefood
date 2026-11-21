@@ -4,7 +4,7 @@ import { INGREDIENTS as BUDDY_INGREDIENTS, PERSONALITIES as BUDDY_PERSONALITIES 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Badge, Button, Card, CardActions, CardButton, Chip, ChipRow, ConfirmSheet, EmptyState, Field, Icon, ICON_NAMES, IconButton, IconLink,
-  Input, KakaoButton, Kcal, LinkButton, ListRow, MacroGrid, MacroInline, MealSlot, MealSplit, MealTag, Notice, Estimate, HowCounted, AsOf, CodeBlock, TrendChart, BarList, GapChart, Page, PageHeader, Price,
+  Input, KakaoButton, Kcal, LinkButton, ListRow, MacroBars, MacroGrid, MacroInline, dailyRefNote, MealSlot, MealSplit, MealTag, Notice, Estimate, HowCounted, AsOf, CodeBlock, TrendChart, BarList, GapChart, Page, PageHeader, Price,
   ProgressBar, SearchField, SectionHeader, Select, Sheet, Disclosure, DayChoice, Spinner, Stat, Steps, Tabs, Textarea, TextLink, TextButton, Thumb, ProductImage,
   Avatar, useToast, cn, type BadgeTone,
   BottomNavItems, SkeletonList, FoodEntryForm, DragArea, DragGhost, DragHandle, useDragItem, useDropTarget, type DragData, ChoiceCard, ChoiceList, LinkTabs, RatingStars, RatingInput, ScaleInput, QuickRating, PostAuthor, PostAction, PostActions, PostTags, ThreadItem, MealAttach, PlanAttach, CertAttach, ProductTagLinks, PostCredits, PhotoGrid, PollAttach, DayDots, Switch,
@@ -1019,6 +1019,12 @@ export default function Reference({ status }: { status: DsStatus }) {
               { key: "breakfast", label: "아침", kcal: 380 }, { key: "lunch", label: "점심", kcal: 640 },
               { key: "dinner", label: "저녁", kcal: 420, planned: true }, { key: "snack", label: "간식", kcal: 0 },
             ]} />
+          </Demo>
+          <Demo label="목록 카드 영양 4칸 — 이름 · 1회분 숫자 · 하루 기준량 대비 막대" code="<MacroBars values />">
+            <div className="flex flex-col gap-2">
+              <MacroBars values={{ protein: 24, carbs: 3, fat: 5, sodium: 430 }} />
+              <p className="text-caption text-ink-2">{dailyRefNote()}</p>
+            </div>
           </Demo>
           <Demo label="한 줄 요약 — 카드·목록 안" code="<MacroInline values />">
             <MacroInline values={{ protein: 32, carbs: 45, fat: 8, sodium: 620 }} />
