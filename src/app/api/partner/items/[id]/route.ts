@@ -6,7 +6,7 @@ import { checkClaimsWith } from "@/lib/partner/claims";
 import { loadClaimTerms } from "@/lib/partner/claims-server";
 import { flatten } from "@/lib/partner/feed";
 import { ingestRows } from "@/lib/partner/ingest";
-import { FIELD_BY_KEY } from "@/lib/partner/schema";
+import { FIELD_BY_KEY, legacyDishRole, type CategoryCode } from "@/lib/partner/schema";
 import { limitRequest } from "@/lib/rate-limit";
 import { WEB_EDIT } from "@/lib/partner/connect-status";
 
@@ -24,7 +24,8 @@ const bad = (error: string, status = 400) => NextResponse.json({ error }, { stat
 function toValues(data: Record<string, unknown> | null): Record<string, string> {
   if (!data) return {};
   const flat = flatten(data);
-  if (data.meal_role !== undefined) flat.meal_role_hint = data.meal_role; // 저장 이름과 양식 이름이 다르다
+  // 예전 제품은 상에서의 자리 없이 저장됐다 — 카테고리·먹는 역할로 채워 보여 준다(고치면 그 값으로 저장)
+  if (data.dish_role === undefined && typeof data.category === "string") flat.dish_role = legacyDishRole(data.category as CategoryCode, data.meal_role as string | undefined);
   const out: Record<string, string> = {};
   for (const [k, v] of Object.entries(flat)) if (FIELD_BY_KEY[k] && v !== null && v !== undefined) out[k] = String(v);
   return out;

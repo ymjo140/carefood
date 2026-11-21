@@ -3,7 +3,7 @@
  * 받은 줄: 검사(schema.parseRow) → 바뀐 게 없으면 건너뜀 → 가격·재고·링크만 바뀌면 바로 반영 → 새 제품·내용 변경은 검수 대기.
  * 반영(approve): partner_items → products(100g 기준 값·건강 점수·끼니 역할) + partner_offers(가격 뷰로 들어감).
  */
-import { anyChanged, CATEGORIES, contentChanged, parseRow, type PartnerItem } from "./schema";
+import { anyChanged, CATEGORIES, contentChanged, dishRoleOf, parseRow, type PartnerItem } from "./schema";
 import { healthScore } from "./health-score";
 import { selectAll } from "@/lib/supabase/all";
 
@@ -101,7 +101,8 @@ export async function ingestRows(sb: Sb, partner: Partner, rows: { row: number; 
     ];
     for (const c of [item.barcode, item.report_no]) if (c && !codeOwner.has(c)) codeOwner.set(c, sku);
     const now = new Date().toISOString();
-    const warnings = parsed.warnings.map((w) => w.message);
+    // 검수 사유는 코드로(review_reasons), 무엇이 어긋났는지 숫자까지는 글로 — 업체·관리자 화면이 둘 다 보여 준다
+    const warnings = [...parsed.review.map((w) => w.message), ...parsed.warnings.map((w) => w.message)];
     let itemId = cur?.id;
     if (reasons.length === 0 && cur) {
       // 가격·재고·링크·배송만 바뀜 → 바로
@@ -159,6 +160,10 @@ export function productValues(item: PartnerItem, partnerActive: boolean, demo = 
     category_large: "상용제품",
     category_medium: cat.label,
     dish_category: cat.dish,
+    // 상에서의 자리·먹는 때는 업체가 고른 값 (예전 제품은 dish_role 이 없어 카테고리로 — dishRoleOf)
+    dish_role: dishRoleOf(item),
+    meal_times: item.meal_times?.length ? item.meal_times : null,
+    meal_class_src: "partner",
     meal_role: item.meal_role,
     is_meal: item.meal_role === "meal",
     serving_size_g: item.serving_size,

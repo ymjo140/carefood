@@ -28,6 +28,43 @@ export type CategoryCode = keyof typeof CATEGORIES;
 
 export const MEAL_ROLES = { meal: "한 끼", side: "반찬", snack: "간식", drink: "음료" } as const;
 
+/**
+ * 상에서의 자리 — 우리 분류(products.dish_role)와 1:1. 홈 한 상 추천(밥·국·반찬)과 음식 종류 거르기가 이 값을 쓴다.
+ * 음료는 dish_role 이 없다(null) — 먹는 역할(meal_role)만 drink.
+ */
+export const DISH_ROLES = {
+  main: "한 끼 요리 (도시락·덮밥·볶음밥·김밥·면·죽·샐러드)",
+  rice: "밥 (국·반찬과 곁들이는 흰밥·잡곡밥)",
+  soup: "국·탕·찌개",
+  side: "반찬",
+  snack: "간식 (요거트·바·빵·과자)",
+  drink: "음료·쉐이크",
+  ingredient: "재료 (조리해서 먹는 생닭·소스 등)",
+} as const;
+export type DishRoleCode = keyof typeof DISH_ROLES;
+/** 상에서의 자리 → 먹는 역할(meal_role). 밥·국은 한 상을 이루는 한 끼 쪽 */
+export const ROLE_OF_DISH: Record<DishRoleCode, PartnerItemRole> = {
+  main: "meal", rice: "meal", soup: "meal", side: "side", snack: "snack", drink: "drink", ingredient: "ingredient",
+};
+type PartnerItemRole = keyof typeof MEAL_ROLES | "ingredient";
+
+/** products.dish_role 에 넣을 값 — 음료는 없음(null). 예전 제품(dish_role 없이 저장됨)은 카테고리·먹는 역할로 */
+export function dishRoleOf(item: { dish_role?: DishRoleCode; category: CategoryCode; meal_role?: string }): Exclude<DishRoleCode, "drink"> | null {
+  const d = item.dish_role ?? legacyDishRole(item.category, item.meal_role);
+  return d === "drink" ? null : d;
+}
+export function legacyDishRole(category: CategoryCode, mealRole?: string): DishRoleCode {
+  if (mealRole === "side") return "side";
+  if (mealRole === "snack") return "snack";
+  if (mealRole === "drink") return "drink";
+  const c = CATEGORIES[category]?.dish;
+  return c === "soup" ? "soup" : c === "side" ? "side" : c === "snack" || c === "dairy" || c === "other" ? "snack" : c === "beverage" ? "drink" : "main";
+}
+
+/** 먹는 때 — products.meal_times 값. 비우면 우리 이름 규칙(lib/meal-time)으로 */
+export const MEAL_TIMES = { breakfast: "아침", lunch: "점심", dinner: "저녁", snack: "간식" } as const;
+export type MealTimeCode = keyof typeof MEAL_TIMES;
+
 /** 알레르기 유발물질 — 식품등의 표시기준 목록 (조개류는 굴·전복·홍합 포함) */
 export const ALLERGENS = {
   egg: "알류", milk: "우유", buckwheat: "메밀", peanut: "땅콩", soybean: "대두", wheat: "밀",
@@ -98,7 +135,8 @@ export const FIELDS: Field[] = [
   { key: "barcode", label: "바코드", need: "권장", type: "text", max: 14, help: "GTIN-13 (13자리)", example: "8801234567890" },
   { key: "food_type", label: "식품유형", need: "권장", type: "text", max: 40, help: "표시사항의 식품유형", example: "즉석조리식품" },
   { key: "category", label: "카테고리", need: "필수", type: "enum", enumOf: Object.fromEntries(Object.entries(CATEGORIES).map(([k, v]) => [k, v.label])), help: "코드표에서 하나", example: "lunchbox" },
-  { key: "meal_role_hint", label: "먹는 역할", need: "선택", type: "enum", enumOf: MEAL_ROLES, help: "한 끼·반찬·간식·음료. 비우면 카테고리로 정해요", example: "meal" },
+  { key: "dish_role", label: "상에서의 자리", need: "필수", type: "enum", enumOf: DISH_ROLES, help: "이 제품만으로 한 끼면 '한 끼 요리', 밥·국과 같이 먹으면 '반찬'. 김밥·덮밥·볶음밥은 한 끼 요리, 햇반 같은 흰밥은 밥", example: "main", content: true },
+  { key: "meal_times", label: "먹는 때", need: "권장", type: "list", enumOf: MEAL_TIMES, help: "아침·점심·저녁·간식 중 어울리는 때를 쉼표로. 비우면 오늘끼록이 정해요", example: "점심, 저녁", content: true },
 
   { key: "total_weight", label: "총 내용량", need: "필수", type: "num", help: "포장 하나의 무게(g) 또는 부피(ml)", example: "300" },
   { key: "weight_unit", label: "용량 단위", need: "선택", type: "enum", enumOf: { g: "g", ml: "ml" }, help: "비우면 g", example: "g" },
@@ -158,7 +196,8 @@ export const FIELD_BY_KEY = Object.fromEntries(FIELDS.map((f) => [f.key, f])) as
 
 export type IssueCode =
   | "required" | "format" | "enum" | "too_long" | "range" | "serving_gt_total"   // → 반려
-  | "energy_mismatch" | "missing_sodium" | "allergen_mismatch" | "claim_words" | "duplicate_code"; // → 검수
+  | "energy_mismatch" | "missing_sodium" | "allergen_mismatch" | "claim_words" | "duplicate_code"
+  | "role_mismatch" | "serving_whole"; // → 검수
 export type Issue = { field?: string; code: IssueCode; message: string };
 
 export const REVIEW_LABELS: Record<string, string> = {
@@ -169,6 +208,8 @@ export const REVIEW_LABELS: Record<string, string> = {
   allergen_mismatch: "원재료와 알레르기 목록이 달라요",
   claim_words: "효능·질병 표현이 있어요",
   duplicate_code: "같은 품목보고번호·바코드가 다른 제품에 있어요",
+  role_mismatch: "상에서의 자리가 이름·열량과 어긋나요",
+  serving_whole: "1회 제공량이 포장 전체와 같아요",
 };
 
 /** 정리한 제품 하나 — partner_items.data */
@@ -181,7 +222,12 @@ export type PartnerItem = {
   barcode?: string;
   food_type?: string;
   category: CategoryCode;
-  meal_role: keyof typeof MEAL_ROLES;
+  /** 상에서의 자리 (업체가 고름) */
+  dish_role: DishRoleCode;
+  /** 먹는 역할 — dish_role 에서 정한다 */
+  meal_role: PartnerItemRole;
+  /** 먹는 때 (없으면 우리 규칙) */
+  meal_times?: MealTimeCode[];
   weight_unit: "g" | "ml";
   total_weight: number;
   serving_size: number;
@@ -217,7 +263,7 @@ export type PartnerItem = {
 export const NUTRIENT_KEYS = ["calories_kcal", "sodium_mg", "carbs_g", "sugars_g", "fat_g", "trans_fat_g", "saturated_fat_g", "cholesterol_mg", "protein_g", "fiber_g", "potassium_mg", "calcium_mg"] as const;
 
 /** 바뀌면 사람 검수로 가는 값 (가격·재고·링크·배송은 바로 반영) */
-export const CONTENT_KEYS = ["name", "category", "meal_role", "nutrition_basis", "nutrition_source", "nutrition", "ingredients_raw", "allergens", "cross_contact", "description", "claims", "serving_size", "total_weight"] as const;
+export const CONTENT_KEYS = ["name", "category", "dish_role", "meal_times", "meal_role", "nutrition_basis", "nutrition_source", "nutrition", "ingredients_raw", "allergens", "cross_contact", "description", "claims", "serving_size", "total_weight"] as const;
 
 /* ───── 값 읽기 ───── */
 
@@ -257,6 +303,31 @@ const CLAIM_WORDS = /치료|예방|완치|처방|진단|효능|효과|개선|완
 const SEASONED = /볶음|덮밥|양념|돈까스|돈가스|짬뽕|라면|우동|소스|찌개|탕$|국$|국밥|카레|커리|짜장|김치|불고기|제육|갈비|떡볶이|만두|조림|간장|된장|고추장/;
 const UNSALTED = /곰탕|곰국|설렁탕|도가니|우족|사골|백숙|삼계탕|수육/;
 
+// 이름으로 짐작한 자리 — 업체가 고른 자리와 다르면 사람이 본다 (틀려도 반려하지 않는다)
+const NAME_MAIN = /도시락|덮밥|볶음밥|비빔밥|김밥|주먹밥|컵밥|리조또|파스타|라면|우동|국수|냉면|쌀국수|짜장면|짬뽕|죽$|샐러드|샌드위치|버거|피자/;
+const NAME_SOUP = /(?<!탕수)(국|탕|찌개|전골)$/;
+
+/** 상에서의 자리가 이름·1회 열량과 어긋나는지 — 검수 사유 */
+export function roleIssues(name: string, dish: DishRoleCode, servingKcal: number): Issue[] {
+  const out: Issue[] = [];
+  const n = name.replace(/\([^)]*\)|\[[^\]]*\]|\d+\s*(g|kg|ml|개입|개|팩|입)/gi, " ").trim();
+  const last = n.split(/\s+/).pop() || n;
+  const label = DISH_ROLES[dish].split(" (")[0];
+  const kcal = Math.round(servingKcal);
+  if (NAME_MAIN.test(n) && (dish === "side" || dish === "rice" || dish === "soup")) {
+    out.push({ field: "dish_role", code: "role_mismatch", message: `이름은 한 끼 요리 같은데 '${label}'(으)로 골랐어요` });
+  } else if (NAME_SOUP.test(last) && dish !== "soup" && dish !== "main" && dish !== "ingredient") {
+    out.push({ field: "dish_role", code: "role_mismatch", message: `이름은 국·탕 같은데 '${label}'(으)로 골랐어요` });
+  }
+  if ((dish === "side" || dish === "rice" || dish === "soup") && kcal > 600) {
+    out.push({ field: "dish_role", code: "role_mismatch", message: `'${label}'인데 1회 열량이 ${kcal}kcal 예요. 한 끼 요리가 아닌지 확인해 주세요` });
+  }
+  if (dish === "main" && kcal > 0 && kcal < 150) {
+    out.push({ field: "dish_role", code: "role_mismatch", message: `한 끼 요리인데 1회 열량이 ${kcal}kcal 예요. 반찬·간식이 아닌지 확인해 주세요` });
+  }
+  return out;
+}
+
 /**
  * 한 행(필드 키 → 값)을 검사하고 정리한다.
  * errors 가 있으면 반영하지 않는다(반려). review 는 사람 검수 이유, warnings 는 알리기만.
@@ -284,6 +355,14 @@ export function parseRow(row: Record<string, unknown>, kind: "meal_service" | "b
     if ((f.type === "num" || f.type === "int") && (Number.isNaN(num(s)) || (num(s) ?? 0) < 0)) errors.push({ field: f.key, code: "format", message: `${f.label}은(는) 0 이상의 숫자여야 해요` });
     if (f.type === "int" && Number.isFinite(num(s)) && !Number.isInteger(num(s))) errors.push({ field: f.key, code: "format", message: `${f.label}은(는) 정수여야 해요` });
     if (f.type === "enum" && !enumValue(f, s)) errors.push({ field: f.key, code: "enum", message: `${f.label}: "${s}"는 코드표에 없어요` });
+  }
+
+  // 먹는 때 — 코드·이름 목록 ("점심, 저녁" · "lunch,dinner")
+  const mealTimes: MealTimeCode[] = [];
+  for (const part of v.meal_times.split(/[,，·/]/).map((x) => x.trim()).filter(Boolean)) {
+    const code = enumValue(FIELD_BY_KEY.meal_times, part) as MealTimeCode | null;
+    if (code) { if (!mealTimes.includes(code)) mealTimes.push(code); }
+    else errors.push({ field: "meal_times", code: "enum", message: `먹는 때: "${part}"는 아침·점심·저녁·간식 중 하나여야 해요` });
   }
 
   // 알레르기 — "없음" 또는 코드·이름 목록
@@ -337,7 +416,8 @@ export function parseRow(row: Record<string, unknown>, kind: "meal_service" | "b
   }
 
   const category = enumValue(FIELD_BY_KEY.category, v.category) as CategoryCode;
-  const role = (v.meal_role_hint ? enumValue(FIELD_BY_KEY.meal_role_hint, v.meal_role_hint) : CATEGORIES[category].role) as PartnerItem["meal_role"];
+  const dishRole = enumValue(FIELD_BY_KEY.dish_role, v.dish_role) as DishRoleCode;
+  const role = ROLE_OF_DISH[dishRole];
   const offers: PartnerItem["offers"] = [{ channel: enumValue(FIELD_BY_KEY.channel, v.channel) as keyof typeof CHANNELS, price: num(v.price) as number, url: v.url }];
   if (v.channel_2) offers.push({ channel: enumValue(FIELD_BY_KEY.channel_2, v.channel_2) as keyof typeof CHANNELS, price: num(v.price_2) as number, url: v.url_2 });
 
@@ -350,7 +430,9 @@ export function parseRow(row: Record<string, unknown>, kind: "meal_service" | "b
     barcode: v.barcode ? v.barcode.replace(/\D/g, "") : undefined,
     food_type: v.food_type || undefined,
     category,
+    dish_role: dishRole,
     meal_role: role,
+    meal_times: mealTimes.length ? (Object.keys(MEAL_TIMES) as MealTimeCode[]).filter((t) => mealTimes.includes(t)) : undefined,
     weight_unit: (v.weight_unit ? enumValue(FIELD_BY_KEY.weight_unit, v.weight_unit) : "g") as "g" | "ml",
     total_weight: total,
     serving_size: serving,
@@ -390,6 +472,10 @@ export function parseRow(row: Record<string, unknown>, kind: "meal_service" | "b
   const sodiumServing = (p.sodium_mg ?? 0) * serving / 100;
   if ((role === "meal" || role === "side") && sodiumServing < 20 && SEASONED.test(item.name) && !UNSALTED.test(item.name)) {
     review.push({ field: "sodium_mg", code: "missing_sodium", message: "간이 된 요리인데 1회 나트륨이 20mg 미만이에요" });
+  }
+  for (const m of roleIssues(item.name, dishRole, kcal * serving / 100)) review.push(m);
+  if (serving === total && total >= 500) {
+    review.push({ field: "serving_size", code: "serving_whole", message: `1회 제공량이 포장 전체(${total}${item.weight_unit})와 같아요. 한 번에 다 먹는 양이 맞는지 확인해 주세요` });
   }
   const gaps = allergenGaps(item.ingredients_raw, allergens);
   if (gaps.length) review.push({ field: "allergens", code: "allergen_mismatch", message: `원재료에 ${gaps.map((g) => ALLERGENS[g]).join("·")}이(가) 보이는데 알레르기 목록에 없어요` });

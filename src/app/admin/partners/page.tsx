@@ -37,7 +37,7 @@ const orderNet = (s: NonNullable<SettleMonth["settlement"]>) => s.order_sales - 
 const KIND_LABEL: Record<string, string> = { meal_service: "식단 서비스", brand: "식품 브랜드", mall: "유통·몰" };
 const STATUS_LABEL: Record<Partner["status"], string> = { onboarding: "준비 중", active: "운영 중", paused: "멈춤" };
 const FIELD_LABEL: Record<string, string> = {
-  name: "제품명", category: "카테고리", meal_role: "먹는 역할", nutrition_basis: "영양 기준", nutrition_source: "영양 출처", nutrition: "영양 값",
+  name: "제품명", category: "카테고리", dish_role: "상에서의 자리", meal_times: "먹는 때", meal_role: "먹는 역할", nutrition_basis: "영양 기준", nutrition_source: "영양 출처", nutrition: "영양 값",
   ingredients_raw: "원재료", allergens: "알레르기", cross_contact: "같은 시설 문구", description: "소개 문구", claims: "강조 표시",
   serving_size: "1회 제공량", total_weight: "총 내용량",
 };

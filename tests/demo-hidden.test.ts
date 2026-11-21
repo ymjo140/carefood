@@ -6,7 +6,7 @@ import { partnerOffersFor } from "@/lib/partner/orders";
 import type { PartnerItem } from "@/lib/partner/schema";
 
 const item = {
-  partner_sku: "DEMO-1", name: "닭가슴살 도시락", brand: "예시", category: "lunchbox", meal_role: "meal", weight_unit: "g",
+  partner_sku: "DEMO-1", name: "닭가슴살 도시락", brand: "예시", category: "lunchbox", dish_role: "main", meal_role: "meal", weight_unit: "g",
   total_weight: 300, serving_size: 300, pack_count: 1, nutrition_basis: "per_100", nutrition_source: "lab",
   nutrition: {}, per100: { calories_kcal: 150, protein_g: 12, sodium_mg: 200, carbs_g: 15, fat_g: 4 },
   ingredients_raw: "닭가슴살, 현미", allergens: [], storage: "frozen", status: "on_sale",
