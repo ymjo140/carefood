@@ -9,6 +9,7 @@
  *   · 찌개·전골·죽: 두세 번 나눠 먹는 포장이 많아 400g
  * - 그 밖의 한 끼 300g · 한 끼가 아니면 100g
  * 식단 기록·추천 순위·검색 목록·식단 리스트·제품 상세가 모두 이 함수를 쓴다.
+ * DB 에도 같은 규칙이 있다 — public.default_serving_g (supabase/migrations/20261130b_portion_columns.sql). 바꾸면 둘 다.
  */
 const WHOLE_CHICKEN = /삼계탕|백숙|반계탕/;
 const SOUP_BOWL = /갈비탕|곰탕|설렁탕|우족탕|도가니탕|육개장|해장국|국밥|추어탕|감자탕|탕(?=[\s\d(]|$)|국(?=[\s\d(]|$)/;
