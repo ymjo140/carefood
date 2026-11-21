@@ -13,6 +13,7 @@ export { Card, CardActions, CardButton } from "./Card";
 export { Input, Textarea, Select, Field, SearchField, UnitInput, RangeInput, Checkbox } from "./Field";
 export { FilePick } from "./FilePick";
 export { Tabs, type TabItem } from "./Tabs";
+export { Disclosure } from "./Disclosure";
 export { Sheet, ConfirmSheet } from "./Sheet";
 export { ToastProvider, useToast } from "./Toast";
 export { BottomNav, BottomNavItems, NAV_TABS } from "./BottomNav";

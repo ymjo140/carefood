@@ -1,4 +1,5 @@
 import { DISH_ROLES } from "@/lib/home-meal";
+import { foodTypeOr, parseFoodTypes } from "@/lib/food-types";
 import { NextRequest, NextResponse } from "next/server";
 import { limitRequest } from "@/lib/rate-limit";
 import { createServiceRoleClient } from "@/lib/supabase/server";
@@ -81,6 +82,8 @@ function parseSearchParams(searchParams: URLSearchParams) {
     kind: searchParams.get("kind") === "meal_service" ? "meal_service" : null,
     // 한 끼에서 맡는 몫 (products.dish_role) — 홈 카테고리 메인 요리·밥·국·찌개·반찬
     role: (searchParams.get("role") || "").split(",").filter((r) => DISH_ROLES.includes(r)),
+    // 음식 종류 (lib/food-types) — 역할이 있으면 역할, 비어 있으면 끼니 구분으로. 여러 개면 하나라도 맞으면
+    types: parseFoodTypes(searchParams.get("type")),
     allergies: (searchParams.get("allergies") || "").split(",").filter(Boolean),
   };
 }
@@ -95,7 +98,7 @@ function parseSearchParams(searchParams: URLSearchParams) {
  */
 function mealsOnly(params: ReturnType<typeof parseSearchParams>) {
   return params.sort === "recommend" && !params.dishCategory && !params.search && !params.kind
-    && !params.tag && !params.tags && !params.purpose && !params.role.length;
+    && !params.tag && !params.tags && !params.purpose && !params.role.length && !params.types.length;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -103,7 +106,7 @@ function buildProductQuery(supabase: any, params: ReturnType<typeof parseSearchP
   const {
     salty, sweet, fatty, spicy,
     search, tag, tags, purpose, dishCategory,
-    hasPriceOnly, kind, role,
+    hasPriceOnly, kind, role, types,
     proteinMin, caloriesMax, sodiumMax, sugarMax, fiberMin, healthScoreMin,
     sort, page, limit,
   } = params;
@@ -182,7 +185,10 @@ function buildProductQuery(supabase: any, params: ReturnType<typeof parseSearchP
   if (role.length === 1) query = query.eq("dish_role", role[0]);
   else if (role.length > 1) query = query.in("dish_role", role);
 
-  // 음식 종류 필터
+  const typeOr = foodTypeOr(types);
+  if (typeOr) query = query.or(typeOr);
+
+  // 음식 종류 필터 (예전 dish_category — 주소로만 받는다)
   if (dishCategory) {
     const cats = dishCategory.split(",").filter(Boolean);
     if (cats.length === 1) query = query.eq("dish_category", cats[0]);
