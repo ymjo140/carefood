@@ -14,6 +14,7 @@ export { Input, Textarea, Select, Field, SearchField, UnitInput, RangeInput, Che
 export { FilePick } from "./FilePick";
 export { Tabs, type TabItem } from "./Tabs";
 export { Disclosure } from "./Disclosure";
+export { DayChoice, type DayChoiceItem } from "./DayChoice";
 export { Sheet, ConfirmSheet } from "./Sheet";
 export { ToastProvider, useToast } from "./Toast";
 export { BottomNav, BottomNavItems, NAV_TABS } from "./BottomNav";

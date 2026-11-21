@@ -38,3 +38,18 @@ describe("DISH_ROLES — 카테고리 거르기 값", () => {
     expect(DISH_ROLES).toEqual(["main", "rice", "soup", "side", "snack"]);
   });
 });
+
+import { dayParts, slotState } from "@/lib/home-meal";
+describe("담을 날 고르기", () => {
+  const rows = [{ date: "2026-11-21", meal_type: "dinner" }];
+  const plans = [{ date: "2026-11-24", meal: "dinner" }];
+  it("기록 → 계획 → 비어 순으로 본다", () => {
+    expect(slotState("dinner", "2026-11-21", rows, plans)).toBe("recorded");
+    expect(slotState("dinner", "2026-11-24", rows, plans)).toBe("planned");
+    expect(slotState("lunch", "2026-11-24", rows, plans)).toBe("empty");
+  });
+  it("날짜 글자", () => {
+    expect(dayParts("2026-11-23")).toEqual({ md: "11월 23일", dow: "월", day: 23 });
+    expect(dayParts("2026-11-21").dow).toBe("토");
+  });
+});

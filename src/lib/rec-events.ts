@@ -9,7 +9,7 @@
  */
 type Sb = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
-export type RecSurface = "ai_fill" | "next" | "chat";
+export type RecSurface = "ai_fill" | "next" | "chat" | "home";
 export type RecAction = "shown" | "skipped" | "recorded";
 export type RecEvent = { user_id: string; surface: RecSurface; item_key: string; meal: string | null; day: string; action: RecAction };
 

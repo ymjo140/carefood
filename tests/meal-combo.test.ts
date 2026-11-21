@@ -17,12 +17,25 @@ describe("한 상 고르기", () => {
     expect(new Set(got.map((c) => c.foods[1].id)).size).toBe(got.length);
     expect(got[0].foods.map((f) => f.id)).toEqual(["r1", "s2", "d1"]); // 300+180+120 = 600kcal, 단백질 36g
   });
-  it("국만 다르고 반찬이 같은 한 상은 뒤로 — 반찬이 겹치지 않는 것을 먼저 고른다", () => {
-    const soups = [it_("s1", "사골 순대국", 140, 12, 200, "soup"), it_("s2", "얼큰 순대국", 140, 12, 200, "soup"), it_("s3", "북엇국", 130, 11, 250, "soup")];
-    const sides = [it_("d1", "두부", 160, 14, 10, "side"), it_("d2", "구운계란", 140, 12, 300, "side")];
-    const got = bestCombos({ rice, soup: soups, side: sides }, b);
+  it("세 상에 같은 음식이 두 번 나오지 않는다 — 사골·얼큰 순대국은 같은 순대국, 반찬도 겹치지 않게", () => {
+    const soups = [it_("s1", "사골 순대국", 140, 12, 200, "soup"), it_("s2", "얼큰 순대국", 140, 12, 200, "soup"), it_("s3", "북엇국", 130, 11, 250, "soup"), it_("s4", "닭볶음탕", 150, 14, 300, "soup")];
+    const sides = [it_("d1", "두부", 160, 14, 10, "side"), it_("d2", "구운계란", 140, 12, 300, "side"), it_("d3", "메추리알장조림", 126, 10, 300, "side")];
+    const rices = [it_("r1", "이지끼니 순잡곡밥 프로틴", 131, 6, 5, "rice"), it_("r2", "햇반 현미귀리밥", 138, 4, 5, "rice"), it_("r3", "전복영양진밥", 134, 5, 5, "rice")];
+    const got = bestCombos({ rice: rices, soup: soups, side: sides }, b);
     expect(got.length).toBe(3);
-    expect(new Set(got.map((c) => c.foods[2]?.id)).size).toBe(2); // 예전에는 셋 다 두부
+    const fam = (i: number) => got.map((c) => c.foods[i]?.name);
+    expect(fam(1).filter((n) => n?.includes("순대국")).length).toBeLessThanOrEqual(1);
+    expect(new Set(fam(0)).size).toBe(3); // 예전에는 순잡곡밥이 두 번
+    expect(new Set(fam(2)).size).toBe(3);
+  });
+  it("이미 보여 준 음식(avoid)은 빼고 다음 상을 고른다 — 밥은 모자라면 다시", () => {
+    const soups = [it_("s1", "사골 순대국", 140, 12, 200, "soup"), it_("s3", "북엇국", 130, 11, 250, "soup"), it_("s4", "닭볶음탕", 150, 14, 300, "soup")];
+    const first = bestCombos({ rice, soup: soups, side }, b, 1);
+    const shown = new Set(first[0].foods.map((f) => f.id));
+    const next = bestCombos({ rice, soup: soups, side }, b, 2, shown);
+    expect(next.length).toBeGreaterThan(0);
+    for (const c of next) expect(shown.has(c.foods[1].id)).toBe(false);
+    expect(next.every((c) => c.foods[0].id === "r1")).toBe(true); // 밥이 하나뿐이면 다시 쓴다
   });
   it("나트륨을 모르는 것이 하나라도 있으면 합도 모름 — 상한으로 빼지 않는다", () => {
     const got = bestCombos({ rice, soup: [it_("s9", "북엇국", 120, 15, null, "soup")], side: [] }, b);

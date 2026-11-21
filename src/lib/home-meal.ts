@@ -31,3 +31,22 @@ export function mealsToAvoid(meal: MealKey, taken: Set<string>): MealKey[] {
 /** 역할 이름 — products.dish_role */
 export const DISH_ROLE_LABEL: Record<string, string> = { main: "메인 요리", rice: "밥", soup: "국·찌개", side: "반찬", snack: "간식" };
 export const DISH_ROLES = Object.keys(DISH_ROLE_LABEL);
+
+/** 담을 날 고르기 — 오늘부터 며칠 (오늘 포함) */
+export const PLAN_DAYS = 7;
+
+export type SlotState = "empty" | "planned" | "recorded";
+/** 그날 그 끼니의 상태 — 기록이 있으면 기록함(고를 수 없음), 예정이 있으면 계획 있음(바꾸기 확인), 아니면 비어 있음 */
+export function slotState(meal: string, date: string, rows: { date: string; meal_type: string | null }[], plans: { date: string; meal: string }[]): SlotState {
+  if (rows.some((r) => r.date === date && r.meal_type === meal)) return "recorded";
+  if (plans.some((p) => p.date === date && p.meal === meal)) return "planned";
+  return "empty";
+}
+
+const WEEK = ["일", "월", "화", "수", "목", "금", "토"];
+/** "2026-11-23" → { md: "11월 23일", dow: "월", day: 23 } (한국 날짜 문자열 그대로 — 시간대 계산 없음) */
+export function dayParts(date: string) {
+  const [y, m, d] = date.split("-").map(Number);
+  const dow = WEEK[new Date(Date.UTC(y, m - 1, d)).getUTCDay()];
+  return { md: `${m}월 ${d}일`, dow, day: d };
+}
